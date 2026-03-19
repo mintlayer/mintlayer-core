@@ -17,19 +17,26 @@ mod handshake_handler;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use tokio::sync::mpsc;
+use tokio::{
+    sync::mpsc::{self, unbounded_channel},
+    task::JoinHandle,
+};
 
 use chainstate::ban_score::BanScore as _;
 use common::{chain::ChainConfig, time_getter::TimeGetter};
 use logging::log;
-use networking::transport::{
-    new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream,
-    TransportSocket,
+use networking::{
+    error::NetworkingError,
+    transport::{
+        new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream,
+        TransportSocket,
+    },
 };
 use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
 use serialization::Encode as _;
+use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     config::P2pConfig,
@@ -39,11 +46,11 @@ use crate::{
     net::{
         default_backend::{
             peer::handshake_handler::HandshakeHandler,
-            types::{BackendEvent, MessageDebugLogSummary, PeerEvent},
+            types::{BackendEvent, MessageDebugLogSummary, MessageTag, PeerEvent},
         },
         types::PeerManagerMessageExt,
     },
-    protocol::ProtocolVersion,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
 };
 
@@ -188,7 +195,7 @@ where
 
     async fn run_impl(self) -> crate::Result<()> {
         let Self {
-            peer_id: _,
+            peer_id,
             peer_address,
             chain_config,
             p2p_config,
@@ -222,7 +229,19 @@ where
         // received from the peer.
         let mut sync_message_received = false;
 
-        loop {
+        let (writer_cmd_sender, writer_cmd_receiver) = unbounded_channel();
+        let (writer_event_sender, mut writer_event_receiver) = unbounded_channel();
+        let writer_join_handle = spawn_writer(
+            peer_id,
+            common_protocol_version.0,
+            socket_writer,
+            writer_cmd_receiver,
+            writer_event_sender,
+        );
+
+        // Note: if the outer Option is set, an explicit disconnection should be initiated via
+        // the writer task. Otherwise the writer task is supposed to be already closed.
+        let reason_for_explicit_disconnect: Option<Option<DisconnectionReason>> = loop {
             tokio::select! {
                 // Sending messages should have higher priority
                 biased;
@@ -232,20 +251,40 @@ where
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
                     BackendEvent::SendMessage(message) => {
-                        log::debug!(
-                            "Sending message {} with encoded size {}",
-                            MessageDebugLogSummary(&*message),
-                            message.encoded_size()
-                        );
-
-                        socket_writer.send(*message).await?
+                        let message_tag: MessageTag = (&*message).into();
+                        if let Err(_) = writer_cmd_sender.send(WriterCommand::SendMessage(message)) {
+                            log::debug!(
+                                "Socket writer task already closed when trying to send a message with tag {:?}",
+                                message_tag
+                            );
+                            break None;
+                        }
                     },
-                    BackendEvent::Disconnect {reason} => {
-                        log::debug!("Disconnection requested, the reason is {:?}", reason);
-                        maybe_send_will_disconnect(reason, common_protocol_version.0.into(), &mut socket_writer).await?;
-                        return Ok(());
+                    BackendEvent::Disconnect { reason } => {
+                        break Some(reason);
                     },
                 },
+                event = writer_event_receiver.recv() => {
+                    match event {
+                        Some(WriterEvent::WriterClosed(result)) => {
+                            match result {
+                                Err(err) => {
+                                    log::info!("Connection closed, reason: {err:?}");
+                                }
+                                Ok(()) => {
+                                    // Note: this shouldn't really happen.
+                                    log::warn!("Socket writer task closed without disconnection request");
+                                }
+                            }
+                            break None;
+                        },
+                        None => {
+                            // Note: this can happen if the writer task has panicked.
+                            log::warn!("Socket writer task closed unexpectedly");
+                            break None;
+                        },
+                    }
+                }
                 event = socket_reader.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
                         let sync_msg_senders = sync_msg_senders_opt.as_mut().expect("sync_msg_senders_opt is some");
@@ -258,27 +297,68 @@ where
                         ).await?;
                     }
                     Err(err) => {
-                        log::info!("Connection closed, reason: {err:?}");
-
                         let err = P2pError::NetworkingError(err);
-                        let disconnection_reason = DisconnectionReason::from_error(&err, &p2p_config);
-                        maybe_send_will_disconnect(disconnection_reason, common_protocol_version.0.into(), &mut socket_writer).await?;
 
                         let ban_score = err.ban_score();
                         if ban_score > 0 {
                             let send_result = peer_event_sender
-                                .send(PeerEvent::Misbehaved { error: err })
+                                .send(PeerEvent::Misbehaved { error: err.clone() })
                                 .await;
                             if let Err(_) = send_result {
                                 log::warn!("Cannot send PeerEvent::Misbehaved");
                             }
                         }
 
-                        return Ok(());
+                        // Either return Some(Some(reason)) or None. I.e. if there is a disconnection reason associated
+                        // with the obtained error, it's probably not just a connection issue, so it's better to
+                        // do a proper disconnect, attempting to send the reason to the peer. Otherwise we're done.
+                        let disconnection_reason = DisconnectionReason::from_error(&err, &p2p_config);
+                        if let Some(disconnection_reason) =  disconnection_reason {
+                            log::info!("Closing connection, reason: {err:?}");
+                             break Some(Some(disconnection_reason));
+                        }
+                        else {
+                            log::info!("Connection closed, reason: {err:?}");
+                            break None;
+                        }
                     }
                 }
             }
+        };
+
+        if let Some(disconnection_reason) = reason_for_explicit_disconnect {
+            let send_result = writer_cmd_sender.send(WriterCommand::Disconnect {
+                reason: disconnection_reason,
+            });
+            match send_result {
+                Ok(()) => {
+                    let disconnect_result = tokio::time::timeout(DISCONNECTION_TIMEOUT, async {
+                        match writer_event_receiver.recv().await {
+                            Some(WriterEvent::WriterClosed(result)) => {
+                                log::debug!("Socket writer closing confirmed with result: {result:?}");
+                            },
+                            None => {
+                                log::debug!("Socket writer task already closed when waiting for disconnection");
+                            },
+                        }
+                    }).await;
+
+                    match disconnect_result {
+                        Ok(()) => {}
+                        Err(_) => {
+                            log::warn!("Disconnection request timed out");
+                        }
+                    }
+                }
+                Err(_) => {
+                    log::debug!("Socket writer task already closed when trying to disconnect");
+                }
+            }
         }
+
+        writer_join_handle.abort();
+
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.peer_id), level = tracing::Level::ERROR)]
@@ -297,6 +377,9 @@ where
     }
 }
 
+const DISCONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+const SOCKET_WRITE_TIMEOUT: Duration = Duration::from_secs(60);
+
 async fn maybe_send_will_disconnect<S: PeerStream>(
     reason: Option<DisconnectionReason>,
     peer_protocol_version: ProtocolVersion,
@@ -310,6 +393,71 @@ async fn maybe_send_will_disconnect<S: PeerStream>(
                     reason: reason.to_string(),
                 }))
                 .await?;
+        }
+    }
+
+    Ok(())
+}
+
+enum WriterCommand {
+    SendMessage(Box<Message>),
+    Disconnect { reason: Option<DisconnectionReason> },
+}
+
+enum WriterEvent {
+    WriterClosed(crate::Result<()>),
+}
+
+fn spawn_writer<S: PeerStream + 'static>(
+    peer_id: PeerId,
+    common_protocol_version: SupportedProtocolVersion,
+    socket_writer: MessageWriter<S, Message>,
+    cmd_receiver: mpsc::UnboundedReceiver<WriterCommand>,
+    event_sender: mpsc::UnboundedSender<WriterEvent>,
+) -> JoinHandle<()> {
+    tokio_spawn_in_current_tracing_span(
+        async move {
+            let writer_result =
+                writer_loop(common_protocol_version, socket_writer, cmd_receiver).await;
+
+            if let Err(_) = event_sender.send(WriterEvent::WriterClosed(writer_result)) {
+                log::debug!("Peer task already closed");
+            }
+        },
+        &format!("PeerSocketWriter[id={peer_id}]"),
+    )
+}
+
+async fn writer_loop<S: PeerStream>(
+    common_protocol_version: SupportedProtocolVersion,
+    mut socket_writer: MessageWriter<S, Message>,
+    mut cmd_receiver: mpsc::UnboundedReceiver<WriterCommand>,
+) -> crate::Result<()> {
+    while let Some(cmd) = cmd_receiver.recv().await {
+        match cmd {
+            WriterCommand::SendMessage(message) => {
+                log::debug!(
+                    "Sending message {} with encoded size {}",
+                    MessageDebugLogSummary(&*message),
+                    message.encoded_size()
+                );
+
+                tokio::time::timeout(SOCKET_WRITE_TIMEOUT, socket_writer.send(*message))
+                    .await
+                    .map_err(|_| {
+                        P2pError::NetworkingError(NetworkingError::SocketWriteTimedOut)
+                    })??;
+            }
+            WriterCommand::Disconnect { reason } => {
+                log::debug!("Disconnection requested, the reason is {:?}", reason);
+                maybe_send_will_disconnect(
+                    reason,
+                    common_protocol_version.into(),
+                    &mut socket_writer,
+                )
+                .await?;
+                break;
+            }
         }
     }
 

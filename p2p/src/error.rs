@@ -263,6 +263,7 @@ pub fn networking_error_ban_score(err: &NetworkingError) -> u32 {
         NetworkingError::NoiseHandshakeError(_) => 0,
         NetworkingError::ProxyError(_) => 0,
         NetworkingError::ChannelTransportError(_) => 0,
+        NetworkingError::SocketWriteTimedOut => 0,
     }
 }
 

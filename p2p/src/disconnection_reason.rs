@@ -146,7 +146,8 @@ impl DisconnectionReason {
             NetworkingError::IoError(_)
             | NetworkingError::NoiseHandshakeError(_)
             | NetworkingError::ProxyError(_)
-            | NetworkingError::ChannelTransportError(_) => None,
+            | NetworkingError::ChannelTransportError(_)
+            | NetworkingError::SocketWriteTimedOut => None,
 
             NetworkingError::MessageCodecError(err) => match err {
                 // Note: technically we could put the entire MessageCodecError inside
