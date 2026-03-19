@@ -35,6 +35,8 @@ make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
+make_config_setting!(DisconnectionTimeout, Duration, Duration::from_secs(10));
+make_config_setting!(SoketWriteTimeout, Duration, Duration::from_secs(60));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -144,4 +146,10 @@ pub struct BackendTimeoutsConfig {
 
     /// Timeout for initial peer handshake
     pub peer_handshake_timeout: PeerHandshakeTimeout,
+
+    /// Timeout for disconnection
+    pub disconnection_timeout: DisconnectionTimeout,
+
+    /// Timeout for the socket write call
+    pub socket_write_timeout: SoketWriteTimeout,
 }

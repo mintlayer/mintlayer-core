@@ -191,6 +191,8 @@ impl From<P2pConfigFile> for P2pConfig {
                     .map(|t| Duration::from_secs(t.into()))
                     .into(),
                 peer_handshake_timeout: Default::default(),
+                disconnection_timeout: Default::default(),
+                socket_write_timeout: Default::default(),
             },
             protocol_config: Default::default(),
             custom_disconnection_reason_for_banning,

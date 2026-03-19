@@ -1004,6 +1004,8 @@ async fn connection_timeout_rpc_notified<T>(
         backend_timeouts: BackendTimeoutsConfig {
             outbound_connection_timeout: Duration::from_secs(1).into(),
             peer_handshake_timeout: Default::default(),
+            disconnection_timeout: Default::default(),
+            socket_write_timeout: Default::default(),
         },
 
         bind_addresses: Default::default(),

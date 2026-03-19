@@ -426,6 +426,8 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
             backend_timeouts: BackendTimeoutsConfig {
                 peer_handshake_timeout: Duration::from_secs(1).into(),
                 outbound_connection_timeout: Default::default(),
+                disconnection_timeout: Default::default(),
+                socket_write_timeout: Default::default(),
             },
 
             bind_addresses: Default::default(),

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use itertools::Itertools as _;
 use rstest::rstest;
@@ -21,7 +21,7 @@ use rstest::rstest;
 use chainstate::{BlockSource, ChainstateConfig, Locator};
 use common::{
     chain,
-    primitives::{Id, Idable as _},
+    primitives::{user_agent::mintlayer_core_user_agent, Id, Idable as _},
 };
 use logging::log;
 use networking::{
@@ -38,6 +38,7 @@ use test_utils::{
 };
 
 use crate::{
+    config::{BackendTimeoutsConfig, P2pConfig},
     message::{HeaderList, HeaderListRequest},
     net::{
         default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
@@ -258,9 +259,38 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
         let channel_max_buf_size = 1000;
         let node_headers_count = 100;
 
+        let socket_write_timeout = Duration::from_secs(3);
+        let no_disconnection_after = Duration::from_secs(1);
+
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(chain::config::create_unit_test_config());
-        let p2p_config = Arc::new(test_p2p_config());
+        let p2p_config = Arc::new(P2pConfig {
+            backend_timeouts: BackendTimeoutsConfig {
+                socket_write_timeout: socket_write_timeout.into(),
+
+                outbound_connection_timeout: Default::default(),
+                peer_handshake_timeout: Default::default(),
+                disconnection_timeout: Default::default(),
+            },
+
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            whitelisted_addresses: Default::default(),
+            ban_config: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            sync_stalling_timeout: Default::default(),
+            peer_manager_config: Default::default(),
+            protocol_config: Default::default(),
+            custom_disconnection_reason_for_banning: Default::default(),
+        });
 
         log::debug!("Generating blocks");
 
@@ -367,6 +397,15 @@ async fn timeout_when_socket_not_read(#[case] seed: Seed) {
             }
         );
 
+        // Wait for a short period of time, there should be no disconnection.
+        tokio::time::timeout(
+            no_disconnection_after,
+            test_node.peer_mgr_notification_receiver().recv(),
+        )
+        .await
+        .unwrap_err();
+
+        // But eventually the disconnection should happen when the socket write timeout expires.
         log::debug!("Expecting PeerManagerNotification::ConnectionClosed");
         let peer_mgr_notif = test_node.peer_mgr_notification_receiver().recv().await.unwrap();
         assert_matches!(

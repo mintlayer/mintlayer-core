@@ -17,7 +17,7 @@ mod handshake_handler;
 #[cfg(test)]
 mod tests;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use tokio::{
     sync::mpsc::{self, unbounded_channel},
@@ -232,6 +232,7 @@ where
         let (writer_cmd_sender, writer_cmd_receiver) = unbounded_channel();
         let (writer_event_sender, mut writer_event_receiver) = unbounded_channel();
         let writer_join_handle = spawn_writer(
+            Arc::clone(&p2p_config),
             peer_id,
             common_protocol_version.0,
             socket_writer,
@@ -332,16 +333,19 @@ where
             });
             match send_result {
                 Ok(()) => {
-                    let disconnect_result = tokio::time::timeout(DISCONNECTION_TIMEOUT, async {
-                        match writer_event_receiver.recv().await {
-                            Some(WriterEvent::WriterClosed(result)) => {
-                                log::debug!("Socket writer closing confirmed with result: {result:?}");
-                            },
-                            None => {
-                                log::debug!("Socket writer task already closed when waiting for disconnection");
-                            },
+                    let disconnect_result = tokio::time::timeout(
+                        *p2p_config.backend_timeouts.disconnection_timeout,
+                        async {
+                            match writer_event_receiver.recv().await {
+                                Some(WriterEvent::WriterClosed(result)) => {
+                                    log::debug!("Socket writer closing confirmed with result: {result:?}");
+                                },
+                                None => {
+                                    log::debug!("Socket writer task already closed when waiting for disconnection");
+                                },
+                            }
                         }
-                    }).await;
+                    ).await;
 
                     match disconnect_result {
                         Ok(()) => {}
@@ -377,9 +381,6 @@ where
     }
 }
 
-const DISCONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
-const SOCKET_WRITE_TIMEOUT: Duration = Duration::from_secs(60);
-
 async fn maybe_send_will_disconnect<S: PeerStream>(
     reason: Option<DisconnectionReason>,
     peer_protocol_version: ProtocolVersion,
@@ -409,6 +410,7 @@ enum WriterEvent {
 }
 
 fn spawn_writer<S: PeerStream + 'static>(
+    p2p_config: Arc<P2pConfig>,
     peer_id: PeerId,
     common_protocol_version: SupportedProtocolVersion,
     socket_writer: MessageWriter<S, Message>,
@@ -417,8 +419,13 @@ fn spawn_writer<S: PeerStream + 'static>(
 ) -> JoinHandle<()> {
     tokio_spawn_in_current_tracing_span(
         async move {
-            let writer_result =
-                writer_loop(common_protocol_version, socket_writer, cmd_receiver).await;
+            let writer_result = writer_loop(
+                &p2p_config,
+                common_protocol_version,
+                socket_writer,
+                cmd_receiver,
+            )
+            .await;
 
             if let Err(_) = event_sender.send(WriterEvent::WriterClosed(writer_result)) {
                 log::debug!("Peer task already closed");
@@ -429,6 +436,7 @@ fn spawn_writer<S: PeerStream + 'static>(
 }
 
 async fn writer_loop<S: PeerStream>(
+    p2p_config: &P2pConfig,
     common_protocol_version: SupportedProtocolVersion,
     mut socket_writer: MessageWriter<S, Message>,
     mut cmd_receiver: mpsc::UnboundedReceiver<WriterCommand>,
@@ -442,11 +450,12 @@ async fn writer_loop<S: PeerStream>(
                     message.encoded_size()
                 );
 
-                tokio::time::timeout(SOCKET_WRITE_TIMEOUT, socket_writer.send(*message))
-                    .await
-                    .map_err(|_| {
-                        P2pError::NetworkingError(NetworkingError::SocketWriteTimedOut)
-                    })??;
+                tokio::time::timeout(
+                    *p2p_config.backend_timeouts.socket_write_timeout,
+                    socket_writer.send(*message),
+                )
+                .await
+                .map_err(|_| P2pError::NetworkingError(NetworkingError::SocketWriteTimedOut))??;
             }
             WriterCommand::Disconnect { reason } => {
                 log::debug!("Disconnection requested, the reason is {:?}", reason);
