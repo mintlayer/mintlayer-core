@@ -22,8 +22,6 @@ use std::{
     sync::Arc,
 };
 
-use itertools::Itertools as _;
-
 use common::{
     address::Address,
     chain::{
@@ -44,6 +42,9 @@ use crate::storage::storage_api::{
 
 use super::CURRENT_STORAGE_VERSION;
 
+use itertools::Itertools as _;
+use num_bigint::BigUint;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TokenTransactionOrderedByTxId(TokenTransaction);
 
@@ -63,8 +64,9 @@ impl Ord for TokenTransactionOrderedByTxId {
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
-    address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
-    address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
+    address_balance_table:
+        BTreeMap<String, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, BigUint>>>,
+    address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), BigUint>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     token_transactions_table:
         BTreeMap<TokenId, BTreeMap<BlockHeight, BTreeSet<TokenTransactionOrderedByTxId>>>,
@@ -123,13 +125,13 @@ impl ApiServerInMemoryStorage {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.address_balance_table
             .get(address)
             .and_then(|by_coin_or_token| by_coin_or_token.get(&coin_or_token_id))
             .map_or_else(
                 || Ok(None),
-                |by_height| Ok(by_height.values().last().copied()),
+                |by_height| Ok(by_height.values().last().cloned()),
             )
     }
 
@@ -155,7 +157,7 @@ impl ApiServerInMemoryStorage {
                         (
                             *coin_or_token_id,
                             AmountWithDecimals {
-                                amount: *by_height.values().last().expect("not empty"),
+                                amount: by_height.values().last().expect("not empty").clone(),
                                 decimals: number_of_decimals,
                             },
                         )
@@ -170,14 +172,14 @@ impl ApiServerInMemoryStorage {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.address_locked_balance_table.get(address).map_or_else(
             || Ok(None),
             |balance| {
                 let range_begin = (coin_or_token_id, BlockHeight::zero());
                 let range_end = (coin_or_token_id, BlockHeight::max());
                 let range = balance.range(range_begin..=range_end);
-                Ok(range.last().map(|(_, v)| *v))
+                Ok(range.last().map(|(_, v)| v.clone()))
             },
         )
     }
@@ -927,7 +929,7 @@ impl ApiServerInMemoryStorage {
     fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -937,8 +939,8 @@ impl ApiServerInMemoryStorage {
             .entry(coin_or_token_id)
             .or_default()
             .entry(block_height)
-            .and_modify(|e| *e = amount)
-            .or_insert(amount);
+            .and_modify(|e| *e = amount.clone())
+            .or_insert(amount.clone());
 
         self.update_nft_owner(coin_or_token_id, amount, address, block_height);
 
@@ -950,7 +952,7 @@ impl ApiServerInMemoryStorage {
     fn update_nft_owner(
         &mut self,
         coin_or_token_id: CoinOrTokenId,
-        amount: Amount,
+        amount: BigUint,
         address: &Address<Destination>,
         block_height: BlockHeight,
     ) {
@@ -960,7 +962,7 @@ impl ApiServerInMemoryStorage {
 
         if let Some(by_height) = self.nft_token_issuances.get_mut(&token_id) {
             let last = by_height.values().last().expect("not empty");
-            let owner = (amount > Amount::ZERO).then_some(address.as_object().clone());
+            let owner = (amount > BigUint::ZERO).then_some(address.as_object().clone());
             let new = NftWithOwner {
                 nft: last.nft.clone(),
                 owner,
@@ -972,7 +974,7 @@ impl ApiServerInMemoryStorage {
     fn set_address_locked_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -980,8 +982,8 @@ impl ApiServerInMemoryStorage {
             .entry(address.to_string())
             .or_default()
             .entry((coin_or_token_id, block_height))
-            .and_modify(|e| *e = amount)
-            .or_insert(amount);
+            .and_modify(|e| *e = amount.clone())
+            .or_insert(amount.clone());
 
         self.update_nft_owner(coin_or_token_id, amount, address, block_height);
 

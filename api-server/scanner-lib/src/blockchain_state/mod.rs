@@ -15,11 +15,9 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ops::{Add, Sub},
+    ops::{Add, AddAssign, Sub},
     sync::Arc,
 };
-
-use futures::{stream::FuturesOrdered, TryStreamExt};
 
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
@@ -59,6 +57,10 @@ use tx_verifier::transaction_verifier::{
 };
 
 use crate::sync::local_state::LocalBlockchainState;
+
+use futures::{stream::FuturesOrdered, TryStreamExt};
+use num_bigint::BigUint;
+use num_traits::ops::checked::CheckedSub;
 
 mod pos_adapter;
 
@@ -2086,16 +2088,16 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
-    let current_balance = db_tx
+    let mut balance = db_tx
         .get_address_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+    balance.add_assign(amount.into_atoms());
 
     db_tx
-        .set_address_balance_at_height(address, new_amount, coin_or_token_id, block_height)
+        .set_address_balance_at_height(address, balance, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -2107,16 +2109,16 @@ async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
     coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
-    let current_balance = db_tx
+    let mut balance = db_tx
         .get_address_locked_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+    balance.add_assign(amount.into_atoms());
 
     db_tx
-        .set_address_locked_balance_at_height(address, new_amount, coin_or_token_id, block_height)
+        .set_address_locked_balance_at_height(address, balance, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -2132,14 +2134,15 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
         .get_address_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
-    let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
-        panic!(
-            "Balance should not overflow {:?} {:?} {:?}",
-            coin_or_token_id, current_balance, *amount
-        )
-    });
+    let new_amount =
+        current_balance.checked_sub(&amount.into_atoms().into()).unwrap_or_else(|| {
+            panic!(
+                "Balance should not underflow {:?} {:?} {:?}",
+                coin_or_token_id, current_balance, *amount
+            )
+        });
 
     db_tx
         .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
@@ -2158,14 +2161,15 @@ async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
         .get_address_locked_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
+        .unwrap_or(BigUint::ZERO);
 
-    let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
-        panic!(
-            "Balance should not overflow {:?} {:?} {:?}",
-            coin_or_token_id, current_balance, *amount
-        )
-    });
+    let new_amount =
+        current_balance.checked_sub(&amount.into_atoms().into()).unwrap_or_else(|| {
+            panic!(
+                "Balance should not underflow {:?} {:?} {:?}",
+                coin_or_token_id, current_balance, *amount
+            )
+        });
 
     db_tx
         .set_address_locked_balance_at_height(&address, new_amount, coin_or_token_id, block_height)

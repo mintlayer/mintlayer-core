@@ -34,6 +34,8 @@ use common::{
 
 use super::ApiServerInMemoryStorageTransactionalRw;
 
+use num_bigint::BigUint;
+
 #[async_trait::async_trait]
 impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn reinitialize_storage(
@@ -74,7 +76,7 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -89,7 +91,7 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
     async fn set_address_locked_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -327,7 +329,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
@@ -342,7 +344,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.transaction.get_address_locked_balance(address, coin_or_token_id)
     }
 

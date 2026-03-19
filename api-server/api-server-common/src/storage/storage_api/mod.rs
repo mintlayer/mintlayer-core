@@ -34,6 +34,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use crypto::vrf::VRFPublicKey;
+use num_bigint::BigUint;
 use pos_accounting::{Error as PosError, PoolData};
 use serialization::{Decode, Encode};
 
@@ -577,9 +578,9 @@ pub struct BlockInfo {
     pub height: Option<BlockHeight>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AmountWithDecimals {
-    pub amount: Amount,
+    pub amount: BigUint,
     pub decimals: u8,
 }
 
@@ -599,7 +600,7 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError>;
+    ) -> Result<Option<BigUint>, ApiServerStorageError>;
 
     async fn get_address_balances(
         &self,
@@ -610,7 +611,7 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError>;
+    ) -> Result<Option<BigUint>, ApiServerStorageError>;
 
     async fn get_address_transactions(
         &self,
@@ -832,7 +833,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
@@ -840,7 +841,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_address_locked_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

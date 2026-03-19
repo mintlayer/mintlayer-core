@@ -38,6 +38,8 @@ use crate::storage::{
 
 use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
+use num_bigint::BigUint;
+
 #[async_trait::async_trait]
 impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn reinitialize_storage(
@@ -93,7 +95,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -107,7 +109,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     async fn set_address_locked_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -425,7 +427,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
@@ -446,7 +448,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_locked_balance(address, coin_or_token_id).await?;
 

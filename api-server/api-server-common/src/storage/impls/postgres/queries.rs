@@ -18,9 +18,6 @@ use std::{
     str::FromStr,
 };
 
-use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
-use serialization::{DecodeAll, Encode};
-
 use common::{
     address::Address,
     chain::{
@@ -31,7 +28,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -42,6 +38,11 @@ use crate::storage::{
         TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
     },
 };
+
+use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
+use num_bigint::BigUint;
+use serialization::{DecodeAll, Encode};
+use tokio_postgres::NoTls;
 
 const VERSION_STR: &str = "version";
 
@@ -149,7 +150,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.tx
             .query_opt(
                 r#"
@@ -166,12 +167,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 || Ok(None),
                 |row| {
                     let amount: Vec<u8> = row.get(0);
-                    let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Amount deserialization failed: {}",
-                            e
-                        ))
-                    })?;
+                    let amount = BigUint::from_bytes_le(&amount);
 
                     Ok(Some(amount))
                 },
@@ -201,12 +197,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let amount: Vec<u8> = row.get(1);
                 let number_of_decimals: i16 = row.get(2);
 
-                let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "Amount deserialization failed: {}",
-                        e
-                    ))
-                })?;
+                let amount = BigUint::from_bytes_le(&amount);
 
                 let coin_or_token_id = CoinOrTokenId::decode_all(&mut coin_or_token_id.as_slice())
                     .map_err(|e| {
@@ -231,7 +222,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
-    ) -> Result<Option<Amount>, ApiServerStorageError> {
+    ) -> Result<Option<BigUint>, ApiServerStorageError> {
         self.tx
             .query_opt(
                 r#"
@@ -249,12 +240,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 || Ok(None),
                 |row| {
                     let amount: Vec<u8> = row.get(0);
-                    let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Amount deserialization failed: {}",
-                            e
-                        ))
-                    })?;
+                    let amount = BigUint::from_bytes_le(&amount);
 
                     Ok(Some(amount))
                 },
@@ -337,7 +323,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -357,7 +343,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
                     WHERE ml.latest_address_balance_cache.block_height <= EXCLUDED.block_height;
                 "#,
-                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.to_bytes_le()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -370,7 +356,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ON CONFLICT (address, block_height, coin_or_token_id)
                     DO UPDATE SET amount = EXCLUDED.amount;
                 "#,
-                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.to_bytes_le()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -379,8 +365,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             return Ok(());
         };
 
-        self.update_nft_owner(token_id, height, (amount > Amount::ZERO).then_some(address))
-            .await?;
+        self.update_nft_owner(
+            token_id,
+            height,
+            (amount > BigUint::ZERO).then_some(address),
+        )
+        .await?;
 
         Ok(())
     }
@@ -432,7 +422,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_address_locked_balance_at_height(
         &mut self,
         address: &Address<Destination>,
-        amount: Amount,
+        amount: BigUint,
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -446,7 +436,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ON CONFLICT (address, block_height, coin_or_token_id)
                     DO UPDATE SET amount = $4;
                 "#,
-                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.to_bytes_le()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -455,8 +445,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             return Ok(());
         };
 
-        self.update_nft_owner(token_id, height, (amount > Amount::ZERO).then_some(address))
-            .await?;
+        self.update_nft_owner(
+            token_id,
+            height,
+            (amount > BigUint::ZERO).then_some(address),
+        )
+        .await?;
 
         Ok(())
     }
