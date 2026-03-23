@@ -76,8 +76,9 @@ mockall::mock! {
             max_count: usize,
         ) -> Result<Vec<Block>, ChainstateError>;
         fn get_block_header(&self, block_id: &Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
-        fn get_locator(&self) -> Result<Locator, ChainstateError>;
+        fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
+        fn get_locator_from_block_id(&self, block_id: &Id<Block>) -> Result<Locator, ChainstateError>;
         fn get_block_ids_as_checkpoints(
             &self,
             start_height: BlockHeight,

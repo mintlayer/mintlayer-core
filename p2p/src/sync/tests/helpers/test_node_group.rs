@@ -15,13 +15,15 @@
 
 use std::collections::BTreeMap;
 
-use common::{chain::GenBlock, primitives::Id};
 use futures::{future::select_all, FutureExt};
+use itertools::Either;
+use tokio::time;
+
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::PeerId;
 use randomness::Rng;
-use tokio::time;
 
 use crate::{message::BlockSyncMessage, PeerManagerEvent};
 
@@ -87,40 +89,57 @@ impl TestNodeGroup {
         &self.data[idx].node
     }
 
-    /// Receive a BlockSyncMessage from any peer for which delay_block_sync_messages_from is set to false.
+    pub fn node_mut(&mut self, idx: usize) -> &mut TestNode {
+        &mut self.data[idx].node
+    }
+
+    /// From any peer, receive either a `BlockSyncMessage` (but only if `delay_block_sync_messages_from`
+    /// is set to false for the peer) or a `PeerManagerEvent`.
     /// Panic if a timeout occurs.
-    async fn receive_next_block_sync_message(&mut self) -> BlockSyncMessageWithNodeIdx {
-        let mut sync_msg_receivers: Vec<_> = self
+    async fn receive_next_block_sync_message_or_peer_manager_event(
+        &mut self,
+    ) -> Either<BlockSyncMessageWithNodeIdx, PeerManagerEventWithNodeIdx> {
+        let futures: Vec<_> = self
             .data
             .iter_mut()
-            .enumerate()
-            .filter_map(|(idx, data_item)| {
-                if data_item.delay_block_sync_messages_from {
-                    None
-                } else {
-                    Some((idx, &mut data_item.node.block_sync_msg_receiver))
+            .map(|node_data_item| {
+                async {
+                    tokio::select! {
+                        msg = node_data_item.node.block_sync_msg_receiver.recv(),
+                            if !node_data_item.delay_block_sync_messages_from =>
+                        {
+                            Either::Left(msg)
+                        }
+                        event = node_data_item.node.peer_manager_event_receiver.recv() => {
+                            Either::Right(event)
+                        }
+                    }
                 }
+                .boxed()
             })
             .collect();
-        assert!(!sync_msg_receivers.is_empty());
+        assert!(!futures.is_empty());
 
-        let combined_future = select_all(
-            sync_msg_receivers
-                .iter_mut()
-                .map(|(_, recv)| recv.recv().boxed())
-                .collect::<Vec<_>>(),
-        );
+        let combined_future = select_all(futures);
 
-        let (receiver_peer_id_msg, future_idx, _) =
+        let (msg_or_peer_mgr_event, future_idx, _) =
             time::timeout(LONG_TIMEOUT, combined_future).await.unwrap();
-        let sender_node_idx = sync_msg_receivers[future_idx].0;
-        let (receiver_peer_id, msg) = receiver_peer_id_msg.unwrap();
-        let receiver_node_idx = self.node_idx_by_peer_id(receiver_peer_id);
 
-        BlockSyncMessageWithNodeIdx {
-            message: msg,
-            sender_node_idx,
-            receiver_node_idx,
+        match msg_or_peer_mgr_event {
+            Either::Left(msg) => {
+                let (receiver_peer_id, msg) = msg.unwrap();
+                let receiver_node_idx = self.node_idx_by_peer_id(receiver_peer_id);
+
+                Either::Left(BlockSyncMessageWithNodeIdx {
+                    message: msg,
+                    sender_node_idx: future_idx,
+                    receiver_node_idx,
+                })
+            }
+            Either::Right(event) => Either::Right(PeerManagerEventWithNodeIdx {
+                event: event.unwrap(),
+                sender_node_idx: future_idx,
+            }),
         }
     }
 
@@ -147,33 +166,53 @@ impl TestNodeGroup {
     // This is only used to prevent infinite loops.
     const MSG_COUNT_LIMIT: usize = 1_000_000;
 
-    /// Exchange block sync messages (waiting for them if needed) while the passed function
-    /// returns SendAndContinue.
+    /// Exchange block sync messages and receive peer manager events, waiting for them if needed,
+    /// while the passed function returns SendAndContinue.
     /// The "context" parameter can be anything, it will be forwarded to the function as is.
-    pub async fn exchange_block_sync_messages_while<F, Context>(
+    /// Note: when a peer manager event is received, nothing will be sent, so `SendAndContinue`
+    /// just means "Send" in this case.
+    pub async fn exchange_block_sync_messages_while_generic<F, Context>(
         &mut self,
         context: &mut Context,
         mut func: F,
     ) where
-        F: FnMut(
-            /*this:*/ &mut TestNodeGroup,
-            /*context:*/ &mut Context,
-            /*msg:*/ &BlockSyncMessageWithNodeIdx,
+        F: AsyncFnMut(
+            // This node group.
+            &mut TestNodeGroup,
+            // The context.
+            &mut Context,
+            // The message or event.
+            // Note that the peer manager event has to be passed by value, since the caller may need
+            // to send a confirmation using a one-shot sender contained in the event, which will consume
+            // the sender (and PeerManagerEvent is non-clonable due to these senders).
+            Either<&BlockSyncMessageWithNodeIdx, PeerManagerEventWithNodeIdx>,
         ) -> MsgAction,
     {
         let mut msg_count: usize = 0;
 
         loop {
-            self.assert_no_peer_manager_events_if_needed();
+            let msg_or_peer_mgr_event =
+                self.receive_next_block_sync_message_or_peer_manager_event().await;
 
-            let msg = self.receive_next_block_sync_message().await;
+            let (msg, peer_mgr_event) = match msg_or_peer_mgr_event {
+                Either::Left(msg) => (Some(msg), None),
+                Either::Right(event) => (None, Some(event)),
+            };
 
-            let msg_action = func(self, context, &msg);
+            let msg_action = func(
+                self,
+                context,
+                msg.as_ref()
+                    .map_or_else(|| Either::Right(peer_mgr_event.unwrap()), Either::Left),
+            )
+            .await;
             if msg_action == MsgAction::Break {
                 break;
             }
 
-            self.send_sync_message(msg).await;
+            if let Some(msg) = msg {
+                self.send_sync_message(msg).await;
+            }
 
             match msg_action {
                 MsgAction::SendAndContinue => { /*do nothing*/ }
@@ -181,11 +220,39 @@ impl TestNodeGroup {
                 MsgAction::Break => unreachable!(),
             }
 
-            self.assert_no_peer_manager_events_if_needed();
-
             assert!(msg_count < Self::MSG_COUNT_LIMIT);
             msg_count += 1;
         }
+    }
+
+    /// Exchange block sync messages, waiting for them if needed, while the passed function
+    /// returns SendAndContinue.
+    /// The "context" parameter can be anything, it will be forwarded to the function as is.
+    pub async fn exchange_block_sync_messages_while<F, Context>(
+        &mut self,
+        context: &mut Context,
+        mut func: F,
+    ) where
+        F: AsyncFnMut(
+            /*this:*/ &mut TestNodeGroup,
+            /*context:*/ &mut Context,
+            /*msg:*/ &BlockSyncMessageWithNodeIdx,
+        ) -> MsgAction,
+    {
+        self.exchange_block_sync_messages_while_generic(
+            context,
+            async |this, context, msg_or_peer_mgr_event| match msg_or_peer_mgr_event {
+                Either::Left(msg) => func(this, context, msg).await,
+                Either::Right(event) => {
+                    if this.prevent_peer_manager_events {
+                        Self::assert_informational_peer_mgr_event(&event.event)
+                    }
+
+                    MsgAction::SendAndContinue
+                }
+            },
+        )
+        .await
     }
 
     /// Perform "1 round" of exchanging block sync messages - exchange only the ones that are already
@@ -227,7 +294,7 @@ impl TestNodeGroup {
             }
 
             loop {
-                self.assert_no_peer_manager_events_if_needed();
+                self.assert_no_non_informational_peer_manager_events_if_needed();
 
                 let (dest_peer_id, sync_msg) =
                     self.data[i].node.block_sync_msg_receiver.recv().await.unwrap();
@@ -248,7 +315,7 @@ impl TestNodeGroup {
                     }
                 }
 
-                self.assert_no_peer_manager_events_if_needed();
+                self.assert_no_non_informational_peer_manager_events_if_needed();
 
                 assert!(msg_count < Self::MSG_COUNT_LIMIT);
                 msg_count += 1;
@@ -304,40 +371,49 @@ impl TestNodeGroup {
         self.prevent_peer_manager_events = set;
     }
 
-    /// The "informational" messages like NewTipReceived/NewChainstateTip etc are ignored.
-    // TODO: Rename the function
-    fn assert_no_peer_manager_events_if_needed(&mut self) {
+    /// Call `assert_no_non_informational_peer_manager_events` if `prevent_peer_manager_events` was set to true.
+    fn assert_no_non_informational_peer_manager_events_if_needed(&mut self) {
         if self.prevent_peer_manager_events {
-            for data_item in &mut self.data {
-                if let Ok(peer_event) = data_item.node.peer_manager_event_receiver.try_recv() {
-                    match peer_event {
-                        PeerManagerEvent::Connect(_, _)
-                        | PeerManagerEvent::Disconnect(_, _, _, _)
-                        | PeerManagerEvent::GetPeerCount(_)
-                        | PeerManagerEvent::GetBindAddresses(_)
-                        | PeerManagerEvent::GetConnectedPeers(_)
-                        | PeerManagerEvent::AdjustPeerScore { .. }
-                        | PeerManagerEvent::GetReserved(_)
-                        | PeerManagerEvent::AddReserved(_, _)
-                        | PeerManagerEvent::RemoveReserved(_, _)
-                        | PeerManagerEvent::ListBanned(_)
-                        | PeerManagerEvent::Ban(_, _, _)
-                        | PeerManagerEvent::Unban(_, _)
-                        | PeerManagerEvent::ListDiscouraged(_)
-                        | PeerManagerEvent::Undiscourage(_, _)
-                        | PeerManagerEvent::EnableNetworking { .. }
-                        | PeerManagerEvent::GenericQuery(_)
-                        | PeerManagerEvent::GenericMut(_) => {
-                            panic!("Unexpected peer manager event: {peer_event:?}");
-                        }
-                        PeerManagerEvent::NewTipReceived { .. }
-                        | PeerManagerEvent::NewChainstateTip(_)
-                        | PeerManagerEvent::NewValidTransactionReceived { .. }
-                        | PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {
-                            // Ignored
-                        }
-                    }
-                }
+            self.assert_no_non_informational_peer_manager_events()
+        }
+    }
+
+    /// Assert there are no peer manager events except for the "informational" messages like
+    /// NewTipReceived/NewChainstateTip etc.
+    fn assert_no_non_informational_peer_manager_events(&mut self) {
+        for data_item in &mut self.data {
+            if let Ok(event) = data_item.node.peer_manager_event_receiver.try_recv() {
+                Self::assert_informational_peer_mgr_event(&event)
+            }
+        }
+    }
+
+    fn assert_informational_peer_mgr_event(event: &PeerManagerEvent) {
+        match event {
+            PeerManagerEvent::Connect(_, _)
+            | PeerManagerEvent::Disconnect(_, _, _, _)
+            | PeerManagerEvent::GetPeerCount(_)
+            | PeerManagerEvent::GetBindAddresses(_)
+            | PeerManagerEvent::GetConnectedPeers(_)
+            | PeerManagerEvent::AdjustPeerScore { .. }
+            | PeerManagerEvent::GetReserved(_)
+            | PeerManagerEvent::AddReserved(_, _)
+            | PeerManagerEvent::RemoveReserved(_, _)
+            | PeerManagerEvent::ListBanned(_)
+            | PeerManagerEvent::Ban(_, _, _)
+            | PeerManagerEvent::Unban(_, _)
+            | PeerManagerEvent::ListDiscouraged(_)
+            | PeerManagerEvent::Undiscourage(_, _)
+            | PeerManagerEvent::EnableNetworking { .. }
+            | PeerManagerEvent::GenericQuery(_)
+            | PeerManagerEvent::GenericMut(_) => {
+                panic!("Unexpected peer manager event: {event:?}");
+            }
+            PeerManagerEvent::NewTipReceived { .. }
+            | PeerManagerEvent::NewChainstateTip(_)
+            | PeerManagerEvent::NewValidTransactionReceived { .. }
+            | PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {
+                // Ignored
             }
         }
     }
@@ -348,6 +424,12 @@ pub struct BlockSyncMessageWithNodeIdx {
     pub message: BlockSyncMessage,
     pub sender_node_idx: usize,
     pub receiver_node_idx: usize,
+}
+
+#[derive(Debug)]
+pub struct PeerManagerEventWithNodeIdx {
+    pub event: PeerManagerEvent,
+    pub sender_node_idx: usize,
 }
 
 #[allow(dead_code)]

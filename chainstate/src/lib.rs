@@ -46,7 +46,7 @@ pub use crate::{
         TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },
 };
-pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+pub use chainstate_types::{BlockIndex, GenBlockIndex, GenBlockIndexRef, PropertyQueryError};
 pub use constraints_value_accumulator;
 pub use detail::tx_verification_strategy::*;
 pub use interface::{chainstate_interface, chainstate_interface_impl_delegation};

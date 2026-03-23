@@ -232,11 +232,11 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    fn get_locator(&self) -> Result<Locator, ChainstateError> {
+    fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_locator()
+            .get_locator_from_best_block()
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -246,6 +246,15 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_locator_from_height(height)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
+    fn get_locator_from_block_id(&self, block_id: &Id<Block>) -> Result<Locator, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_locator_from_block_id(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

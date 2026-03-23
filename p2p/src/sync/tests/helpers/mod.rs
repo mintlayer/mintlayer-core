@@ -180,16 +180,12 @@ impl TestNode {
         &self.chainstate_handle
     }
 
-    pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
-        self.chainstate_handle
-            .call(move |cs| cs.get_block(&block_id))
-            .await
-            .unwrap()
-            .unwrap()
-    }
-
     pub fn mempool(&self) -> &MempoolHandle {
         &self.mempool_handle
+    }
+
+    pub fn peer_id_as_seen_by_others(&self) -> PeerId {
+        self.peer_id
     }
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
@@ -448,9 +444,34 @@ impl TestNode {
         drop(self.peer_manager_event_receiver);
     }
 
+    pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
+        self.chainstate_handle
+            .call(move |cs| cs.get_block(&block_id))
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
     pub async fn get_locator_from_height(&self, height: BlockHeight) -> Locator {
         self.chainstate_handle
-            .call_mut(move |this| this.get_locator_from_height(height))
+            .call(move |cs| cs.get_locator_from_height(height))
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    pub async fn get_locator_from_best_block(&self) -> Locator {
+        self.chainstate_handle
+            .call(move |cs| cs.get_locator_from_best_block())
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    pub async fn get_locator_from_block_id(&self, block_id: &Id<Block>) -> Locator {
+        let block_id = *block_id;
+        self.chainstate_handle
+            .call(move |cs| cs.get_locator_from_block_id(&block_id))
             .await
             .unwrap()
             .unwrap()
@@ -918,31 +939,30 @@ pub async fn make_new_top_blocks_return_headers(
     let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.gen()));
 
     chainstate
-        .call_mut(move |this| {
+        .call_mut(move |cs| {
             let mut new_rng = new_rng;
             let mut block_headers = Vec::new();
-            let start_height = this
+            let start_height = cs
                 .get_best_block_height()
                 .unwrap()
                 .into_int()
                 .saturating_sub(start_distance_from_top);
-            let start_block_id =
-                this.get_block_id_from_height(start_height.into()).unwrap().unwrap();
-            let mut last_block = match start_block_id.classify(this.get_chain_config()) {
+            let start_block_id = cs.get_block_id_from_height(start_height.into()).unwrap().unwrap();
+            let mut last_block = match start_block_id.classify(cs.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
-                common::chain::GenBlockId::Block(id) => this.get_block(&id).unwrap(),
+                common::chain::GenBlockId::Block(id) => cs.get_block(&id).unwrap(),
             };
 
             for _ in 0..count {
                 let new_block = make_new_block(
-                    this.get_chain_config(),
+                    cs.get_chain_config(),
                     last_block.as_ref(),
                     &time_getter,
                     &mut new_rng,
                 );
 
                 block_headers.push(new_block.header().clone());
-                this.process_block(new_block.clone(), BlockSource::Local).unwrap();
+                cs.process_block(new_block.clone(), BlockSource::Local).unwrap();
                 last_block = Some(new_block);
             }
 

@@ -175,7 +175,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
+    pub fn get_locator_from_best_block(&self) -> Result<Locator, PropertyQueryError> {
         let best_block_index = self.chainstate_ref.get_best_block_index()?;
         let height = best_block_index.block_height();
         self.get_locator_from_height(height)
@@ -185,11 +185,48 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         height: BlockHeight,
     ) -> Result<Locator, PropertyQueryError> {
-        let headers = locator_tip_distances()
+        let block_id_results = locator_tip_distances()
             .map_while(|dist| height - dist)
             .map(|ht| self.chainstate_ref.get_block_id_by_height(ht));
 
-        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+        itertools::process_results(block_id_results, |iter| iter.flatten().collect::<Vec<_>>())
+            .map(Locator::new)
+    }
+
+    pub fn get_locator_from_block_id(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Locator, PropertyQueryError> {
+        let mut last_child_block_index =
+            self.chainstate_ref.get_existing_gen_block_index(block_id.into())?;
+        let mut already_on_mainchain = false;
+        let starting_height = last_child_block_index.block_height();
+
+        let block_id_results = locator_tip_distances()
+            .map_while(|dist| starting_height - dist)
+            .map(|height| -> Result<_, PropertyQueryError> {
+                if !already_on_mainchain {
+                    let last_child_block_id_from_height = self
+                        .chainstate_ref
+                        .get_block_id_by_height(last_child_block_index.block_height())?;
+                    already_on_mainchain =
+                        last_child_block_id_from_height == Some(last_child_block_index.block_id());
+                }
+
+                let block_id = if already_on_mainchain {
+                    self.chainstate_ref
+                        .get_block_id_by_height(height)?
+                        .ok_or(PropertyQueryError::InvariantErrorLocatorDistancesWrongOrder)?
+                } else {
+                    last_child_block_index =
+                        self.chainstate_ref.get_ancestor(&last_child_block_index, height)?;
+                    last_child_block_index.block_id()
+                };
+
+                Ok(block_id)
+            });
+
+        itertools::process_results(block_id_results, |iter| iter.collect::<Vec<_>>())
             .map(Locator::new)
     }
 
