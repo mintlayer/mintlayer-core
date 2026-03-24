@@ -168,7 +168,7 @@ dyn-clone = "1.0"
 # Note: enum iteration is also provided by strum. However, with strum it's a bit more limited,
 # e.g. there is no way to to go from one enum value to the next one, like enum_iterator::Sequence::next()
 # does.
-num-bigint = "0.4.6"
+num-bigint = "0.4"
 enum-iterator = "2.0"
 enumflags2 = "0.7"
 expect-test = "1.3"
