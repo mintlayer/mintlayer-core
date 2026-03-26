@@ -345,7 +345,7 @@ impl HandshakeHandler {
                     let send_result = peer_event_sender
                         .send(PeerEvent::MisbehavedOnHandshake { error: err.clone() })
                         .await;
-                    if let Err(_) = send_result {
+                    if send_result.is_err() {
                         log::error!("Cannot send PeerEvent::MisbehavedOnHandshake");
                     }
                 }

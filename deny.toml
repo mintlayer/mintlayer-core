@@ -2,7 +2,6 @@
 github = [
     "mintlayer",  # allow any code from mintlayer's github
     "paritytech", # we have to use an unreleased version of parity-scale-codec at this moment
-    "tokio-rs",   # we have to use an unreleased version of tokio at this moment
 ]
 
 [licenses]

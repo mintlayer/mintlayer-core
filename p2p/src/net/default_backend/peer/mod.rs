@@ -255,12 +255,13 @@ where
                 biased;
 
                 event = backend_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    BackendEvent::Accepted{ block_sync_msg_sender, transaction_sync_msg_sender } => {
+                    BackendEvent::Accepted { block_sync_msg_sender, transaction_sync_msg_sender } => {
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
                     BackendEvent::SendMessage(message) => {
                         let message_tag: MessageTag = (&*message).into();
-                        if let Err(_) = writer_cmd_sender.send(WriterCommand::SendMessage(message)) {
+                        let send_result = writer_cmd_sender.send(WriterCommand::SendMessage(message));
+                        if send_result.is_err() {
                             log::debug!(
                                 "Socket writer task already closed when trying to send a message with tag {:?}",
                                 message_tag
@@ -316,7 +317,7 @@ where
                             let send_result = peer_event_sender
                                 .send(PeerEvent::Misbehaved { error: err.clone() })
                                 .await;
-                            if let Err(_) = send_result {
+                            if send_result.is_err() {
                                 log::warn!("Cannot send PeerEvent::Misbehaved");
                             }
                         }
@@ -382,7 +383,7 @@ where
         let run_result = self.run_impl().await;
         let send_result = peer_event_sender.send(PeerEvent::ConnectionClosed).await;
 
-        if let Err(_) = send_result {
+        if send_result.is_err() {
             // Note: this situation is likely to happen if the connection is already closed,
             // so it's not really an error.
             log::debug!("Unable to send PeerEvent::ConnectionClosed to Backend");
@@ -441,7 +442,8 @@ fn spawn_writer<S: PeerStream + 'static>(
             )
             .await;
 
-            if let Err(_) = event_sender.send(WriterEvent::WriterClosed(writer_result)) {
+            let send_result = event_sender.send(WriterEvent::WriterClosed(writer_result));
+            if send_result.is_err() {
                 log::debug!("Peer task already closed");
             }
         },
@@ -462,7 +464,7 @@ async fn writer_loop<S: PeerStream>(
             WriterCommand::SendMessage(message) => {
                 log::debug!(
                     "Sending message {} with encoded size {}",
-                    MessageDebugLogSummary(&*message),
+                    MessageDebugLogSummary(&message),
                     message.encoded_size()
                 );
 

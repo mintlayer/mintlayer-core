@@ -93,7 +93,7 @@ impl PeerManagerObserverImpl {
     fn send_notification(&self, notification: PeerManagerNotification) {
         let send_result = self.notification_sender.send(notification.clone());
 
-        if let Err(_) = send_result {
+        if send_result.is_err() {
             log::warn!("Error sending peer manager notification {notification:?}");
         }
     }
@@ -165,7 +165,7 @@ impl BackendObserverImpl {
     fn send_notification(&self, notification: BackendNotification) {
         let send_result = self.notification_sender.send(notification.clone());
 
-        if let Err(_) = send_result {
+        if send_result.is_err() {
             log::warn!("Error sending backend notification {notification:?}");
         }
     }

@@ -380,7 +380,7 @@ impl<'a> std::fmt::Display for MessageDebugLogSummary<'a> {
                 TransactionResponse::Found(tx) => {
                     write!(
                         f,
-                        "TransactionResponse-Found(id={})",
+                        "TransactionResponse-Found(id={:x})",
                         tx.transaction().get_id()
                     )
                 }
