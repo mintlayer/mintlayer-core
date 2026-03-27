@@ -15,9 +15,9 @@
 
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
-use common::chain::config::create_testnet;
 use tempfile::TempDir;
 
+use common::{chain::config::create_testnet, primitives::semver::SemVer};
 use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
 use utils_networking::IpOrSocketAddress;
 
@@ -116,6 +116,11 @@ fn read_config_override_values() {
     let p2p_max_clock_diff = 15;
     let p2p_force_dns_query_if_no_global_addresses_known = true;
     let p2p_custom_disconnection_reason_for_banning = "foo".to_owned();
+    let p2p_min_peer_software_version = SemVer {
+        major: 12,
+        minor: 34,
+        patch: 56,
+    };
     let rpc_bind_address = "127.0.0.1:5432".parse().unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
@@ -155,9 +160,10 @@ fn read_config_override_values() {
         p2p_force_dns_query_if_no_global_addresses_known: Some(
             p2p_force_dns_query_if_no_global_addresses_known,
         ),
-        p2p_custom_disconnection_reason_for_banning: (Some(
+        p2p_custom_disconnection_reason_for_banning: Some(
             p2p_custom_disconnection_reason_for_banning.clone(),
-        )),
+        ),
+        p2p_min_peer_software_version: Some(p2p_min_peer_software_version),
         max_tip_age: Some(max_tip_age),
         rpc_bind_address: Some(rpc_bind_address),
         rpc_enabled: Some(true),
@@ -290,6 +296,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.p2p.as_ref().unwrap().custom_disconnection_reason_for_banning,
         Some(p2p_custom_disconnection_reason_for_banning)
+    );
+    assert_eq!(
+        config.p2p.as_ref().unwrap().min_peer_software_version,
+        Some(p2p_min_peer_software_version)
     );
 
     assert_eq!(

@@ -122,6 +122,7 @@ mod dont_evict_if_blocks_in_flight {
                 feeler_connections_interval: Default::default(),
                 force_dns_query_if_no_global_addresses_known: Default::default(),
                 allow_same_ip_connections: Default::default(),
+                min_peer_software_version: Default::default(),
             },
             ping_check_period: Duration::ZERO.into(),
 

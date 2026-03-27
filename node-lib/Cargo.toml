@@ -29,6 +29,7 @@ fs4.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 paste.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_with.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false }
 toml.workspace = true
