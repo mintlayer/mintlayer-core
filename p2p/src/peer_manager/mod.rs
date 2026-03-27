@@ -27,6 +27,7 @@ pub mod peers_eviction;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     net::IpAddr,
+    ops::DerefMut as _,
     sync::Arc,
     time::Duration,
 };
@@ -43,7 +44,7 @@ use common::{
 use logging::log;
 use networking::types::ConnectionDirection;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
-use randomness::{make_pseudo_rng, seq::IteratorRandom, Rng};
+use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngCore};
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 use utils_networking::IpOrSocketAddress;
 
@@ -205,6 +206,9 @@ where
     /// substitute it with a mock implementation.
     dns_seed: Box<dyn DnsSeed>,
 
+    /// An RNG used to generate various delays when dealing with peers.
+    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
+
     /// The time when PeerManager was initialized.
     init_time: Time,
     /// Last time when a new tip was added to the chainstate.
@@ -233,6 +237,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
     S: PeerDbStorage,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         networking_enabled: bool,
         chain_config: Arc<ChainConfig>,
@@ -241,6 +246,7 @@ where
         peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
+        rng: impl RngCore + Send + 'static,
     ) -> crate::Result<Self> {
         Self::new_generic(
             networking_enabled,
@@ -252,6 +258,7 @@ where
             peerdb_storage,
             None,
             Box::new(DefaultDnsSeed::new(chain_config, p2p_config)),
+            rng,
         )
     }
 
@@ -266,20 +273,23 @@ where
         peerdb_storage: S,
         observer: Option<Box<dyn Observer + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
+        mut rng: impl RngCore + Send + 'static,
     ) -> crate::Result<Self> {
-        let mut rng = make_pseudo_rng();
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
             Arc::clone(&p2p_config),
             time_getter.clone(),
             peerdb_storage,
+            &mut rng,
         )?;
         let salt = peerdb.salt();
         let now = time_getter.get_time();
         let next_feeler_connection_time =
-            Self::choose_next_feeler_connection_time(&p2p_config, now);
+            Self::choose_next_feeler_connection_time(&p2p_config, now, &mut rng);
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
+
+        let peer_eviction_random_state = peers_eviction::RandomState::new(&mut rng);
 
         Ok(PeerManager {
             networking_enabled,
@@ -293,10 +303,11 @@ where
             peers: BTreeMap::new(),
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
-            peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
+            peer_eviction_random_state,
             addr_list_response_cache: AddrListResponseCache::new(salt),
             observer,
             dns_seed,
+            rng: std::sync::Mutex::new(Box::new(rng)),
             init_time: now,
             last_chainstate_tip_block_time: None,
             last_heartbeat_time: None,
@@ -306,11 +317,21 @@ where
         })
     }
 
-    fn choose_next_feeler_connection_time(p2p_config: &P2pConfig, now: Time) -> Time {
+    fn lock_rng(
+        rng: &std::sync::Mutex<Box<dyn RngCore + Send>>,
+    ) -> std::sync::MutexGuard<'_, Box<dyn RngCore + Send>> {
+        rng.lock().expect("poisoned mutex")
+    }
+
+    fn choose_next_feeler_connection_time(
+        p2p_config: &P2pConfig,
+        now: Time,
+        rng: &mut impl RngCore,
+    ) -> Time {
         let delay = p2p_config
             .peer_manager_config
             .feeler_connections_interval
-            .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+            .mul_f64(utils::exp_rand::exponential_rand(rng));
         (now + delay).expect("Unexpected time overflow")
     }
 
@@ -375,8 +396,10 @@ where
 
         // Send only one address because of the rate limiter (see `ADDR_RATE_INITIAL_SIZE`).
         // Select a random address to give all addresses a chance to be discovered by the network.
-        let chosen_discovered_address =
-            discovered_own_addresses.iter().choose(&mut make_pseudo_rng()).cloned();
+        let chosen_discovered_address = discovered_own_addresses
+            .iter()
+            .choose(Self::lock_rng(&self.rng).deref_mut())
+            .cloned();
 
         log::debug!(
             "Own addresses discovered for peer {peer_id}: {:?}, chosen address: {:?}",
@@ -401,7 +424,7 @@ where
                     address: address.as_peer_address(),
                 }),
             );
-            peer.announced_addresses.insert(&address, &mut make_pseudo_rng());
+            peer.announced_addresses.insert(&address, Self::lock_rng(&self.rng).deref_mut());
         }
     }
 
@@ -430,7 +453,7 @@ where
             .peers
             .values_mut()
             .filter(|peer| peer.discovered_own_address.is_some())
-            .choose(&mut make_pseudo_rng())
+            .choose(Self::lock_rng(&self.rng).deref_mut())
         {
             Self::send_own_address_to_peer(&mut self.peer_connectivity_handle, peer);
         }
@@ -932,11 +955,13 @@ where
     /// It's called when a new inbound connection is received, but the connection limit has been reached.
     /// Returns true if a random peer has been disconnected.
     fn try_evict_random_inbound_connection(&mut self) -> bool {
-        if let Some(peer_id) = peers_eviction::select_for_eviction_inbound(
+        let peer_id_opt = peers_eviction::select_for_eviction_inbound(
             self.eviction_candidates(PeerRole::Inbound),
             &self.p2p_config.peer_manager_config,
-            &mut make_pseudo_rng(),
-        ) {
+            Self::lock_rng(&self.rng).deref_mut(),
+        );
+
+        if let Some(peer_id) = peer_id_opt {
             log::info!("Inbound peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
@@ -952,12 +977,14 @@ where
 
     /// If there are too many outbound block relay peers, find and disconnect the "worst" one.
     fn evict_block_relay_peer(&mut self) {
-        if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
+        let peer_id_opt = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
-            &mut make_pseudo_rng(),
-        ) {
+            Self::lock_rng(&self.rng).deref_mut(),
+        );
+
+        if let Some(peer_id) = peer_id_opt {
             log::info!("Block relay peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
@@ -970,12 +997,14 @@ where
 
     /// If there are too many outbound full relay peers, find and disconnect the "worst" one.
     fn evict_full_relay_peer(&mut self) {
-        if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
+        let peer_id_opt = peers_eviction::select_for_eviction_full_relay(
             self.eviction_candidates(PeerRole::OutboundFullRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
-            &mut make_pseudo_rng(),
-        ) {
+            Self::lock_rng(&self.rng).deref_mut(),
+        );
+
+        if let Some(peer_id) = peer_id_opt {
             log::info!("Full relay peer {peer_id} is selected for eviction");
             self.disconnect(
                 peer_id,
@@ -1062,7 +1091,7 @@ where
         let announced_addresses = RollingBloomFilter::new(
             PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE,
             PEER_ADDRESSES_ROLLING_BLOOM_FPP,
-            &mut make_pseudo_rng(),
+            Self::lock_rng(&self.rng).deref_mut(),
         );
 
         let discovered_own_address = self.discover_own_address(
@@ -1098,7 +1127,8 @@ where
         assert!(old_value.is_none());
 
         if peer_role.is_outbound() {
-            self.peerdb.outbound_peer_connected(peer_address);
+            self.peerdb
+                .outbound_peer_connected(peer_address, Self::lock_rng(&self.rng).deref_mut());
         }
 
         if peer_role == PeerRole::OutboundBlockRelay {
@@ -1194,7 +1224,8 @@ where
             }
 
             if peer_role.is_outbound() {
-                self.peerdb.report_outbound_failure(peer_address);
+                self.peerdb
+                    .report_outbound_failure(peer_address, Self::lock_rng(&self.rng).deref_mut());
             }
         } else if peer_role == PeerRole::Feeler {
             self.disconnect(
@@ -1219,7 +1250,8 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: SocketAddress, error: P2pError) {
-        self.peerdb.report_outbound_failure(address);
+        self.peerdb
+            .report_outbound_failure(address, Self::lock_rng(&self.rng).deref_mut());
 
         let PendingConnect {
             outbound_connect_type,
@@ -1252,7 +1284,10 @@ where
             );
 
             if peer.peer_role.is_outbound() {
-                self.peerdb.outbound_peer_disconnected(peer.peer_address);
+                self.peerdb.outbound_peer_disconnected(
+                    peer.peer_address,
+                    Self::lock_rng(&self.rng).deref_mut(),
+                );
             }
 
             if let Some(PendingDisconnect {
@@ -1293,7 +1328,10 @@ where
 
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn query_dns_seed(&mut self) {
-        let addresses = self.dns_seed.obtain_addresses().await;
+        // Note: can't pass the result of `Self::lock_rng(&self.rng).deref_mut()` to `obtain_addresses`,
+        // like it's done in other places, because it's an async function and `MutexGuard` is not `Send`.
+        let addresses =
+            self.dns_seed.obtain_addresses(&mut BoxedRngMutexWrapper::new(&self.rng)).await;
 
         let mut new_addr_count = 0;
         for addr in &addresses {
@@ -1410,6 +1448,7 @@ where
                 )
             },
             needed_outbound_full_relay_conn_count,
+            Self::lock_rng(&self.rng).deref_mut(),
         );
 
         log::debug!(
@@ -1450,6 +1489,7 @@ where
                 )
             },
             needed_outbound_block_relay_conn_count,
+            Self::lock_rng(&self.rng).deref_mut(),
         );
 
         log::debug!(
@@ -1493,12 +1533,16 @@ where
             && cur_feeler_conn_count == 0
             && now >= self.next_feeler_connection_time
         {
-            if let Some(address) =
-                self.peerdb.select_non_reserved_outbound_address_from_new_addr_table()
-            {
+            let address_opt = self.peerdb.select_non_reserved_outbound_address_from_new_addr_table(
+                Self::lock_rng(&self.rng).deref_mut(),
+            );
+            if let Some(address) = address_opt {
                 self.connect(address, OutboundConnectType::Feeler);
-                self.next_feeler_connection_time =
-                    Self::choose_next_feeler_connection_time(&self.p2p_config, now);
+                self.next_feeler_connection_time = Self::choose_next_feeler_connection_time(
+                    &self.p2p_config,
+                    now,
+                    Self::lock_rng(&self.rng).deref_mut(),
+                );
             }
         }
     }
@@ -1533,16 +1577,15 @@ where
                 return;
             }
 
-            peer.announced_addresses.insert(&address, &mut make_pseudo_rng());
+            peer.announced_addresses.insert(&address, Self::lock_rng(&self.rng).deref_mut());
 
             self.peerdb.peer_discovered(address);
 
             if !self.peerdb.is_address_banned_or_discouraged(&address.as_bannable()) {
-                let peer_ids = self
-                    .subscribed_to_peer_addresses
-                    .iter()
-                    .cloned()
-                    .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
+                let peer_ids = self.subscribed_to_peer_addresses.iter().cloned().choose_multiple(
+                    Self::lock_rng(&self.rng).deref_mut(),
+                    PEER_ADDRESS_RESEND_COUNT,
+                );
                 for new_peer_id in peer_ids {
                     self.announce_address(new_peer_id, address);
                 }
@@ -1565,22 +1608,27 @@ where
         let now = self.time_getter.get_time();
         let addresses = self
             .addr_list_response_cache
-            .get_or_create(peer, now, || {
-                self.peerdb
-                    .known_addresses()
-                    .filter_map(|address| {
-                        let peer_addr = address.as_peer_address();
-                        let bannable_addr = address.as_bannable();
-                        if Self::is_peer_address_discoverable(&peer_addr, &self.p2p_config)
-                            && !self.peerdb.is_address_banned_or_discouraged(&bannable_addr)
-                        {
-                            Some(peer_addr)
-                        } else {
-                            None
-                        }
-                    })
-                    .choose_multiple(&mut make_pseudo_rng(), max_addr_count)
-            })
+            .get_or_create(
+                peer,
+                now,
+                || {
+                    self.peerdb
+                        .known_addresses()
+                        .filter_map(|address| {
+                            let peer_addr = address.as_peer_address();
+                            let bannable_addr = address.as_bannable();
+                            if Self::is_peer_address_discoverable(&peer_addr, &self.p2p_config)
+                                && !self.peerdb.is_address_banned_or_discouraged(&bannable_addr)
+                            {
+                                Some(peer_addr)
+                            } else {
+                                None
+                            }
+                        })
+                        .choose_multiple(&mut BoxedRngMutexWrapper::new(&self.rng), max_addr_count)
+                },
+                &mut BoxedRngMutexWrapper::new(&self.rng),
+            )
             // Note: some of the addresses may have become banned or discouraged after they've been
             // cached. It's not clear whether it's better to filter them out here, which will
             // reveal to peers what addresses we've banned or discouraged, or keep them as is.
@@ -1752,7 +1800,7 @@ where
             }
             PeerManagerEvent::AddReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                self.peerdb.add_reserved_node(address);
+                self.peerdb.add_reserved_node(address, Self::lock_rng(&self.rng).deref_mut());
                 if self.networking_enabled {
                     // Initiate new outbound connection without waiting for `heartbeat`
                     self.connect(address, OutboundConnectType::Reserved);
@@ -1761,7 +1809,7 @@ where
             }
             PeerManagerEvent::RemoveReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                self.peerdb.remove_reserved_node(address);
+                self.peerdb.remove_reserved_node(address, Self::lock_rng(&self.rng).deref_mut());
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::ListBanned(response_sender) => {
@@ -2038,7 +2086,7 @@ where
                     }
                 }
                 None => {
-                    let nonce = make_pseudo_rng().gen();
+                    let nonce = Self::lock_rng(&self.rng).gen();
                     Self::send_peer_message(
                         &mut self.peer_connectivity_handle,
                         *peer_id,
@@ -2321,8 +2369,9 @@ where
                         *self.p2p_config.peer_manager_config.outbound_full_relay_count,
                         1,
                     );
-                    let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)
-                        .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                    let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32).mul_f64(
+                        utils::exp_rand::exponential_rand(Self::lock_rng(&self.rng).deref_mut()),
+                    );
                     next_time_resend_own_address = (next_time_resend_own_address + delay)
                         .expect("Time derived from local clock; cannot fail");
                 }

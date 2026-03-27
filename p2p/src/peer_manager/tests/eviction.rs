@@ -25,6 +25,7 @@ use common::{
 use logging::log;
 use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv};
+use randomness::Rng as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -101,7 +102,7 @@ mod dont_evict_if_blocks_in_flight {
                 enable_feeler_connections: false.into(),
 
                 peerdb_config: PeerDbConfig {
-                    salt: Some(Salt::new_random_with_rng(&mut rng)),
+                    salt: Some(Salt::new_random(&mut rng)),
 
                     new_addr_table_bucket_count: Default::default(),
                     tried_addr_table_bucket_count: Default::default(),
@@ -159,6 +160,7 @@ mod dont_evict_if_blocks_in_flight {
             Arc::clone(&p2p_config),
             vec![bind_address],
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         );
 
         let addr_count = 3;

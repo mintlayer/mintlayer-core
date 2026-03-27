@@ -20,6 +20,7 @@ use rstest::rstest;
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use networking::test_helpers::{TestAddressMaker, TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv};
+use randomness::Rng as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -89,6 +90,7 @@ async fn dont_auto_ban_connected_peer(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     );
 
     let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
@@ -157,6 +159,7 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
+        make_seedable_rng(rng.gen()),
     );
 
     let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
@@ -247,6 +250,7 @@ async fn reject_incoming_connection_from_banned_peer(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -342,6 +346,7 @@ async fn no_outgoing_connection_to_banned_peer(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -429,6 +434,7 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         );
 
     let addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -553,6 +559,7 @@ async fn banned_address_not_in_addr_response(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
+            make_seedable_rng(rng.gen()),
         );
 
     let addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(

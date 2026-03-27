@@ -15,13 +15,22 @@
 
 use std::sync::Arc;
 
+use rstest::rstest;
+
 use chainstate::ChainstateConfig;
-use networking::test_helpers::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use networking::{
+    test_helpers::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    transport::{BufferedTranscoder, TransportListener, TransportSocket},
 };
-use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
 use p2p_test_utils::run_with_timeout;
-use test_utils::{assert_matches, BasicTestTimeGetter};
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
@@ -33,11 +42,13 @@ use crate::{
 // Note: these tests are mainly a sanity check to ensure that the corresponding test harness
 // is working properly.
 
-async fn correct_handshake_outgoing<TTM>()
+async fn correct_handshake_outgoing<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -52,6 +63,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -105,29 +117,40 @@ where
     assert_eq!(peer_score, 0);
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_outgoing_tcp() {
-    run_with_timeout(correct_handshake_outgoing::<TestTransportTcp>()).await;
+async fn correct_handshake_outgoing_tcp(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_outgoing::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_outgoing_channels() {
-    run_with_timeout(correct_handshake_outgoing::<TestTransportChannel>()).await;
+async fn correct_handshake_outgoing_channels(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_outgoing::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_outgoing_noise() {
-    run_with_timeout(correct_handshake_outgoing::<TestTransportNoise>()).await;
+async fn correct_handshake_outgoing_noise(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_outgoing::<TestTransportNoise>(seed)).await;
 }
 
-async fn correct_handshake_incoming<TTM>()
+async fn correct_handshake_incoming<TTM>(seed: Seed)
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -142,6 +165,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
+        make_seedable_rng(rng.gen()),
     )
     .await;
 
@@ -189,20 +213,29 @@ where
     assert_eq!(peer_score, 0);
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_incoming_tcp() {
-    run_with_timeout(correct_handshake_incoming::<TestTransportTcp>()).await;
+async fn correct_handshake_incoming_tcp(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_incoming::<TestTransportTcp>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_incoming_channels() {
-    run_with_timeout(correct_handshake_incoming::<TestTransportChannel>()).await;
+async fn correct_handshake_incoming_channels(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_incoming::<TestTransportChannel>(seed)).await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn correct_handshake_incoming_noise() {
-    run_with_timeout(correct_handshake_incoming::<TestTransportNoise>()).await;
+async fn correct_handshake_incoming_noise(#[case] seed: Seed) {
+    run_with_timeout(correct_handshake_incoming::<TestTransportNoise>(seed)).await;
 }

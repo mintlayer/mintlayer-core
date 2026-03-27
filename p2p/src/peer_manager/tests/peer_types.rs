@@ -15,13 +15,19 @@
 
 use std::sync::Arc;
 
+use rstest::rstest;
+
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use networking::transport::TcpTransportSocket;
 use p2p_types::{
     services::{Service, Services},
     PeerId,
 };
-use test_utils::BasicTestTimeGetter;
+use randomness::Rng as _;
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -35,10 +41,14 @@ use crate::{
     PeerManagerEvent,
 };
 
-#[tracing::instrument]
-#[test]
-fn validate_services() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn validate_services(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
 
     for node_type in [NodeType::Full, NodeType::BlocksOnly] {
         let chain_config = Arc::new(config::create_unit_test_config());
@@ -84,6 +94,7 @@ fn validate_services() {
             peer_mgr_event_receiver,
             time_getter.get_time_getter(),
             peerdb_inmemory_store(),
+            make_seedable_rng(rng.gen()),
         )
         .unwrap();
 

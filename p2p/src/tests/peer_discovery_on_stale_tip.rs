@@ -24,7 +24,11 @@ use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::{run_with_timeout, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use randomness::{Rng as _, RngCore};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::P2pConfig,
@@ -80,7 +84,7 @@ async fn peer_discovery_on_stale_tip_impl(
     start_in_ibd: bool,
     use_extra_block_relay_peers: bool,
 ) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     // The heavy checks don't make much sense for this test and it's relatively lengthy,
@@ -154,6 +158,7 @@ async fn peer_discovery_on_stale_tip_impl(
                 i + 1,
                 initial_block.clone(),
                 &format!("node{i}"),
+                make_seedable_rng(rng.gen()),
             )
             .await,
         );
@@ -217,6 +222,7 @@ async fn peer_discovery_on_stale_tip_impl(
         new_node_idx,
         initial_block.clone(),
         "new_node",
+        make_seedable_rng(rng.gen()),
     )
     .await;
     let new_node_addr = *new_node.local_address();
@@ -279,7 +285,8 @@ async fn new_full_relay_connections_on_stale_tip(#[case] seed: Seed) {
 }
 
 async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
+
     let time_getter = BasicTestTimeGetter::new();
     let start_time = time_getter.get_time_getter().get_time();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -363,6 +370,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         0,
         Some(initial_block.clone()),
         "main",
+        make_seedable_rng(rng.gen()),
     )
     .await;
     let main_node_address = *main_node.local_address();
@@ -378,6 +386,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
                 i + 1,
                 Some(initial_block.clone()),
                 &format!("extra{i}"),
+                make_seedable_rng(rng.gen()),
             )
             .await,
         );
@@ -510,6 +519,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn start_node(
     time_getter: &BasicTestTimeGetter,
     chain_config: &Arc<ChainConfig>,
@@ -518,6 +528,7 @@ async fn start_node(
     node_index: usize,
     initial_block: Option<Block>,
     name: &str,
+    rng: impl RngCore + Send + 'static,
 ) -> TestNode<Transport> {
     let node = TestNode::<Transport>::start(
         true,
@@ -529,6 +540,7 @@ async fn start_node(
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some(name),
+        rng,
     )
     .await;
 

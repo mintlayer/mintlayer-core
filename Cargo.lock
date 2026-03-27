@@ -6988,6 +6988,7 @@ name = "randomness"
 version = "1.2.1"
 dependencies = [
  "rand 0.8.5",
+ "static_assertions",
 ]
 
 [[package]]

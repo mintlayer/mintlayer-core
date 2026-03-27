@@ -39,7 +39,7 @@ use common::{chain::ChainConfig, time_getter::TimeGetter};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::expect_recv;
 use p2p_types::socket_address::SocketAddress;
-use randomness::Rng;
+use randomness::{Rng, RngCore};
 use test_utils::assert_matches_return_val;
 
 use crate::{
@@ -68,6 +68,7 @@ async fn make_peer_manager_custom<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
+    rng: impl RngCore + Send + 'static,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     UnboundedSender<PeerManagerEvent>,
@@ -104,6 +105,7 @@ where
         peer_mgr_event_receiver,
         time_getter,
         peerdb_inmemory_store(),
+        rng,
     )
     .unwrap();
 
@@ -119,6 +121,7 @@ async fn make_peer_manager<T>(
     transport: T::Transport,
     bind_address: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
+    rng: impl RngCore + Send + 'static,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     oneshot::Sender<()>,
@@ -136,6 +139,7 @@ where
             chain_config,
             p2p_config,
             Default::default(),
+            rng,
         )
         .await;
     (peer_manager, shutdown_sender, subscribers_sender)
@@ -150,6 +154,7 @@ pub fn make_standalone_peer_manager(
     p2p_config: Arc<P2pConfig>,
     bind_addresses: Vec<SocketAddress>,
     time_getter: TimeGetter,
+    rng: impl RngCore + Send + 'static,
 ) -> (
     PeerManager<TcpNetworkingService, impl PeerDbStorage>,
     mpsc::UnboundedSender<ConnectivityEvent>,
@@ -180,6 +185,7 @@ pub fn make_standalone_peer_manager(
         peerdb_inmemory_store(),
         Some(peer_mgr_observer),
         Box::new(dns_seed),
+        rng,
     )
     .unwrap();
 
@@ -198,6 +204,7 @@ async fn run_peer_manager<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
+    rng: impl RngCore + Send + 'static,
 ) -> (
     UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
@@ -208,7 +215,8 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let (peer_manager, peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
-        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
+        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter, rng)
+            .await;
     tokio_spawn_in_current_tracing_span(
         // Rust 1.92 thinks that the unwrap call here is unreachable, even though the function
         // returns a normal error.
@@ -235,10 +243,11 @@ async fn send_and_sync(
     message: PeerManagerMessage,
     conn_event_sender: &UnboundedSender<ConnectivityEvent>,
     cmd_receiver: &mut UnboundedReceiver<Command>,
+    rng: &mut impl Rng,
 ) {
     conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 
-    let sent_nonce = randomness::make_pseudo_rng().gen();
+    let sent_nonce = rng.gen();
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,

@@ -41,7 +41,7 @@ use std::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
+use randomness::{seq::IteratorRandom, Rng, SliceRandom};
 
 use crate::config::P2pConfig;
 
@@ -101,6 +101,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         p2p_config: Arc<P2pConfig>,
         time_getter: TimeGetter,
         storage: S,
+        rng: &mut impl Rng,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
         let LoadedStorage {
@@ -109,7 +110,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
             discouraged_addresses,
             anchor_addresses,
             salt,
-        } = LoadedStorage::load_storage(&storage, &p2p_config.peer_manager_config.peerdb_config)?;
+        } = LoadedStorage::load_storage(
+            &storage,
+            &p2p_config.peer_manager_config.peerdb_config,
+            rng,
+        )?;
 
         let reserved_nodes = p2p_config
             .reserved_nodes
@@ -215,20 +220,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         additional_filter: &impl Fn(&SocketAddress) -> bool,
         count: usize,
-    ) -> Vec<SocketAddress> {
-        self.select_non_reserved_outbound_addresses_with_rng(
-            cur_outbound_conn_addr_groups,
-            additional_filter,
-            count,
-            &mut make_pseudo_rng(),
-        )
-    }
-
-    fn select_non_reserved_outbound_addresses_with_rng(
-        &self,
-        cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
-        additional_filter: &impl Fn(&SocketAddress) -> bool,
-        count: usize,
         rng: &mut impl Rng,
     ) -> Vec<SocketAddress> {
         if count == 0 {
@@ -297,6 +288,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     pub fn select_non_reserved_outbound_address_from_new_addr_table(
         &self,
+        rng: &mut impl Rng,
     ) -> Option<SocketAddress> {
         let now = self.time_getter.get_time();
 
@@ -314,7 +306,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 }
             })
             .copied()
-            .choose(&mut make_pseudo_rng())
+            .choose(rng)
     }
 
     /// Selects reserved peer addresses for outbound connections
@@ -401,8 +393,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, address: SocketAddress) {
-        self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
+    pub fn report_outbound_failure(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed, rng);
 
         // Note: if the failed connection is a manual one, the address won't be in the addr tables,
         // but the 'change_address_state' call above will insert it into self.addresses.
@@ -414,14 +406,14 @@ impl<S: PeerDbStorage> PeerDb<S> {
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn outbound_peer_connected(&mut self, address: SocketAddress) {
-        self.change_address_state(address, AddressStateTransitionTo::Connected);
+    pub fn outbound_peer_connected(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::Connected, rng);
         self.move_addr_to_tried(&address);
     }
 
     /// Handle peer disconnect event with unspecified reason
-    pub fn outbound_peer_disconnected(&mut self, address: SocketAddress) {
-        self.change_address_state(address, AddressStateTransitionTo::Disconnected);
+    pub fn outbound_peer_disconnected(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::Disconnected, rng);
     }
 
     pub fn remove_address(&mut self, address: &SocketAddress) {
@@ -518,6 +510,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         &mut self,
         address: SocketAddress,
         transition: AddressStateTransitionTo,
+        rng: &mut impl Rng,
     ) {
         let now = self.time_getter.get_time();
 
@@ -530,7 +523,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let old_state = address_data.state().clone();
 
-        address_data.transition_to(transition, now, &mut make_pseudo_rng());
+        address_data.transition_to(transition, now, rng);
 
         log::debug!(
             "Address {} state changed: {:?}, old state = {:?}, new state = {:?}",
@@ -549,13 +542,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.reserved_nodes.iter().copied()
     }
 
-    pub fn add_reserved_node(&mut self, address: SocketAddress) {
-        self.change_address_state(address, AddressStateTransitionTo::SetReserved);
+    pub fn add_reserved_node(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::SetReserved, rng);
         self.reserved_nodes.insert(address);
     }
 
-    pub fn remove_reserved_node(&mut self, address: SocketAddress) {
-        self.change_address_state(address, AddressStateTransitionTo::UnsetReserved);
+    pub fn remove_reserved_node(&mut self, address: SocketAddress, rng: &mut impl Rng) {
+        self.change_address_state(address, AddressStateTransitionTo::UnsetReserved, rng);
         self.reserved_nodes.remove(&address);
     }
 

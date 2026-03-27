@@ -16,16 +16,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+
 use common::chain::ChainConfig;
 use logging::log;
 use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
-use randomness::{make_pseudo_rng, seq::IteratorRandom};
+use randomness::{seq::IteratorRandom, RngCore};
 
 use crate::config::P2pConfig;
 
 #[async_trait]
 pub trait DnsSeed: Send + Sync {
-    async fn obtain_addresses(&self) -> Vec<SocketAddress>;
+    async fn obtain_addresses(&self, rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress>;
 }
 
 pub struct DefaultDnsSeed {
@@ -47,7 +48,7 @@ const MAX_DNS_RECORDS: usize = 10;
 
 #[async_trait]
 impl DnsSeed for DefaultDnsSeed {
-    async fn obtain_addresses(&self) -> Vec<SocketAddress> {
+    async fn obtain_addresses(&self, rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress> {
         let dns_seeds = self.chain_config.dns_seeds();
 
         if dns_seeds.is_empty() {
@@ -73,7 +74,7 @@ impl DnsSeed for DefaultDnsSeed {
                         )
                     })
                     // Randomize selection because records can be sorted by type (A and AAAA)
-                    .choose_multiple(&mut make_pseudo_rng(), MAX_DNS_RECORDS)
+                    .choose_multiple(rng, MAX_DNS_RECORDS)
                     .into_iter()
                     .for_each(|addr| {
                         addresses.push(addr);

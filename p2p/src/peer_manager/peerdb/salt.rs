@@ -15,7 +15,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use randomness::{make_pseudo_rng, Rng};
+use randomness::Rng;
 use serialization::{Decode, Encode};
 
 /// A random number that is generated once and then mixed into certain hashes in the peer manager.
@@ -27,11 +27,7 @@ impl Salt {
         Self(val)
     }
 
-    pub fn new_random() -> Self {
-        Self::new_random_with_rng(&mut make_pseudo_rng())
-    }
-
-    pub fn new_random_with_rng<R: Rng>(rng: &mut R) -> Self {
+    pub fn new_random(rng: &mut impl Rng) -> Self {
         Self(rng.gen::<u64>())
     }
 

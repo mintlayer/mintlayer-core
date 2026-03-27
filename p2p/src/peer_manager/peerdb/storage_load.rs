@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::primitives::time::Time;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::Rng;
 
 use crate::{
     error::P2pError,
@@ -44,13 +45,14 @@ impl LoadedStorage {
     pub fn load_storage<S: PeerDbStorage>(
         storage: &S,
         peerdb_config: &PeerDbConfig,
+        rng: &mut impl Rng,
     ) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
 
         match version {
-            None => Self::init_storage(storage, peerdb_config),
+            None => Self::init_storage(storage, peerdb_config, rng),
             Some(CURRENT_STORAGE_VERSION) => Self::load_storage_v3(storage),
             Some(version) => Err(P2pError::PeerDbStorageVersionMismatch {
                 expected_version: CURRENT_STORAGE_VERSION,
@@ -62,8 +64,9 @@ impl LoadedStorage {
     fn init_storage<S: PeerDbStorage>(
         storage: &S,
         peerdb_config: &PeerDbConfig,
+        rng: &mut impl Rng,
     ) -> crate::Result<LoadedStorage> {
-        let salt = peerdb_config.salt.unwrap_or_else(Salt::new_random);
+        let salt = peerdb_config.salt.unwrap_or_else(|| Salt::new_random(rng));
 
         let mut tx = storage.transaction_rw()?;
         tx.set_version(CURRENT_STORAGE_VERSION)?;

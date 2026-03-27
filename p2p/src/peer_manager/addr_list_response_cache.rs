@@ -20,7 +20,7 @@ use std::{
 };
 
 use common::primitives::time::Time;
-use randomness::{make_pseudo_rng, Rng};
+use randomness::Rng;
 
 use super::{peer_context::PeerContext, peerdb::salt::Salt};
 
@@ -50,7 +50,13 @@ impl AddrListResponseCache {
         }
     }
 
-    pub fn get_or_create<F>(&mut self, peer_ctx: &PeerContext, now: Time, create: F) -> &Addresses
+    pub fn get_or_create<F>(
+        &mut self,
+        peer_ctx: &PeerContext,
+        now: Time,
+        create: F,
+        rng: &mut impl Rng,
+    ) -> &Addresses
     where
         F: FnOnce() -> Addresses,
     {
@@ -61,13 +67,13 @@ impl AddrListResponseCache {
         let cache_entry = match self.cache.entry(id) {
             Entry::Vacant(entry) => entry.insert(CacheEntry {
                 addresses: create(),
-                expiration_time: Self::new_expiration_time_from_now(now),
+                expiration_time: Self::new_expiration_time_from_now(now, rng),
             }),
             Entry::Occupied(mut entry) => {
                 if entry.get().expiration_time <= now {
                     *entry.get_mut() = CacheEntry {
                         addresses: create(),
-                        expiration_time: Self::new_expiration_time_from_now(now),
+                        expiration_time: Self::new_expiration_time_from_now(now, rng),
                     };
                 }
                 entry.into_mut()
@@ -101,10 +107,10 @@ impl AddrListResponseCache {
         hasher.finish()
     }
 
-    fn new_expiration_time_from_now(now: Time) -> Time {
+    fn new_expiration_time_from_now(now: Time, rng: &mut impl Rng) -> Time {
         let min_secs = EXPIRATION_INTERVAL_MIN.as_secs();
         let max_secs = EXPIRATION_INTERVAL_MAX.as_secs();
-        let secs = make_pseudo_rng().gen_range(min_secs..=max_secs);
+        let secs = rng.gen_range(min_secs..=max_secs);
         (now + Duration::from_secs(secs)).expect("Unexpected time overflow")
     }
 }
