@@ -1423,11 +1423,11 @@ user-login = "cpu"
 user-name = "Daniel McCarney"
 
 [[publisher.rustls-webpki]]
-version = "0.103.9"
-when = "2026-01-16"
-user-id = 4556
-user-login = "djc"
-user-name = "Dirkjan Ochtman"
+version = "0.103.10"
+when = "2026-03-20"
+user-id = 2751
+user-login = "ctz"
+user-name = "Joe Birr-Pixton"
 
 [[publisher.rustversion]]
 version = "1.0.22"
@@ -2981,7 +2981,7 @@ notes = "one use of unsafe to call windows specific api to get console handle."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.50.1"
-notes = "Lots of stylistic/rust-related chanegs, plus new features, but nothing out of the ordrinary."
+notes = "Lots of stylistic/rust-related changes, plus new features, but nothing out of the ordrinary."
 
 [[audits.bytecode-alliance.audits.nu-ansi-term]]
 who = "Alex Crichton <alex@alexcrichton.com>"
