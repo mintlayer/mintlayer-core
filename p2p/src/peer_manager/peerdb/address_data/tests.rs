@@ -14,10 +14,13 @@
 // limitations under the License.
 
 use rstest::rstest;
+use strum::IntoEnumIterator as _;
 
+use logging::log;
 use randomness::{
     distributions::{Distribution, WeightedIndex},
     rngs::StepRng,
+    seq::IteratorRandom as _,
     Rng,
 };
 use test_utils::random::{make_seedable_rng, Seed};
@@ -32,8 +35,9 @@ fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let started_at = Time::from_duration_since_epoch(Duration::ZERO);
 
-    let weights = [100, 100, 100, 10, 10];
-    assert_eq!(weights.len(), ALL_TRANSITIONS.len());
+    let weights = [100, 100, 100, 100, 10, 10];
+    let all_transition_tags = AddressStateTransitionToTag::iter().collect::<Vec<_>>();
+    assert_eq!(weights.len(), all_transition_tags.len());
     let weights = WeightedIndex::new(weights).unwrap();
 
     for _ in 0..100 {
@@ -43,10 +47,28 @@ fn randomized(#[case] seed: Seed) {
         let mut address_data = AddressData::new(was_reachable, reserved, started_at);
 
         for _ in 0..1000 {
-            let transition = ALL_TRANSITIONS[weights.sample(&mut rng)];
+            let transition_tag = all_transition_tags[weights.sample(&mut rng)];
+
+            let transition = match transition_tag {
+                AddressStateTransitionToTag::Connected => AddressStateTransitionTo::Connected {
+                    peer_role: OutboundPeerRole::iter().choose(&mut rng).unwrap(),
+                },
+                AddressStateTransitionToTag::HadActivity => AddressStateTransitionTo::HadActivity,
+                AddressStateTransitionToTag::Disconnected => AddressStateTransitionTo::Disconnected,
+                AddressStateTransitionToTag::ConnectionFailed => {
+                    AddressStateTransitionTo::ConnectionFailed
+                }
+                AddressStateTransitionToTag::SetReserved => AddressStateTransitionTo::SetReserved,
+                AddressStateTransitionToTag::UnsetReserved => {
+                    AddressStateTransitionTo::UnsetReserved
+                }
+            };
 
             let is_valid_transition = match transition {
-                AddressStateTransitionTo::Connected => !address_data.is_connected(),
+                AddressStateTransitionTo::Connected { peer_role: _ } => {
+                    !address_data.is_connected()
+                }
+                AddressStateTransitionTo::HadActivity => address_data.is_connected(),
                 AddressStateTransitionTo::Disconnected => address_data.is_connected(),
                 AddressStateTransitionTo::ConnectionFailed => !address_data.is_connected(),
                 AddressStateTransitionTo::SetReserved => true,
@@ -100,17 +122,29 @@ fn next_connect_time_test_impl(rng: &mut impl Rng) {
     let max_time_reserved = (start_time + limit_reserved).unwrap();
     let max_time_reachable = (start_time + limit_reachable).unwrap();
 
-    let time = AddressData::next_connect_time(start_time, 0, true, rng);
-    assert!(time <= max_time_reserved);
+    for fail_count in [0, u32::MAX] {
+        for connections_without_activity_count in [0, u32::MAX] {
+            log::debug!("fail_count = {fail_count}, connections_without_activity_count = {connections_without_activity_count}");
 
-    let time = AddressData::next_connect_time(start_time, 0, false, rng);
-    assert!(time <= max_time_reachable);
+            let time = AddressData::next_connect_time(
+                start_time,
+                fail_count,
+                connections_without_activity_count,
+                true,
+                rng,
+            );
+            assert!(time <= max_time_reserved);
 
-    let time = AddressData::next_connect_time(start_time, u32::MAX, true, rng);
-    assert!(time <= max_time_reserved);
-
-    let time = AddressData::next_connect_time(start_time, u32::MAX, false, rng);
-    assert!(time <= max_time_reachable);
+            let time = AddressData::next_connect_time(
+                start_time,
+                fail_count,
+                connections_without_activity_count,
+                false,
+                rng,
+            );
+            assert!(time <= max_time_reachable);
+        }
+    }
 }
 
 #[test]

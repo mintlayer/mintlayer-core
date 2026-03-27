@@ -34,7 +34,7 @@ use p2p::{
         PingResponse,
     },
     net::{
-        types::{ConnectivityEvent, SyncingEvent},
+        types::{ConnectivityEvent, PeerManagerMessageExt, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     peer_manager::{
@@ -211,9 +211,17 @@ where
     fn handle_conn_message(
         &mut self,
         peer_id: PeerId,
-        message: PeerManagerMessage,
+        message: PeerManagerMessageExt,
     ) -> p2p::Result<()> {
-        match message {
+        let peer_mgr_message = match message {
+            PeerManagerMessageExt::PeerManagerMessage(message) => message,
+            PeerManagerMessageExt::FirstSyncMessageReceived => {
+                // Ignored
+                return Ok(());
+            }
+        };
+
+        match peer_mgr_message {
             PeerManagerMessage::AddrListRequest(_) => {
                 // Ignored
                 Ok(())
@@ -231,7 +239,7 @@ where
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
                 self.conn
-                    .send_message(
+                    .send_peer_manager_message(
                         peer_id,
                         PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     )
@@ -382,7 +390,7 @@ where
             CrawlerCommand::RequestAddresses { peer_id } => {
                 log::debug!("Requesting addresses from peer {peer_id}");
 
-                conn.send_message(
+                conn.send_peer_manager_message(
                     peer_id,
                     PeerManagerMessage::AddrListRequest(AddrListRequest {}),
                 )

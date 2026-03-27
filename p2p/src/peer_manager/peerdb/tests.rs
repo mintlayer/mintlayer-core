@@ -22,6 +22,7 @@ use std::{
 
 use itertools::Itertools;
 use rstest::rstest;
+use strum::IntoEnumIterator as _;
 
 use ::test_utils::{
     random::{make_seedable_rng, Seed},
@@ -30,10 +31,11 @@ use ::test_utils::{
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
 use networking::test_helpers::TestAddressMaker;
 use p2p_types::socket_addr_ext::SocketAddrExt;
-use randomness::Rng;
+use randomness::{seq::IteratorRandom as _, Rng};
 
 use crate::{
     ban_config::BanConfig,
+    net::types::OutboundPeerRole,
     peer_manager::{
         peerdb::{
             address_data::{self, PURGE_REACHABLE_FAIL_COUNT, PURGE_UNREACHABLE_TIME},
@@ -505,9 +507,10 @@ fn connected_unreachable(#[case] seed: Seed) {
     peerdb.report_outbound_failure(address, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_unreachable());
 
-    // User requests connection to the currently unreachable node via RPC and connection succeeds.
+    // PeerManager attempts a connection to a currently unreachable node and the connection succeeds.
     // PeerDb should process that normally.
-    peerdb.outbound_peer_connected(address, &mut rng);
+    let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+    peerdb.outbound_peer_connected(address, peer_role, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 
     assert_addr_consistency(&peerdb);
@@ -535,9 +538,10 @@ fn connected_unknown(#[case] seed: Seed) {
 
     let address = TestAddressMaker::new_random_address(&mut rng).into();
 
-    // User requests connection to some unknown node via RPC and connection succeeds.
+    // PeerManager attempts a connection to some unknown node and the connection succeeds.
     // PeerDb should process that normally.
-    peerdb.outbound_peer_connected(address, &mut rng);
+    let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+    peerdb.outbound_peer_connected(address, peer_role, &mut rng);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 
     assert_addr_consistency(&peerdb);
@@ -605,8 +609,7 @@ fn anchor_peers(#[case] seed: Seed) {
     assert_addr_consistency(&peerdb);
 }
 
-// Call 'remove_address' on new and tried addresses, check that the db is
-// in consistent state.
+// Call 'remove_address' on new and tried addresses, check that the db is in a consistent state.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
@@ -652,7 +655,8 @@ fn remove_addr(#[case] seed: Seed) {
     }
 
     for addr in &tried_addrs {
-        peerdb.outbound_peer_connected(*addr, &mut rng);
+        let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+        peerdb.outbound_peer_connected(*addr, peer_role, &mut rng);
     }
 
     for addr in new_addrs_to_remove.iter().chain(tried_addrs_to_remove.iter()) {
@@ -707,7 +711,8 @@ fn remove_unreachable(#[case] seed: Seed) {
     }
 
     for addr in &tried_addrs {
-        peerdb.outbound_peer_connected(*addr, &mut rng);
+        let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+        peerdb.outbound_peer_connected(*addr, peer_role, &mut rng);
     }
 
     assert_eq!(new_addr_table(&peerdb).addr_count(), addr_count);
@@ -862,7 +867,8 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
             peerdb.add_reserved_node(addr, &mut rng);
         }
 
-        peerdb.outbound_peer_connected(addr, &mut rng);
+        let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+        peerdb.outbound_peer_connected(addr, peer_role, &mut rng);
 
         if use_reserved_nodes && i % 3 == 1 {
             peerdb.add_reserved_node(addr, &mut rng);
@@ -934,7 +940,9 @@ fn new_tried_addr_selection_frequency() {
                 peerdb.peer_discovered(addr);
             }
             for addr in tried_addrs {
-                peerdb.outbound_peer_connected(addr, &mut rng);
+                let peer_role = OutboundPeerRole::iter().choose(&mut rng).unwrap();
+                peerdb.outbound_peer_connected(addr, peer_role, &mut rng);
+
                 // Mark the address as disconnected, otherwise it won't be selected by
                 // select_non_reserved_outbound_addresses.
                 peerdb.outbound_peer_disconnected(addr, &mut rng);

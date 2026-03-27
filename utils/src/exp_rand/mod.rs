@@ -15,7 +15,9 @@
 
 use randomness::Rng;
 
-/// Returns a value sampled from an exponential distribution with a mean of 1.0
+/// Returns a value sampled from an exponential distribution with a mean of 1.0.
+///
+/// The result will be in the range (0, max], where max = -ln(f64::MIN_POSITIVE) ~= 708.396418532264.
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
     let mut random_f64 = rng.gen::<f64>();
     // The generated number will be in the range [0, 1). Turn it into (0, 1) to avoid

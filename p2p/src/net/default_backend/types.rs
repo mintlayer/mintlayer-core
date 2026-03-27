@@ -32,7 +32,7 @@ use crate::{
         BlockSyncMessage, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
         PingResponse, TransactionResponse, TransactionSyncMessage, WillDisconnectMessage,
     },
-    net::types::services::Services,
+    net::types::{services::Services, PeerManagerMessageExt},
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
@@ -109,7 +109,7 @@ pub mod peer_event {
     }
 }
 
-/// Events sent by Peer to Backend
+/// Events sent by `Peer` to `Backend`.
 #[derive(Debug)]
 pub enum PeerEvent {
     /// Peer information received from remote
@@ -119,7 +119,7 @@ pub enum PeerEvent {
     ConnectionClosed,
 
     /// Message received from remote
-    MessageReceived { message: PeerManagerMessage },
+    MessageReceived(PeerManagerMessageExt),
 
     /// Protocol violation
     Misbehaved { error: P2pError },
@@ -135,7 +135,7 @@ pub enum PeerEvent {
     },
 }
 
-/// Events sent by Backend to Peer
+/// Events sent by `Backend` to `Peer`.
 #[derive(Debug)]
 pub enum BackendEvent {
     Accepted {

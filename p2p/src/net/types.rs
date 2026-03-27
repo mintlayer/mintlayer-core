@@ -26,7 +26,9 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::{
     error::ConnectionValidationError,
-    message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
+    message::{
+        BlockSyncMessage, PeerManagerMessage, PeerManagerMessageTag, TransactionSyncMessage,
+    },
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
@@ -45,7 +47,7 @@ use self::services::Services;
     serde::Serialize,
     serde::Deserialize,
     rpc_description::HasValueHint,
-    enum_iterator::Sequence,
+    strum::EnumIter,
 )]
 pub enum PeerRole {
     Inbound,
@@ -57,23 +59,60 @@ pub enum PeerRole {
 }
 
 impl PeerRole {
-    pub fn is_outbound(&self) -> bool {
-        use PeerRole::*;
-
+    pub fn as_outbound(&self) -> Option<OutboundPeerRole> {
         match self {
-            Inbound => false,
-            OutboundFullRelay | OutboundBlockRelay | OutboundReserved | OutboundManual | Feeler => {
-                true
-            }
+            Self::Inbound => None,
+            Self::OutboundFullRelay => Some(OutboundPeerRole::FullRelay),
+            Self::OutboundBlockRelay => Some(OutboundPeerRole::BlockRelay),
+            Self::OutboundReserved => Some(OutboundPeerRole::Reserved),
+            Self::OutboundManual => Some(OutboundPeerRole::Manual),
+            Self::Feeler => Some(OutboundPeerRole::Feeler),
         }
     }
 
-    pub fn is_outbound_manual(&self) -> bool {
-        use PeerRole::*;
+    pub fn is_outbound(&self) -> bool {
+        self.as_outbound().is_some()
+    }
 
+    pub fn is_outbound_manual(&self) -> bool {
         match self {
-            OutboundManual => true,
-            Inbound | OutboundFullRelay | OutboundBlockRelay | OutboundReserved | Feeler => false,
+            Self::OutboundManual => true,
+            Self::Inbound
+            | Self::OutboundFullRelay
+            | Self::OutboundBlockRelay
+            | Self::OutboundReserved
+            | Self::Feeler => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter)]
+pub enum OutboundPeerRole {
+    FullRelay,
+    BlockRelay,
+    Reserved,
+    Manual,
+    Feeler,
+}
+
+impl OutboundPeerRole {
+    /// Return true if for this connection type some message exchange is expected (besides
+    /// the handshake and WillDisconnect), i.e. the node is supposed to send at least one message
+    /// and get back a response.
+    ///
+    /// This is used by peerdb's AddressData to determine whether the "no activity" counter
+    /// should be increased after a connection with no peer activity.
+    pub fn is_message_exchange_expected(&self) -> bool {
+        match self {
+            Self::FullRelay | Self::BlockRelay | Self::Reserved | Self::Manual => true,
+            Self::Feeler => false,
+        }
+    }
+
+    pub fn is_manual(&self) -> bool {
+        match self {
+            Self::Manual => true,
+            | Self::FullRelay | Self::BlockRelay | Self::Reserved | Self::Feeler => false,
         }
     }
 }
@@ -142,13 +181,17 @@ impl Display for PeerInfo {
     }
 }
 
-/// Connectivity-related events received from the network
+/// Events available via the `ConnectivityService` trait (normally implemented by `NetworkingService::ConnectivityHandle`).
+///
+/// Note: `PeerManager` is the main consumer of these events.
 #[derive(Debug)]
 pub enum ConnectivityEvent {
+    /// A message received from a peer.
     Message {
         peer_id: PeerId,
-        message: PeerManagerMessage,
+        message: PeerManagerMessageExt,
     },
+
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
@@ -224,7 +267,41 @@ pub enum ConnectivityEvent {
     },
 }
 
-/// Syncing-related events (sent from the backend)
+#[derive(Debug)]
+pub enum PeerManagerMessageExt {
+    // The complete PeerManagerMessage
+    PeerManagerMessage(PeerManagerMessage),
+
+    // An indicator that the first sync message (i.e. BlockSyncMessage or TransactionSyncMessage)
+    // has been received from the peer.
+    FirstSyncMessageReceived,
+}
+
+impl From<PeerManagerMessage> for PeerManagerMessageExt {
+    fn from(value: PeerManagerMessage) -> Self {
+        Self::PeerManagerMessage(value)
+    }
+}
+
+/// Tag type for `PeerManagerMessageExt`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerManagerMessageExtTag {
+    PeerManagerMessage(PeerManagerMessageTag),
+    FirstSyncMessageReceived,
+}
+
+impl From<&'_ PeerManagerMessageExt> for PeerManagerMessageExtTag {
+    fn from(value: &'_ PeerManagerMessageExt) -> Self {
+        match value {
+            PeerManagerMessageExt::PeerManagerMessage(msg) => Self::PeerManagerMessage(msg.into()),
+            PeerManagerMessageExt::FirstSyncMessageReceived => Self::FirstSyncMessageReceived,
+        }
+    }
+}
+
+/// Events obtainable via the `SyncingEventReceiver` trait (normally implemented by `NetworkingService::SyncingEventReceiver`).
+///
+/// Note: `SyncManager` is the consumer of these events.
 #[derive(Debug)]
 pub enum SyncingEvent {
     /// Peer connected

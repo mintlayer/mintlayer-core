@@ -24,6 +24,7 @@ mod incorrect_handshake;
 mod min_peer_software_version;
 mod misbehavior;
 mod peer_discovery_on_stale_tip;
+mod peer_mgr_events;
 mod same_handshake_nonce;
 mod unsupported_message;
 mod unsupported_version;
