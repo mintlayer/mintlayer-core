@@ -40,4 +40,6 @@ export function run_all_tests() {
   run_one_test(test_signed_transaction_intent);
   run_one_test(test_transaction_and_witness_encoding);
   run_one_test(test_partially_signed_transaction_encoding);
+
+  console.log("All tests passed");
 }
