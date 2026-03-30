@@ -962,6 +962,21 @@ where
                 .unwrap();
         }
 
+        // make sure we can have two tokens in the same transaction
+        {
+            let random_token_id2 = TokenId::random_using(&mut rng);
+            let tx = token_transactions.first().unwrap();
+            db_tx
+                .set_token_transaction_at_height(
+                    random_token_id2,
+                    tx.tx_id,
+                    block_height,
+                    tx.tx_global_index,
+                )
+                .await
+                .unwrap();
+        }
+
         let len = 5;
         let global_idx = 10;
         let token_txs =
