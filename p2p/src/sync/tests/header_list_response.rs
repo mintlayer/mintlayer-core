@@ -15,16 +15,27 @@
 
 use std::{iter, sync::Arc, time::Duration};
 
+use itertools::Itertools as _;
+
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
-use common::{chain::config::create_unit_test_config, primitives::Idable};
+use common::{
+    chain::{config::create_unit_test_config, GenBlock},
+    primitives::{BlockHeight, Id, Idable},
+};
+use logging::log;
 use p2p_test_utils::create_n_blocks;
-use test_utils::random::Seed;
+use randomness::Rng as _;
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     error::ProtocolError,
-    message::{BlockListRequest, BlockSyncMessage, HeaderList},
-    sync::tests::helpers::TestNode,
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList},
+    sync::{test_helpers::make_new_blocks, tests::helpers::TestNode},
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -37,7 +48,7 @@ use crate::{
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn header_count_limit_exceeded(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
         let mut tf = TestFramework::builder(&mut rng)
@@ -83,7 +94,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unordered_headers(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
         let mut tf = TestFramework::builder(&mut rng)
@@ -128,7 +139,7 @@ async fn unordered_headers(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnected_headers(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
         let mut tf = TestFramework::builder(&mut rng)
@@ -171,7 +182,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_headers(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
         let mut tf = TestFramework::builder(&mut rng)
@@ -242,6 +253,163 @@ async fn disconnect() {
         tokio::time::sleep(Duration::from_millis(300)).await;
         node.receive_disconnect_peer_event(peer.get_id()).await;
 
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+// When handling a header list, the node must check headers' validity first, and only then check
+// if some blocks have already been requested.
+// The actual test happens with "make_branch2_invalid=true":
+// 1) Make a forked chain with 2 branches; the 1st one is good, the 2nd one has an invalid header.
+// 2) The peer sends a header list for the 1st branch; the node responds with a block list request.
+// 3) The peer sends a header list for the 2nd branch.
+// Expected result: the node sees that the new header list has an invalid header and adjusts
+// the peer score immediately.
+// The case "make_branch2_invalid=false" exists for completeness; all headers on the 2nd branch
+// are ok in this case and the node is expected to send another BlockListRequest and accept the
+// corresponding blocks without punishing the peer.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn header_check_happens_before_checking_if_blocks_were_requested(
+    #[case] seed: Seed,
+    #[values(false, true)] make_branch2_invalid: bool,
+) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let time_getter = BasicTestTimeGetter::new();
+
+        let node_blocks_count = rng.gen_range(1..3);
+        let branch1_len = rng.gen_range(3..5);
+        let branch2_len = rng.gen_range(3..5);
+
+        log::debug!(
+            "node_blocks_count = {}, branch1_len = {}, branch2_len = {}",
+            node_blocks_count,
+            branch1_len,
+            branch2_len
+        );
+
+        let node_blocks = make_new_blocks(
+            &chain_config,
+            None,
+            &time_getter.get_time_getter(),
+            node_blocks_count,
+            &mut rng,
+        );
+
+        let branch1_blocks = make_new_blocks(
+            &chain_config,
+            node_blocks.last(),
+            &time_getter.get_time_getter(),
+            branch1_len,
+            &mut rng,
+        );
+
+        let branch2_blocks = make_new_blocks(
+            &chain_config,
+            node_blocks.last(),
+            &time_getter.get_time_getter(),
+            branch2_len,
+            &mut rng,
+        );
+
+        let chain_config = if make_branch2_invalid {
+            let branch2_invalid_header_idx =
+                rng.gen_range(0..std::cmp::min(branch1_blocks.len(), branch2_blocks.len()));
+
+            // To make one of the headers on branch2 invalid, specify a checkpoint referring to
+            // a block on branch1.
+            let checkpoint_height =
+                BlockHeight::new((branch2_invalid_header_idx + node_blocks.len() + 1) as u64);
+            let checkpoint_block_id: Id<GenBlock> =
+                branch1_blocks[branch2_invalid_header_idx].get_id().into();
+
+            let chain_config = Arc::new(
+                common::chain::config::create_unit_test_config_builder()
+                    .checkpoints([(checkpoint_height, checkpoint_block_id)].into())
+                    .build(),
+            );
+
+            chain_config
+        } else {
+            chain_config
+        };
+
+        let p2p_config = Arc::new(test_p2p_config());
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time_getter.get_time_getter())
+            .with_blocks(node_blocks.clone())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        log::debug!("Peer sends HeaderList for branch1");
+        peer.send_headers(branch1_blocks.iter().map(|block| block.header().clone()).collect_vec())
+            .await;
+
+        log::debug!("Expecting BlockListRequest for branch 1");
+        assert_eq!(
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+                branch1_blocks.iter().map(|block| block.get_id()).collect_vec()
+            )),
+        );
+
+        log::debug!("Peer sends HeaderList for branch2");
+        peer.send_headers(branch2_blocks.iter().map(|block| block.header().clone()).collect_vec())
+            .await;
+
+        if make_branch2_invalid {
+            // The node should check the headers right away and discover that one of them is invalid.
+            node.assert_peer_score_adjustment(peer.get_id(), 100).await;
+            node.assert_no_sync_message().await;
+        } else {
+            // If the headers are ok, the node should accept the previously requested blocks
+            // and make a new block request for the new ones.
+
+            for block in &branch1_blocks {
+                log::debug!("Peer sends BlockResponse for branch 1");
+                peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                    block.clone(),
+                )))
+                .await;
+            }
+
+            log::debug!("Expecting BlockListRequest for branch 2");
+            assert_eq!(
+                node.get_sent_block_sync_message().await.1,
+                BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+                    branch2_blocks.iter().map(|block| block.get_id()).collect_vec()
+                )),
+            );
+
+            for block in &branch2_blocks {
+                log::debug!("Peer sends BlockResponse for branch 2");
+                peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                    block.clone(),
+                )))
+                .await;
+            }
+
+            log::debug!("Expecting final HeaderListRequest");
+            assert_matches!(
+                node.get_sent_block_sync_message().await.1,
+                BlockSyncMessage::HeaderListRequest(_)
+            );
+        }
+
+        node.assert_no_error().await;
+        node.assert_no_peer_manager_event().await;
+        node.assert_no_sync_message().await;
         node.join_subsystem_manager().await;
     })
     .await;
