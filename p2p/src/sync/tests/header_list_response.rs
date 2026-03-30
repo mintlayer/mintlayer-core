@@ -414,3 +414,152 @@ async fn header_check_happens_before_checking_if_blocks_were_requested(
     })
     .await;
 }
+
+// Check that if the peer tries to extend a branch that has been invalidated in the node,
+// the node will detect it when validating headers and won't try to download blocks that are
+// known to be invalid.
+// The actual test happens with "invalidate_branch2=true":
+// 1) The node has a forked chain, where the 2nd branch has a manually invalidated block.
+// 2) The peer sends a HeaderList that may include some part of the invalidated branch and also adds
+//    new blocks on top of it.
+// Expected result: the node adjusts peer's score immediately, without trying to download the
+// blocks first.
+// The case "invalidate_branch2=false" exists for completeness; no blocks on the 2nd branch are
+// invalidated in this case and the node is expected to send a BlockListRequest and accept the
+// corresponding blocks without punishing the peer.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn extending_invalidated_chain_should_fail_at_header_check(
+    #[case] seed: Seed,
+    #[values(false, true)] invalidate_branch2: bool,
+) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let time_getter = BasicTestTimeGetter::new();
+
+        let common_blocks_count = rng.gen_range(1..3);
+        let branch1_blocks_count = rng.gen_range(3..5);
+        let branch2_known_blocks_count = rng.gen_range(1..3);
+        let branch2_unknown_blocks_count = rng.gen_range(1..3);
+
+        log::debug!(
+            "common blk = {}, branch1 blk = {}, branch2 known blk = {}, branch2 unknown blk = {}",
+            common_blocks_count,
+            branch1_blocks_count,
+            branch2_known_blocks_count,
+            branch2_unknown_blocks_count
+        );
+
+        let common_blocks = make_new_blocks(
+            &chain_config,
+            None,
+            &time_getter.get_time_getter(),
+            common_blocks_count,
+            &mut rng,
+        );
+
+        let branch1_blocks = make_new_blocks(
+            &chain_config,
+            common_blocks.last(),
+            &time_getter.get_time_getter(),
+            branch1_blocks_count,
+            &mut rng,
+        );
+
+        let branch2_known_blocks = make_new_blocks(
+            &chain_config,
+            common_blocks.last(),
+            &time_getter.get_time_getter(),
+            branch2_known_blocks_count,
+            &mut rng,
+        );
+
+        let branch2_unknown_blocks = make_new_blocks(
+            &chain_config,
+            branch2_known_blocks.last(),
+            &time_getter.get_time_getter(),
+            branch2_unknown_blocks_count,
+            &mut rng,
+        );
+
+        let p2p_config = Arc::new(test_p2p_config());
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time_getter.get_time_getter())
+            .with_blocks(
+                [
+                    common_blocks.as_slice(),
+                    branch1_blocks.as_slice(),
+                    branch2_known_blocks.as_slice(),
+                ]
+                .concat(),
+            )
+            .build()
+            .await;
+
+        if invalidate_branch2 {
+            let block_id_to_invalidate =
+                branch2_known_blocks[rng.gen_range(0..branch2_known_blocks.len())].get_id();
+            node.chainstate()
+                .call_mut(move |cs| cs.invalidate_block(&block_id_to_invalidate))
+                .await
+                .unwrap()
+                .unwrap()
+        }
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        let branch2_first_known_block_to_send_idx = rng.gen_range(0..=branch2_known_blocks.len());
+        let branch2_headers = branch2_known_blocks[branch2_first_known_block_to_send_idx..]
+            .iter()
+            .chain(branch2_unknown_blocks.iter())
+            .map(|block| block.header().clone())
+            .collect_vec();
+
+        log::debug!("Peer sends HeaderList for branch2");
+        peer.send_headers(branch2_headers).await;
+
+        if invalidate_branch2 {
+            // The node should discover that the headers extend an invalidated chain, without
+            // the need to download the actual blocks, and discourage the peer right away.
+            node.assert_peer_score_adjustment(peer.get_id(), 100).await;
+            node.assert_no_sync_message().await;
+        } else {
+            // If the headers are ok, the node should make a block request for the unknown blocks.
+
+            log::debug!("Expecting BlockListRequest for branch2_unknown_blocks");
+            assert_eq!(
+                node.get_sent_block_sync_message().await.1,
+                BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+                    branch2_unknown_blocks.iter().map(|block| block.get_id()).collect_vec()
+                )),
+            );
+
+            for block in &branch2_unknown_blocks {
+                log::debug!("Peer sends BlockResponse for branch2_unknown_blocks");
+                peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                    block.clone(),
+                )))
+                .await;
+            }
+
+            log::debug!("Expecting final HeaderListRequest");
+            assert_matches!(
+                node.get_sent_block_sync_message().await.1,
+                BlockSyncMessage::HeaderListRequest(_)
+            );
+        }
+
+        node.assert_no_error().await;
+        node.assert_no_peer_manager_event().await;
+        node.assert_no_sync_message().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
