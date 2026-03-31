@@ -81,6 +81,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Fixed a potential indefinite stalling of a particular connection when both nodes start sending
       large amounts of data to each other.
 
+    - Fixed a potential indefinite exchange of the same header list requests and responses if
+      the node and the peer are on different branches of a deep fork (such as the one happened
+      due to the recent hard fork).
+
   - Wallet CLI and RPC: the commands `account-utxos` and `standalone-multisig-utxos` and their RPC
     counterparts now return correct decimal amounts for tokens with non-default number of decimals.
 

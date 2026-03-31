@@ -21,7 +21,10 @@ use std::{
 use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 
-use chainstate::{BlockIndex, BlockSource, Locator};
+use chainstate::{
+    chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, GenBlockIndex,
+    GenBlockIndexRef, Locator,
+};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
@@ -31,8 +34,10 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::const_value::ConstValue;
-use utils::sync::Arc;
+use utils::{
+    const_value::ConstValue, debug_assert_or_log, displayable_option::DisplayableOption as _,
+    sync::Arc,
+};
 
 use crate::{
     config::P2pConfig,
@@ -47,7 +52,10 @@ use crate::{
     sync::{
         chainstate_handle::ChainstateHandle,
         peer_activity::PeerActivity,
-        peer_common::{choose_peers_best_block, handle_message_processing_result},
+        peer_common::{
+            choose_peers_best_block_by_block_ids, choose_peers_best_block_by_block_indices,
+            handle_message_processing_result,
+        },
         sync_status::PeerBlockSyncStatus,
         LocalEvent,
     },
@@ -326,7 +334,54 @@ where
     }
 
     async fn request_headers(&mut self) -> Result<()> {
-        let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
+        log::debug!(
+            "Sending header list request, peers_best_block_that_we_have = {:x}",
+            self.incoming.peers_best_block_that_we_have.as_displayable()
+        );
+
+        // If possible, we create the locator based on `peers_best_block_that_we_have` rather
+        // than our own best block.
+        //
+        // Note that historically we were always sending a best-block-based locator but this could
+        // lead to indefinite connection stalling with a peer who is on a fork: the node and the peer
+        // would send each other a locator that would only be able to locate a block more than
+        // `msg_header_count_limit` blocks below the fork, so the response to this locator would
+        // always contain only known headers, which would result in the same locator being sent again.
+        //
+        // Also note that the stalling prevention depends on the discouragement mechanism and
+        // on the node configuration being adequate. I.e. it will only work if:
+        // 1) `msg_header_count_limit` is noticeably bigger than `max_depth_for_reorg` (which is
+        //    true in production, but may not be true in tests).
+        //    If this is not the case, then e.g. the following is possible:
+        //    a) `peers_best_block_that_we_have` refers to a stale chain, but the peer has already
+        //       reorged to our mainchain;
+        //    b) the distance from `peers_best_block_that_we_have` to the fork point can be up to
+        //       `max_depth_for_reorg` blocks; but when we ask the peer for headers using the stale
+        //       block id, it can only return `msg_header_count_limit` headers, which is smaller
+        //       in this scenario, so the last header in the list can have a smaller chain trust
+        //       than the stale block, in which case we'll not update `peers_best_block_that_we_have`
+        //       after receiving the response and therefore send the same locator again.
+        //    (and if we were to change `peers_best_block_that_we_have` so that it only tracks
+        //    node's mainchain blocks, then the stalling would happen when the peer is still on
+        //    the stale chain).
+        // 2) The peer must not be whitelisted (which currently includes addresses in the whitelist
+        //    itself and also "manual" and reserved peers).
+        let locator = if let Some(peer_best_block_id) = self
+            .incoming
+            .peers_best_block_that_we_have
+            .and_then(|gen_block_id| gen_block_id.classify(&self.chain_config).chain_block_id())
+        {
+            self.chainstate_handle
+                .call(move |this| Ok(this.get_locator_from_block_id(&peer_best_block_id)?))
+                .await?
+        } else {
+            self.chainstate_handle
+                .call(|this| Ok(this.get_locator_from_best_block()?))
+                .await?
+        };
+
+        // TODO: if we consider this situation realistic, then perhaps we should just truncate
+        // the locator.
         if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
             log::warn!(
                 "Sending locator of the length {}, which exceeds the maximum length {:?}",
@@ -335,7 +390,6 @@ where
             );
         }
 
-        log::debug!("Sending header list request");
         self.send_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             locator,
         )))?;
@@ -387,7 +441,7 @@ where
             // we may not be on the correct chain. E.g. the current best block might be below
             // the first checkpoint, so we'd have no way of knowing that the chain is bogus.
             // And if we sent such headers to a peer that have seen a checkpointed block, it
-            // would ban us.
+            // would discourage us.
             self.send_headers(HeaderList::new(Vec::new()))?;
             return Ok(());
         }
@@ -404,7 +458,7 @@ where
                     // the first one represents the locator's latest block that is present in
                     // this node's main chain (or the genesis).
                     let last_common_block_id = *header.prev_block_id();
-                    choose_peers_best_block(
+                    choose_peers_best_block_by_block_ids(
                         c,
                         old_peers_best_block_that_we_have,
                         Some(last_common_block_id),
@@ -419,6 +473,10 @@ where
             .await?;
         debug_assert!(headers.len() <= header_count_limit);
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
+        log::debug!(
+            "New peers_best_block_that_we_have: {:x} (handle_header_request)",
+            self.incoming.peers_best_block_that_we_have.as_displayable()
+        );
 
         // Sending a below-the-max amount of headers is a signal to the peer that we've sent
         // all headers that were available at the moment.
@@ -642,7 +700,7 @@ where
             .call(move |c| {
                 let (existing_block_headers, new_block_headers) =
                     c.split_off_leading_known_headers(headers)?;
-                let peers_best_block_that_we_have = choose_peers_best_block(
+                let peers_best_block_that_we_have = choose_peers_best_block_by_block_ids(
                     c,
                     old_peers_best_block_that_we_have,
                     existing_block_headers.last().map(|header| header.get_id().into()),
@@ -653,6 +711,10 @@ where
             .await?;
 
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
+        log::debug!(
+            "New peers_best_block_that_we_have: {:x} (handle_header_list)",
+            self.incoming.peers_best_block_that_we_have.as_displayable()
+        );
 
         if !self.incoming.requested_blocks.is_empty() {
             // We are already downloading blocks, so bail out.
@@ -721,42 +783,76 @@ where
             let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
             let block_id = block.get_id();
 
-            // Determine whether the block already exists via a separate readonly call to chainstate
-            // (subsystems can parallelize readonly calls).
-            // Note: this should reduce the pressure on the chainstate during initial block download,
-            // when the same blocks are received from multiple peers at the same time.
-            let (block, new_block_received, peers_best_block_id) = self
-                .chainstate_handle
-                .call(move |c| {
-                    let block = c.preliminary_block_check(block)?;
-                    let new_block_received =
-                        c.get_block_index_for_persisted_block(&block_id)?.is_none();
-                    let peers_best_block_id = choose_peers_best_block(
-                        c,
-                        old_peers_best_block_that_we_have,
-                        Some(block_id.into()),
-                    )?;
+            // Note: having a separate readonly chainstate call to check for block existence reduces
+            // the pressure on the chainstate during initial block download, when the same blocks
+            // are received from multiple peers at the same time (subsystems can parallelize readonly calls).
 
-                    Ok((block, new_block_received, peers_best_block_id))
+            // Check the block and obtain its existing block index, if any, via a separate readonly
+            // call to chainstate.
+            // Also obtain the block index for `old_peers_best_block_that_we_have`.
+            let (
+                block,
+                new_block_existing_index,
+                block_index_for_old_peers_best_block_that_we_have,
+            ) = self
+                .chainstate_handle
+                .call(move |c: &dyn ChainstateInterface| -> crate::Result<_> {
+                    let block = c.preliminary_block_check(block)?;
+                    let new_block_existing_index =
+                        c.get_block_index_for_persisted_block(&block_id)?;
+
+                    let block_index_for_old_peers_best_block_that_we_have =
+                        old_peers_best_block_that_we_have
+                            .map(|id| -> crate::Result<_> {
+                                let block_idx = c.get_gen_block_index_for_persisted_block(&id)?;
+                                debug_assert!(
+                                    block_idx.is_some(),
+                                    "old_peers_best_block_that_we_have is not in the chainstate"
+                                );
+                                Ok(block_idx)
+                            })
+                            .transpose()?
+                            .flatten();
+
+                    Ok((
+                        block,
+                        new_block_existing_index,
+                        block_index_for_old_peers_best_block_that_we_have,
+                    ))
                 })
                 .await?;
 
             // If the block is new, process it.
-            if new_block_received {
-                let new_tip_received = self
+            let new_block_index = if new_block_existing_index.is_none() {
+                let (new_tip_received, new_block_index) = self
                     .chainstate_handle
                     .call_mut(move |c| {
                         // The block may have been received from another peer in the meantime,
                         // so need to check its existence again (process_block would returns
                         // an error if a block already exists).
-                        if c.get_block_index_for_persisted_block(&block_id)?.is_none() {
-                            let block_index = c.process_block(block, BlockSource::Peer)?;
-                            Ok(block_index.is_some())
+                        let new_block_index = c.get_block_index_for_persisted_block(&block_id)?;
+
+                        if new_block_index.is_none() {
+                            let new_tip_received =
+                                c.process_block(block, BlockSource::Peer)?.is_some();
+
+                            let new_block_index =
+                                c.get_block_index_for_persisted_block(&block_id)?;
+                            debug_assert_or_log!(
+                                new_block_index.is_some(),
+                                concat!(
+                                    "BlockIndex for block {:x} is None after ",
+                                    "the block has been successfully processed"
+                                ),
+                                block_id
+                            );
+
+                            Ok((new_tip_received, new_block_index))
                         } else {
                             log::debug!(
                                 "Block {block_id} obtained from another peer in the meantime"
                             );
-                            Ok(false)
+                            Ok((false, new_block_index))
                         }
                     })
                     .await?;
@@ -767,9 +863,22 @@ where
                         block_id,
                     })?;
                 }
-            }
 
-            self.incoming.peers_best_block_that_we_have = peers_best_block_id;
+                new_block_index
+            } else {
+                new_block_existing_index
+            };
+
+            self.incoming.peers_best_block_that_we_have = choose_peers_best_block_by_block_indices(
+                block_index_for_old_peers_best_block_that_we_have
+                    .as_ref()
+                    .map(GenBlockIndex::as_ref),
+                new_block_index.as_ref().map(GenBlockIndexRef::Block),
+            );
+            log::debug!(
+                "New peers_best_block_that_we_have: {:x} (handle_block_response)",
+                self.incoming.peers_best_block_that_we_have.as_displayable()
+            );
         }
 
         if self.incoming.requested_blocks.is_empty() {
@@ -856,7 +965,9 @@ where
         });
         let new_best_sent_block_id = self
             .chainstate_handle
-            .call(move |c| choose_peers_best_block(c, old_best_sent_block_id, Some(id.into())))
+            .call(move |c| {
+                choose_peers_best_block_by_block_ids(c, old_best_sent_block_id, Some(id.into()))
+            })
             .await?;
 
         if new_best_sent_block_id == Some(id.into()) {

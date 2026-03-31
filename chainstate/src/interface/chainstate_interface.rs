@@ -97,10 +97,13 @@ pub trait ChainstateInterface: Send + Sync {
     ///
     /// This returns a relatively short sequence even for a long chain. Such sequence can be used
     /// to quickly find a common ancestor between different chains.
-    fn get_locator(&self) -> Result<Locator, ChainstateError>;
+    fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError>;
 
-    /// Returns a locator starting from the specified height.
+    /// Returns a locator starting from the specified height on the main chain.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
+
+    /// Returns a locator starting from the specified block (not necessarily on the main chain).
+    fn get_locator_from_block_id(&self, block_id: &Id<Block>) -> Result<Locator, ChainstateError>;
 
     /// Returns mainchain block ids with heights in the range start_height..end_height using
     /// the given step;

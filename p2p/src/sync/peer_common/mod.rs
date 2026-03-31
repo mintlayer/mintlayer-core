@@ -15,8 +15,10 @@
 
 mod known_transactions;
 
-use chainstate::{ban_score::BanScore, chainstate_interface::ChainstateInterface};
-use common::{chain::GenBlock, primitives::Id, Uint256};
+use chainstate::{
+    ban_score::BanScore, chainstate_interface::ChainstateInterface, GenBlockIndex, GenBlockIndexRef,
+};
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use mempool::error::{Error as MempoolError, MempoolPolicyError};
 use p2p_types::PeerId;
@@ -46,6 +48,8 @@ pub async fn handle_message_processing_result(
         Ok(()) => return Ok(()),
         Err(e) => e,
     };
+
+    log::debug!("Handling message processing error: {error:?}");
 
     match error {
         // Due to the fact that p2p is split into several tasks, it is possible to send a
@@ -113,28 +117,40 @@ pub async fn handle_message_processing_result(
 }
 
 /// This function is used to update peers_best_block_that_we_have.
-/// The "better" block is the one that is on the main chain and has a higher chain-trust.
-/// In the case of a tie, new_block_id is preferred.
-pub fn choose_peers_best_block(
+/// The "better" block is the one that has a higher chain-trust.
+/// In the case of a tie, the new block is preferred.
+pub fn choose_peers_best_block_by_block_indices(
+    old_block_idx: Option<GenBlockIndexRef<'_>>,
+    new_block_idx: Option<GenBlockIndexRef<'_>>,
+) -> Option<Id<GenBlock>> {
+    match (old_block_idx, new_block_idx) {
+        (None, None) => None,
+        (Some(idx), None) | (None, Some(idx)) => Some(*idx.block_id()),
+        (Some(old_idx), Some(new_idx)) => {
+            if new_idx.chain_trust() >= old_idx.chain_trust() {
+                Some(*new_idx.block_id())
+            } else {
+                Some(*old_idx.block_id())
+            }
+        }
+    }
+}
+
+pub fn choose_peers_best_block_by_block_ids(
     chainstate: &dyn ChainstateInterface,
     old_block_id: Option<Id<GenBlock>>,
     new_block_id: Option<Id<GenBlock>>,
 ) -> Result<Option<Id<GenBlock>>> {
-    match (old_block_id, new_block_id) {
-        (None, None) => Ok(None),
-        (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
-        (Some(old_id), Some(new_id)) => {
-            let old_block_chain_trust = chainstate
-                .get_gen_block_index_for_persisted_block(&old_id)?
-                .map_or(Uint256::ZERO, |idx| idx.chain_trust());
-            let new_block_chain_trust = chainstate
-                .get_gen_block_index_for_persisted_block(&new_id)?
-                .map_or(Uint256::ZERO, |idx| idx.chain_trust());
-            if new_block_chain_trust >= old_block_chain_trust {
-                Ok(Some(new_id))
-            } else {
-                Ok(Some(old_id))
-            }
-        }
-    }
+    let old_block_idx = old_block_id
+        .map(|id| chainstate.get_gen_block_index_for_persisted_block(&id))
+        .transpose()?
+        .flatten();
+    let new_block_idx = new_block_id
+        .map(|id| chainstate.get_gen_block_index_for_persisted_block(&id))
+        .transpose()?
+        .flatten();
+    Ok(choose_peers_best_block_by_block_indices(
+        old_block_idx.as_ref().map(GenBlockIndex::as_ref),
+        new_block_idx.as_ref().map(GenBlockIndex::as_ref),
+    ))
 }

@@ -58,7 +58,7 @@ fn process_a_trivial_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn get_locator(#[case] seed: Seed) {
+fn get_locator_from_best_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::builder(&mut rng)
@@ -66,7 +66,7 @@ fn get_locator(#[case] seed: Seed) {
             .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
             .build();
 
-        let locator = btf.chainstate.get_locator().unwrap();
+        let locator = btf.chainstate.get_locator_from_best_block().unwrap();
         assert_eq!(locator.len(), 1);
         assert_eq!(&locator[0], &btf.genesis().get_id());
 
@@ -79,7 +79,7 @@ fn get_locator(#[case] seed: Seed) {
             blocks += new_blocks;
 
             // Check the locator length.
-            let locator = btf.chainstate.get_locator().unwrap();
+            let locator = btf.chainstate.get_locator_from_best_block().unwrap();
             assert_eq!(
                 locator.len(),
                 blocks.next_power_of_two().trailing_zeros() as usize + 1
@@ -95,6 +95,12 @@ fn get_locator(#[case] seed: Seed) {
                     btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
+
+            // Check that get_locator_from_block_id returns the same locator.
+            let best_block_id = btf.to_chain_block_id(&btf.chainstate.get_best_block_id().unwrap());
+            let locator_from_block_id =
+                btf.chainstate.get_locator_from_block_id(&best_block_id).unwrap();
+            assert_eq!(locator, locator_from_block_id);
         }
     });
 }
@@ -134,6 +140,88 @@ fn get_locator_from_height(#[case] seed: Seed) {
                     btf.chainstate.get_block_id_from_height(idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
+
+            // Check that get_locator_from_block_id returns the same locator.
+            let block_id = btf.to_chain_block_id(
+                &btf.chainstate.get_block_id_from_height(height.into()).unwrap().unwrap(),
+            );
+            let locator_from_block_id =
+                btf.chainstate.get_locator_from_block_id(&block_id).unwrap();
+            assert_eq!(locator, locator_from_block_id);
+        }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_locator_from_block_id(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let mut tf1 = TestFramework::builder(&mut rng)
+            // Heavy checks are useless here and they increase test run time noticeably
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .with_chain_config(
+                chain::config::create_unit_test_config_builder()
+                    // Increase max_depth_for_reorg so that we can create a fork more than 1000
+                    // blocks deep.
+                    .max_depth_for_reorg(10_000.into())
+                    .build(),
+            )
+            .build();
+
+        let mainchain_len: usize = rng.gen_range(1000..2000);
+        let stalechain_len = rng.gen_range(mainchain_len / 2..mainchain_len);
+        let fork_height = rng.gen_range(0..stalechain_len);
+
+        let mainchain_block_ids = tf1
+            .create_chain_return_ids(&tf1.genesis().get_id().into(), mainchain_len, &mut rng)
+            .unwrap();
+        let stale_branch_parent_id = if fork_height == 0 {
+            tf1.genesis().get_id().into()
+        } else {
+            mainchain_block_ids[fork_height - 1]
+        };
+
+        let stale_branch_block_ids = tf1
+            .create_chain_return_ids(
+                &stale_branch_parent_id,
+                stalechain_len - fork_height,
+                &mut rng,
+            )
+            .unwrap();
+
+        let whole_stalechain = mainchain_block_ids[0..fork_height]
+            .iter()
+            .chain(&stale_branch_block_ids[..])
+            .map(|block_id| {
+                tf1.chainstate.get_block(&tf1.to_chain_block_id(block_id)).unwrap().unwrap()
+            });
+
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
+
+        for block in whole_stalechain {
+            tf2.chainstate.process_block(block, BlockSource::Local).unwrap();
+        }
+
+        assert_eq!(tf1.best_block_id(), *mainchain_block_ids.last().unwrap());
+        assert_eq!(tf2.best_block_id(), *stale_branch_block_ids.last().unwrap());
+
+        for _ in 0..8 {
+            let stale_block_idx = rng.gen_range(0..stale_branch_block_ids.len());
+            let height = (stale_block_idx + fork_height + 1) as u64;
+
+            let stale_block_id = tf1.to_chain_block_id(&stale_branch_block_ids[stale_block_idx]);
+
+            let locator_from_id =
+                tf1.chainstate.get_locator_from_block_id(&stale_block_id).unwrap();
+            let locator_from_height_in_tf2 =
+                tf2.chainstate.get_locator_from_height(height.into()).unwrap();
+
+            assert_eq!(locator_from_id, locator_from_height_in_tf2);
         }
     });
 }
@@ -158,7 +246,7 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
 
         // The locator is from this exact chain, so get_mainchain_headers_by_locator
         // should return an empty sequence.
-        let locator = tf.chainstate.get_locator().unwrap();
+        let locator = tf.chainstate.get_locator_from_best_block().unwrap();
         assert_eq!(
             tf.chainstate.get_mainchain_headers_by_locator(&locator, header_limit).unwrap(),
             vec![],
@@ -211,11 +299,11 @@ fn get_headers_genesis(#[case] seed: Seed) {
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
 
         btf.create_chain(&genesis_id, rng.gen_range(64..128), &mut rng).unwrap();
-        let locator_1 = btf.chainstate.get_locator().unwrap();
+        let locator_1 = btf.chainstate.get_locator_from_best_block().unwrap();
 
         let chain_length = rng.gen_range(1200..2000);
         btf.create_chain(&genesis_id, chain_length, &mut rng).unwrap();
-        let locator_2 = btf.chainstate.get_locator().unwrap();
+        let locator_2 = btf.chainstate.get_locator_from_best_block().unwrap();
         assert_ne!(locator_1, locator_2);
         assert!(locator_1.len() < locator_2.len());
 
@@ -254,7 +342,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();
 
         tf.create_chain(&common_block_id, rng.gen_range(100..250), &mut rng).unwrap();
-        let locator = tf.chainstate.get_locator().unwrap();
+        let locator = tf.chainstate.get_locator_from_best_block().unwrap();
         tf.create_chain(&common_block_id, rng.gen_range(250..500), &mut rng).unwrap();
 
         let headers = tf.chainstate.get_mainchain_headers_by_locator(&locator, 2000).unwrap();
@@ -540,7 +628,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         tf2.create_chain(&prev_id, rng.gen_range(256..512), &mut rng).unwrap();
 
         let header_count_limit = rng.gen_range(1000..3000);
-        let locator = tf1.chainstate.get_locator().unwrap();
+        let locator = tf1.chainstate.get_locator_from_best_block().unwrap();
         let headers = tf2
             .chainstate
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
@@ -548,7 +636,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let id = *headers[0].prev_block_id();
         tf1.gen_block_index(&id); // This panics if the ID is not found
 
-        let locator = tf2.chainstate.get_locator().unwrap();
+        let locator = tf2.chainstate.get_locator_from_best_block().unwrap();
         let headers = tf1
             .chainstate
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
@@ -898,7 +986,7 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::builder(&mut rng).build();
 
-        let locator = btf.chainstate.get_locator().unwrap();
+        let locator = btf.chainstate.get_locator_from_best_block().unwrap();
         assert_eq!(locator.len(), 1);
         assert_eq!(&locator[0], &btf.genesis().get_id());
 

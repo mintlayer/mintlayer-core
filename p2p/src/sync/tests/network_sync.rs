@@ -15,20 +15,24 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::{BlockSource, ChainstateConfig};
+use itertools::Itertools;
+
+use chainstate::{BlockSource, ChainstateConfig, ChainstateHandle, Locator};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{self, block::timestamp::BlockTimestamp},
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{user_agent::mintlayer_core_user_agent, BlockDistance, Idable},
 };
 use logging::log;
 use p2p_test_utils::{create_n_blocks, run_with_timeout, MEDIUM_TIMEOUT};
 use p2p_types::PeerId;
 use randomness::Rng;
 use test_utils::{
+    mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
+use utils::atomics::SeqCstAtomicU64;
 
 use crate::{
     config::{BackendTimeoutsConfig, P2pConfig},
@@ -36,10 +40,13 @@ use crate::{
     protocol::ProtocolConfig,
     sync::tests::helpers::{
         make_new_block, make_new_blocks, make_new_top_blocks,
-        test_node_group::{MsgAction, TestNodeGroup},
+        test_node_group::{
+            BlockSyncMessageWithNodeIdx, MsgAction, PeerManagerEventWithNodeIdx, TestNodeGroup,
+        },
         TestNode,
     },
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
+    PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -49,7 +56,7 @@ use crate::{
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn basic(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let time_getter = BasicTestTimeGetter::new();
 
@@ -148,7 +155,7 @@ async fn basic(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         // With the heavy checks enabled, this test takes over a minute to complete in debug builds.
         let chainstate_config = ChainstateConfig::new().with_heavy_checks_enabled(false);
@@ -206,7 +213,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reorg(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let time_getter = BasicTestTimeGetter::new();
 
@@ -289,7 +296,7 @@ async fn reorg(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let time_getter = BasicTestTimeGetter::new();
 
@@ -360,7 +367,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         let mut delayed_msgs = Vec::new();
 
         nodes
-            .exchange_block_sync_messages_while(&mut delayed_msgs, |_, delayed_msgs, msg| {
+            .exchange_block_sync_messages_while(&mut delayed_msgs, async |_, delayed_msgs, msg| {
                 if msg.sender_node_idx == 1 {
                     if let BlockSyncMessage::BlockListRequest(req) = &msg.message {
                         assert_eq!(req.block_ids().len(), initial_block_count);
@@ -610,7 +617,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
 async fn process_block_interference1(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         run_with_timeout(async {
-            let mut rng = test_utils::random::make_seedable_rng(seed);
+            let mut rng = make_seedable_rng(seed);
 
             let chain_config = Arc::new(chain::config::create_unit_test_config());
             let mut tf = TestFramework::builder(&mut rng)
@@ -719,7 +726,7 @@ async fn process_block_interference1(#[case] seed: Seed) {
 async fn process_block_interference2(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         run_with_timeout(async {
-            let mut rng = test_utils::random::make_seedable_rng(seed);
+            let mut rng = make_seedable_rng(seed);
 
             let chain_config = Arc::new(chain::config::create_unit_test_config());
             let mut tf = TestFramework::builder(&mut rng)
@@ -852,4 +859,231 @@ async fn process_block_interference2(#[case] seed: Seed) {
         .await;
     })
     .await;
+}
+
+// A test for the fix of an issue where peers who are on different forks would send each other
+// the same header list requests and the same responses over and over again, unable to stop.
+// 1) Create a forked chain, such that using a locator created from one of the tips won't be able
+// to locate anything in the other chain.
+// 2) Start 2 nodes using the different chains and make them communicate.
+// Expected result: the nodes discourage each other with ban score of 100.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
+        // Note: locator distances are 0, 1, 2, 4, 8, 16, 32 etc.
+        // Here for each peer the total number of blocks will be less than 32 and the number of
+        // peer-specific blocks will be bigger than 16; this means the first locators that the
+        // peers will send each other won't be able to locate any blocks.
+        let msg_header_count_limit: usize = 5;
+        let common_blocks_count = rng.gen_range(5..8);
+        let node1_extra_blocks_count = rng.gen_range(18..22);
+        let node2_extra_blocks_count = rng.gen_range(18..22);
+
+        log::debug!(
+            "common blocks: {}, node1 extra blocks: {}, node2 extra blocks: {}",
+            common_blocks_count,
+            node1_extra_blocks_count,
+            node2_extra_blocks_count
+        );
+
+        // `max_depth_for_reorg` has to be smaller than `msg_header_count_limit`, same as in
+        // production, otherwise the discouragement won't happen.
+        let max_depth_for_reorg = msg_header_count_limit - 1;
+
+        let chain_config = Arc::new(
+            common::chain::config::create_unit_test_config_builder()
+                .max_depth_for_reorg(BlockDistance::new(max_depth_for_reorg as i64))
+                .build(),
+        );
+        let genesis_ts_secs = chain_config.genesis_block().timestamp().as_int_seconds();
+        let cur_time = Arc::new(SeqCstAtomicU64::new(
+            rng.gen_range(genesis_ts_secs..genesis_ts_secs * 2),
+        ));
+        let time_getter = mocked_time_getter_seconds(cur_time);
+
+        let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
+            msg_header_count_limit: msg_header_count_limit.into(),
+
+            max_request_blocks_count: Default::default(),
+            max_addr_list_response_address_count: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+        }));
+
+        let common_blocks = make_new_blocks(
+            &chain_config,
+            None,
+            &time_getter,
+            common_blocks_count,
+            &mut rng,
+        );
+        let node1_specific_blocks = make_new_blocks(
+            &chain_config,
+            common_blocks.last(),
+            &time_getter,
+            node1_extra_blocks_count,
+            &mut rng,
+        );
+        let node2_specific_blocks = make_new_blocks(
+            &chain_config,
+            common_blocks.last(),
+            &time_getter,
+            node2_extra_blocks_count,
+            &mut rng,
+        );
+        assert_ne!(node1_specific_blocks, node2_specific_blocks);
+
+        let node1 = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time_getter.clone())
+            .with_blocks([common_blocks.as_slice(), node1_specific_blocks.as_slice()].concat())
+            .build()
+            .await;
+        let node1_expected_first_locator = node1.get_locator_from_best_block().await;
+
+        let node2 = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time_getter.clone())
+            .with_blocks([common_blocks.as_slice(), node2_specific_blocks.as_slice()].concat())
+            .build()
+            .await;
+        let node2_expected_first_locator = node2.get_locator_from_best_block().await;
+
+        // Sanity check: node2's first locator can't "locate" anything in node1's chainstate and vice versa
+        let node1_blocks_existence_for_node2_locator =
+            blocks_existence_for_locator(node1.chainstate(), node2_expected_first_locator.clone())
+                .await;
+        assert_eq!(
+            node1_blocks_existence_for_node2_locator,
+            vec![false; node2_expected_first_locator.len()]
+        );
+        let node2_blocks_existence_for_node1_locator =
+            blocks_existence_for_locator(node2.chainstate(), node1_expected_first_locator.clone())
+                .await;
+        assert_eq!(
+            node2_blocks_existence_for_node1_locator,
+            vec![false; node1_expected_first_locator.len()]
+        );
+
+        let mut nodes = TestNodeGroup::new(vec![node1, node2]);
+
+        let mut had_header_list_req_from_node1 = false;
+        let mut had_header_list_req_from_node2 = false;
+        let mut node1_score_adjusted = false;
+        let mut node2_score_adjusted = false;
+
+        log::debug!("Starting message exchange");
+
+        type MsgOrEvent<'a> =
+            itertools::Either<&'a BlockSyncMessageWithNodeIdx, PeerManagerEventWithNodeIdx>;
+        nodes
+            .exchange_block_sync_messages_while_generic(
+                &mut (),
+                async |nodes: &mut TestNodeGroup, _, msg_or_event: MsgOrEvent<'_>| {
+                    log::debug!("Got activity: {msg_or_event:?}");
+
+                    match msg_or_event {
+                        itertools::Either::Left(msg) => match &msg.message {
+                            BlockSyncMessage::HeaderListRequest(req) => match msg.sender_node_idx {
+                                0 => {
+                                    if !had_header_list_req_from_node1 {
+                                        assert_eq!(req.locator(), &node1_expected_first_locator);
+                                        log::debug!("Got expected HeaderListRequest from node1");
+                                        had_header_list_req_from_node1 = true;
+                                    }
+                                }
+                                1 => {
+                                    if !had_header_list_req_from_node2 {
+                                        assert_eq!(req.locator(), &node2_expected_first_locator);
+                                        log::debug!("Got expected HeaderListRequest from node2");
+                                        had_header_list_req_from_node2 = true;
+                                    }
+                                }
+                                _ => unreachable!(),
+                            },
+
+                            BlockSyncMessage::HeaderList(_)
+                            | BlockSyncMessage::BlockListRequest(_)
+                            | BlockSyncMessage::BlockResponse(_)
+                            | BlockSyncMessage::TestSentinel(_) => {}
+                        },
+                        itertools::Either::Right(event) => match event.event {
+                            PeerManagerEvent::AdjustPeerScore {
+                                peer_id,
+                                adjust_by,
+                                reason: _,
+                                response_sender,
+                            } => {
+                                response_sender.send(Ok(()));
+
+                                match event.sender_node_idx {
+                                    0 => {
+                                        assert_eq!(
+                                            peer_id,
+                                            nodes.node(1).peer_id_as_seen_by_others()
+                                        );
+                                        assert_eq!(adjust_by, 100);
+
+                                        assert!(!node2_score_adjusted);
+                                        node2_score_adjusted = true;
+                                    }
+                                    1 => {
+                                        assert_eq!(
+                                            peer_id,
+                                            nodes.node(0).peer_id_as_seen_by_others()
+                                        );
+                                        assert_eq!(adjust_by, 100);
+
+                                        assert!(!node1_score_adjusted);
+                                        node1_score_adjusted = true;
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                            e => {
+                                panic!(
+                                    "Unexpected peer manager event: {e:?} (sender node idx = {})",
+                                    event.sender_node_idx
+                                );
+                            }
+                        },
+                    }
+
+                    if node1_score_adjusted && node2_score_adjusted {
+                        MsgAction::Break
+                    } else {
+                        MsgAction::SendAndContinue
+                    }
+                },
+            )
+            .await;
+
+        nodes.node_mut(0).assert_no_peer_manager_event().await;
+        nodes.node_mut(1).assert_no_peer_manager_event().await;
+
+        nodes.join_subsystem_managers().await;
+    })
+    .await;
+}
+
+async fn blocks_existence_for_locator(cs: &ChainstateHandle, locator: Locator) -> Vec<bool> {
+    cs.call({
+        move |cs| {
+            locator
+                .iter()
+                .map(|block_id| cs.get_gen_block_index_for_any_block(block_id).unwrap().is_some())
+                .collect_vec()
+        }
+    })
+    .await
+    .unwrap()
 }

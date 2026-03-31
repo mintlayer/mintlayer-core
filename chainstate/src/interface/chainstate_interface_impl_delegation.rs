@@ -130,12 +130,16 @@ where
         self.deref().get_mainchain_blocks(from, max_count)
     }
 
-    fn get_locator(&self) -> Result<Locator, ChainstateError> {
-        self.deref().get_locator()
+    fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError> {
+        self.deref().get_locator_from_best_block()
     }
 
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError> {
         self.deref().get_locator_from_height(height)
+    }
+
+    fn get_locator_from_block_id(&self, block_id: &Id<Block>) -> Result<Locator, ChainstateError> {
+        self.deref().get_locator_from_block_id(block_id)
     }
 
     fn get_block_ids_as_checkpoints(

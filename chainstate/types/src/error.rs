@@ -26,7 +26,7 @@ pub enum PropertyQueryError {
     StorageError(#[from] crate::storage_result::Error),
     #[error("Best block index not found")]
     BestBlockIndexNotFound,
-    #[error("Block not found {0}")]
+    #[error("Block not found: {0}")]
     BlockNotFound(Id<Block>),
     #[error("Block index not found for block {0}")]
     BlockIndexNotFound(Id<GenBlock>),
@@ -39,7 +39,7 @@ pub enum PropertyQueryError {
     },
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
-    #[error("Error obtaining ancestor")]
+    #[error("Error obtaining ancestor: {0}")]
     GetAncestorError(#[from] GetAncestorError),
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
@@ -60,6 +60,8 @@ pub enum PropertyQueryError {
     },
     #[error("Token info missing for token {0:x}")]
     TokenInfoMissing(TokenId),
+    #[error("Locator distances have wrong order")]
+    InvariantErrorLocatorDistancesWrongOrder,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
