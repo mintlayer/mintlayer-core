@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2026 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,18 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-pub mod destination_getters;
-pub mod key_chain;
-pub mod send_request;
-pub mod signer;
-pub mod wallet;
-pub mod wallet_events;
-
-use signer::software_signer::SoftwareSignerProvider;
-
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
-
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend, SoftwareSignerProvider>;
+fn main() {
+    build_utils::emit_git_env_vars();
+}

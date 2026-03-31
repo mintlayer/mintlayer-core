@@ -38,7 +38,6 @@ use helpers::{
     fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
-use node_comm::rpc_client::ColdWalletClient;
 use runtime_wallet::RuntimeWallet;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -245,9 +244,6 @@ impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, Wal
 }
 
 pub type RpcController<N, WalletEvents> = Controller<N, WalletEvents, DefaultBackend>;
-pub type HandlesController<WalletEvents> =
-    Controller<WalletHandlesClient, WalletEvents, DefaultBackend>;
-pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvents, DefaultBackend>;
 
 impl<N, W, B> Controller<N, W, B>
 where

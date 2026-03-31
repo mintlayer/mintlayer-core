@@ -16,11 +16,12 @@
 use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
-use utils::clap_utils;
+use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerScannerArgs {
     /// Network
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]

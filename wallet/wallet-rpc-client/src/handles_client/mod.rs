@@ -32,8 +32,9 @@ use node_comm::node_traits::NodeInterface;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
+use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
-use wallet::{account::TxInfo, version::get_version};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{
         CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletCreationOptions,
@@ -121,7 +122,7 @@ where
     }
 
     async fn version(&self) -> Result<String, Self::Error> {
-        Ok(get_version())
+        Ok(app_version_with_git_info!().to_pretty_string())
     }
 
     async fn rpc_completed(&self) {

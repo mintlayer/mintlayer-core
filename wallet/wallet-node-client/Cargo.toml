@@ -18,6 +18,7 @@ p2p = { path = "../../p2p" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
+utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet-types = { path = "../types" }
 
@@ -39,6 +40,9 @@ tower.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
+
+[build-dependencies]
+build_utils = { path = "../../utils/build_utils" }
 
 [features]
 trezor = ["wallet-types/trezor"]

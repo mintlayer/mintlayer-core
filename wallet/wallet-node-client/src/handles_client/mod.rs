@@ -44,6 +44,7 @@ use p2p::{
     P2pHandle,
 };
 use serialization::hex::HexError;
+use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
@@ -382,7 +383,7 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
     async fn node_version(&self) -> Result<String, Self::Error> {
-        Ok(env!("CARGO_PKG_VERSION").into())
+        Ok(app_version_with_git_info!().to_semver_string())
     }
 
     async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {

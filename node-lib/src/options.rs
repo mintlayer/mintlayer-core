@@ -36,7 +36,8 @@ use common::{
     primitives::semver::SemVer,
 };
 use utils::{
-    clap_utils, default_data_dir::default_data_dir_for_chain, root_user::ForceRunAsRootOptions,
+    app_version_with_git_info, clap_utils, default_data_dir::default_data_dir_for_chain,
+    root_user::ForceRunAsRootOptions,
 };
 use utils_networking::IpOrSocketAddress;
 
@@ -57,7 +58,7 @@ pub const IMPORT_BOOTSTRAP_FILE_OPTION_ID: &str = "import_bootstrap_file";
 // so the env vars for both of them will use the same infix; this is intended.
 #[derive(Parser, Debug, Clone)]
 #[clap(mut_args(clap_utils::env_adder("NODE")))]
-#[clap(author, version, about)]
+#[clap(author, version(app_version_with_git_info!().to_pretty_string()), about)]
 pub struct Options {
     #[clap(flatten)]
     pub top_level: TopLevelOptions,

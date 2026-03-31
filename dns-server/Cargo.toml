@@ -37,3 +37,6 @@ storage-inmemory = { path = "../storage/inmemory" }
 test-utils = { path = "../test-utils" }
 
 rstest.workspace = true
+
+[build-dependencies]
+build_utils = { path = "../utils/build_utils" }

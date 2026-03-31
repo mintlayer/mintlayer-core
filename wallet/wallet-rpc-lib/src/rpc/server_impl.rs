@@ -30,8 +30,9 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPublicKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
+use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
-use wallet::{account::TxInfo, version::get_version};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{
         BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase,
@@ -89,7 +90,7 @@ where
     }
 
     async fn version(&self) -> rpc::RpcResult<String> {
-        Ok(get_version())
+        Ok(app_version_with_git_info!().to_semver_string())
     }
 
     async fn create_wallet(

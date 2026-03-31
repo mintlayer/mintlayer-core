@@ -94,7 +94,7 @@ trait ColdWalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
-    /// Print the version of the wallet software and possibly the git commit hash, if found
+    /// Return the version of the wallet software.
     #[method(name = "version")]
     async fn version(&self) -> rpc::RpcResult<String>;
 

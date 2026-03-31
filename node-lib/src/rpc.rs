@@ -20,7 +20,7 @@ use std::{sync::Arc, time::Duration};
 use chainstate_launcher::ChainConfig;
 use rpc::{description::Described, handle_result, RpcResult};
 use subsystem::ShutdownTrigger;
-use utils::tokio_spawn;
+use utils::{app_version_with_git_info, tokio_spawn};
 
 /// RPC methods controlling the node.
 #[rpc::describe]
@@ -75,7 +75,7 @@ impl NodeRpcServer for NodeRpc {
     }
 
     fn version(&self) -> RpcResult<String> {
-        Ok(env!("CARGO_PKG_VERSION").into())
+        Ok(app_version_with_git_info!().to_semver_string())
     }
 
     fn set_mock_time(&self, time: u64) -> RpcResult<()> {

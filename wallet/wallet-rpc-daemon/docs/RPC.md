@@ -3534,7 +3534,7 @@ nothing
 
 ### Method `version`
 
-Print the version of the wallet software and possibly the git commit hash, if found
+Return the version of the wallet software.
 
 
 Parameters:

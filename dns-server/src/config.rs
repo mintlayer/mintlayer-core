@@ -20,10 +20,10 @@ use std::{
 
 use clap::Parser;
 use hickory_client::rr::Name;
-use utils_networking::IpOrSocketAddress;
 
 use common::primitives::per_thousand::PerThousand;
-use utils::{clap_utils, root_user::ForceRunAsRootOptions};
+use utils::{app_version_with_git_info, clap_utils, root_user::ForceRunAsRootOptions};
+use utils_networking::IpOrSocketAddress;
 
 use crate::dns_server::MinSameSoftwareVersionNodesRatio;
 
@@ -35,6 +35,7 @@ pub enum Network {
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("DNS_SRV")))]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct DnsServerRunOptions {
     #[clap(flatten)]
     pub config: DnsServerConfig,
