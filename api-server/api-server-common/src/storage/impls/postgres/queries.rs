@@ -823,11 +823,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml.token_transactions (
-                    tx_global_index bigint PRIMARY KEY,
+                    tx_global_index bigint,
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     transaction_id bytea NOT NULL,
-                    UNIQUE (token_id, transaction_id, block_height)
+                    PRIMARY KEY (token_id, transaction_id, block_height)
                 );",
         )
         .await?;
