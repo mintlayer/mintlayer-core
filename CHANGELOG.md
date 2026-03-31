@@ -73,9 +73,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       constantly attempting to re-establish a connection with a peer that has banned it.
 
 ### Fixed
-  - P2p: when a peer sends a message that can't be decoded, it will now be discouraged (which is what
-    is normally done for misbehaving peers) and the node won't try connecting to it again.\
-    Also, the peer will be sent an appropriate `WillDisconnect` message prior to disconnection.
+  - P2p:
+    - When a peer sends a message that can't be decoded, it will now be discouraged (which is what
+      is normally done for misbehaving peers) and the node won't try connecting to it again.\
+      Also, the peer will be sent an appropriate `WillDisconnect` message prior to disconnection.
+
+    - Fixed a potential indefinite stalling of a particular connection when both nodes start sending
+      large amounts of data to each other.
 
   - Wallet CLI and RPC: the commands `account-utxos` and `standalone-multisig-utxos` and their RPC
     counterparts now return correct decimal amounts for tokens with non-default number of decimals.

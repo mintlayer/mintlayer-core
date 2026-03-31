@@ -31,7 +31,7 @@ use test_utils::{
 };
 
 use crate::{
-    config::P2pConfig,
+    config::{BackendTimeoutsConfig, P2pConfig},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     protocol::ProtocolConfig,
     sync::tests::helpers::{
@@ -71,16 +71,15 @@ async fn basic(#[case] seed: Seed) {
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_config: Default::default(),
-            outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
-            peer_handshake_timeout: Default::default(),
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
+            backend_timeouts: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -314,16 +313,15 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_config: Default::default(),
-            outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
-            peer_handshake_timeout: Default::default(),
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
+            backend_timeouts: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -425,7 +423,12 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
         let p2p_config = Arc::new(P2pConfig {
             // Minimize the time block sync manager spends in wait_for_clock_diff.
             max_clock_diff: Duration::from_secs(1).into(),
-            peer_handshake_timeout: Duration::from_secs(1).into(),
+            backend_timeouts: BackendTimeoutsConfig {
+                peer_handshake_timeout: Duration::from_secs(1).into(),
+                outbound_connection_timeout: Default::default(),
+                disconnection_timeout: Default::default(),
+                socket_write_timeout: Default::default(),
+            },
 
             bind_addresses: Default::default(),
             socks5_proxy: Default::default(),
@@ -434,7 +437,6 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_config: Default::default(),
-            outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
             node_type: Default::default(),

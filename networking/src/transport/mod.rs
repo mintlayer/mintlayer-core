@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod buffered_transcoder;
 mod impls;
 mod message_codec;
+mod message_stream;
 mod traits;
 
 use impls::{channel, socks5, stream_adapter, tcp};
 
 pub use self::{
-    buffered_transcoder::BufferedTranscoder,
     channel::{ChannelListener, ChannelStream, MpscChannelTransport, MpscChannelTransportError},
     message_codec::MessageCodec,
+    message_stream::{new_message_stream, MessageReader, MessageWriter},
     socks5::Socks5TransportSocket,
     stream_adapter::{
         identity::IdentityStreamAdapter,

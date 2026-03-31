@@ -20,15 +20,21 @@ pub enum NetworkingError {
     // Note: std::io::Error is neither clonable nor comparable, so we only store its "kind" here.
     #[error("IO error: {0}")]
     IoError(std::io::ErrorKind),
+
     #[error("Message codec error: {0}")]
     MessageCodecError(#[from] MessageCodecError),
+
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
+
     #[error("Proxy error: {0}")]
     ProxyError(String),
 
     #[error("Channel transport error: {0}")]
     ChannelTransportError(#[from] MpscChannelTransportError),
+
+    #[error("Socket write timed out")]
+    SocketWriteTimedOut,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]

@@ -21,18 +21,21 @@ use std::{
 };
 
 use async_trait::async_trait;
-use randomness::RngCore;
 use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
 use networking::transport::TransportSocket;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use randomness::RngCore;
 use test_utils::BasicTestTimeGetter;
 
 use crate::{
     error::P2pError,
-    net::types::{PeerInfo, PeerManagerMessageExtTag, PeerRole},
-    peer_manager::{self, dns_seed::DnsSeed},
+    net::{
+        default_backend::types::{BackendObserver, Message},
+        types::{PeerInfo, PeerManagerMessageExtTag, PeerRole},
+    },
+    peer_manager::{self, dns_seed::DnsSeed, PeerManagerObserver},
 };
 
 pub mod test_node;
@@ -60,6 +63,7 @@ pub enum PeerManagerNotification {
     Heartbeat,
     ConnectionAccepted {
         address: SocketAddress,
+        peer_id: PeerId,
         peer_role: PeerRole,
     },
     OutboundError {
@@ -75,11 +79,11 @@ pub enum PeerManagerNotification {
     },
 }
 
-pub struct PeerManagerObserver {
+pub struct PeerManagerObserverImpl {
     notification_sender: UnboundedSender<PeerManagerNotification>,
 }
 
-impl PeerManagerObserver {
+impl PeerManagerObserverImpl {
     pub fn new(notification_sender: UnboundedSender<PeerManagerNotification>) -> Self {
         Self {
             notification_sender,
@@ -89,13 +93,13 @@ impl PeerManagerObserver {
     fn send_notification(&self, notification: PeerManagerNotification) {
         let send_result = self.notification_sender.send(notification.clone());
 
-        if let Err(err) = send_result {
-            log::warn!("Error sending peer manager notification {notification:?}: {err}");
+        if send_result.is_err() {
+            log::warn!("Error sending peer manager notification {notification:?}");
         }
     }
 }
 
-impl peer_manager::Observer for PeerManagerObserver {
+impl PeerManagerObserver for PeerManagerObserverImpl {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32) {
         self.send_notification(PeerManagerNotification::BanScoreAdjustment { address, new_score });
     }
@@ -112,8 +116,17 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::Heartbeat);
     }
 
-    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole) {
-        self.send_notification(PeerManagerNotification::ConnectionAccepted { address, peer_role });
+    fn on_connection_accepted(
+        &mut self,
+        address: SocketAddress,
+        peer_id: PeerId,
+        peer_role: PeerRole,
+    ) {
+        self.send_notification(PeerManagerNotification::ConnectionAccepted {
+            address,
+            peer_id,
+            peer_role,
+        });
     }
 
     fn outbound_error(&mut self, address: SocketAddress, error: P2pError) {
@@ -128,6 +141,48 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::MessageReceived {
             peer_id,
             message_tag,
+        });
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackendNotification {
+    MessageRead { peer_id: PeerId, message: Message },
+    MessageWritten { peer_id: PeerId, message: Message },
+}
+
+pub struct BackendObserverImpl {
+    notification_sender: UnboundedSender<BackendNotification>,
+}
+
+impl BackendObserverImpl {
+    pub fn new(notification_sender: UnboundedSender<BackendNotification>) -> Self {
+        Self {
+            notification_sender,
+        }
+    }
+
+    fn send_notification(&self, notification: BackendNotification) {
+        let send_result = self.notification_sender.send(notification.clone());
+
+        if send_result.is_err() {
+            log::warn!("Error sending backend notification {notification:?}");
+        }
+    }
+}
+
+impl BackendObserver for BackendObserverImpl {
+    fn on_message_write(&self, peer_id: PeerId, message: &Message) {
+        self.send_notification(BackendNotification::MessageWritten {
+            peer_id,
+            message: message.clone(),
+        });
+    }
+
+    fn on_message_read(&self, peer_id: PeerId, message: &Message) {
+        self.send_notification(BackendNotification::MessageRead {
+            peer_id,
+            message: message.clone(),
         });
     }
 }

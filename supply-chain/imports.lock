@@ -644,6 +644,13 @@ user-id = 5059
 user-login = "newpavlov"
 user-name = "Artyom Pavlov"
 
+[[publisher.getrandom]]
+version = "0.3.1"
+when = "2025-01-28"
+user-id = 5059
+user-login = "newpavlov"
+user-name = "Artyom Pavlov"
+
 [[publisher.ghash]]
 version = "0.5.1"
 when = "2024-03-03"
@@ -1673,6 +1680,20 @@ when = "2025-10-28"
 user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
+
+[[publisher.tokio]]
+version = "1.50.0"
+when = "2026-03-03"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
+
+[[publisher.tokio-macros]]
+version = "2.6.1"
+when = "2026-03-02"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
 
 [[publisher.tokio-postgres]]
 version = "0.7.16"
@@ -2719,6 +2740,12 @@ Unsafe code, but its logic looks good to me. Necessary given what it is
 doing. Well tested, has quickchecks.
 """
 
+[[audits.bytecode-alliance.audits.async-task]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "4.7.1"
+notes = "Fairly significant chunk of unsafe code in the async executor core, but seems isolated to well-understood patterns, e.g. a manual vtable and some manual layout code."
+
 [[audits.bytecode-alliance.audits.atomic-waker]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2999,6 +3026,12 @@ notes = "As advertised: a numeric library. The only `unsafe` is from some float-
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.1.0"
+
+[[audits.bytecode-alliance.audits.parking]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "2.2.1"
+notes = "forbid-unsafe crate with straightforward imports."
 
 [[audits.bytecode-alliance.audits.percent-encoding]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4186,6 +4219,21 @@ criteria = "safe-to-deploy"
 delta = "0.2.8 -> 0.2.9"
 notes = "No changes to Rust code between 0.2.8 and 0.2.9"
 
+[[audits.isrg.audits.getrandom]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.3 -> 0.3.4"
+
+[[audits.isrg.audits.getrandom]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.4 -> 0.4.0"
+
+[[audits.isrg.audits.getrandom]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.4.1"
+
 [[audits.isrg.audits.hmac]]
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
@@ -4636,6 +4684,20 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.27 -> 0.3.28"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.getrandom]]
+who = "Emilio Cobos Álvarez <emilio@crisal.io>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.3"
+notes = """
+Biggest non-trivial change is a new UEFI back-end, which looks reasonable to
+the best of my ability: There's some trickiness on initialization but doesn't
+look unsafe, at worse it leaks, and it might not if the relevant pointers are
+static/non-owning. Other changes also look reasonable too: some tweaks to
+inlining and a syscall-based linux back-end, whose relevant unsafe code looks
+reasonable.
+"""
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.gpu-allocator]]
@@ -5100,6 +5162,18 @@ who = "Ben Dean-Kawamura <bdk@mozilla.com>"
 criteria = "safe-to-deploy"
 delta = "1.1.0 -> 2.1.1"
 notes = "Simple hashing crate, no unsafe code."
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.seahash]]
+who = "Benjamin VanderSloot <bvandersloot@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "4.1.0"
+notes = """
+Uses unsafe to compute a non-cryptographic hash over &[u8],
+grabbing u64s out of the buffer for XORs. Logic looks sound,
+careful not to read over the end of the buffer, and the unsafety
+is well contained.
+"""
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.sha2]]

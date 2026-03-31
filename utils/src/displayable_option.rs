@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::fmt::{Display, LowerHex, UpperHex};
 
-/// A trait that provides a reasonable way to print an `Option` via `Display`.
+/// A trait that provides a reasonable way to print an `Option` via `Display`, `LowerHex` and `UpperHex`.
 ///
 /// If the value is `Some(val)`, `val` will be printed directly; otherwise, `None` will be printed.
 ///
@@ -46,16 +46,48 @@ where
     }
 }
 
+impl<T> LowerHex for DisplayableOptionWrapper<'_, T>
+where
+    T: LowerHex,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(val) = self.0 {
+            write!(f, "{val:x}")
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
+impl<T> UpperHex for DisplayableOptionWrapper<'_, T>
+where
+    T: UpperHex,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(val) = self.0 {
+            write!(f, "{val:X}")
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::displayable_option::DisplayableOption;
+    use super::*;
 
     #[test]
     fn test() {
         let x = Some(123);
         assert_eq!(x.as_displayable().to_string(), "123");
+        assert_eq!(format!("{}", x.as_displayable()), "123");
+        assert_eq!(format!("{:x}", x.as_displayable()), "7b");
+        assert_eq!(format!("{:X}", x.as_displayable()), "7B");
 
         let x: Option<i32> = None;
         assert_eq!(x.as_displayable().to_string(), "None");
+        assert_eq!(format!("{}", x.as_displayable()), "None");
+        assert_eq!(format!("{:x}", x.as_displayable()), "None");
+        assert_eq!(format!("{:X}", x.as_displayable()), "None");
     }
 }

@@ -29,7 +29,7 @@ use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
 
 use crate::{
     error::P2pError,
-    net::NetworkingService,
+    net::{default_backend::types::BackendObserver, NetworkingService},
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     P2pConfig, P2pEventHandler,
 };
@@ -64,6 +64,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
         protocol_version: ProtocolVersion,
+        observer: Option<Arc<dyn BackendObserver + Send + Sync>>,
         tracing_span: tracing::Span,
     ) -> crate::Result<(
         <Self as NetworkingService>::ConnectivityHandle,
@@ -95,6 +96,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             shutdown_receiver,
             subscribers_receiver,
             protocol_version,
+            observer,
         );
         let backend_task = tokio_spawn_in_tracing_span(
             async move {
@@ -154,6 +156,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             shutdown_receiver,
             subscribers_receiver,
             protocol_version,
+            None,
             tracing::Span::current(),
         )
     }

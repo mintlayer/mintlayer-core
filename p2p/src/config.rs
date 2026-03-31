@@ -35,6 +35,8 @@ make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
+make_config_setting!(DisconnectionTimeout, Duration, Duration::from_secs(10));
+make_config_setting!(SoketWriteTimeout, Duration, Duration::from_secs(60));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -69,44 +71,59 @@ impl From<NodeType> for Services {
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<SocketAddr>,
+
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
+
     /// Disable p2p encryption (for tests only).
     pub disable_noise: Option<bool>,
+
     /// Optional list of initial node addresses.
     /// Boot node addresses are added to PeerDb as regular discovered addresses.
     pub boot_nodes: Vec<IpOrSocketAddress>,
+
     /// Optional list of reserved node addresses.
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.
     pub reserved_nodes: Vec<IpOrSocketAddress>,
-    /// Optional list of whitelisted addresses. Such addresses cannot be automatically banned.
+
+    /// Optional list of whitelisted addresses. Such addresses cannot be automatically discouraged.
     pub whitelisted_addresses: Vec<IpAddr>,
+
     /// Settings related to banning and discouragement.
     pub ban_config: BanConfig,
-    /// The outbound connection timeout value in seconds.
-    pub outbound_connection_timeout: OutboundConnectionTimeout,
+
     /// How often send ping requests to peers
     pub ping_check_period: PingCheckPeriod,
+
     /// When a peer is detected as dead and disconnected
     pub ping_timeout: PingTimeout,
-    /// Timeout for initial peer handshake
-    pub peer_handshake_timeout: PeerHandshakeTimeout,
+
     /// Maximum acceptable time difference between this node and the remote peer.
     /// If a large difference is detected, the peer will be disconnected.
     pub max_clock_diff: MaxClockDiff,
-    /// A node type.
+
+    /// The node type.
     pub node_type: NodeTypeSetting,
+
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.
     pub allow_discover_private_ips: AllowDiscoverPrivateIps,
+
     /// User agent value of this node (sent to peers over the network).
     pub user_agent: UserAgent,
+
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
+
     /// Various settings used internally by the peer manager.
     pub peer_manager_config: PeerManagerConfig,
+
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
+
+    /// Various timeouts used by the backend.
+    pub backend_timeouts: BackendTimeoutsConfig,
+
     /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
     pub custom_disconnection_reason_for_banning: Option<String>,
 }
@@ -117,6 +134,22 @@ impl P2pConfig {
     /// It is calculated as the max clock diff setting plus handshake timeout to allow for
     /// imprecisions caused by the network latency.
     pub fn effective_max_clock_diff(&self) -> Duration {
-        *self.max_clock_diff + *self.peer_handshake_timeout
+        *self.max_clock_diff + *self.backend_timeouts.peer_handshake_timeout
     }
+}
+
+/// Part of P2pConfig containing various timeouts used by the backend.
+#[derive(Default, Debug, Clone)]
+pub struct BackendTimeoutsConfig {
+    /// The outbound connection timeout value.
+    pub outbound_connection_timeout: OutboundConnectionTimeout,
+
+    /// Timeout for initial peer handshake
+    pub peer_handshake_timeout: PeerHandshakeTimeout,
+
+    /// Timeout for disconnection
+    pub disconnection_timeout: DisconnectionTimeout,
+
+    /// Timeout for the socket write call
+    pub socket_write_timeout: SoketWriteTimeout,
 }

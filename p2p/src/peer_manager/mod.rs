@@ -203,7 +203,7 @@ where
     addr_list_response_cache: AddrListResponseCache,
 
     /// PeerManager's observer for use by tests.
-    observer: Option<Box<dyn Observer + Send>>,
+    observer: Option<Box<dyn PeerManagerObserver + Send>>,
 
     /// Normally, this will be DefaultDnsSeed, which performs the actual address lookup, but tests can
     /// substitute it with a mock implementation.
@@ -274,7 +274,7 @@ where
         peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
-        observer: Option<Box<dyn Observer + Send>>,
+        observer: Option<Box<dyn PeerManagerObserver + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
         mut rng: impl RngCore + Send + 'static,
     ) -> crate::Result<Self> {
@@ -289,7 +289,6 @@ where
         let now = time_getter.get_time();
         let next_feeler_connection_time =
             Self::choose_next_feeler_connection_time(&p2p_config, now, &mut rng);
-        assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
 
         let peer_eviction_random_state = peers_eviction::RandomState::new(&mut rng);
@@ -695,7 +694,7 @@ where
 
         ensure!(
             !self.pending_outbound_connects.contains_key(&address),
-            P2pError::PeerError(PeerError::Pending(address.to_string())),
+            P2pError::PeerError(PeerError::ConnectionPending(address.to_string())),
         );
 
         self.maybe_reject_because_already_connected(&address, peer_role)?;
@@ -771,7 +770,7 @@ where
     ) -> crate::Result<()> {
         ensure!(
             !self.pending_disconnects.contains_key(&peer_id),
-            P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
+            P2pError::PeerError(PeerError::DisconnectionPending(peer_id.to_string())),
         );
 
         ensure!(
@@ -1158,7 +1157,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_accepted(peer_address, peer_role)
+            o.on_connection_accepted(peer_address, peer_id, peer_role)
         }
 
         Ok(())
@@ -2456,7 +2455,7 @@ where
     }
 }
 
-pub trait Observer {
+pub trait PeerManagerObserver {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
 
     fn on_peer_ban(&mut self, address: BannableAddress);
@@ -2467,7 +2466,12 @@ pub trait Observer {
     fn on_heartbeat(&mut self);
 
     // This will be called for both incoming and outgoing connections.
-    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
+    fn on_connection_accepted(
+        &mut self,
+        address: SocketAddress,
+        peer_id: PeerId,
+        peer_role: PeerRole,
+    );
 
     // This will be called after `ConnectivityEvent::ConnectionError` has been handled by
     // the peer manager.

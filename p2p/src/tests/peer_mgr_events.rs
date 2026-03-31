@@ -25,7 +25,7 @@ use chainstate::{ChainstateConfig, Locator};
 use common::primitives::Id;
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{BufferedTranscoder, TransportListener, TransportSocket},
+    transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::{run_with_timeout, MEDIUM_TIMEOUT, SHORT_TIMEOUT};
 use p2p_types::peer_address::PeerAddress;
@@ -111,13 +111,13 @@ async fn first_sync_message_received_must_be_sent(
 
         let (stream, _) = listener.accept().await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
@@ -208,7 +208,7 @@ async fn first_sync_message_received_must_be_sent(
             }
         };
 
-        msg_stream.send(msg_to_send).await.unwrap();
+        msg_writer.send(msg_to_send).await.unwrap();
 
         if is_sync_msg {
             tokio::time::timeout(
@@ -273,13 +273,13 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
 
         let (stream, _) = listener.accept().await.unwrap();
 
-        let mut msg_stream =
-            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut msg_reader, mut msg_writer) =
+            new_message_stream(stream, Some(*p2p_config.protocol_config.max_message_size));
 
-        let msg = msg_stream.recv().await.unwrap();
+        let msg = msg_reader.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-        msg_stream
+        msg_writer
             .send(Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
@@ -303,7 +303,7 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
                 Message::NewTransaction(Id::random_using(&mut rng))
             };
 
-            msg_stream.send(msg).await.unwrap();
+            msg_writer.send(msg).await.unwrap();
         }
 
         tokio::time::timeout(

@@ -16,50 +16,52 @@
 use std::io;
 
 use bytes::BytesMut;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio_util::codec::{Decoder, Encoder};
 
 use serialization::{Decode, Encode};
 
 use super::message_codec::MessageCodec;
 
-pub struct BufferedTranscoder<S, Msg> {
+pub fn new_message_stream<S, Msg>(
     stream: S,
+    max_message_size: Option<usize>,
+) -> (MessageReader<S, Msg>, MessageWriter<S, Msg>)
+where
+    S: AsyncWrite + AsyncRead + Unpin,
+{
+    let (read_half, write_half) = tokio::io::split(stream);
+    let reader = MessageReader::new(read_half, max_message_size);
+    let writer = MessageWriter::new(write_half, max_message_size);
+
+    (reader, writer)
+}
+
+// TODO: consider using `FramedRead`/`FramedWrite` from `tokio_util` instead of the custom
+// `MessageReader`/`MessageWriter`.
+
+pub struct MessageReader<S, Msg> {
+    stream: ReadHalf<S>,
     buffer: BytesMut,
     message_codec: MessageCodec<Msg>,
 }
 
-impl<S, Msg> BufferedTranscoder<S, Msg> {
-    pub fn new(stream: S, max_message_size: Option<usize>) -> BufferedTranscoder<S, Msg> {
+impl<S, Msg> MessageReader<S, Msg> {
+    pub fn new(stream: ReadHalf<S>, max_message_size: Option<usize>) -> Self {
         let message_codec = MessageCodec::new(max_message_size);
-        BufferedTranscoder {
+        Self {
             stream,
             buffer: BytesMut::new(),
             message_codec,
         }
     }
-
-    /// The inner stream. This is only accessible as an immutable reference, so it'll allow
-    /// to read some additional info that the concrete stream might provide, but won't allow
-    /// reading or writing the actual stream data.
-    pub fn inner_stream(&self) -> &S {
-        &self.stream
-    }
 }
 
-impl<S, Msg> BufferedTranscoder<S, Msg>
+impl<S, Msg> MessageReader<S, Msg>
 where
-    Msg: Encode + Decode,
-    S: AsyncWrite + AsyncRead + Unpin,
+    Msg: Decode,
+    S: AsyncRead + Unpin,
 {
-    pub async fn send(&mut self, msg: Msg) -> crate::Result<()> {
-        let mut buf = BytesMut::new();
-        self.message_codec.encode(msg, &mut buf)?;
-        self.stream.write_all(&buf).await?;
-        self.stream.flush().await?;
-        Ok(())
-    }
-
     /// Read a framed message from socket
     ///
     /// First try to decode whatever may be in the stream's buffer and if it's empty
@@ -83,6 +85,35 @@ where
 
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
+    }
+}
+
+pub struct MessageWriter<S, Msg> {
+    stream: WriteHalf<S>,
+    message_codec: MessageCodec<Msg>,
+}
+
+impl<S, Msg> MessageWriter<S, Msg> {
+    pub fn new(stream: WriteHalf<S>, max_message_size: Option<usize>) -> Self {
+        let message_codec = MessageCodec::new(max_message_size);
+        Self {
+            stream,
+            message_codec,
+        }
+    }
+}
+
+impl<S, Msg> MessageWriter<S, Msg>
+where
+    Msg: Encode,
+    S: AsyncWrite + Unpin,
+{
+    pub async fn send(&mut self, msg: Msg) -> crate::Result<()> {
+        let mut buf = BytesMut::new();
+        self.message_codec.encode(msg, &mut buf)?;
+        self.stream.write_all(&buf).await?;
+        self.stream.flush().await?;
+        Ok(())
     }
 }
 
@@ -112,8 +143,8 @@ mod tests {
         let buf_size = rng.gen_range(10..max_msg_size + 10);
         let (stream1, stream2) = tokio::io::duplex(buf_size);
 
-        let mut sender = BufferedTranscoder::new(stream1, None);
-        let mut receiver = BufferedTranscoder::<_, Vec<u8>>::new(stream2, None);
+        let (_, mut sender) = new_message_stream(stream1, None);
+        let (mut receiver, _) = new_message_stream::<_, Vec<u8>>(stream2, None);
 
         let (sender_sender, sender_receiver) = tokio::sync::oneshot::channel();
 
@@ -133,9 +164,8 @@ mod tests {
             assert_eq!(received_message, message);
         }
 
-        let sender = sender_receiver.await.unwrap();
+        let _sender = sender_receiver.await.unwrap();
 
-        assert_eq!(sender.buffer.len(), 0);
         assert_eq!(receiver.buffer.len(), 0);
     }
 }

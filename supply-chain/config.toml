@@ -49,12 +49,6 @@ audit-as-crates-io = true
 [policy.parity-scale-codec-derive]
 audit-as-crates-io = true
 
-[policy.tokio]
-audit-as-crates-io = true
-
-[policy.tokio-macros]
-audit-as-crates-io = true
-
 [policy.trezor-client]
 audit-as-crates-io = false
 
@@ -116,10 +110,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.async-recursion]]
 version = "1.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.async-task]]
-version = "4.7.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bigdecimal]]
@@ -550,14 +540,6 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.getrandom]]
-version = "0.3.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.getrandom]]
-version = "0.4.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.getrandom_or_panic]]
 version = "0.0.3"
 criteria = "safe-to-deploy"
@@ -978,10 +960,6 @@ criteria = "safe-to-deploy"
 version = "3.7.5@git:5021525697edc0661591ebc71392c48d950a10b0"
 criteria = "safe-to-deploy"
 
-[[exemptions.parking]]
-version = "2.2.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.piper]]
 version = "0.2.4"
 criteria = "safe-to-deploy"
@@ -1222,10 +1200,6 @@ criteria = "safe-to-deploy"
 version = "3.0.10"
 criteria = "safe-to-run"
 
-[[exemptions.seahash]]
-version = "4.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.security-framework]]
 version = "2.11.1"
 criteria = "safe-to-run"
@@ -1392,14 +1366,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tinyvec]]
 version = "1.10.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio]]
-version = "1.49.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio-macros]]
-version = "2.6.0@git:0d6c7af3e43457350bdc03a6dbcafa276fab7352"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-socks]]

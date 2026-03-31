@@ -41,8 +41,8 @@ use crate::{
     Result,
 };
 
-// How much bytes is allowed for write (without reading on the other side).
-const MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
+/// The default value for how much bytes is allowed for write (without reading on the other side).
+const DEFAULT_MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
 
 struct IncomingConnection {
     from: SocketAddr,
@@ -68,6 +68,7 @@ static NEXT_IP_ADDRESS: StdAtomicU32 = StdAtomicU32::new(1);
 pub struct MpscChannelTransport {
     local_address: IpAddr,
     last_port: AtomicU16,
+    max_buf_size: usize,
 }
 
 impl MpscChannelTransport {
@@ -80,7 +81,14 @@ impl MpscChannelTransport {
         Self {
             local_address,
             last_port: 1024.into(),
+            max_buf_size: DEFAULT_MAX_BUF_SIZE,
         }
+    }
+
+    /// Specified how much bytes is allowed for write (without reading on the other side).
+    pub fn with_max_buf_size(mut self, max_buf_size: usize) -> Self {
+        self.max_buf_size = max_buf_size;
+        self
     }
 
     /// Return the next u32 value that can be used to construct a unique local address for this kind of transport.
@@ -105,6 +113,7 @@ impl TransportSocket for MpscChannelTransport {
             return Ok(Self::Listener {
                 addresses,
                 receiver: None,
+                max_buf_size: self.max_buf_size,
             });
         }
 
@@ -142,6 +151,7 @@ impl TransportSocket for MpscChannelTransport {
         Ok(Self::Listener {
             addresses,
             receiver: Some(receiver),
+            max_buf_size: self.max_buf_size,
         })
     }
 
@@ -186,6 +196,7 @@ impl TransportSocket for MpscChannelTransport {
 pub struct ChannelListener {
     addresses: Vec<SocketAddr>,
     receiver: Option<UnboundedReceiver<IncomingConnection>>,
+    max_buf_size: usize,
 }
 
 #[async_trait]
@@ -209,7 +220,7 @@ impl TransportListener for ChannelListener {
 
         assert!(self.addresses.contains(&local_address));
 
-        let (server_stream, client_stream) = tokio::io::duplex(MAX_BUF_SIZE);
+        let (server_stream, client_stream) = tokio::io::duplex(self.max_buf_size);
 
         client_stream_sender.send(client_stream).map_err(|_| {
             MpscChannelTransportError::ConnectorDroppedUnexpectedly {
@@ -320,7 +331,7 @@ mod tests {
     use randomness::Rng;
     use test_utils::random::{gen_random_bytes, Seed};
 
-    use crate::transport::BufferedTranscoder;
+    use crate::transport::new_message_stream;
 
     use super::*;
 
@@ -346,11 +357,12 @@ mod tests {
         let message_size = rng.gen_range(128..1024);
 
         let message = gen_random_bytes(&mut rng, 1, message_size);
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, Some(message.encoded_size()));
-        peer_stream.send(message.clone()).await.unwrap();
+        let (_, mut peer_stream_writer) =
+            new_message_stream(peer_stream, Some(message.encoded_size()));
+        peer_stream_writer.send(message.clone()).await.unwrap();
 
-        let mut server_stream =
-            BufferedTranscoder::<_, Vec<u8>>::new(server_stream, Some(message.encoded_size()));
-        assert_eq!(server_stream.recv().await.unwrap(), message);
+        let (mut server_stream_reader, _) =
+            new_message_stream::<_, Vec<u8>>(server_stream, Some(message.encoded_size()));
+        assert_eq!(server_stream_reader.recv().await.unwrap(), message);
     }
 }

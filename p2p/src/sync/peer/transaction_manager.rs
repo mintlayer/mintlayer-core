@@ -124,7 +124,7 @@ where
         *self.id
     }
 
-    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.id()))]
+    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.id()), level = tracing::Level::ERROR)]
     pub async fn run(&mut self) {
         match self.main_loop().await {
             // The unexpected "channel closed" error will be handled by the sync manager.

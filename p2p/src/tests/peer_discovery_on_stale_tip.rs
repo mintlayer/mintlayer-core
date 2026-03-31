@@ -459,9 +459,15 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     // Wait until the main node has tried connecting to all of the extra nodes.
     while tried_connections.len() < extra_nodes_addresses.len() {
         if let Some(notification) = main_node.try_recv_peer_mgr_notification() {
-            if let PeerManagerNotification::ConnectionAccepted { address, peer_role } = notification
+            if let PeerManagerNotification::ConnectionAccepted {
+                address,
+                peer_id,
+                peer_role,
+            } = notification
             {
-                log::debug!("Connection accepted from {address}, role is {peer_role:?}");
+                log::debug!(
+                    "Connection accepted from {address}, role = {peer_role:?}, id = {peer_id}"
+                );
 
                 if address.socket_addr().ip() != main_node_address.socket_addr().ip() {
                     assert_eq!(peer_role, PeerRole::OutboundFullRelay);
@@ -506,15 +512,14 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         // Note: peer_handshake_timeout specifies real time rather than mocked time (it's passed
         // into tokio::time::timeout), so no need to make it artificially large.
-        peer_handshake_timeout: Default::default(),
         ping_check_period: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }

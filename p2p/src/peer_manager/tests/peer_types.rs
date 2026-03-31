@@ -63,16 +63,15 @@ fn validate_services(#[case] seed: Seed) {
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_config: Default::default(),
-            outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
-            peer_handshake_timeout: Default::default(),
             max_clock_diff: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
+            backend_timeouts: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

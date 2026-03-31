@@ -47,7 +47,7 @@ use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
-    config::P2pConfig,
+    config::{BackendTimeoutsConfig, P2pConfig},
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, DialError, P2pError, ProtocolError},
     message::AddrListRequest,
@@ -1001,7 +1001,12 @@ async fn connection_timeout_rpc_notified<T>(
 
     let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        outbound_connection_timeout: Duration::from_secs(1).into(),
+        backend_timeouts: BackendTimeoutsConfig {
+            outbound_connection_timeout: Duration::from_secs(1).into(),
+            peer_handshake_timeout: Default::default(),
+            disconnection_timeout: Default::default(),
+            socket_write_timeout: Default::default(),
+        },
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -1012,7 +1017,6 @@ async fn connection_timeout_rpc_notified<T>(
         ban_config: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -1146,10 +1150,8 @@ where
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -1157,6 +1159,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1192,10 +1195,8 @@ where
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -1203,6 +1204,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1320,15 +1322,14 @@ where
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1366,15 +1367,14 @@ where
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1399,15 +1399,14 @@ where
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1545,15 +1544,14 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1592,15 +1590,14 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1626,15 +1623,14 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -1724,15 +1720,14 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1771,15 +1766,14 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1805,15 +1799,14 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -2122,15 +2115,14 @@ mod feeler_connections_test_utils {
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_config: Default::default(),
-            outbound_connection_timeout: Default::default(),
             ping_timeout: Default::default(),
-            peer_handshake_timeout: Default::default(),
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
+            backend_timeouts: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         }
     }
@@ -2210,15 +2202,14 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_config: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
+        backend_timeouts: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
 

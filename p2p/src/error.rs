@@ -84,7 +84,9 @@ pub enum PeerError {
         new_peer_role: PeerRole,
     },
     #[error("Connection to address {0} already pending")]
-    Pending(String),
+    ConnectionPending(String),
+    #[error("Disconnection from address {0} already pending")]
+    DisconnectionPending(String),
     /// This error is used by backend to drop the connection after the peer has informed us
     /// about an impending disconnection.
     #[error("The peer is going to disconnect us")]
@@ -261,6 +263,7 @@ pub fn networking_error_ban_score(err: &NetworkingError) -> u32 {
         NetworkingError::NoiseHandshakeError(_) => 0,
         NetworkingError::ProxyError(_) => 0,
         NetworkingError::ChannelTransportError(_) => 0,
+        NetworkingError::SocketWriteTimedOut => 0,
     }
 }
 

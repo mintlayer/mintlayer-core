@@ -19,10 +19,11 @@ use tokio::sync::{mpsc::Sender, oneshot};
 
 use common::{
     chain::{config::MagicBytes, Transaction},
-    primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id},
+    primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id, Idable as _},
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
+use utils::displayable_option::DisplayableOption;
 
 use crate::{
     disconnection_reason::DisconnectionReason,
@@ -181,7 +182,8 @@ pub enum HandshakeMessage {
     },
 }
 
-#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone, strum::EnumDiscriminants)]
+#[strum_discriminants(name(MessageTag))]
 pub enum Message {
     #[codec(index = 0)]
     Handshake(HandshakeMessage),
@@ -324,10 +326,97 @@ impl Message {
     }
 }
 
+/// A type that implements `Display` and produces a summary for the message to print to debug log.
+///
+/// Note that this is supposed to be printed on every received or sent message, so even though
+/// it's debug info, it's better to keep it compact.
+#[derive(Debug, Clone, Copy)]
+pub struct MessageDebugLogSummary<'a>(pub &'a Message);
+
+impl<'a> std::fmt::Display for MessageDebugLogSummary<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Message::Handshake(msg) => match msg {
+                HandshakeMessage::Hello { .. } => {
+                    write!(f, "Handshake-Hello")
+                }
+                HandshakeMessage::HelloAck { .. } => {
+                    write!(f, "Handshake-HelloAck")
+                }
+            },
+            Message::PingRequest(msg) => write!(f, "PingRequest(nonce={})", msg.nonce),
+            Message::PingResponse(msg) => write!(f, "PingResponse(nonce={})", msg.nonce),
+            Message::NewTransaction(id) => write!(f, "NewTransaction(id={id:x})"),
+            Message::HeaderListRequest(msg) => write!(
+                f,
+                "HeaderListRequest(locator 1st block id={:x})",
+                msg.locator().iter().next().as_displayable()
+            ),
+            Message::HeaderList(msg) => {
+                let first_header_id = msg.headers().first().map(|hdr| hdr.block_id());
+                write!(
+                    f,
+                    "HeaderList(1st hdr id={:x}, count={})",
+                    first_header_id.as_displayable(),
+                    msg.headers().len()
+                )
+            }
+            Message::BlockListRequest(msg) => {
+                write!(
+                    f,
+                    "BlockListRequest(1st block id={:x}, count = {})",
+                    msg.block_ids().first().as_displayable(),
+                    msg.block_ids().len()
+                )
+            }
+            Message::BlockResponse(msg) => {
+                write!(f, "BlockResponse(id={})", msg.block().get_id())
+            }
+            Message::TransactionRequest(id) => write!(f, "TransactionRequest(id={id:x})"),
+            Message::TransactionResponse(msg) => match msg {
+                TransactionResponse::NotFound(id) => {
+                    write!(f, "TransactionResponse-NotFound(id={id:x})")
+                }
+                TransactionResponse::Found(tx) => {
+                    write!(
+                        f,
+                        "TransactionResponse-Found(id={:x})",
+                        tx.transaction().get_id()
+                    )
+                }
+            },
+            Message::AnnounceAddrRequest(msg) => {
+                write!(f, "AnnounceAddrRequest(addr={})", msg.address)
+            }
+            Message::AddrListRequest(_) => write!(f, "AddrListRequest"),
+            Message::AddrListResponse(msg) => write!(
+                f,
+                "AddrListResponse(1st addr={}, count={})",
+                msg.addresses.first().as_displayable(),
+                msg.addresses.len()
+            ),
+            Message::WillDisconnect(msg) => write!(f, "WillDisconnect(reason='{}')", msg.reason),
+            #[cfg(test)]
+            Message::TestBlockSyncMsgSentinel(id) => {
+                write!(f, "TestBlockSyncMsgSentinel(id={id:x})")
+            }
+        }
+    }
+}
+
 /// Return true if the WillDisconnect message can be sent to a peer with the specified
 /// protocol version.
 pub fn can_send_will_disconnect(peer_protocol_version: ProtocolVersion) -> bool {
     peer_protocol_version >= SupportedProtocolVersion::V3.into()
+}
+
+/// Backend observer, used by tests.
+pub trait BackendObserver {
+    /// Called before the message is written to the socket.
+    fn on_message_write(&self, peer_id: PeerId, msg: &Message);
+
+    /// Called after the message has been read from the socket.
+    fn on_message_read(&self, peer_id: PeerId, msg: &Message);
 }
 
 #[cfg(test)]
@@ -341,7 +430,7 @@ mod tests {
         primitives::{semver::SemVer, Id},
     };
     use networking::test_helpers::{get_two_connected_sockets, TestTransportChannel};
-    use networking::transport::{BufferedTranscoder, MpscChannelTransport};
+    use networking::transport::{new_message_stream, MpscChannelTransport};
     use p2p_types::services::Service;
     use randomness::Rng;
     use test_utils::random::Seed;
@@ -452,9 +541,9 @@ mod tests {
 
         let (socket1, socket2) =
             get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
-        let mut sender =
-            BufferedTranscoder::new(socket1, Some(*p2p_config.protocol_config.max_message_size));
-        let mut receiver = BufferedTranscoder::<_, Message>::new(
+        let (_, mut sender) =
+            new_message_stream(socket1, Some(*p2p_config.protocol_config.max_message_size));
+        let (mut receiver, _) = new_message_stream::<_, Message>(
             socket2,
             Some(*p2p_config.protocol_config.max_message_size),
         );
@@ -465,7 +554,6 @@ mod tests {
             assert_eq!(received_message, message);
         }
 
-        assert!(sender.is_empty());
         assert!(receiver.is_empty());
     }
 }

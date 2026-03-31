@@ -19,7 +19,7 @@ use chainstate::ChainstateConfig;
 use common::{chain::Transaction, primitives::Id};
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{BufferedTranscoder, TransportSocket as _},
+    transport::{new_message_stream, TransportSocket as _},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::Rng as _;
@@ -92,9 +92,10 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     let transport = TestTransportChannel::make_transport();
     let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, Some(max_message_size_for_peer));
+    let (mut msg_reader, mut msg_writer) =
+        new_message_stream(stream, Some(max_message_size_for_peer));
 
-    msg_stream
+    msg_writer
         .send(TestMessage::Handshake(HandshakeMessage::Hello {
             protocol_version: TEST_PROTOCOL_VERSION.into(),
             network: *chain_config.magic_bytes(),
@@ -108,14 +109,14 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         .await
         .unwrap();
 
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(
         msg,
         TestMessage::Handshake(HandshakeMessage::HelloAck { .. })
     );
 
     // Handshake has completed successfully; the node requests for headers.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     assert_matches!(
         msg,
         TestMessage::HeaderListRequest(HeaderListRequest { .. })
@@ -134,12 +135,12 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     let msg = TestMessage::UnsupportedVariant(msg_data);
     let msg_size = msg.encoded_size();
 
-    msg_stream.send(msg).await.unwrap();
+    msg_writer.send(msg).await.unwrap();
 
     // The node should send WillDisconnect. Since the message size check happens first, sending
     // too big a message will produce a size-related reason even though UnsupportedVariant
     // is sent in both cases.
-    let msg = msg_stream.recv().await.unwrap();
+    let msg = msg_reader.recv().await.unwrap();
     let disconnection_reason = assert_matches_return_val!(
         msg,
         TestMessage::WillDisconnect(WillDisconnectMessage { reason }),
@@ -154,7 +155,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     assert_eq!(disconnection_reason, expected_disconnection_reason);
 
     // The connection should be closed.
-    msg_stream.recv().await.unwrap_err();
+    msg_reader.recv().await.unwrap_err();
 
     let (_, ban_score) = test_node.wait_for_ban_score_adjustment().await;
     assert_eq!(ban_score, 100);
