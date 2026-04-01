@@ -295,7 +295,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
                     // Mark UTXO as spent in mempool
                     db_tx
-                        .set_mempool_utxo(outpoint.clone(), utxo.clone(), true, &[])
+                        .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[])
                         .await
                         .map_err(BlockchainStateError::StorageError)?;
 
@@ -678,7 +678,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             let addresses_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
 
             db_tx
-                .set_mempool_utxo(outpoint, utxo, false, &addresses_refs)
+                .set_mempool_utxo(outpoint, utxo, &addresses_refs)
                 .await
                 .map_err(BlockchainStateError::StorageError)?;
         }

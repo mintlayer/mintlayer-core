@@ -419,11 +419,10 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        spent: bool,
         addresses: &[&str],
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_mempool_utxo(outpoint, utxo, spent, addresses).await?;
+        conn.set_mempool_utxo(outpoint, utxo, addresses).await?;
 
         Ok(())
     }

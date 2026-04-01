@@ -1817,7 +1817,7 @@ pub async fn mempool_address<T: ApiServerStorage>(
         })?;
 
     let locked_coin_balance = tx
-        .get_address_locked_balance(&address.to_string(), CoinOrTokenId::Coin)
+        .get_mempool_locked_address_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
