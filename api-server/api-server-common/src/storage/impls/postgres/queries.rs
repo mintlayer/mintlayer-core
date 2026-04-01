@@ -3233,9 +3233,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        spent: bool,
         addresses: &[&str],
     ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
         self.tx
             .execute(
                 "INSERT INTO ml.mempool_utxo (outpoint, utxo, spent)
@@ -3488,7 +3488,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT utxo, spent
                     FROM ml.mempool_utxo
                     WHERE outpoint = ua.outpoint
-                    ORDER BY block_height DESC
                     LIMIT 1
                 ) u
                 WHERE ua.address = $1 AND u.spent = false;"#,
@@ -3581,7 +3580,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
         self.tx
             .execute(
-                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2, $3);",
+                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2);",
                 &[&coin_or_token_id.encode(), &(issuance.number_of_decimals as i16)],
             )
             .await
@@ -3617,7 +3616,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
         self.tx
             .execute(
-                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2, $3);",
+                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2);",
                 &[&coin_or_token_id.encode(), &0_i16],
             )
             .await
@@ -3629,11 +3628,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
         let res = self
             .tx
             .query_opt(
                 "SELECT number_of_decimals FROM ml.mempool_coin_or_token_decimals WHERE coin_or_token_id = $1",
-                &[&token_id.encode()],
+                &[&coin_or_token_id.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -3685,9 +3685,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let order_id_addr = Address::new(chain_config, order_id)
-            .map_err(|_| ApiServerStorageError::AddressableError)?
-            .as_str()
-            .to_string();
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
             .execute(
@@ -3697,12 +3695,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ON CONFLICT (order_id) DO UPDATE SET initially_asked = EXCLUDED.initially_asked, ask_balance = EXCLUDED.ask_balance, ask_currency = EXCLUDED.ask_currency, initially_given = EXCLUDED.initially_given, give_balance = EXCLUDED.give_balance, give_currency = EXCLUDED.give_currency, conclude_destination = EXCLUDED.conclude_destination, next_nonce = EXCLUDED.next_nonce, frozen = EXCLUDED.frozen;
                 "#,
                 &[
-                    &order_id_addr,
-                    &order.initially_asked.encode(),
-                    &order.ask_balance.encode(),
+                    &order_id_addr.as_str(),
+                    &amount_to_str(order.initially_asked),
+                    &amount_to_str(order.ask_balance),
                     &order.ask_currency.encode(),
-                    &order.initially_given.encode(),
-                    &order.give_balance.encode(),
+                    &amount_to_str(order.initially_given),
+                    &amount_to_str(order.give_balance),
                     &order.give_currency.encode(),
                     &order.conclude_destination.encode(),
                     &order.next_nonce.encode(),
@@ -3729,6 +3727,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ml.mempool_token_transactions,
                 ml.mempool_fungible_token,
                 ml.mempool_nft_issuance,
+                ml.mempool_orders,
                 ml.mempool_coin_or_token_decimals
             RESTART IDENTITY CASCADE;",
         )
@@ -3754,7 +3753,7 @@ fn decode_order_from_row(
     let give_currency: Vec<u8> = data.get("give_currency");
     let conclude_destination: Vec<u8> = data.get("conclude_destination");
     let next_nonce: Vec<u8> = data.get("next_nonce");
-    let creation_block_height: Option<i64> = data.get("creation_block_height");
+    let creation_block_height: Option<i64> = data.try_get("creation_block_height").ok().flatten();
     let is_frozen: bool = data.get("frozen");
 
     let order_id = Address::<OrderId>::from_string(chain_config, order_id)

@@ -418,13 +418,13 @@ impl LockedUtxo {
     }
 }
 
-#[derive(Debug, Clone, Copy, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 pub enum UtxoSpent {
     AtBlockHeight(BlockHeight),
     InMempool,
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
     spent: Option<UtxoSpent>,
@@ -1068,7 +1068,6 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        spent: bool,
         addresses: &[&str],
     ) -> Result<(), ApiServerStorageError>;
 

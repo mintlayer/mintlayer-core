@@ -66,255 +66,236 @@ async fn address_not_found(#[case] seed: Seed) {
     task.abort();
 }
 
-// #[rstest]
-// #[trace]
-// #[case(Seed::from_entropy())]
-// #[tokio::test]
-// async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
-//     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-//     let addr = listener.local_addr().unwrap();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
 
-//     let (tx, rx) = tokio::sync::oneshot::channel::<[(String, serde_json::Value); 2]>();
+    let (tx, rx) = tokio::sync::oneshot::channel::<[(String, serde_json::Value); 2]>();
 
-//     let task = tokio::spawn(async move {
-//         let web_server_state = {
-//             let mut rng = make_seedable_rng(seed);
-//             let chain_config = create_unit_test_config();
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let chain_config = create_unit_test_config();
 
-//             let chainstate_blocks = {
-//                 let mut tf = TestFramework::builder(&mut rng)
-//                     .with_chain_config(chain_config.clone())
-//                     .build();
+            let transactions = {
+                let tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
 
-//                 // generate addresses
+                // generate addresses
 
-//                 let (alice_sk, alice_pk) =
-//                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                let (alice_sk, alice_pk) =
+                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-//                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
-//                 let alice_address =
-//                     Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
-//                 let mut alice_balance = Amount::from_atoms(1_000_000);
-//                 let mut alice_utxos = BTreeMap::new();
+                let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
+                let alice_address =
+                    Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
+                let mut alice_balance = Amount::from_atoms(1_000_000);
+                let mut alice_utxos = BTreeMap::new();
 
-//                 let (_bob_sk, bob_pk) =
-//                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                let (_bob_sk, bob_pk) =
+                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-//                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
-//                 let bob_address =
-//                     Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
-//                 let mut bob_utxos = BTreeMap::new();
+                let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
+                let bob_address =
+                    Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
+                let mut bob_utxos = BTreeMap::new();
 
-//                 // setup initial transaction
+                // setup initial transaction
 
-//                 let previous_tx_out =
-//                     TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
+                let previous_tx_out =
+                    TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
 
-//                 let transaction = TransactionBuilder::new()
-//                     .add_input(
-//                         TxInput::from_utxo(
-//                             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-//                             0,
-//                         ),
-//                         InputWitness::NoSignature(None),
-//                     )
-//                     .add_output(previous_tx_out.clone())
-//                     .build();
+                let transaction = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                            0,
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(previous_tx_out.clone())
+                    .build();
 
-//                 let previous_transaction_id = transaction.transaction().get_id();
+                let previous_transaction_id = transaction.transaction().get_id();
 
-//                 let mut previous_witness = InputWitness::Standard(
-//                     StandardInputSignature::produce_uniparty_signature_for_input(
-//                         &alice_sk,
-//                         SigHashType::all(),
-//                         alice_destination.clone(),
-//                         &transaction,
-//                         &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
-//                         0,
-//                         &mut rng,
-//                     )
-//                     .unwrap(),
-//                 );
+                let mut previous_witness = InputWitness::Standard(
+                    StandardInputSignature::produce_uniparty_signature_for_input(
+                        &alice_sk,
+                        SigHashType::all(),
+                        alice_destination.clone(),
+                        &transaction,
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
+                        0,
+                        &mut rng,
+                    )
+                    .unwrap(),
+                );
 
-//                 let mut chainstate_block_ids = vec![*tf
-//                     .make_block_builder()
-//                     .add_transaction(transaction.clone())
-//                     .build_and_process(&mut rng)
-//                     .unwrap()
-//                     .unwrap()
-//                     .block_id()];
+                // Generate two outputs for a single transaction
 
-//                 // Generate two outputs for a single transaction
+                let random_coin_amount1 = rng.gen_range(1..10);
+                let random_coin_amount2 = rng.gen_range(1..10);
 
-//                 let random_coin_amount1 = rng.gen_range(1..10);
-//                 let random_coin_amount2 = rng.gen_range(1..10);
+                alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
+                alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
 
-//                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
-//                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
+                let alice_tx_out =
+                    TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
 
-//                 let alice_tx_out =
-//                     TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
+                let bob_tx_out1 = TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(random_coin_amount1)),
+                    bob_destination.clone(),
+                );
 
-//                 let bob_tx_out1 = TxOutput::Transfer(
-//                     OutputValue::Coin(Amount::from_atoms(random_coin_amount1)),
-//                     bob_destination.clone(),
-//                 );
+                let bob_tx_out2 = TxOutput::LockThenTransfer(
+                    OutputValue::Coin(Amount::from_atoms(random_coin_amount2)),
+                    bob_destination.clone(),
+                    OutputTimeLock::ForBlockCount(10),
+                );
 
-//                 let bob_tx_out2 = TxOutput::LockThenTransfer(
-//                     OutputValue::Coin(Amount::from_atoms(random_coin_amount2)),
-//                     bob_destination.clone(),
-//                     OutputTimeLock::ForBlockCount(10),
-//                 );
+                let transaction2 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(
+                            OutPointSourceId::Transaction(previous_transaction_id),
+                            0,
+                        ),
+                        previous_witness.clone(),
+                    )
+                    .add_output(alice_tx_out.clone())
+                    .add_output(bob_tx_out1.clone())
+                    .add_output(bob_tx_out2.clone())
+                    .build();
 
-//                 let transaction = TransactionBuilder::new()
-//                     .add_input(
-//                         TxInput::from_utxo(
-//                             OutPointSourceId::Transaction(previous_transaction_id),
-//                             0,
-//                         ),
-//                         previous_witness.clone(),
-//                     )
-//                     .add_output(alice_tx_out.clone())
-//                     .add_output(bob_tx_out1.clone())
-//                     .add_output(bob_tx_out2.clone())
-//                     .build();
+                let utxo = UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(transaction2.transaction().get_id()),
+                    0,
+                );
+                alice_utxos.insert(utxo, alice_tx_out);
+                bob_utxos.insert(
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction2.transaction().get_id()),
+                        1,
+                    ),
+                    bob_tx_out1,
+                );
+                bob_utxos.insert(
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction2.transaction().get_id()),
+                        2,
+                    ),
+                    bob_tx_out2,
+                );
 
-//                 let utxo = UtxoOutPoint::new(
-//                     OutPointSourceId::Transaction(transaction.transaction().get_id()),
-//                     0,
-//                 );
-//                 alice_utxos.insert(utxo, alice_tx_out);
-//                 bob_utxos.insert(
-//                     UtxoOutPoint::new(
-//                         OutPointSourceId::Transaction(transaction.transaction().get_id()),
-//                         1,
-//                     ),
-//                     bob_tx_out1,
-//                 );
-//                 bob_utxos.insert(
-//                     UtxoOutPoint::new(
-//                         OutPointSourceId::Transaction(transaction.transaction().get_id()),
-//                         2,
-//                     ),
-//                     bob_tx_out2,
-//                 );
+                previous_witness = InputWitness::Standard(
+                    StandardInputSignature::produce_uniparty_signature_for_input(
+                        &alice_sk,
+                        SigHashType::all(),
+                        alice_destination.clone(),
+                        &transaction,
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
+                        0,
+                        &mut rng,
+                    )
+                    .unwrap(),
+                );
 
-//                 previous_witness = InputWitness::Standard(
-//                     StandardInputSignature::produce_uniparty_signature_for_input(
-//                         &alice_sk,
-//                         SigHashType::all(),
-//                         alice_destination.clone(),
-//                         &transaction,
-//                         &[SighashInputCommitment::Utxo(Cow::Borrowed(&previous_tx_out))],
-//                         0,
-//                         &mut rng,
-//                     )
-//                     .unwrap(),
-//                 );
+                let signed_transaction2 = SignedTransaction::new(
+                    transaction2.transaction().clone(),
+                    vec![previous_witness.clone()],
+                )
+                .unwrap();
 
-//                 let signed_transaction = SignedTransaction::new(
-//                     transaction.transaction().clone(),
-//                     vec![previous_witness.clone()],
-//                 )
-//                 .unwrap();
+                _ = tx.send([
+                    (
+                        alice_address.as_str().to_string(),
+                        alice_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
+                    ),
+                    (
+                        bob_address.to_string(),
+                        bob_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
+                    ),
+                ]);
 
-//                 chainstate_block_ids.push(
-//                     *tf.make_block_builder()
-//                         .add_transaction(signed_transaction)
-//                         .build_and_process(&mut rng)
-//                         .unwrap()
-//                         .unwrap()
-//                         .block_id(),
-//                 );
+                [transaction, signed_transaction2]
+            };
 
-//                 _ = tx.send([
-//                     (
-//                         alice_address.as_str().to_string(),
-//                         alice_utxos
-//                             .into_iter()
-//                             .map(|utxo| {
-//                                 json!({
-//                                 "outpoint": utxo_outpoint_to_json(&utxo.0),
-//                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
-//                             })
-//                             .collect::<Vec<_>>()
-//                             .into(),
-//                     ),
-//                     (
-//                         bob_address.to_string(),
-//                         bob_utxos
-//                             .into_iter()
-//                             .map(|utxo| {
-//                                 json!({
-//                                 "outpoint": utxo_outpoint_to_json(&utxo.0),
-//                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
-//                             })
-//                             .collect::<Vec<_>>()
-//                             .into(),
-//                     ),
-//                 ]);
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
-//                 chainstate_block_ids
-//                     .iter()
-//                     .map(|id| tf.block(tf.to_chain_block_id(id.into())))
-//                     .collect::<Vec<_>>()
-//             };
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
 
-//             let storage = {
-//                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+                storage
+            };
 
-//                 let mut db_tx = storage.transaction_rw().await.unwrap();
-//                 db_tx.reinitialize_storage(&chain_config).await.unwrap();
-//                 db_tx.commit().await.unwrap();
+            let chain_config = Arc::new(chain_config);
 
-//                 storage
-//             };
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            for tx in transactions {
+                local_node.add_mempool_tx(&tx).await.unwrap();
+            }
 
-//             let chain_config = Arc::new(chain_config);
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+            }
+        };
 
-//             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
-//             local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
-//             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+        web_server(listener, web_server_state, true).await
+    });
 
-//             ApiServerWebServerState {
-//                 db: Arc::new(local_node.storage().clone_storage().await),
-//                 chain_config: Arc::clone(&chain_config),
-//                 rpc: Arc::new(DummyRPC {}),
-//                 cached_values: Arc::new(CachedValues {
-//                     feerate_points: RwLock::new((get_time(), vec![])),
-//                 }),
-//                 time_getter: Default::default(),
-//             }
-//         };
+    for (address, expected) in rx.await.unwrap() {
+        let url = format!("/api/v2/mempool/address/{address}/all-utxos");
 
-//         web_server(listener, web_server_state, true).await
-//     });
+        // Given that the listener port is open, this will block until a
+        // response is made (by the web server, which takes the listener
+        // over)
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
 
-//     for (address, expected) in rx.await.unwrap() {
-//         let url = format!("/api/v2/mempool/address/{address}/all-utxos");
+        assert_eq!(
+            response.status(),
+            200,
+            "Failed getting address balance for {address}"
+        );
 
-//         // Given that the listener port is open, this will block until a
-//         // response is made (by the web server, which takes the listener
-//         // over)
-//         let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-//             .await
-//             .unwrap();
+        let body = response.text().await.unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-//         assert_eq!(
-//             response.status(),
-//             200,
-//             "Failed getting address balance for {address}"
-//         );
+        assert_eq!(body, expected);
+    }
 
-//         let body = response.text().await.unwrap();
-//         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-//         eprintln!("asd\n\n");
-//         assert_eq!(body, expected);
-//     }
-
-//     task.abort();
-// }
+    task.abort();
+}
 
 #[rstest]
 #[trace]

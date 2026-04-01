@@ -324,10 +324,9 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        spent: bool,
         addresses: &[&str],
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_mempool_utxo(outpoint, utxo, spent, addresses)
+        self.transaction.set_mempool_utxo(outpoint, utxo, addresses)
     }
 
     async fn set_mempool_address_balance(

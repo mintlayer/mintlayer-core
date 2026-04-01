@@ -1448,9 +1448,9 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
-        spent: bool,
         addresses: &[&str],
     ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
         self.mempool_utxo_table.insert(outpoint.clone(), (utxo, spent));
         for address in addresses {
             self.mempool_address_utxos
@@ -1582,6 +1582,7 @@ impl ApiServerInMemoryStorage {
         self.mempool_token_transactions_table.clear();
         self.mempool_fungible_token_data.clear();
         self.mempool_nft_token_issuances.clear();
+        self.mempool_orders_table.clear();
         Ok(())
     }
 }
