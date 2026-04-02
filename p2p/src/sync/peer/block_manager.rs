@@ -716,6 +716,15 @@ where
             self.incoming.peers_best_block_that_we_have.as_displayable()
         );
 
+        // Now use preliminary_headers_check; this can be done because the first header
+        // is known to be connected to the chainstate.
+        {
+            let new_block_headers = new_block_headers.clone();
+            self.chainstate_handle
+                .call(move |c| Ok(c.preliminary_headers_check(&new_block_headers)?))
+                .await?;
+        }
+
         if !self.incoming.requested_blocks.is_empty() {
             // We are already downloading blocks, so bail out.
             // Note that we unconditionally replace pending_headers with new_block_headers
@@ -730,15 +739,6 @@ where
                 self.request_headers().await?;
             }
             return Ok(());
-        }
-
-        // Now use preliminary_headers_check; this can be done because the first header
-        // is known to be connected to the chainstate.
-        {
-            let new_block_headers = new_block_headers.clone();
-            self.chainstate_handle
-                .call(move |c| Ok(c.preliminary_headers_check(&new_block_headers)?))
-                .await?;
         }
 
         self.request_blocks(new_block_headers)

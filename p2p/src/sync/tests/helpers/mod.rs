@@ -251,6 +251,7 @@ impl TestNode {
 
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
+        log::debug!("Asserting no error");
         expect_no_recv!(self.error_receiver);
     }
 
@@ -362,6 +363,8 @@ impl TestNode {
     /// like NewTipReceived/NewChainstateTip etc).
     // TODO: Rename the function
     pub async fn assert_no_peer_manager_event(&mut self) {
+        log::debug!("Asserting no peer mgr event");
+
         time::timeout(SHORT_TIMEOUT, async {
             loop {
                 let peer_event = self.peer_manager_event_receiver.recv().await.unwrap();
@@ -400,10 +403,16 @@ impl TestNode {
 
     /// Panics if the sync manager sends a message.
     pub async fn assert_no_sync_message(&mut self) {
+        log::debug!("Asserting no sync message");
+
         let future = async {
             tokio::select! {
-                _ = self.block_sync_msg_receiver.recv() => {},
-                _ = self.transaction_sync_msg_receiver.recv() => {},
+                msg = self.block_sync_msg_receiver.recv() => {
+                    log::debug!("Got sync msg {msg:?} while expecting none");
+                },
+                msg = self.transaction_sync_msg_receiver.recv() => {
+                    log::debug!("Got sync msg {msg:?} while expecting none");
+                },
             }
         };
 
@@ -415,6 +424,8 @@ impl TestNode {
         expected_peer: PeerId,
         expected_score: u32,
     ) {
+        log::debug!("Asserting peer score adjustment");
+
         let (adjusted_peer, score) = self.receive_adjust_peer_score_event().await;
         assert_eq!(adjusted_peer, expected_peer);
         assert_eq!(score, expected_score);
@@ -429,6 +440,8 @@ impl TestNode {
     }
 
     pub async fn join_subsystem_manager(self) {
+        log::debug!("Joining subsystem mgr");
+
         // Shutdown sync manager first
         drop(self.syncing_event_sender);
         let _ = self.sync_manager_handle.await;

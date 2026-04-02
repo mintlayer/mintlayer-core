@@ -1350,9 +1350,9 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
     });
 }
 
-// Issue and mint maximum possible tokens for Unlimited supply.
-// Try to mint 1 more and check an error.
-// Try to mint random number and check an error.
+// Issue and mint maximum possible tokens (i128::MAX) for Unlimited supply.
+// Try to mint 1 more and expect an error.
+// Try to mint random number and expect an error.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1373,8 +1373,8 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
                 IsTokenFreezable::No,
             );
 
-        // Mint tokens i128::MAX
-        let mint_tx = TransactionBuilder::new()
+        // Mint i128::MAX atoms
+        let initial_mint_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_command(
                     AccountNonce::new(0),
@@ -1395,9 +1395,9 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let mint_tx_id = mint_tx.transaction().get_id();
+        let initial_mint_tx_id = initial_mint_tx.transaction().get_id();
         tf.make_block_builder()
-            .add_transaction(mint_tx)
+            .add_transaction(initial_mint_tx)
             .build_and_process(&mut rng)
             .unwrap();
 
@@ -1416,25 +1416,29 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
             true,
         );
 
-        {
-            // Try mint one more over i128::MAX
-            let mint_tx = TransactionBuilder::new()
+        let make_mint_tx = |amount| {
+            TransactionBuilder::new()
                 .add_input(
                     TxInput::from_command(
                         AccountNonce::new(1),
-                        AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
+                        AccountCommand::MintTokens(token_id, amount),
                     ),
                     InputWitness::NoSignature(None),
                 )
                 .add_input(
-                    TxInput::from_utxo(mint_tx_id.into(), 0),
+                    TxInput::from_utxo(initial_mint_tx_id.into(), 0),
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                    OutputValue::TokenV1(token_id, amount),
                     Destination::AnyoneCanSpend,
                 ))
-                .build();
+                .build()
+        };
+
+        {
+            // Try minting one more atom.
+            let mint_tx = make_mint_tx(Amount::from_atoms(1));
             let mint_tx_id = mint_tx.transaction().get_id();
             let result =
                 tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
@@ -1454,41 +1458,256 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
             );
         }
 
-        // Try mint random number over i128::MAX
-        let random_amount = Amount::from_atoms(rng.gen_range(0..i128::MAX as u128));
-        let mint_tx = TransactionBuilder::new()
+        {
+            // Try minting a random number of atoms
+            let amount = Amount::from_atoms(rng.gen_range(1..=i128::MAX as u128));
+            let mint_tx = make_mint_tx(amount);
+            let mint_tx_id = mint_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::TokensAccountingError(
+                            tokens_accounting::Error::AccountingError(
+                                accounting::Error::ArithmeticErrorDeltaAdditionFailed
+                            )
+                        ),
+                        mint_tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        {
+            // For completeness, try minting a random number of atoms bigger than i128::MAX.
+            // A different error will be generated.
+            let amount = Amount::from_atoms(rng.gen_range((i128::MAX as u128) + 1..=u128::MAX));
+            let mint_tx = make_mint_tx(amount);
+            let mint_tx_id = mint_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::TokensAccountingError(
+                            tokens_accounting::Error::AccountingError(
+                                accounting::Error::ArithmeticErrorToSignedFailed
+                            )
+                        ),
+                        mint_tx_id.into()
+                    )
+                ))
+            );
+        }
+    });
+}
+
+// Same as mint_unlimited_supply_max, but use TokenTotalSupply::Fixed with an amount bigger than i128::MAX.
+// 1) mint maximum possible tokens (i128::MAX);
+// 2) try minting 1 more and expect an error;
+// 3) try minting a random amount and expect an error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+
+        let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
+        let total_supply_atoms = if rng.gen_bool(0.5) {
+            u128::MAX
+        } else {
+            rng.gen_range((i128::MAX as u128) + 1..u128::MAX)
+        };
+        let total_supply_atoms_above_i128_max = total_supply_atoms - i128::MAX as u128;
+        assert!(total_supply_atoms_above_i128_max > 0);
+
+        let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
+            issue_token_from_genesis(
+                &mut rng,
+                &mut tf,
+                TokenTotalSupply::Fixed(Amount::from_atoms(total_supply_atoms)),
+                IsTokenFreezable::No,
+            );
+
+        // Mint i128::MAX atoms
+        let initial_mint_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_command(
-                    AccountNonce::new(1),
-                    AccountCommand::MintTokens(token_id, random_amount),
+                    AccountNonce::new(0),
+                    AccountCommand::MintTokens(token_id, max_amount_to_mint),
                 ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 0),
+                utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, random_amount),
+                OutputValue::Coin(token_supply_change_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, max_amount_to_mint),
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let mint_tx_id = mint_tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+        let initial_mint_tx_id = initial_mint_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(initial_mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::TokensAccountingError(
-                        tokens_accounting::Error::AccountingError(
-                            accounting::Error::ArithmeticErrorDeltaAdditionFailed
-                        )
-                    ),
-                    mint_tx_id.into()
-                )
-            ))
+        check_fungible_token(
+            &tf,
+            &mut rng,
+            &token_id,
+            &ExpectedFungibleTokenData {
+                issuance,
+                issuance_tx,
+                issuance_block_id,
+                circulating_supply: Some(max_amount_to_mint),
+                is_locked: false,
+                is_frozen: IsTokenFrozen::No(IsTokenFreezable::No),
+            },
+            true,
         );
+
+        let make_mint_tx = |amount| {
+            TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_command(
+                        AccountNonce::new(1),
+                        AccountCommand::MintTokens(token_id, amount),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::from_utxo(initial_mint_tx_id.into(), 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build()
+        };
+
+        {
+            // Try mint one more atom
+            let mint_tx = make_mint_tx(Amount::from_atoms(1));
+            let mint_tx_id = mint_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::TokensAccountingError(
+                            tokens_accounting::Error::AccountingError(
+                                accounting::Error::ArithmeticErrorDeltaAdditionFailed
+                            )
+                        ),
+                        mint_tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        {
+            // Try minting a random number of atoms, so that the total is below the specified max supply.
+            let amount = Amount::from_atoms(rng.gen_range(1..=total_supply_atoms_above_i128_max));
+            let mint_tx = make_mint_tx(amount);
+            let mint_tx_id = mint_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::TokensAccountingError(
+                            tokens_accounting::Error::AccountingError(
+                                accounting::Error::ArithmeticErrorDeltaAdditionFailed
+                            )
+                        ),
+                        mint_tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        {
+            // For completeness, try minting a random number of atoms, so that the total is above
+            // the specified max supply. Different errors are expected in this case, depending
+            // on whether the total amount fits into u128.
+
+            let max_extra_amount_to_fit_into_u128 = u128::MAX - total_supply_atoms;
+
+            if max_extra_amount_to_fit_into_u128 != 0 {
+                // The total amount fits into u128.
+
+                let amount = Amount::from_atoms(
+                    total_supply_atoms_above_i128_max
+                        + rng.gen_range(1..=max_extra_amount_to_fit_into_u128),
+                );
+                let mint_tx = make_mint_tx(amount);
+                let mint_tx_id = mint_tx.transaction().get_id();
+                let result =
+                    tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+                assert_eq!(
+                    result.unwrap_err(),
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::TokensAccountingError(
+                                tokens_accounting::Error::MintExceedsSupplyLimit(
+                                    amount,
+                                    Amount::from_atoms(total_supply_atoms),
+                                    token_id
+                                )
+                            ),
+                            mint_tx_id.into()
+                        )
+                    ))
+                );
+            }
+
+            {
+                // The total amount doesn't fit into u128.
+
+                let amount = Amount::from_atoms(rng.gen_range(
+                    total_supply_atoms_above_i128_max + max_extra_amount_to_fit_into_u128 + 1
+                        ..=u128::MAX,
+                ));
+                let mint_tx = make_mint_tx(amount);
+                let mint_tx_id = mint_tx.transaction().get_id();
+                let result =
+                    tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+                assert_eq!(
+                    result.unwrap_err(),
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::TokensAccountingError(
+                                tokens_accounting::Error::AmountOverflow
+                            ),
+                            mint_tx_id.into()
+                        )
+                    ))
+                );
+            }
+        }
     });
 }
 
