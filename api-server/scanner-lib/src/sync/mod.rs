@@ -17,6 +17,7 @@ use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+
 pub mod local_state;
 mod remote_node;
 
@@ -63,12 +64,27 @@ pub async fn sync_once(
             .await
             .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
 
-        let (best_block_height, best_block_id) = local_state
+        let (best_block_height, best_block_id, _) = local_state
             .best_block()
             .await
             .map_err(|e| SyncError::BestBlockRetrievalError(e.to_string()))?;
 
         if chain_info.best_block_id == best_block_id {
+            logging::log::info!("Fully synced! Scanning mempool...");
+
+            // Fetch the current complete mempool
+            let all_mempool_txs = rpc_client
+                .mempool_get_transactions()
+                .await
+                .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
+
+            for tx in all_mempool_txs {
+                local_state
+                    .add_mempool_tx(&tx)
+                    .await
+                    .map_err(|e| SyncError::LocalNode(e.to_string()))?;
+            }
+
             return Ok(());
         }
 

@@ -25,10 +25,11 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-        ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, Transactional,
-        TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        AmountWithDecimals, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
+        ApiServerStorageWrite, ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation,
+        FungibleTokenData, LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction,
+        TransactionInfo, Transactional, TxAdditionalInfo, Utxo, UtxoLock, UtxoSpent,
+        UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -805,7 +806,11 @@ where
 
             // and set it as spent on the next block height
             let next_block_height = block_height.next_height().next_height();
-            let spent_utxo = Utxo::new(output.clone(), None, Some(next_block_height));
+            let spent_utxo = Utxo::new(
+                output.clone(),
+                None,
+                Some(UtxoSpent::AtBlockHeight(next_block_height)),
+            );
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
@@ -852,17 +857,88 @@ where
             );
         }
 
+        // get all mempool utxos
+        {
+            // some new address
+            let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+            let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
+            let bob_address =
+                Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
+
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+            let outpoint = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(random_tx_id),
+                rng.gen::<u32>(),
+            );
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                bob_destination.clone(),
+            );
+
+            let utxo = Utxo::new(output.clone(), None, None);
+            db_tx
+                .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[bob_address.as_str()])
+                .await
+                .unwrap();
+
+            let utxos = db_tx.get_mempool_address_all_utxos(bob_address.as_str()).await.unwrap();
+            assert_eq!(utxos.len(), 1);
+            assert_eq!(
+                utxos.iter().find(|utxo| utxo.0 == outpoint),
+                Some(&(outpoint.clone(), UtxoWithExtraInfo::new(output, None)))
+            );
+
+            // then update it to spent
+            let spent_utxo = utxo.into_spent_in_mempool();
+            db_tx
+                .set_mempool_utxo(outpoint.clone(), spent_utxo, &[bob_address.as_str()])
+                .await
+                .unwrap();
+
+            // should return empty as it is spent
+            let utxos = db_tx.get_mempool_address_all_utxos(bob_address.as_str()).await.unwrap();
+            assert!(utxos.is_empty());
+        }
+
+        // set one in mempool and get it
+        {
+            db_tx
+                .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[bob_address.as_str()])
+                .await
+                .unwrap();
+
+            let fetched_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+            assert_eq!(fetched_utxo, Some(utxo.clone()));
+
+            let bob_utxos =
+                db_tx.get_mempool_address_all_utxos(bob_address.as_str()).await.unwrap();
+            assert_eq!(
+                bob_utxos,
+                vec![(
+                    outpoint.clone(),
+                    UtxoWithExtraInfo::new(output.clone(), None)
+                )]
+            );
+
+            db_tx.clear_mempool_data().await.unwrap();
+        }
+
         // set one and get it
         {
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
-                    utxo,
+                    utxo.clone(),
                     &[bob_address.as_str()],
                     block_height,
                 )
                 .await
                 .unwrap();
+
+            // even if the utxo is confirmed it should be returned by the fallback
+            let fetched_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+            assert_eq!(fetched_utxo, Some(utxo.clone()));
 
             let bob_utxos = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
             assert_eq!(
@@ -914,7 +990,11 @@ where
             }
 
             // set the new one to spent in the same block
-            let utxo = Utxo::new(output2.clone(), None, Some(block_height));
+            let utxo = Utxo::new(
+                output2.clone(),
+                None,
+                Some(UtxoSpent::AtBlockHeight(block_height)),
+            );
             expected_utxos.remove(&outpoint2);
             db_tx
                 .set_utxo_at_height(outpoint2, utxo, &[bob_address.as_str()], block_height)
@@ -1940,6 +2020,227 @@ where
     // test orders
     orders(&mut rng, &mut storage).await;
 
+    // Test mempool operations
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // setup
+        let tx_id = Id::<Transaction>::random_using(&mut rng);
+        let tx_info = TransactionInfo {
+            tx: TransactionBuilder::new().build(),
+            additional_info: TxAdditionalInfo {
+                fee: Amount::from_atoms(100),
+                input_utxos: vec![],
+                token_decimals: BTreeMap::new(),
+            },
+        };
+        db_tx.set_mempool_transaction(tx_id, &tx_info).await.unwrap();
+
+        let outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(Id::<Transaction>::random_using(&mut rng)),
+            0,
+        );
+        let utxo = Utxo::new(
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            ),
+            None,
+            None,
+        );
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let addr1 = Address::new(&chain_config, random_destination).unwrap();
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let addr2 = Address::new(&chain_config, random_destination).unwrap();
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let addr3 = Address::new(&chain_config, random_destination).unwrap();
+
+        db_tx
+            .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[addr1.as_str()])
+            .await
+            .unwrap();
+
+        db_tx
+            .set_mempool_address_balance(
+                addr2.as_str(),
+                CoinOrTokenId::Coin,
+                Amount::from_atoms(100),
+                chain_config.coin_decimals(),
+            )
+            .await
+            .unwrap();
+        let token_id_bal = TokenId::random_using(&mut rng);
+        let addr2_token_bal = 100;
+        let addr2_locked_token_bal = 200;
+        db_tx
+            .set_mempool_address_balance(
+                addr2.as_str(),
+                CoinOrTokenId::TokenId(token_id_bal),
+                Amount::from_atoms(addr2_token_bal),
+                4,
+            )
+            .await
+            .unwrap();
+        db_tx
+            .set_mempool_locked_address_balance(
+                addr2.as_str(),
+                CoinOrTokenId::TokenId(token_id_bal),
+                Amount::from_atoms(addr2_locked_token_bal),
+                4,
+            )
+            .await
+            .unwrap();
+
+        db_tx.set_mempool_address_transaction(addr3.as_str(), tx_id).await.unwrap();
+
+        let token_id1 = TokenId::random_using(&mut rng);
+        db_tx.set_mempool_token_transaction(token_id1, tx_id).await.unwrap();
+
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let token1_number_of_decimals = rng.gen_range(0..18);
+        let fd = FungibleTokenData {
+            token_ticker: b"TKN".to_vec(),
+            number_of_decimals: token1_number_of_decimals,
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            circulating_supply: Amount::ZERO,
+            total_supply: TokenTotalSupply::Unlimited,
+            is_locked: false,
+            frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            authority: random_destination,
+            next_nonce: AccountNonce::new(0),
+        };
+
+        db_tx.set_mempool_fungible_token_issuance(token_id1, fd).await.unwrap();
+
+        let nft_id = TokenId::random_using(&mut rng);
+        let nft_issuance = NftIssuance::V0(NftIssuanceV0 {
+            metadata: common::chain::tokens::Metadata {
+                creator: None,
+                name: b"NFT".to_vec(),
+                description: b"".to_vec(),
+                ticker: b"n".to_vec(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![],
+            },
+        });
+        db_tx
+            .set_mempool_nft_issuance(nft_id, nft_issuance, &Destination::AnyoneCanSpend)
+            .await
+            .unwrap();
+
+        let (order_id, order) = random_order(
+            &mut rng,
+            None,
+            CoinOrTokenId::Coin,
+            CoinOrTokenId::TokenId(token_id1),
+        );
+        db_tx.set_mempool_order(order_id, &order).await.unwrap();
+
+        db_tx.commit().await.unwrap();
+
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        // Check values
+        let retrieved_tx = db_tx.get_mempool_transaction(tx_id).await.unwrap();
+        assert_eq!(retrieved_tx, Some(tx_info.clone()));
+
+        let mempool_txs = db_tx.get_mempool_transactions(10, 0).await.unwrap();
+        assert_eq!(mempool_txs, vec![tx_info]);
+
+        let retrieved_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+        assert_eq!(retrieved_utxo, Some(utxo.clone()));
+
+        let addr1_utxos = db_tx.get_mempool_address_all_utxos(addr1.as_str()).await.unwrap();
+        assert_eq!(addr1_utxos.len(), 1);
+        assert_eq!(addr1_utxos[0].0, outpoint);
+        assert_eq!(
+            addr1_utxos[0].1,
+            UtxoWithExtraInfo::new(utxo.output().clone(), None)
+        );
+
+        let addr2_balances = db_tx.get_mempool_address_balances(addr2.as_str()).await.unwrap();
+        assert_eq!(addr2_balances.len(), 2);
+        let expected_balances = BTreeMap::from_iter([
+            (
+                CoinOrTokenId::Coin,
+                AmountWithDecimals {
+                    amount: Amount::from_atoms(100),
+                    decimals: chain_config.coin_decimals(),
+                },
+            ),
+            (
+                CoinOrTokenId::TokenId(token_id_bal),
+                AmountWithDecimals {
+                    amount: Amount::from_atoms(addr2_token_bal),
+                    decimals: 4,
+                },
+            ),
+        ]);
+        assert_eq!(addr2_balances, expected_balances);
+
+        let b1 = db_tx
+            .get_mempool_address_balance(addr2.as_str(), CoinOrTokenId::Coin)
+            .await
+            .unwrap();
+        assert_eq!(b1, Some(Amount::from_atoms(100)));
+        let b2 = db_tx
+            .get_mempool_locked_address_balance(
+                addr2.as_str(),
+                CoinOrTokenId::TokenId(token_id_bal),
+            )
+            .await
+            .unwrap();
+        assert_eq!(b2, Some(Amount::from_atoms(addr2_locked_token_bal)));
+
+        let addr3_txs = db_tx.get_mempool_address_transactions(addr3.as_str()).await.unwrap();
+        assert_eq!(addr3_txs, vec![tx_id]);
+
+        let retrieved_order = db_tx.get_mempool_order(order_id).await.unwrap();
+        assert_eq!(retrieved_order, Some(order));
+
+        let token_decimals = db_tx.get_mempool_token_num_decimals(token_id1).await.unwrap();
+        assert_eq!(token_decimals, Some(token1_number_of_decimals));
+
+        // nfts have 0 decimals
+        let token2_decimals = db_tx.get_mempool_token_num_decimals(nft_id).await.unwrap();
+        assert_eq!(token2_decimals, Some(0));
+
+        drop(db_tx);
+
+        // Clear and check
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.clear_mempool_data().await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        let retrieved_tx_cleared = db_tx.get_mempool_transaction(tx_id).await.unwrap();
+        assert_eq!(retrieved_tx_cleared, None);
+
+        let mempool_txs_cleared = db_tx.get_mempool_transactions(10, 0).await.unwrap();
+        assert!(mempool_txs_cleared.is_empty());
+
+        let retrieved_utxo_cleared = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+        assert_eq!(retrieved_utxo_cleared, None);
+
+        let retrieved_order_cleared = db_tx.get_mempool_order(order_id).await.unwrap();
+        assert_eq!(retrieved_order_cleared, None);
+
+        let addr1_utxos_cleared =
+            db_tx.get_mempool_address_all_utxos(addr1.as_str()).await.unwrap();
+        assert!(addr1_utxos_cleared.is_empty());
+
+        let addr2_balances_cleared =
+            db_tx.get_mempool_address_balances(addr2.as_str()).await.unwrap();
+        assert!(addr2_balances_cleared.is_empty());
+    }
+
     Ok(())
 }
 
@@ -1963,37 +2264,37 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
 
     let (order1_id, order1) = random_order(
         rng,
-        BlockHeight::new(1),
+        Some(BlockHeight::new(1)),
         CoinOrTokenId::Coin,
         CoinOrTokenId::TokenId(token1),
     );
     let (order2_id, order2) = random_order(
         rng,
-        BlockHeight::new(2),
+        Some(BlockHeight::new(2)),
         CoinOrTokenId::TokenId(token1),
         CoinOrTokenId::TokenId(token2),
     );
     let (order3_id, order3) = random_order(
         rng,
-        BlockHeight::new(3),
+        Some(BlockHeight::new(3)),
         CoinOrTokenId::Coin,
         CoinOrTokenId::TokenId(token2),
     );
     let (order4_id, order4) = random_order(
         rng,
-        BlockHeight::new(4),
+        Some(BlockHeight::new(4)),
         CoinOrTokenId::TokenId(token2),
         CoinOrTokenId::TokenId(token1),
     );
     let (order5_id, order5) = random_order(
         rng,
-        BlockHeight::new(5),
+        Some(BlockHeight::new(5)),
         CoinOrTokenId::TokenId(token1),
         CoinOrTokenId::Coin,
     );
     let (order6_id, order6) = random_order(
         rng,
-        BlockHeight::new(6),
+        Some(BlockHeight::new(6)),
         CoinOrTokenId::TokenId(token1),
         CoinOrTokenId::TokenId(token2),
     );
@@ -2157,7 +2458,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
 
 fn random_order(
     rng: &mut (impl Rng + CryptoRng),
-    creation_height: BlockHeight,
+    creation_height: Option<BlockHeight>,
     ask_currency: CoinOrTokenId,
     give_currency: CoinOrTokenId,
 ) -> (OrderId, Order) {

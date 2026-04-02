@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, GenBlock},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -25,7 +25,7 @@ pub trait LocalBlockchainState {
     type Error: std::error::Error;
 
     /// Returns the current best known block (may be genesis)
-    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error>;
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>, BlockTimestamp), Self::Error>;
 
     /// Scan new blocks:
     /// 1. Reset local blocks to the common block height
@@ -38,4 +38,6 @@ pub trait LocalBlockchainState {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error>;
+
+    async fn add_mempool_tx(&mut self, transaction: &SignedTransaction) -> Result<(), Self::Error>;
 }
