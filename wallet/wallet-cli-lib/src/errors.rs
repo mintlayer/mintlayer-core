@@ -17,27 +17,37 @@ use std::path::PathBuf;
 
 use utils::cookie::LoadCookieError;
 use wallet_cli_commands::WalletCliCommandError;
-use wallet_rpc_client::rpc_client::WalletRpcError;
+use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
 use wallet_rpc_lib::types::NodeInterface;
 
 #[derive(thiserror::Error, derive_more::Debug)]
 pub enum WalletCliError<N: NodeInterface> {
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, String),
+
     #[error(
         "RPC authentication cookie-file read error: {0}. Please make sure the node is started."
     )]
     CookieFileReadError(#[from] LoadCookieError),
+
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
-    #[error("{0}")]
+
+    #[error(transparent)]
     WalletClientRpcError(#[from] WalletRpcError),
-    #[error("{0}")]
+
+    #[error(transparent)]
     WalletCommandError(#[from] WalletCliCommandError<N>),
+
     #[error("Unexpected interaction on startup commands")]
     UnexpectedInteraction,
+
+    #[error(transparent)]
+    WalletRpcHandlesClientError(#[from] WalletRpcHandlesClientError<N>),
 }

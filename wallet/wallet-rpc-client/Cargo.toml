@@ -42,6 +42,9 @@ tokio = { workspace = true, default-features = false, features = [
   "sync",
 ] }
 
+[build-dependencies]
+build_utils = { path = "../../utils/build_utils" }
+
 [features]
 trezor = [
   "wallet/trezor",

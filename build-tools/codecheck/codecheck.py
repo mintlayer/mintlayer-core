@@ -4,9 +4,12 @@
 import fnmatch
 import itertools
 import os
+import pathlib
 import re
 import sys
 import tomllib
+
+PROJECT_ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
 
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
@@ -140,6 +143,32 @@ def check_workspace_and_package_versions_equal():
 
     if not result:
         print("Workspace vs package versions mismatch in Cargo.toml: '{}' != '{}'".format(workspace_version, package_version))
+    print()
+
+    return result
+
+
+# Ensure that each crate's Cargo.toml has a version field and it's always "version.workspace = true".
+def check_crate_version_inherits_workspace_version():
+    print("==== Ensuring that each crate's version inherits its value from the workspace")
+
+    result = True
+
+    for path in cargo_config_files():
+        path = pathlib.Path(path).resolve()
+        if path.name == "Cargo.toml" and not path.parent == PROJECT_ROOT_DIR:
+            with open(path, "rb") as file:
+                rel_path = path.relative_to(PROJECT_ROOT_DIR)
+                toml_file = tomllib.load(file)
+                version = toml_file["package"].get("version")
+
+                if version is None:
+                    print(f"{rel_path}: missing 'package.version', the version defaults to 0.0.0")
+                    result = False
+                elif not isinstance(version, dict) or version.get("workspace") != True:
+                    print(f"{rel_path}: the package version must be inherited from the workspace (use 'version.workspace = true')")
+                    result = False
+
     print()
 
     return result
@@ -385,6 +414,7 @@ def run_checks():
         check_local_licenses(),
         check_crate_versions(),
         check_workspace_and_package_versions_equal(),
+        check_crate_version_inherits_workspace_version(),
         check_dependency_versions_patch_version(),
         check_todos(),
         check_trailing_whitespaces(),
@@ -393,5 +423,8 @@ def run_checks():
 
 
 if __name__ == '__main__':
+    # Note: this script expects the current directory to be the project root.
+    os.chdir(PROJECT_ROOT_DIR)
+
     if not run_checks():
         sys.exit(1)

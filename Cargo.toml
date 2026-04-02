@@ -63,6 +63,7 @@ members = [
   "test-utils",                          # Various utilities for tests.
   "tokens-accounting",                   # Tokens accounting
   "utils",                               # Various utilities.
+  "utils/build_utils",                   # Build-related utilities.
   "utils/networking",                    # Various async/tokio utilities.
   "utxo",                                # Utxo and related utilities (cache, undo, etc.).
   "wallet",                              # Wallet primitives.
@@ -251,6 +252,7 @@ socket2 = "0.5"
 sscanf = "0.4"
 static_assertions = "1.1"
 strum = { version = "0.26", default-features = false, features = ["derive"] }
+substrate-build-script-utils = "11.0"
 syn = "2.0"
 tap = "1.0"
 tempfile = "3.3"

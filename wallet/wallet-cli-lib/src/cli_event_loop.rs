@@ -15,17 +15,23 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
+
+use common::chain::ChainConfig;
+use logging::log;
+use utils::app_version_with_git_info;
 use wallet_cli_commands::{CommandHandler, ConsoleCommand, ManageableWalletCommand};
-use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
-use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
+use wallet_rpc_client::{
+    handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc,
+    wallet_rpc_traits::WalletInterface,
+};
 use wallet_rpc_lib::{
-    config::WalletRpcConfig, ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc,
-    WalletRpcServer, WalletService,
+    config::WalletRpcConfig,
+    types::{ControllerConfig, NodeInterface},
+    ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
 };
 
-use crate::errors::WalletCliError;
+use crate::{errors::WalletCliError, version_check::parse_version_without_metadata};
 
 #[derive(Debug)]
 pub enum Event<N: NodeInterface> {
@@ -54,6 +60,8 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
     cold_wallet: bool,
     no_qr: bool,
 ) -> Result<(), WalletCliError<N>> {
+    let wallet_cli_version = parse_version_without_metadata(app_version_with_git_info!().version);
+
     match wallet_type {
         WalletType::Local {
             node_rpc,
@@ -90,6 +98,19 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
             };
             let wallet = WalletRpcHandlesClient::new(wallet_rpc, server_rpc);
 
+            if !cold_wallet {
+                let node_version =
+                    parse_version_without_metadata(&wallet.node_version().await?.version);
+
+                if node_version != wallet_cli_version {
+                    log::warn!(
+                        "The versions of wallet-cli ({}) and the node ({}) don't match.",
+                        wallet_cli_version,
+                        node_version
+                    );
+                }
+            }
+
             let mut command_handler = CommandHandler::new(
                 ControllerConfig {
                     in_top_x_mb,
@@ -121,6 +142,24 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
             remote_socket_address,
         } => {
             let wallet = ClientWalletRpc::new(remote_socket_address, rpc_auth).await?;
+
+            {
+                let remote_wallet_version =
+                    parse_version_without_metadata(&wallet.version().await?);
+                let node_version =
+                    parse_version_without_metadata(&wallet.node_version().await?.version);
+
+                if !(wallet_cli_version == remote_wallet_version
+                    && remote_wallet_version == node_version)
+                {
+                    log::warn!(
+                        "The versions of wallet-cli ({}), wallet-rpc-daemon ({}) and the node ({}) don't match.",
+                        wallet_cli_version,
+                        remote_wallet_version,
+                        node_version
+                    );
+                }
+            }
 
             let mut command_handler = CommandHandler::new(
                 ControllerConfig {

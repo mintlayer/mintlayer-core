@@ -19,3 +19,6 @@ utils-networking = { path = "../../utils/networking" }
 clap = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+
+[build-dependencies]
+build_utils = { path = "../../utils/build_utils" }
