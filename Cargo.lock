@@ -231,6 +231,7 @@ version = "1.2.1"
 dependencies = [
  "api-blockchain-scanner-lib",
  "api-server-common",
+ "build_utils",
  "clap",
  "common",
  "logging",
@@ -360,6 +361,7 @@ dependencies = [
  "api-server-common",
  "async-trait",
  "axum 0.7.9",
+ "build_utils",
  "clap",
  "common",
  "crypto",
@@ -1116,6 +1118,13 @@ dependencies = [
  "uuid",
  "windows 0.61.3",
  "windows-future",
+]
+
+[[package]]
+name = "build_utils"
+version = "1.2.1"
+dependencies = [
+ "substrate-build-script-utils",
 ]
 
 [[package]]
@@ -2579,6 +2588,7 @@ version = "1.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "build_utils",
  "chainstate",
  "clap",
  "common",
@@ -5327,6 +5337,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blockprod",
+ "build_utils",
  "chainstate",
  "chainstate-storage",
  "common",
@@ -5345,6 +5356,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tower",
+ "utils",
  "utils-networking",
  "wallet-types",
 ]
@@ -5437,6 +5449,7 @@ version = "1.2.1"
 dependencies = [
  "anyhow",
  "blockprod",
+ "build_utils",
  "chainstate",
  "chainstate-launcher",
  "clap",
@@ -8588,6 +8601,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-build-script-utils"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b285e7d183a32732fdc119f3d81b7915790191fad602b7c709ef247073c77a2e"
+
+[[package]]
 name = "subsystem"
 version = "1.2.1"
 dependencies = [
@@ -9795,6 +9814,7 @@ dependencies = [
 name = "wallet-address-generator-lib"
 version = "1.2.1"
 dependencies = [
+ "build_utils",
  "clap",
  "common",
  "crypto",
@@ -9822,6 +9842,7 @@ dependencies = [
  "async-trait",
  "bigdecimal",
  "blockprod",
+ "build_utils",
  "chainstate",
  "chainstate-storage",
  "chrono",
@@ -9877,6 +9898,7 @@ version = "1.2.1"
 dependencies = [
  "async-trait",
  "blockprod",
+ "build_utils",
  "chainstate",
  "chainstate-storage",
  "clap",
@@ -9901,6 +9923,7 @@ dependencies = [
  "reedline",
  "rpc",
  "rstest",
+ "semver",
  "serde_json",
  "serialization",
  "shlex",
@@ -9966,6 +9989,7 @@ version = "1.2.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "build_utils",
  "chainstate",
  "chainstate-storage",
  "common",
@@ -10013,6 +10037,7 @@ version = "1.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "build_utils",
  "chainstate",
  "clap",
  "common",

@@ -16,9 +16,10 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use crypto::key::hdkd::u31::U31;
-use utils::clap_utils;
+use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 use wallet_rpc_lib::cmdline::CliHardwareWalletType;
 
@@ -44,7 +45,7 @@ pub struct RegtestOptions {
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("WALLET")))]
-#[clap(version)]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {
     /// Network

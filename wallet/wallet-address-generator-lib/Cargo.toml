@@ -14,5 +14,7 @@ wallet = { path = "../../wallet" }
 crypto = { path = "../../crypto" }
 
 clap = { workspace = true, features = ["derive"] }
-
 thiserror.workspace = true
+
+[build-dependencies]
+build_utils = { path = "../../utils/build_utils" }

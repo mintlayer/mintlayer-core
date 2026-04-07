@@ -18,6 +18,7 @@ pub mod config;
 pub mod console;
 pub mod errors;
 mod repl;
+mod version_check;
 
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},

@@ -23,7 +23,8 @@ use rpc::{
     RpcAuthData,
 };
 use utils::{
-    clap_utils, cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure,
+    app_version_with_git_info, clap_utils, cookie::COOKIE_FILENAME,
+    default_data_dir::default_data_dir_for_chain, ensure,
 };
 use utils_networking::NetworkAddressWithPort;
 
@@ -34,6 +35,7 @@ use crate::{
 
 /// Service providing an RPC interface to a wallet
 #[derive(clap::Parser)]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct WalletRpcDaemonArgs {
     #[clap(subcommand)]
     command: WalletRpcDaemonCommand,

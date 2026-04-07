@@ -52,6 +52,9 @@ wallet-types = { path = "../types" }
 
 rstest.workspace = true
 
+[build-dependencies]
+build_utils = { path = "../../utils/build_utils" }
+
 [features]
 trezor = ["wallet-types/trezor", "wallet/trezor", "wallet-controller/trezor"]
 ledger = ["wallet-types/ledger", "wallet/ledger", "wallet-controller/ledger"]

@@ -37,11 +37,10 @@ use node_comm::node_traits::NodeInterface;
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::{
-    ensure,
+    app_version_with_git_info, ensure,
     qrcode::{QrCode, QrCodeError},
     sorted::Sorted as _,
 };
-use wallet::version::get_version;
 use wallet_controller::types::WalletExtraInfo;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
@@ -841,7 +840,9 @@ where
                 ))
             }
 
-            ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
+            ColdWalletCommand::Version => Ok(ConsoleCommand::Print(
+                app_version_with_git_info!().to_pretty_string(),
+            )),
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
             ColdWalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
             ColdWalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),

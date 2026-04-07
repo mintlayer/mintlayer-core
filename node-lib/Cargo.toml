@@ -41,3 +41,6 @@ randomness = { path = "../randomness" }
 ctor.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
+
+[build-dependencies]
+build_utils = { path = "../utils/build_utils" }

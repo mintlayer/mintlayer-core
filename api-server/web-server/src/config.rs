@@ -19,13 +19,14 @@ use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
 use tokio::net::TcpListener;
-use utils::clap_utils;
+use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Parser)]
 #[clap(mut_args(clap_utils::env_adder("API_WEB_SRV")))]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerWebServerConfig {
     /// Network
     /// Default: `testnet`

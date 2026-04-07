@@ -15,11 +15,12 @@
 
 mod cli_test_framework;
 
-use randomness::Rng;
+use rstest::rstest;
 
 use common::{address::Address, chain::PoolId, primitives::H256};
-use rstest::rstest;
+use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
+use utils::app_version_with_git_info;
 
 use crate::cli_test_framework::CliTestFramework;
 
@@ -31,7 +32,7 @@ async fn wallet_cli_basic(#[case] seed: Seed) {
     let test = CliTestFramework::setup(&mut rng).await;
 
     let output = test.exec("node-version");
-    assert_eq!(output, env!("CARGO_PKG_VERSION"));
+    assert_eq!(output, app_version_with_git_info!().to_semver_string());
 
     let output = test.exec("node-best-block-height");
     assert_eq!(output, "0");

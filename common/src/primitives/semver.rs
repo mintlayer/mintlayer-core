@@ -18,6 +18,11 @@ use std::str::FromStr;
 use serde::Serialize;
 use serialization::{Decode, Encode};
 
+// Note: this is not a real "semantic version" because it lacks the prerelease and build metadata
+// parts. However it's not easy to change, since it's part of the p2p protocol, namely the Hello
+// and HelloAck messages (also, it's probably not a good idea to send the additional info over
+// the network anyway).
+// TODO: perhaps it should be renamed at least.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone, Serialize)]
 pub struct SemVer {
     pub major: u8,

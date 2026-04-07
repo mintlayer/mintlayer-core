@@ -22,7 +22,7 @@ use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::u31::U31;
 use crypto::key::hdkd::{child_number::ChildNumber, derivable::Derivable};
-use utils::{clap_utils, ensure};
+use utils::{app_version_with_git_info, clap_utils, ensure};
 use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::WalletError;
 use wallet::{
@@ -63,7 +63,7 @@ impl std::fmt::Display for Network {
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("WALLET_ADDR_GEN")))]
-#[clap(version)]
+#[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct CliArgs {
     /// The network, for which addresses will be generated
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
