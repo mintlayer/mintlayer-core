@@ -11,7 +11,7 @@
 
 # Note: the base image here doesn't really matter, we just use the same one as in the "builder"
 # stage below.
-FROM rust:bookworm as source
+FROM rust:bookworm AS source
 COPY . /src
 RUN rm -r /src/build-tools
 
@@ -24,7 +24,9 @@ FROM rust:bookworm AS builder
 
 WORKDIR /usr/src/
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y ca-certificates libdbus-1-dev libusb-1.0-0-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=source /src/ /usr/src/
 

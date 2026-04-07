@@ -46,8 +46,8 @@ BASE_COINS_AT_STAKE_PER_NODE = 300_000
 # Note: node index will be added to each of these numbers to form the actual port number,
 # so make sure the ranges don't overlap.
 # These values are also hard-coded in the .env file.
-NODE_RPC_PORT_BASE = 40000
-WALLET_RPC_PORT_BASE = 40100
+NODE_RPC_PORT_BASE = 40100
+WALLET_RPC_PORT_BASE = 40200
 
 # RPC username and password for node-daemon and wallet-rpc-daemon".
 # These values are also hard-coded in the .env file.

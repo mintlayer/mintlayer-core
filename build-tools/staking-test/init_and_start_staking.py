@@ -109,7 +109,10 @@ class Node():
             pledge_amount = MIN_POOL_PLEDGE
 
         response = self.wallet.staking_create_pool(
-            0, { "atoms": f"{pledge_amount}" }, { "atoms": "0" }, f"{margin_ratio_per_thousand}", self.address, { "in_top_x_mb" : None })
+            0, { "atoms": f"{pledge_amount}" }, { "atoms": "0" }, f"{margin_ratio_per_thousand}",
+            self.address, None, None, { "in_top_x_mb" : None }
+        )
+
         tx_id = response["tx_id"]
         tx_ids.append(tx_id)
 
