@@ -870,6 +870,7 @@ pub enum MnemonicInfo {
     NewlyGenerated { mnemonic: String },
 }
 
+// TODO: if this is really trezor-specific, then it should be renamed.
 #[cfg(feature = "trezor")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct FoundDevice {

@@ -335,12 +335,6 @@ overflow-checks = true
 [profile.test.package.script]
 opt-level = 2
 
-[features]
-tokio-console = []
-trezor = []
-ledger = []
-default = ["trezor", "ledger"]
-
 [patch.crates-io]
 # Using fontconfig-parser v0.5.8 completely breaks UI in node-gui on Linux - most of the text disappears and the few
 # characters that remain have broken spacing, so we force the usage of v0.5.7 via "patch".

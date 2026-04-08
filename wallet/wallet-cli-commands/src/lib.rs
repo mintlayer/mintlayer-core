@@ -88,6 +88,7 @@ pub enum CreateWalletSubCommand {
     /// Cannot specify a mnemonic or passphrase here, the mnemonic must have been entered on
     /// the device during its initial setup and the passphrase will have to be entered every
     /// time the device is connected to the host machine.
+    #[cfg(feature = "trezor")]
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -107,6 +108,7 @@ pub enum CreateWalletSubCommand {
     /// Cannot specify a mnemonic or passphrase here, both are managed on the device.
     /// Depending on its configuration, the passphrase may need to be entered manually
     /// each time or may be applied automatically after unlocking with a secondary PIN.
+    #[cfg(feature = "ledger")]
     #[command()]
     Ledger {
         /// File path of the wallet file
@@ -134,11 +136,13 @@ impl CreateWalletSubCommand {
                 )
             }
 
+            #[cfg(feature = "trezor")]
             Self::Trezor {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
 
+            #[cfg(feature = "ledger")]
             Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
@@ -177,6 +181,7 @@ pub enum RecoverWalletSubCommand {
     /// Cannot specify a mnemonic or passphrase here, the mnemonic must have been entered on
     /// the device during its initial setup and the passphrase will have to be entered every
     /// time the device is connected to the host machine.
+    #[cfg(feature = "trezor")]
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -196,6 +201,7 @@ pub enum RecoverWalletSubCommand {
     /// Cannot specify a mnemonic or passphrase here, both are managed on the device.
     /// Depending on its configuration, the passphrase may need to be entered manually
     /// each time or may be applied automatically after unlocking with a secondary PIN.
+    #[cfg(feature = "ledger")]
     #[command()]
     Ledger {
         /// File path of the wallet file
@@ -223,11 +229,13 @@ impl RecoverWalletSubCommand {
                 )
             }
 
+            #[cfg(feature = "trezor")]
             Self::Trezor {
                 wallet_path,
                 device_id,
             } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
 
+            #[cfg(feature = "ledger")]
             Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
         }
     }
@@ -247,6 +255,7 @@ pub enum OpenWalletSubCommand {
         force_change_wallet_type: bool,
     },
     /// (Beta) Open a wallet file that is connected to a Trezor hardware wallet.
+    #[cfg(feature = "trezor")]
     #[command()]
     Trezor {
         /// File path of the wallet file
@@ -263,6 +272,7 @@ pub enum OpenWalletSubCommand {
     },
 
     /// (Beta) Open a wallet file that is connected to a Ledger hardware wallet.
+    #[cfg(feature = "ledger")]
     #[command()]
     Ledger {
         /// File path of the wallet file
@@ -1301,6 +1311,7 @@ pub trait ChoiceMenu: DynClone + Debug {
 }
 dyn_clone::clone_trait_object!(ChoiceMenu);
 
+// TODO: this is Trezor-specific, so it should be either renamed or generalized.
 #[derive(Debug, Clone)]
 pub struct CreateWalletDeviceSelectMenu {
     available_devices: Vec<FoundDevice>,
@@ -1354,6 +1365,7 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
     }
 }
 
+// TODO: this is Trezor-specific, so it should be either renamed or generalized.
 #[derive(Debug, Clone)]
 pub struct OpenWalletDeviceSelectMenu {
     available_devices: Vec<FoundDevice>,

@@ -39,6 +39,7 @@ tokio.workspace = true
 winres = "0.1"
 
 [features]
+tokio-console = ["utils/tokio-console"]
 trezor = [
   "wallet-controller/trezor",
   "wallet-types/trezor",

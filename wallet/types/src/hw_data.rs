@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
-
 use serialization::{Decode, Encode};
 
 /// This is the data that will be stored in the wallet db.
@@ -56,8 +54,9 @@ pub enum LedgerModel {
     Unknown { usb_pid: Option<u16> },
 }
 
-impl fmt::Display for LedgerModel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(feature = "ledger")]
+impl std::fmt::Display for LedgerModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LedgerModel::NanoS => write!(f, "Nano S"),
             LedgerModel::NanoSPlus => write!(f, "Nano S Plus"),
