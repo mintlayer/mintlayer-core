@@ -75,4 +75,4 @@ build_utils = { path = "../../utils/build_utils" }
 [features]
 trezor = ["wallet-types/trezor", "wallet-rpc-lib/trezor"]
 ledger = ["wallet-types/ledger", "wallet-rpc-lib/ledger"]
-default = ["trezor", "ledger"]
+default = ["trezor"]
