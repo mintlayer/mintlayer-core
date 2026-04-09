@@ -31,13 +31,17 @@ const HORIZONTAL_PADDING: f32 = 10.;
 
 #[allow(clippy::float_arithmetic)]
 pub fn estimate_status_bar_height(wallet_info: &WalletExtraInfo) -> f32 {
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
+    let height_for_hw_wallet = TEXT_SIZE + 2. * VERTICAL_PADDING
+            // For some reason, the status bar gets a bit of additional height.
+            + 4.;
+
     match wallet_info {
         WalletExtraInfo::SoftwareWallet => 0.,
-        WalletExtraInfo::TrezorWallet { .. } | WalletExtraInfo::LedgerWallet { .. } => {
-            TEXT_SIZE + 2. * VERTICAL_PADDING
-            // For some reason, the status bar gets a bit of additional height.
-            + 4.
-        }
+        #[cfg(feature = "trezor")]
+        WalletExtraInfo::TrezorWallet { .. } => height_for_hw_wallet,
+        #[cfg(feature = "ledger")]
+        WalletExtraInfo::LedgerWallet { .. } => height_for_hw_wallet,
     }
 }
 

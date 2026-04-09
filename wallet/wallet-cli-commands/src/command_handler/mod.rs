@@ -281,6 +281,7 @@ where
                             force_change_wallet_type,
                             None,
                         ),
+                        #[cfg(feature = "trezor")]
                         OpenWalletSubCommand::Trezor {
                             wallet_path,
                             encryption_password,
@@ -291,6 +292,7 @@ where
                             false,
                             Some(HardwareWalletType::Trezor { device_id }),
                         ),
+                        #[cfg(feature = "ledger")]
                         OpenWalletSubCommand::Ledger {
                             wallet_path,
                             encryption_password,
@@ -372,6 +374,7 @@ where
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
                 let wallet_description = match info.extra_info {
                     WalletExtraInfo::SoftwareWallet => "This is a software wallet".to_owned(),
+                    #[cfg(feature = "trezor")]
                     WalletExtraInfo::TrezorWallet {
                         device_name,
                         device_id,
@@ -382,6 +385,7 @@ where
                             device_name, device_id, firmware_version
                         )
                     }
+                    #[cfg(feature = "ledger")]
                     WalletExtraInfo::LedgerWallet { app_version, model } => format!(
                         "This is a Ledger wallet; model: {model}, running app version {}",
                         app_version

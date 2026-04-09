@@ -92,7 +92,7 @@ use randomness::{make_pseudo_rng, make_true_rng, Rng};
 #[cfg(feature = "ledger")]
 use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
-use wallet::signer::trezor_signer::TrezorSignerProvider;
+use wallet::signer::trezor_signer::{SelectedDevice, TrezorSignerProvider};
 #[cfg(feature = "trezor")]
 use wallet::signer::SignerError;
 
@@ -102,7 +102,7 @@ use wallet::{
         TransactionToSign,
     },
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
-    signer::{software_signer::SoftwareSignerProvider, trezor_signer::SelectedDevice},
+    signer::software_signer::SoftwareSignerProvider,
     wallet::{WalletCreation, WalletPoolsFilter},
     wallet_events::WalletEvents,
     WalletError, WalletResult,
@@ -124,7 +124,6 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::types::WalletExtraInfo;
 
 // Note: the standard `Debug` macro is not smart enough and requires N to implement the `Debug`

@@ -19,3 +19,6 @@ rpc-description = { path = "../rpc/description" }
 
 assert_cmd.workspace = true
 expect-test.workspace = true
+
+[features]
+tokio-console = ["utils/tokio-console"]

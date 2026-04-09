@@ -472,7 +472,9 @@ impl Tab for WalletTab {
         let text = match node_state.wallets.get(&self.wallet_id) {
             Some(wallet_info) => match wallet_info.extra_info {
                 wallet_controller::types::WalletExtraInfo::SoftwareWallet => "Software wallet",
+                #[cfg(feature = "trezor")]
                 wallet_controller::types::WalletExtraInfo::TrezorWallet { .. } => "Trezor wallet",
+                #[cfg(feature = "ledger")]
                 wallet_controller::types::WalletExtraInfo::LedgerWallet { .. } => "Ledger wallet",
             },
             None => "No wallet",

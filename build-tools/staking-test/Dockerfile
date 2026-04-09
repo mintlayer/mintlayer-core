@@ -1,13 +1,12 @@
 ARG CARGO_TARGET_DIR=/src/target
-ARG RUST_VER=1.78
 
 # Use a separate "source" stage so that build-tools is not copied into the builder image,
 # while still not excluding it from the build context (it's needed to copy node_runner.sh below).
-FROM rust:$RUST_VER as source
+FROM rust:bookworm AS source
 COPY . /src
 RUN rm -r /src/build-tools
 
-FROM rust:$RUST_VER as builder
+FROM rust:bookworm AS builder
 ARG CARGO_TARGET_DIR
 
 WORKDIR /src/
@@ -20,14 +19,18 @@ ARG NUM_JOBS=16
 # directory specified in their .cargo/config.toml).
 ENV CARGO_TARGET_DIR=$CARGO_TARGET_DIR
 
+RUN apt-get update && \
+    apt-get install -y libdbus-1-dev libusb-1.0-0-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN cargo build --release -j${NUM_JOBS} --bin node-daemon --bin wallet-cli --bin wallet-rpc-daemon
 
 FROM debian:bookworm-slim
 ARG CARGO_TARGET_DIR
 
 RUN apt-get update && \
-    apt-get install -y dnsutils \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y dnsutils libdbus-1-3 libusb-1.0-0 && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /workdir
 WORKDIR /workdir

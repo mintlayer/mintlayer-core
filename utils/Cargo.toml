@@ -40,7 +40,7 @@ tempfile.workspace = true
 loom.workspace = true
 
 [features]
-tokio-console = []
+tokio-console = ["logging/tokio-console"]
 
 [[bench]]
 name = "benches"

@@ -1,10 +1,9 @@
-FROM rust:1.75
-
+FROM rust:latest
 WORKDIR /src/
 
 RUN apt-get update && \
     apt-get install -y \
-    ca-certificates \
+    ca-certificates libdbus-1-dev libusb-1.0-0-dev \
     nmap procps net-tools iputils-ping dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
