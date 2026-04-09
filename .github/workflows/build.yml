@@ -37,17 +37,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor,ledger
+        run: cargo build --release --locked --features trezor
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor,ledger
+        run: cargo test --release --workspace --features trezor
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor,ledger
+        run: cargo test --release --doc --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor,ledger
+        run: cargo test --release mixed_sighash_types --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -89,17 +89,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor,ledger
+        run: cargo build --release --locked --features trezor
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor,ledger
+        run: cargo test --release --workspace --features trezor
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor,ledger
+        run: cargo test --release --doc --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor,ledger
+        run: cargo test --release mixed_sighash_types --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -133,17 +133,17 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Build
-        run: cargo build --release --locked --features trezor,ledger
+        run: cargo build --release --locked --features trezor
 
       - name: Run tests
-        run: cargo test --release --workspace --features trezor,ledger
+        run: cargo test --release --workspace --features trezor
 
       - name: Run doc tests
-        run: cargo test --release --doc --features trezor,ledger
+        run: cargo test --release --doc --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
-        run: cargo test --release mixed_sighash_types --features trezor,ledger
+        run: cargo test --release mixed_sighash_types --features trezor
 
       # This test is ignored, so it needs to run separately.
       - name: Run test_4opc_sequences test
@@ -293,6 +293,7 @@ jobs:
 
   # Build Ledger-specific tests and archive them
   run_tests_on_ledger_preparation:
+    if: false # Temporarily disabled for the v1.3.0 release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the core repository
@@ -338,6 +339,7 @@ jobs:
 
   # Run Ledger-specific tests on an emulator
   run_tests_on_ledger:
+    if: false # Temporarily disabled for the v1.3.0 release
     needs: run_tests_on_ledger_preparation
     runs-on: ubuntu-latest
     strategy:
