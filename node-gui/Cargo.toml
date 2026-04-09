@@ -52,4 +52,4 @@ ledger = [
   "wallet-cli-commands/ledger",
   "node-gui-backend/ledger",
 ]
-default = ["trezor"]
+default = ["trezor", "ledger"]
