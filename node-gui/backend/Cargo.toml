@@ -58,4 +58,4 @@ ledger = [
   "wallet-rpc-client/ledger",
   "wallet-cli-commands/ledger",
 ]
-default = ["trezor", "ledger"]
+default = ["trezor"]

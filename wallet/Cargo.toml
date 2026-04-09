@@ -90,4 +90,4 @@ enable-ledger-device-tests = ["ledger"]
 # similar to what we have for the node.
 use-deterministic-signatures-in-software-signer-for-regtest = []
 
-default = ["trezor", "ledger"]
+default = ["trezor"]

@@ -1,6 +1,6 @@
 # RPC documentation for Mintlayer node wallet
 
-Version `1.2.1`.
+Version `1.3.0`.
 
 ## Module `WalletRpc`
 
@@ -3570,8 +3570,7 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) { "type": "Ledger" }
-         3) null,
+         2) null,
 }
 ```
 
@@ -3621,8 +3620,7 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) { "type": "Ledger" }
-         3) null,
+         2) null,
 }
 ```
 
@@ -3669,8 +3667,7 @@ Parameters:
                      1) string
                      2) null },
             }
-         2) { "type": "Ledger" }
-         3) null,
+         2) null,
 }
 ```
 
@@ -3730,13 +3727,6 @@ Returns:
                     "device_name": string,
                     "device_id": string,
                     "firmware_version": string,
-                },
-            }
-         3) {
-                "type": "LedgerWallet",
-                "content": {
-                    "app_version": string,
-                    "model": string,
                 },
             },
 }

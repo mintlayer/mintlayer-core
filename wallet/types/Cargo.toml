@@ -38,4 +38,4 @@ rstest.workspace = true
 [features]
 trezor = []
 ledger = []
-default = ["trezor", "ledger"]
+default = ["trezor"]

@@ -60,4 +60,4 @@ rstest.workspace = true
 [features]
 trezor = ["wallet-types/trezor"]
 ledger = ["wallet-types/ledger"]
-default = ["trezor", "ledger"]
+default = ["trezor"]
