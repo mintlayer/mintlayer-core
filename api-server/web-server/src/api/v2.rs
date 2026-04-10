@@ -770,7 +770,7 @@ pub async fn mempool_transaction_output<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_utxo_mempool_fallback(&outpoint)
+        .get_utxo_mempool_with_fallback(&outpoint)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -1817,7 +1817,7 @@ pub async fn mempool_address<T: ApiServerStorage>(
         })?;
 
     let locked_coin_balance = tx
-        .get_mempool_locked_address_balance(&address.to_string(), CoinOrTokenId::Coin)
+        .get_mempool_address_locked_balance_with_fallback(&address.to_string(), CoinOrTokenId::Coin)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");

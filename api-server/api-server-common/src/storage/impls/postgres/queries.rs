@@ -1118,6 +1118,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             );",
         )
         .await?;
+        
+        self.just_execute(
+            "CREATE TABLE ml.mempool_pool_data (
+                    pool_id TEXT NOT NULL,
+                    data bytea NOT NULL,
+                    PRIMARY KEY (pool_id)
+                );",
+        )
+        .await?;
 
         self.just_execute(
             "CREATE TABLE ml.mempool_fungible_token (
@@ -1776,7 +1785,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn get_pool_data(
-        &mut self,
+        &self,
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
@@ -1927,6 +1936,68 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         Ok(())
     }
+
+    pub async fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let pool_id_addr = Address::new(chain_config, pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self.tx
+            .query_opt(
+                r#"
+                SELECT data
+                FROM ml.mempool_pool_data
+                WHERE pool_id = $1
+                LIMIT 1;
+            "#,
+                &[&pool_id_addr.as_str()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+                
+        if let Some(row) = row {
+            let pool_data: Vec<u8> = row.get(0);
+            let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
+                .map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool data deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(Some(pool_data))
+        } else {
+            self.get_pool_data(pool_id, chain_config).await
+        }
+    }
+
+    pub async fn set_mempool_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolDataWithExtraInfo,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let pool_id = Address::new(chain_config, pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.mempool_pool_data (pool_id, data)
+                    VALUES ($1, $2)
+                    ON CONFLICT (pool_id) DO UPDATE
+                    SET data = $2;
+                "#,
+                &[&pool_id.as_str(), &pool_data.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
 
     #[allow(clippy::type_complexity)]
     pub async fn get_transaction(
@@ -3182,7 +3253,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         transaction_id: Id<Transaction>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
-        // Because of ON DELETE CASCADE on other tables, we insert the transaction first.
         self.tx
             .execute(
                 "INSERT INTO ml.mempool_transactions (transaction_id, transaction_data)
@@ -3195,7 +3265,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn get_utxo_mempool_fallback(
+    pub async fn get_utxo_mempool_with_fallback(
         &self,
         outpoint: &UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
@@ -3260,7 +3330,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn get_mempool_address_balance(
+    pub async fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
@@ -3286,7 +3356,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.get_address_balance(address, coin_or_token_id).await
     }
 
-    pub async fn get_mempool_locked_address_balance(
+    pub async fn get_mempool_address_locked_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
@@ -3624,7 +3694,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn get_mempool_token_num_decimals(
+    pub async fn get_mempool_token_num_decimals_with_fallback(
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
@@ -3646,7 +3716,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.get_token_num_decimals(token_id).await
     }
 
-    pub async fn get_mempool_order(
+    pub async fn get_mempool_order_with_fallback(
         &self,
         order_id: OrderId,
         chain_config: &ChainConfig,
@@ -3725,6 +3795,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ml.mempool_locked_address_balance,
                 ml.mempool_address_transactions,
                 ml.mempool_token_transactions,
+                ml.mempool_pool_data,
                 ml.mempool_fungible_token,
                 ml.mempool_nft_issuance,
                 ml.mempool_orders,
