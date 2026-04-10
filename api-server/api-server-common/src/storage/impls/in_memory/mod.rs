@@ -90,6 +90,7 @@ struct ApiServerInMemoryStorage {
         BTreeMap<String, BTreeMap<CoinOrTokenId, AmountWithDecimals>>,
     mempool_address_transactions_table: BTreeMap<String, BTreeSet<Id<Transaction>>>,
     mempool_token_transactions_table: BTreeMap<TokenId, BTreeSet<Id<Transaction>>>,
+    mempool_pool_data_table: BTreeMap<PoolId, PoolDataWithExtraInfo>,
     mempool_fungible_token_data: BTreeMap<TokenId, FungibleTokenData>,
     mempool_nft_token_issuances: BTreeMap<TokenId, NftWithOwner>,
     mempool_orders_table: BTreeMap<OrderId, Order>,
@@ -127,6 +128,7 @@ impl ApiServerInMemoryStorage {
             mempool_locked_address_balance_table: BTreeMap::new(),
             mempool_address_transactions_table: BTreeMap::new(),
             mempool_token_transactions_table: BTreeMap::new(),
+            mempool_pool_data_table: BTreeMap::new(),
             mempool_fungible_token_data: BTreeMap::new(),
             mempool_nft_token_issuances: BTreeMap::new(),
             mempool_orders_table: BTreeMap::new(),
@@ -862,7 +864,7 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn get_utxo_mempool_fallback(
+    fn get_utxo_mempool_with_fallback(
         &self,
         outpoint: &UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
@@ -873,7 +875,7 @@ impl ApiServerInMemoryStorage {
         self.get_utxo(outpoint.clone())
     }
 
-    fn get_mempool_address_balance(
+    fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
@@ -890,7 +892,7 @@ impl ApiServerInMemoryStorage {
         self.get_address_balance(address, coin_or_token_id)
     }
 
-    fn get_mempool_locked_address_balance(
+    fn get_mempool_address_locked_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
@@ -962,7 +964,7 @@ impl ApiServerInMemoryStorage {
             // TODO:
             .union(self.address_locked_utxos.get(address).unwrap_or(&BTreeSet::new()))
             .filter_map(|outpoint| {
-                if let Some(utxo) = self.get_utxo_mempool_fallback(outpoint).expect("no error") {
+                if let Some(utxo) = self.get_utxo_mempool_with_fallback(outpoint).expect("no error") {
                     (!utxo.spent())
                         .then_some((outpoint.clone(), utxo.utxo_with_extra_info().clone()))
                 } else {
@@ -981,6 +983,19 @@ impl ApiServerInMemoryStorage {
             })
             .collect();
         Ok(result)
+    }
+
+    fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let pool_data = self.mempool_pool_data_table.get(&pool_id).cloned();
+
+        if pool_data.is_some() {
+            return Ok(pool_data);
+        }
+
+        self.get_pool_data(pool_id)
     }
 }
 
@@ -1513,6 +1528,15 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn set_mempool_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: PoolDataWithExtraInfo,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_pool_data_table.insert(pool_id, pool_data);
+        Ok(())
+    }
+
     fn set_mempool_fungible_token_issuance(
         &mut self,
         token_id: TokenId,
@@ -1538,7 +1562,7 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn get_mempool_token_num_decimals(
+    fn get_mempool_token_num_decimals_with_fallback(
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
@@ -1555,7 +1579,7 @@ impl ApiServerInMemoryStorage {
         self.get_token_num_decimals(token_id)
     }
 
-    fn get_mempool_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+    fn get_mempool_order_with_fallback(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
         let order_result = self.mempool_orders_table.get(&order_id).cloned();
         if order_result.is_some() {
             return Ok(order_result);
@@ -1578,7 +1602,9 @@ impl ApiServerInMemoryStorage {
         self.mempool_utxo_table.clear();
         self.mempool_address_utxos.clear();
         self.mempool_address_balance_table.clear();
+        self.mempool_locked_address_balance_table.clear();
         self.mempool_address_transactions_table.clear();
+        self.mempool_pool_data_table.clear();
         self.mempool_token_transactions_table.clear();
         self.mempool_fungible_token_data.clear();
         self.mempool_nft_token_issuances.clear();

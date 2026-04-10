@@ -815,18 +815,24 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError>;
 
-    async fn get_utxo_mempool_fallback(
+    // Returns the UTXO from the mempool if it exists,
+    // otherwise fallbacks to getting it from the confirmed UTXOs.
+    async fn get_utxo_mempool_with_fallback(
         &self,
         outpoint: &UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError>;
 
-    async fn get_mempool_address_balance(
+    // Returns the balance of a coin or token for a given address from the mempool
+    // if it exists, otherwise fallbacks to getting it from the confirmed address balances.
+    async fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
-    async fn get_mempool_locked_address_balance(
+    // Returns the locked balance of a coin or token for a given address from the mempool
+    // if it exists, otherwise fallbacks to getting it from the confirmed locked address balances.
+    async fn get_mempool_address_locked_balance_with_fallback(
         &self,
         address: &str,
         coin_or_token_id: CoinOrTokenId,
@@ -848,12 +854,23 @@ pub trait ApiServerStorageRead: Sync {
         offset: u64,
     ) -> Result<Vec<TransactionInfo>, ApiServerStorageError>;
 
-    async fn get_mempool_token_num_decimals(
+    // Returns the number of decimals of a token from the mempool if it exists,
+    // otherwise fallbacks to getting it from the confirmed token data.
+    async fn get_mempool_token_num_decimals_with_fallback(
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError>;
 
-    async fn get_mempool_order(
+    // Returns the pool data from the mempool if it exists,
+    // otherwise fallbacks to getting it from the confirmed pool data.
+    async fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
+
+    // Returns an order from the mempool if it exists,
+    // otherwise fallbacks to getting it from the confirmed orders.
+    async fn get_mempool_order_with_fallback(
         &self,
         order_id: OrderId,
     ) -> Result<Option<Order>, ApiServerStorageError>;
@@ -1097,6 +1114,12 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         token_id: TokenId,
         transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolDataWithExtraInfo,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_mempool_fungible_token_issuance(
