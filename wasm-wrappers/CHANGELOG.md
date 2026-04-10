@@ -6,6 +6,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-09
+
 ### Added
 - New functions:
   - `encode_destination`
@@ -16,6 +18,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ### Changed
 - `encode_witness_htlc_secret` was renamed to `encode_witness_htlc_spend`.
 - `encode_witness_htlc_multisig` was renamed to `encode_witness_htlc_refund_multisig`.
+
+## [1.2.1] - 2026-02-28
+
+No changes
 
 ## [1.2.0] - 2025-10-27
 

@@ -6,6 +6,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-09
+
 ### Added
 - New endpoint was added: `/v2/transaction/{id}/output/{idx}`.
 - New endpoint was added: `/v2/token/{id}/transactions` will return all transactions related to a token.\
@@ -16,6 +18,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   as a substring (previously only exact matches were returned).
 
 - `CURRENT_STORAGE_VERSION` was increased, full resync is required.
+
+## [1.2.1] - 2026-02-28
+
+No changes
 
 ## [1.2.0] - 2025-10-27
 

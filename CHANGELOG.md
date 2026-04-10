@@ -12,22 +12,31 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Added
+  - Wallet:
+    - Added support for Ledger hardware wallets (beta).
+
+  - Wallet RPC:
+    - New value `ledger` in the `hardware_wallet` option for `wallet_create`, `wallet_recover` and `wallet_open` methods.
+
+  - Wallet CLI:
+    - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
+      `software` and `trezor`, which specifies the type of the wallet to operate on.
+
+## [1.3.0] - 2026-04-09
+
+### Added
   - Node RPC: new methods added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.
 
   - Wallet RPC:
     - new methods added: `node_get_tokens_info`, `order_list_own`, `order_list_all_active`, `utxo_spend`.
-    - new value `ledger` in the `hardware_wallet` option for `wallet_create`, `wallet_recover` and `wallet_open` methods.
 
   - Wallet CLI:
     - the commands `order-create`, `order-fill`, `order-freeze`, `order-conclude`, `htlc-create-transaction` were added,
       mirroring their existing RPC counterparts.
     - other new commands added: `order-list-own`, `order-list-all-active`, `utxo-spend`, `htlc-generate-secret`,
       `htlc-calc-secret-hash`.
-    - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
-      `software` and `trezor`, which specifies the type of the wallet to operate on.
 
   - Wallet:
-    - Added support for Ledger hardware wallets (beta).
     - Now the wallet subscribes to events from the Mempool to include not yet confirmed transactions
       relevant to this wallet.
 
