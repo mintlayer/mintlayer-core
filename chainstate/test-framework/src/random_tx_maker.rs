@@ -367,7 +367,7 @@ impl<'a> RandomTxMaker<'a> {
         self.utxo_set
             .utxos()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .filter_map(|(outpoint, utxo)| {
                 let input = TxInput::Utxo((*outpoint).clone());
@@ -402,7 +402,7 @@ impl<'a> RandomTxMaker<'a> {
             .tokens_store
             .tokens_data()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(token_id, _)| AccountType::Token(**token_id))
             .collect::<Vec<_>>();
@@ -411,7 +411,7 @@ impl<'a> RandomTxMaker<'a> {
             .orders_store
             .orders_data()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(id, _)| AccountType::Order(**id))
             .collect::<Vec<_>>();
@@ -420,7 +420,7 @@ impl<'a> RandomTxMaker<'a> {
             .pos_accounting_store
             .all_delegation_balances()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(id, _)| AccountType::Delegation(**id))
             .collect::<Vec<_>>();

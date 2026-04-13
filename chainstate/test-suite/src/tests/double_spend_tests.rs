@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError,
@@ -28,8 +27,10 @@ use common::{
     },
     primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
-use randomness::SliceRandom;
+use randomness::{IndexedRandom as _, SliceRandom};
 use tx_verifier::CheckTransactionError;
+
+use super::*;
 
 // Process a block where the second transaction uses the first one as input.
 //

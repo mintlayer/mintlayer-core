@@ -32,7 +32,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use rand::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
 use serialization::Encode as _;
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 

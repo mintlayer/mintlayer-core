@@ -32,7 +32,7 @@ use crate::Uint256;
 
 pub use with_id::WithId;
 
-fixed_hash::construct_fixed_hash! {
+utils::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
 }

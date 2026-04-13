@@ -77,9 +77,12 @@ impl OutputValuesHolder for BlockBody {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rstest::rstest;
 
-    use crate::primitives::id::Idable;
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::{CryptoRng, Rng};
+    use test_utils::random::{make_seedable_rng, Seed};
+
     use crate::{
         chain::{
             block::BlockReward,
@@ -90,13 +93,10 @@ mod tests {
             },
             Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
         },
-        primitives::{Amount, Id, H256},
+        primitives::{id::Idable, Amount, Id, H256},
     };
-    use crypto::key::{KeyKind, PrivateKey};
-    use proptest::prelude::Rng;
-    use randomness::CryptoRng;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     fn generate_random_h256(rng: &mut impl Rng) -> H256 {
         let mut bytes = [0u8; 32];

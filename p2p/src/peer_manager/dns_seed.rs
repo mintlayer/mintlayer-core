@@ -74,7 +74,7 @@ impl DnsSeed for DefaultDnsSeed {
                         )
                     })
                     // Randomize selection because records can be sorted by type (A and AAAA)
-                    .choose_multiple(rng, MAX_DNS_RECORDS)
+                    .sample(rng, MAX_DNS_RECORDS)
                     .into_iter()
                     .for_each(|addr| {
                         addresses.push(addr);

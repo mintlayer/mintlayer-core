@@ -13,34 +13,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod adapters;
+
 use std::sync::Mutex;
 
-pub use rand::prelude::SliceRandom;
-pub use rand::{seq, CryptoRng, Rng, RngCore, SeedableRng};
+// FIXME use new names
+pub use rand::prelude::{IndexedMutRandom, IndexedRandom, SliceRandom};
+pub use rand::{
+    seq, CryptoRng, Rng as RngCore, RngExt as Rng, SeedableRng, TryCryptoRng, TryRng as TryRngCore,
+};
 
 pub mod distributions {
-    pub use rand::distributions::{
-        Alphanumeric, DistString, Distribution, Standard, WeightedIndex,
+    pub use rand::distr::{
+        weighted::WeightedIndex, Alphanumeric, Distribution, SampleString as DistString,
+        StandardUniform as Standard,
     };
     pub mod uniform {
-        pub use rand::distributions::uniform::SampleRange;
+        pub use rand::distr::uniform::SampleRange;
     }
 }
 
 pub mod rngs {
-    pub use rand::rngs::mock::StepRng;
-    pub use rand::rngs::OsRng;
+    pub use rand::rngs::SysRng as OsRng;
+}
+
+pub mod rand_core_utils {
+    pub use rand_core::utils::*;
 }
 
 #[must_use]
 pub fn make_true_rng() -> impl Rng + CryptoRng {
-    rand::rngs::StdRng::from_entropy()
+    // Note: the old call `StdRng::from_entropy()` from rand v0.8.x that we used to have here would
+    // also panic on RNG creation failure. In either case, the possible failure comes from `getrandom`,
+    // which states in its docs (https://docs.rs/getrandom/latest/getrandom/#error-handling)
+    // that the failure is highly unlikely and that after the first successful call one can be
+    // reasonably confident that no failure will occur. So panicking on failure is reasonable
+    // behavior here.
+    // TODO: it's still better to propagate the error, to fail gracefully in such a situation.
+    rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng).expect("RNG creation failed")
 }
 
 #[must_use]
 pub fn make_pseudo_rng() -> impl Rng {
     rand::rngs::ThreadRng::default()
 }
+
+// FIXME update docs for BoxedRngMutexWrapper; perhaps make it generic over error.
 
 /// A wrapper over `Mutex<Box<R>>` that implements `RngCore` and `CryptoRng` if `R` does the same.
 ///
@@ -56,25 +74,27 @@ impl<'a, R: ?Sized> BoxedRngMutexWrapper<'a, R> {
     }
 }
 
-impl<'a, R: RngCore + ?Sized> RngCore for BoxedRngMutexWrapper<'a, R> {
-    fn next_u32(&mut self) -> u32 {
-        self.0.lock().expect("poisoned mutex").next_u32()
+impl<'a, R: rand::Rng + ?Sized> rand::TryRng for BoxedRngMutexWrapper<'a, R> {
+    type Error = std::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        Ok(self.0.lock().expect("poisoned mutex").next_u32())
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.lock().expect("poisoned mutex").next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        Ok(self.0.lock().expect("poisoned mutex").next_u64())
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.lock().expect("poisoned mutex").fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        self.0.lock().expect("poisoned mutex").try_fill_bytes(dest)
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        Ok(self.0.lock().expect("poisoned mutex").fill_bytes(dest))
     }
 }
 
-impl<'a, R: CryptoRng> CryptoRng for BoxedRngMutexWrapper<'a, R> {}
+// Note: `CryptoRng` is implemented automatically for all `R: TryCryptoRng<Error = Infallible>`.
+impl<'a, R: rand::TryCryptoRng<Error = std::convert::Infallible>> rand::TryCryptoRng
+    for BoxedRngMutexWrapper<'a, R>
+{
+}
 
 #[cfg(test)]
 mod tests {
@@ -86,20 +106,18 @@ mod tests {
     #[allow(dead_code)]
     struct DumbRng;
 
-    impl RngCore for DumbRng {
-        fn next_u32(&mut self) -> u32 {
-            0
+    impl TryRngCore for DumbRng {
+        type Error = std::convert::Infallible;
+
+        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+            Ok(0)
         }
 
-        fn next_u64(&mut self) -> u64 {
-            0
+        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+            Ok(0)
         }
 
-        fn fill_bytes(&mut self, dest: &mut [u8]) {
-            dest.fill(0);
-        }
-
-        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
             dest.fill(0);
             Ok(())
         }

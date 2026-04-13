@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use randomness::{make_pseudo_rng, Rng as _};
+
 pub enum Container {
     PostgresFromDockerHub,
 }
@@ -26,9 +28,8 @@ impl Container {
 }
 
 fn random_string(length: usize) -> String {
-    use rand::Rng;
-    rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    make_pseudo_rng()
+        .sample_iter(&randomness::distributions::Alphanumeric)
         .take(length)
         .map(char::from)
         .collect()

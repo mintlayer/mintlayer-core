@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::CryptoRng;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -35,7 +34,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{

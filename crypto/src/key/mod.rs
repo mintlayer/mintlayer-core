@@ -37,8 +37,8 @@ pub use signature::Signature;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
-    #[error("Failed to construct a valid signature")]
-    SignatureConstructionError,
+    #[error("Wrong signature size")]
+    WrongSignatureSize,
 }
 
 #[must_use]
@@ -190,7 +190,7 @@ mod test {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.random::<u8>()).collect();
         let sig = sk.sign_message(&msg, &mut rng).unwrap();
         assert!(pk.verify_message(&sig, &msg));

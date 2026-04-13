@@ -9,6 +9,8 @@ rust-version.workspace = true
 parity-scale-codec = { workspace = true, features = ["derive", "chain-error", "std"] }
 
 [dev-dependencies]
+randomness = { path = "../../randomness" }
+
 arraytools.workspace = true
 hex-literal.workspace = true
 rand.workspace = true

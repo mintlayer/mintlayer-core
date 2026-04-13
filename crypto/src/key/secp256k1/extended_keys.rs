@@ -13,20 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key::hdkd::derivation_path::DerivationPath;
-use crate::key::hdkd::{
-    chain_code::ChainCode,
-    child_number::ChildNumber,
-    derivable::{Derivable, DerivationError},
-};
-use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
-use crate::util::{self, new_hmac_sha_512};
-use hmac::{Hmac, Mac};
-use randomness::{CryptoRng, Rng};
-use secp256k1;
-use serialization::{Decode, Encode};
-use sha2::Sha512;
 use std::cmp::Ordering;
+
+use hmac::{Hmac, Mac};
+use secp256k1;
+use sha2::Sha512;
+
+use randomness::{adapters::RngCore09Adapter, CryptoRng, Rng};
+use serialization::{Decode, Encode};
+
+use crate::{
+    key::{
+        hdkd::{
+            chain_code::ChainCode,
+            child_number::ChildNumber,
+            derivable::{Derivable, DerivationError},
+            derivation_path::DerivationPath,
+        },
+        secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
+    },
+    util::{self, new_hmac_sha_512},
+};
 
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
 /// the private key at one of the nodes of this tree.
@@ -57,7 +64,7 @@ fn to_key_and_chain_code(
     mac: Hmac<Sha512>,
 ) -> Result<(secp256k1::SecretKey, ChainCode), DerivationError> {
     util::to_key_and_chain_code(mac, |secret_key_bytes| {
-        secp256k1::SecretKey::from_slice(secret_key_bytes)
+        secp256k1::SecretKey::from_byte_array(*secret_key_bytes)
             .map_err(|_| DerivationError::KeyDerivationError)
     })
 }
@@ -85,7 +92,7 @@ impl Secp256k1ExtendedPrivateKey {
         let mut chain_code = [0u8; 32];
         rng.fill_bytes(&mut chain_code);
         let chain_code = chain_code.into();
-        let private_key = secp256k1::SecretKey::new(rng).into();
+        let private_key = secp256k1::SecretKey::new(&mut RngCore09Adapter(rng)).into();
         // Generate a new private key
         let ext_priv = Secp256k1ExtendedPrivateKey {
             derivation_path: DerivationPath::empty(),

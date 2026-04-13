@@ -94,7 +94,7 @@ impl PeerIdSupply {
         Self { active, next }
     }
 
-    fn gen(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
+    fn random(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
         self.active
             .get(rng.random_range(0..(self.active.len() + extra)))
             .copied()

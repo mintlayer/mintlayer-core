@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::ParseIntError, str::FromStr};
+use std::{convert::Infallible, num::ParseIntError, str::FromStr};
 
 use rand_chacha::ChaChaRng;
-use randomness::SliceRandom as _;
+
+use randomness::{IndexedRandom as _, TryCryptoRng, TryRngCore, rand_core_utils};
 
 pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngCore, SeedableRng};
 
@@ -86,25 +87,23 @@ impl TestRng {
     }
 }
 
-impl RngCore for TestRng {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
+impl TryRngCore for TestRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.0.try_next_u32()
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        self.0.try_next_u64()
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_chacha::rand_core::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         self.0.try_fill_bytes(dest)
     }
 }
 
-impl CryptoRng for TestRng {}
+impl TryCryptoRng for TestRng {}
 
 #[must_use]
 pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
@@ -188,7 +187,7 @@ pub fn gen_random_spaces(
         '\u{3000}', // ideographic space
     ];
     let count = rng.random_range(min_count..=max_count);
-    SPACES.choose_multiple(rng, count).copied()
+    SPACES.sample(rng, count).copied()
 }
 
 /// Collect the strings from the passed iterator into a single string, surrounding them with
@@ -209,6 +208,39 @@ pub fn collect_string_with_random_spaces<'a>(
 
     result
 }
+
+// This is a replacement for `rand::rngs::mock::StepRng`, which was deprecated in rand 0.9.x and
+// removed in 0.10.x.
+#[derive(Debug, Clone)]
+pub struct StepRng {
+    initial: u64,
+    increment: u64,
+}
+
+impl StepRng {
+    pub fn new(initial: u64, increment: u64) -> Self {
+        StepRng { initial, increment }
+    }
+}
+
+impl TryRngCore for StepRng {
+    type Error = std::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.try_next_u64().map(|val| val as u32)
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        let result = self.initial;
+        self.initial = self.initial.wrapping_add(self.increment);
+        Ok(result)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        rand_core_utils::fill_bytes_via_next_word(dest, || self.try_next_u64())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

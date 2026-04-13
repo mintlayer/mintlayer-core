@@ -43,7 +43,7 @@ use tokio::{net::UdpSocket, sync::mpsc};
 
 use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use logging::log;
-use randomness::{make_pseudo_rng, Rng, SliceRandom};
+use randomness::{make_pseudo_rng, IndexedRandom as _, Rng, SliceRandom as _};
 use utils::{atomics::RelaxedAtomicU32, make_config_setting, tokio_spawn};
 
 use crate::{
@@ -309,11 +309,11 @@ impl AuthorityImpl {
             });
 
         let mut selected_same_version_addrs =
-            same_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+            same_version_addrs.sample(rng, count).cloned().collect::<Vec<_>>();
         selected_same_version_addrs.shuffle(rng);
 
         let mut selected_other_version_addrs =
-            other_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+            other_version_addrs.sample(rng, count).cloned().collect::<Vec<_>>();
         selected_other_version_addrs.shuffle(rng);
 
         #[allow(clippy::float_arithmetic)]

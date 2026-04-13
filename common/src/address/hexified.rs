@@ -291,13 +291,13 @@ mod tests {
 
         let strings = (0..100)
             .map(|_| {
-                let size = rng.random::<usize>() % 50;
+                let size = rng.random_range(0..50);
                 random_string(size, &mut rng)
             })
             .collect::<Vec<String>>();
 
         let keys = (0..strings.len())
-            .map(|_| match rng.random::<usize>() % Destination::COUNT {
+            .map(|_| match rng.random_range(0..Destination::COUNT) {
                 0 => Destination::AnyoneCanSpend,
                 1 => {
                     let (_private_key, public_key) =
