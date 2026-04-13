@@ -31,7 +31,7 @@ pub fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
 
 pub fn to_key_and_chain_code<SecretKey>(
     mac: Hmac<Sha512>,
-    to_key: impl FnOnce(&[u8]) -> Result<SecretKey, DerivationError>,
+    to_key: impl FnOnce(&[u8; 32]) -> Result<SecretKey, DerivationError>,
 ) -> Result<(SecretKey, ChainCode), DerivationError> {
     // Finalize the hmac
     let mut result = mac.finalize().into_bytes();
@@ -44,7 +44,7 @@ pub fn to_key_and_chain_code<SecretKey>(
     result.zeroize();
 
     // Create the secret key key
-    let secret_key = to_key(secret_key_bytes.as_slice())?;
+    let secret_key = to_key(&secret_key_bytes.into())?;
     secret_key_bytes.zeroize();
 
     // Chain code

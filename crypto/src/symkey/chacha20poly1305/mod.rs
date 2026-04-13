@@ -186,7 +186,7 @@ mod test {
     fn decrypt_too_short_cipher_text() {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
-        let cipher_text_len = rng.random::<usize>() % Chacha20poly1305Key::NONCE_LEN;
+        let cipher_text_len = rng.random_range(0..Chacha20poly1305Key::NONCE_LEN);
         let cipher_text = (0..cipher_text_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let decrypt_err = key.decrypt(cipher_text, None).unwrap_err();
         assert_eq!(

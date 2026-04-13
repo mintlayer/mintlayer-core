@@ -15,9 +15,10 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use randomness::{make_pseudo_rng, Rng as _};
+use serialization_core::{DecodeAll, Encode};
 use utils::SimpleWrapper;
 
 #[test]
@@ -93,7 +94,7 @@ fn test_scale_vectors() {
 
 #[test]
 fn test_scale_btree_map() {
-    let mut rng = rand::thread_rng();
+    let mut rng = make_pseudo_rng();
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
         btree_map.insert(

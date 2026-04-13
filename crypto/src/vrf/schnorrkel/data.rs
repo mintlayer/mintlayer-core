@@ -147,24 +147,26 @@ impl SchnorrkelVRFReturn {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use hex::FromHex;
-    use randomness::{make_pseudo_rng, make_true_rng, Rng};
     use schnorrkel::{signing_context, Keypair, PublicKey, SecretKey};
+
+    use randomness::{adapters::RngCore08Adapter, make_pseudo_rng, make_true_rng, Rng};
     use serialization::{DecodeAll, Encode};
+
+    use super::*;
 
     #[test]
     fn serialization_of_result() {
         let mut csprng = make_true_rng();
-        let keypair = Keypair::generate_with(&mut csprng);
+        let keypair = Keypair::generate_with(&mut RngCore08Adapter(&mut csprng));
 
         let mut rng = make_pseudo_rng();
 
-        let label_size = 1 + rng.random::<usize>() % 10000;
+        let label_size = rng.random_range(1..=10000);
         let label: Vec<u8> = (1..label_size).map(|_| rng.random::<u8>()).collect();
 
         let ctx = signing_context(&label);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg: Vec<u8> = (1..msg_size).map(|_| rng.random::<u8>()).collect();
         let (input_and_output, proof, _proof1batchable) = keypair.vrf_sign(ctx.bytes(&msg));
         let preout = &input_and_output.to_preout();

@@ -35,9 +35,9 @@ fn create_random_data_map_with_target_byte_size(
     let mut total_size = 0;
 
     while total_size < required_size {
-        let key_size = 1 + rng.random::<usize>() % key_max_size;
+        let key_size = rng.random_range(1..=key_max_size);
         let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
-        let val_size = 1 + rng.random::<usize>() % val_max_size;
+        let val_size = rng.random_range(1..=val_max_size);
         let val = (0..val_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         result.insert(key, val);
 

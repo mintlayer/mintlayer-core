@@ -1642,7 +1642,7 @@ where
             self.peerdb.peer_discovered(address);
 
             if !self.peerdb.is_address_banned_or_discouraged(&address.as_bannable()) {
-                let peer_ids = self.subscribed_to_peer_addresses.iter().cloned().choose_multiple(
+                let peer_ids = self.subscribed_to_peer_addresses.iter().cloned().sample(
                     Self::lock_rng(&self.rng).deref_mut(),
                     PEER_ADDRESS_RESEND_COUNT,
                 );
@@ -1685,7 +1685,7 @@ where
                                 None
                             }
                         })
-                        .choose_multiple(&mut BoxedRngMutexWrapper::new(&self.rng), max_addr_count)
+                        .sample(&mut BoxedRngMutexWrapper::new(&self.rng), max_addr_count)
                 },
                 &mut BoxedRngMutexWrapper::new(&self.rng),
             )

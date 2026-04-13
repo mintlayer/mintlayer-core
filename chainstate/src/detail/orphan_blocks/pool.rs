@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 
-use common::chain::{Block, GenBlock};
-use common::primitives::id::WithId;
-use common::primitives::{Id, Idable};
-use randomness::SliceRandom;
+use common::{
+    chain::{Block, GenBlock},
+    primitives::{id::WithId, Id, Idable},
+};
+use randomness::IndexedRandom as _;
 
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,

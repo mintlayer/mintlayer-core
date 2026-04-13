@@ -15,9 +15,10 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{Decode, DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use randomness::{make_pseudo_rng, Rng as _};
+use serialization_core::{Decode, DecodeAll, Encode};
 use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
@@ -63,7 +64,7 @@ fn test_enum_codec_index() {
 
 #[test]
 fn test_scale_structures() {
-    let mut rng = rand::thread_rng();
+    let mut rng = make_pseudo_rng();
 
     #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
     enum TestEnum {

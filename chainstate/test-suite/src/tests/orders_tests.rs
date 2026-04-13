@@ -514,7 +514,7 @@ fn create_two_different_orders_same_tx(#[case] seed: Seed) {
         );
 
         let order_data_2 = OrderData::new(
-            Destination::PublicKeyHash(PublicKeyHash::random()),
+            Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             OutputValue::Coin(amount2),
             OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );

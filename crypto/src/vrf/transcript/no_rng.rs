@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use randomness::adapters::RngCore08Adapter;
+
 use super::{traits::SignableTranscript, with_rng::VRFTranscriptWithRng};
 
 #[must_use]
@@ -68,27 +70,33 @@ impl schnorrkel::context::SigningTranscript for VRFTranscript {
         nonce_seeds: &[&[u8]],
         rng: R,
     ) where
-        R: randomness::RngCore + randomness::CryptoRng,
+        R: rand_0_8::RngCore + rand_0_8::CryptoRng,
     {
         self.0.witness_bytes_rng(label, dest, nonce_seeds, rng)
     }
 
     fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
-        self.witness_bytes_rng(label, dest, nonce_seeds, randomness::make_true_rng())
+        self.witness_bytes_rng(
+            label,
+            dest,
+            nonce_seeds,
+            RngCore08Adapter(randomness::make_true_rng()),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use rand_chacha::ChaChaRng;
 
-    use randomness::{Rng, SeedableRng};
+    use randomness::SeedableRng;
 
     use super::*;
 
     #[test]
     fn manual_vs_assembled() {
+        use rand_0_8::Rng as _;
+
         // build first transcript by manually filling values
         let mut manual_transcript = merlin::Transcript::new(b"initial");
         manual_transcript.append_message(b"abc", b"xyz");
@@ -100,14 +108,16 @@ mod tests {
             .attach_u64(b"rx42", 424242);
 
         // build a random number generator using each transcript and ensure they both arrive to the same values
-        let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+        let mut g1 = manual_transcript
+            .build_rng()
+            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
         let mut g2 = assembled_transcript
             .0
             .build_rng()
-            .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
 
         for _ in 0..100 {
-            assert_eq!(g1.random::<u64>(), g2.random::<u64>());
+            assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
         }
     }
 }

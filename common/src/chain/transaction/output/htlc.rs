@@ -94,7 +94,7 @@ impl<'de> serde::Deserialize<'de> for HtlcSecret {
     }
 }
 
-fixed_hash::construct_fixed_hash! {
+utils::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct HtlcSecretHash(20);
 }
@@ -253,19 +253,30 @@ mod tests {
         assert_eq!(actual_deserialized_hash, hash);
     }
 
+    // Note: rustc_hex::FromHexError's Display implementation differs a bit depending on whether
+    // the crate's 'std' feature is enabled, so the expected values here may have to be changed
+    // whenever rustc_hex's configuration changes (which is controller by fixed_hash).
     #[rstest]
     #[case(
         "00000000000000000000000000000000000000000000000000000000000000",
-        "Invalid input length"
+        "invalid length"
     )]
-    #[case("000000000000000000000000000000000invalid", "Invalid character")]
+    #[case("000000000000000000000000000000000invalid", "invalid character")]
     fn secret_hash_deserialize_invalid(#[case] hash_str: &str, #[case] expected_msg: &str) {
         let err = HtlcSecretHash::from_str(hash_str).unwrap_err();
-        assert!(err.to_string().contains(expected_msg));
+        let err_str = err.to_string().to_ascii_lowercase();
+        assert!(
+            err_str.contains(expected_msg),
+            "err_str = {err_str}, expected_msg = {expected_msg}"
+        );
 
         let hash_json_str = secret_hash_str_to_json(hash_str);
         let err = serde_json::from_str::<HtlcSecretHash>(&hash_json_str).unwrap_err();
-        assert!(err.to_string().contains(expected_msg));
+        let err_str = err.to_string().to_ascii_lowercase();
+        assert!(
+            err_str.contains(expected_msg),
+            "err_str = {err_str}, expected_msg = {expected_msg}"
+        );
     }
 
     fn secret_hash_str_to_json(hash_str: &str) -> String {

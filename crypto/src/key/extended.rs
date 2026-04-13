@@ -202,7 +202,7 @@ mod test {
         let (sk, pk) =
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), ExtendedKeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.random::<u8>()).collect();
         let sig = sk.private_key().sign_message(&msg, &mut rng).unwrap();
         assert!(pk.into_public_key().verify_message(&sig, &msg));
