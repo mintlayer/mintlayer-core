@@ -300,8 +300,8 @@ package = "messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Bump ml_primitives and parity scale codec deps"
-rev = "a2e67f6cf804dd905791ec36bff1981871f5321c"
+# The commit "Fix Mintlayer code after merge with v2.11.0"
+rev = "fda0c12fc408ab96d4bd0fc3e796e00c622642db"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]

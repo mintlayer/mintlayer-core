@@ -54,6 +54,10 @@ jobs:
 
   static_checks_windows:
     runs-on: windows-latest
+    env:
+        # Same as in build_windows, using the default CARGO_HOME would make the job fail due to Windows
+        # path length limit.
+        CARGO_HOME: C:\crg
     steps:
       # This prevents git from changing line-endings to crlf, which messes cargo fmt checks
       - name: Set git to use LF

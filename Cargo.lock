@@ -1734,7 +1734,7 @@ dependencies = [
  "lazy_static",
  "logging",
  "merkletree-mintlayer",
- "mintlayer-core-primitives",
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?rev=13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b)",
  "num",
  "num-traits",
  "once_cell",
@@ -5027,7 +5027,7 @@ version = "0.1.0"
 source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=dbc41342564b2198037ed4ad41b4cf0c34617870#dbc41342564b2198037ed4ad41b4cf0c34617870"
 dependencies = [
  "derive_more 2.1.1",
- "mintlayer-core-primitives",
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?rev=13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b)",
  "num_enum",
  "parity-scale-codec",
 ]
@@ -5100,11 +5100,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintlayer-core-primitives"
+version = "1.0.0"
+source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=d5089aea20c6120e91667a29870dfeb496eff9ec#d5089aea20c6120e91667a29870dfeb496eff9ec"
+dependencies = [
+ "derive_more 2.1.1",
+ "fixed-hash",
+ "parity-scale-codec",
+ "strum 0.27.2",
+]
+
+[[package]]
 name = "mintlayer-firmware-deps"
 version = "0.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=fda0c12fc408ab96d4bd0fc3e796e00c622642db#fda0c12fc408ab96d4bd0fc3e796e00c622642db"
 dependencies = [
- "mintlayer-core-primitives",
+ "mintlayer-core-primitives 1.0.0 (git+https://github.com/mintlayer/mintlayer-core-primitives?rev=d5089aea20c6120e91667a29870dfeb496eff9ec)",
 ]
 
 [[package]]
@@ -9363,7 +9374,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.5"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=fda0c12fc408ab96d4bd0fc3e796e00c622642db#fda0c12fc408ab96d4bd0fc3e796e00c622642db"
 dependencies = [
  "bitcoin",
  "byteorder",

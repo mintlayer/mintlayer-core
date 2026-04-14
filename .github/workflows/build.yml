@@ -18,6 +18,11 @@ env:
 jobs:
   build_windows:
     runs-on: windows-latest
+    env:
+        # With the default CARGO_HOME the job will fail due to Windows path length limit when
+        # checking out the trezor firmware repo. E.g. one of the paths looks like this:
+        # C:/Users/runneradmin/.cargo/git/checkouts/mintlayer-trezor-firmware-04bdf62619936e0b/596b3eb/vendor/libtropic/scripts/tropic01_model/provisioning_data/2025-06-27T07-51-29Z__prod_C2S_T200__provisioning__lab_batch_package/cert_chain/tropicsquare_root_ca_certificate_sn_101.der
+        CARGO_HOME: C:\crg
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v5
@@ -218,6 +223,19 @@ jobs:
       TREZOR_TESTS_USE_REAL_DEVICE: false
       TREZOR_TESTS_AUTO_CONFIRM: true
     steps:
+      # Note: THP is the new protocol used by Safe 7, which we do not yet support, so we disable
+      # it by setting THP to 0. This means that we're not emulating the real Safe 7 here, i.e. it's
+      # just a hack to make the CI pass.
+      # TODO:
+      # 1) Remove this after THP support is implemented.
+      # 2) Another thing that is different about Safe 7 is the use of an additional secure element
+      #    called Tropic. Tests on the firmware side build the firmware with DISABLE_TROPIC=0, which
+      #    then requires a Tropic model server to be run alongside the emulator. We might want to do
+      #    the same here, to make the emulator behave more like the real device.
+      - name: Disable THP for T3W1
+        if: ${{ matrix.model == 'T3W1' }}
+        run: echo "THP=0" >> "$GITHUB_ENV"
+
       # Note: cargo-nextest requires the source code to be present when running archived test binaries.
       - name: Checkout the core repository
         uses: actions/checkout@v5
@@ -271,18 +289,18 @@ jobs:
         run: nix-shell --arg fullDeps false --run "true"
         working-directory: ./mintlayer-trezor-firmware
       - name: Setup trezor repo build dependencies, part 2
-        run: nix-shell --arg fullDeps false --run "poetry install"
+        run: nix-shell --arg fullDeps false --run "uv sync"
         working-directory: ./mintlayer-trezor-firmware
 
       - name: Build the firmware
-        run: nix-shell --run "poetry run make -C core build_unix"
+        run: nix-shell --run "uv run make -C core build_unix"
         working-directory: ./mintlayer-trezor-firmware
 
       # Note: since we haven't installed Cargo in this job, we have to execute "cargo-nextest nextest"
       # instead of "cargo nextest".
       - name: Run tests in the emulator
         run: nix-shell --run "
-          poetry run core/emu.py
+          uv run core/emu.py
           --headless --quiet --temporary-profile
           --mnemonic \"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\"
           --command env --chdir ../mintlayer-core
