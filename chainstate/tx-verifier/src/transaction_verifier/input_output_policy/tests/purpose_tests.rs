@@ -540,7 +540,7 @@ fn staker_destination_change(#[case] seed: Seed) {
         Amount::ZERO,
     );
 
-    let kernel_input_utxo = if rng.gen_bool(0.5) {
+    let kernel_input_utxo = if rng.random_bool(0.5) {
         TxOutput::CreateStakePool(stake_pool_id(), Box::new(stake_pool_data.clone()))
     } else {
         TxOutput::ProduceBlockFromStake(old_staker_dest, stake_pool_id())
@@ -564,7 +564,7 @@ fn staker_destination_change(#[case] seed: Seed) {
 
     // Case 1 - before the fork; the staker destination change is allowed.
     {
-        let block_height = if rng.gen_bool(0.5) {
+        let block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap()
         } else {
             BlockHeight::new(rng.gen_range(0..fork_height.into_int()))
@@ -583,7 +583,7 @@ fn staker_destination_change(#[case] seed: Seed) {
 
     // Case 2 - after the fork; the staker destination change is prohibited.
     {
-        let block_height = if rng.gen_bool(0.5) {
+        let block_height = if rng.random_bool(0.5) {
             fork_height
         } else {
             BlockHeight::new(rng.gen_range(fork_height.into_int()..=BlockHeight::max().into_int()))

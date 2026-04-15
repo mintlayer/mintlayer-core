@@ -235,14 +235,14 @@ fn assert_order_exists(
     }
 
     let mut make_different_currency = |currency, other_currency| {
-        if currency != other_currency && rng.gen_bool(0.5) {
+        if currency != other_currency && rng.random_bool(0.5) {
             return other_currency;
         }
 
         match currency {
             Currency::Coin => Currency::Token(TokenId::random_using(rng)),
             Currency::Token(_) => {
-                if rng.gen_bool(0.5) {
+                if rng.random_bool(0.5) {
                     Currency::Coin
                 } else {
                     Currency::Token(TokenId::random_using(rng))
@@ -3527,7 +3527,7 @@ fn order_with_zero_value(#[case] seed: Seed, #[case] version: OrdersVersion) {
             ),
         };
 
-        let (ask, give) = if rng.gen_bool(0.5) {
+        let (ask, give) = if rng.random_bool(0.5) {
             (coins, tokens)
         } else {
             (tokens, coins)
@@ -3593,7 +3593,7 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
         let (sk2, pk2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let (_, pk3) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let output_destination = if rng.gen_bool(0.5) {
+        let output_destination = if rng.random_bool(0.5) {
             Destination::PublicKey(pk3)
         } else {
             Destination::AnyoneCanSpend
@@ -4246,7 +4246,7 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
                 ))
                 .add_output(TxOutput::CreateOrder(Box::new(new_order_data.clone())));
             // Add coins or tokens to inputs and transfer the same amount in outputs.
-            let tx_builder = if rng.gen_bool(0.5) {
+            let tx_builder = if rng.random_bool(0.5) {
                 tx_builder
                     .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
                     .add_output(TxOutput::Transfer(
@@ -4338,7 +4338,7 @@ fn conclude_and_recreate_in_same_tx_with_different_balances(
         let tokens_amount = tokens_amount_after_order_creation;
 
         let (fill_amount, filled_amount) = if fill_after_creation {
-            let fill_amount = if increase_give_balance && rng.gen_bool(0.5) {
+            let fill_amount = if increase_give_balance && rng.random_bool(0.5) {
                 // Fill the order completely.
                 orig_ask_amount
             } else {

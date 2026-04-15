@@ -233,7 +233,7 @@ async fn auto_connection_fails_peer_state_becomes_disconnected(
             );
 
             // An inbound connection shouldn't change the outcome even if it's successful.
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 log::debug!("Accepting an extra inbound connection");
 
                 inbound_full_relay_peer_connected_and_disconnected(
@@ -403,7 +403,7 @@ async fn auto_connection_fails_peer_state_becomes_unreachable(
     );
 
     // An inbound connection shouldn't change the outcome even if it's successful.
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         log::debug!("Accepting an extra inbound connection");
 
         inbound_full_relay_peer_connected_and_disconnected(
@@ -561,7 +561,7 @@ async fn manual_connection_fails(#[case] seed: Seed, #[values(false, true)] make
             .await;
 
             // An inbound connection shouldn't change the outcome even if it's successful.
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 log::debug!("Accepting an extra inbound connection");
 
                 inbound_full_relay_peer_connected_and_disconnected(

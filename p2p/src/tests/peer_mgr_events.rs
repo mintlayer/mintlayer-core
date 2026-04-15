@@ -295,7 +295,7 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
         connect_result_receiver.await.unwrap().unwrap();
 
         for _ in 5..10 {
-            let msg = if rng.gen_bool(0.5) {
+            let msg = if rng.random_bool(0.5) {
                 Message::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![
                     Id::random_using(&mut rng),
                 ])))

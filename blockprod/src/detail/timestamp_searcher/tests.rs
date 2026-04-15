@@ -58,7 +58,7 @@ mod collect_search_data {
 
         let mut rng = make_seedable_rng(seed);
 
-        let consensus_version = if rng.gen_bool(0.5) {
+        let consensus_version = if rng.random_bool(0.5) {
             PoSConsensusVersion::V0
         } else {
             PoSConsensusVersion::V1
@@ -537,7 +537,7 @@ mod search {
                     Amount::from_atoms(staker_balance),
                 )
                 .unwrap(),
-                consensus_version: if rng.gen_bool(0.5) {
+                consensus_version: if rng.random_bool(0.5) {
                     PoSConsensusVersion::V0
                 } else {
                     PoSConsensusVersion::V1

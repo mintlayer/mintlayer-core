@@ -162,7 +162,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
     let txs_by_id: BTreeMap<_, _> = txs.into_iter().map(|tx| (*tx.tx_id(), tx)).collect();
 
     // Pick a number of transaction IDs to be explicitly requested by the user.
-    let user_tx_ids = txs_by_id.keys().filter(|_| rng.gen_bool(0.1)).copied().collect();
+    let user_tx_ids = txs_by_id.keys().filter(|_| rng.random_bool(0.1)).copied().collect();
 
     let accumulator = Box::new(DefaultTxAccumulator::new(
         10_000_000,

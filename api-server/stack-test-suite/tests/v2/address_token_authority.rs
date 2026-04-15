@@ -68,7 +68,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut input_utxo = tf.genesis().utxos()[0].clone();
 
                 for _ in 0..10 {
-                    let (dest, token_ids) = if rng.gen_bool(0.5) {
+                    let (dest, token_ids) = if rng.random_bool(0.5) {
                         (alice_destination.clone(), &mut alice_token_ids)
                     } else {
                         (bob_destination.clone(), &mut bob_token_ids)
@@ -118,7 +118,7 @@ async fn ok(#[case] seed: Seed) {
                     // Select a random token_id and transfer authority to the other person
                     let (token_id, dest, dest2, priv_key, token_ids) = if !alice_token_ids
                         .is_empty()
-                        && (bob_token_ids.is_empty() || rng.gen_bool(0.5))
+                        && (bob_token_ids.is_empty() || rng.random_bool(0.5))
                     {
                         (
                             alice_token_ids.remove(rng.gen_range(0..alice_token_ids.len())),

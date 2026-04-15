@@ -169,7 +169,7 @@ fn randomized_test(#[case] seed: Seed) {
                     did_something = true;
                 }
                 1 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                             test_data.decommission_pool(&mut tf, &mut rng, &pool_id);
                             did_something = true;
@@ -177,7 +177,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 2 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                             let _ = test_data.create_delegation(&mut tf, &mut rng, &pool_id);
                             did_something = true;
@@ -185,7 +185,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 3 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
                         {
@@ -200,7 +200,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 _ => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
                         {
@@ -216,7 +216,7 @@ fn randomized_test(#[case] seed: Seed) {
                 }
             }
 
-            if !did_something && rng.gen_bool(0.5) {
+            if !did_something && rng.random_bool(0.5) {
                 if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                     test_data.produce_trivial_block_with_pool(&mut tf, &mut rng, &pool_id);
                     did_something = true;

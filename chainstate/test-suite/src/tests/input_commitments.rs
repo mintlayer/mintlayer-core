@@ -464,12 +464,12 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
                     good_fill_order_input_commitment_v1.clone(),
                 ];
 
-                let bad_initially_asked = if rng.gen_bool(0.5) {
+                let bad_initially_asked = if rng.random_bool(0.5) {
                     OutputValue::Coin(amount_variation(&mut rng, initial_ask_amount))
                 } else {
                     OutputValue::TokenV1(token_id, initial_ask_amount)
                 };
-                let bad_initially_given = if rng.gen_bool(0.5) {
+                let bad_initially_given = if rng.random_bool(0.5) {
                     OutputValue::TokenV1(token_id, amount_variation(&mut rng, initial_give_amount))
                 } else {
                     OutputValue::Coin(initial_give_amount)
@@ -721,12 +721,12 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
                         give_balance,
                     }];
 
-                let bad_initially_asked = if rng.gen_bool(0.5) {
+                let bad_initially_asked = if rng.random_bool(0.5) {
                     OutputValue::Coin(amount_variation(&mut rng, initial_ask_amount))
                 } else {
                     OutputValue::TokenV1(token_id, initial_ask_amount)
                 };
-                let bad_initially_given = if rng.gen_bool(0.5) {
+                let bad_initially_given = if rng.random_bool(0.5) {
                     OutputValue::TokenV1(token_id, amount_variation(&mut rng, initial_give_amount))
                 } else {
                     OutputValue::Coin(initial_give_amount)
@@ -872,7 +872,7 @@ fn make_conclude_order_input(
 }
 
 fn amount_variation(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> Amount {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         (amount - Amount::from_atoms(1)).unwrap()
     } else {
         (amount + Amount::from_atoms(1)).unwrap()

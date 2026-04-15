@@ -276,7 +276,7 @@ pub fn generate_unsigned_tx(
 ) -> Result<Transaction, TransactionCreationError> {
     let inputs = (0..inputs_count)
         .map(|_| {
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 TxInput::from_utxo(
                     Id::<Transaction>::new(H256::random_using(rng)).into(),
                     rng.random(),

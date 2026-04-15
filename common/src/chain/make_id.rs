@@ -220,7 +220,7 @@ mod tests {
             ),
         ));
         let utxo_input = TxInput::Utxo(UtxoOutPoint::new(
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 OutPointSourceId::Transaction(Id::random_using(&mut rng))
             } else {
                 OutPointSourceId::BlockReward(Id::random_using(&mut rng))

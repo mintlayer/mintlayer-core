@@ -588,7 +588,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
     // Best block height is the fork height minus 2 or less.
     // Expecting V0 token id.
     {
-        let best_block_height = if rng.gen_bool(0.5) {
+        let best_block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap().prev_height().unwrap()
         } else {
             BlockHeight::new(rng.gen_range(0..fork_height.into_int() - 2))
@@ -623,7 +623,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
     // Best block height is the fork height minus 1 or bigger.
     // Expecting V0 token id.
     {
-        let best_block_height = if rng.gen_bool(0.5) {
+        let best_block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap()
         } else {
             BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2))
@@ -948,7 +948,7 @@ fn orders_state_update(#[case] seed: Seed) {
 
     // Create order 1
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -968,7 +968,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1017,7 +1017,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1069,7 +1069,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1104,7 +1104,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1143,7 +1143,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1176,7 +1176,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1216,7 +1216,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 
@@ -1252,7 +1252,7 @@ fn orders_state_update(#[case] seed: Seed) {
         )
         .unwrap();
 
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
     }
 

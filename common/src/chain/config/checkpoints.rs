@@ -181,7 +181,7 @@ mod tests {
             checkpoints_map.insert(BlockHeight::new(15), Id::random_using(&mut rng));
             checkpoints_map
         };
-        let checkpoints = if rng.gen_bool(0.5) {
+        let checkpoints = if rng.random_bool(0.5) {
             Checkpoints::new(checkpoints_map.clone(), genesis_id).unwrap()
         } else {
             static MAP: OnceCell<BTreeMap<BlockHeight, Id<GenBlock>>> = OnceCell::new();

@@ -41,8 +41,8 @@ fn randomized(#[case] seed: Seed) {
     let weights = WeightedIndex::new(weights).unwrap();
 
     for _ in 0..100 {
-        let was_reachable = rng.gen_bool(0.2);
-        let reserved = rng.gen_bool(0.1);
+        let was_reachable = rng.random_bool(0.2);
+        let reserved = rng.random_bool(0.1);
 
         let mut address_data = AddressData::new(was_reachable, reserved, started_at);
 

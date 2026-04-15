@@ -88,14 +88,14 @@ pub fn random_rpc_ft_info_with_id_ticker_decimals(
         metadata_uri: gen_random_alnum_string(rng, 10, 20).into(),
         circulating_supply: Amount::from_atoms(rng.random()),
         total_supply: RPCTokenTotalSupply::Unlimited,
-        is_locked: rng.gen_bool(0.5),
+        is_locked: rng.random_bool(0.5),
         frozen: random_rpc_is_token_frozen(rng),
         authority: Destination::PublicKeyHash(PublicKeyHash::random_using(rng)),
     }
 }
 
 pub fn random_rpc_is_token_frozen(rng: &mut impl Rng) -> RPCIsTokenFrozen {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         RPCIsTokenFrozen::NotFrozen {
             freezable: rng.random(),
         }
@@ -107,7 +107,7 @@ pub fn random_rpc_is_token_frozen(rng: &mut impl Rng) -> RPCIsTokenFrozen {
 }
 
 pub fn random_is_token_freezable(rng: &mut impl Rng) -> IsTokenFreezable {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         IsTokenFreezable::Yes
     } else {
         IsTokenFreezable::No
@@ -115,7 +115,7 @@ pub fn random_is_token_freezable(rng: &mut impl Rng) -> IsTokenFreezable {
 }
 
 pub fn random_is_token_unfreezable(rng: &mut impl Rng) -> IsTokenUnfreezable {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         IsTokenUnfreezable::Yes
     } else {
         IsTokenUnfreezable::No
@@ -238,7 +238,7 @@ pub fn random_order_currencies_with_token(
     rng: &mut impl Rng,
     token_id: TokenId,
 ) -> OrderCurrencies {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         OrderCurrencies {
             ask: Currency::Coin,
             give: Currency::Token(token_id),

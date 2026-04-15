@@ -1313,7 +1313,7 @@ async fn wallet_recover_new_account(#[case] seed: Seed) {
         )
         .await;
 
-        if rng.gen_bool(0.2) {
+        if rng.random_bool(0.2) {
             last_account_index = wallet.create_next_account(None).await.unwrap().0;
         }
         blocks.push(block);

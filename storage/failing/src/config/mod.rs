@@ -130,7 +130,7 @@ impl ErrorGeneration {
     }
 
     pub fn generate(&self, rng: &mut impl Rng) -> Option<StorageError> {
-        ensure!(rng.gen_bool(self.probability.into()));
+        ensure!(rng.random_bool(self.probability.into()));
         self.errors.generate(rng)
     }
 }
