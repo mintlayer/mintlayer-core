@@ -61,7 +61,7 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let n_inputs = rng.gen_range(1..=10);
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
-            if rng.gen_bool(0.8) {
+            if rng.random_bool(0.8) {
                 let source: Id<Transaction> = H256(rng.random()).into();
                 let output_index = rng.gen_range(0..=400);
                 TxInput::from_utxo(source.into(), output_index)

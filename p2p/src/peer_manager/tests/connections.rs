@@ -1983,7 +1983,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         let addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
         let is_last_addr = addresses.is_empty();
         let should_succeed = {
-            let rand_bool = rng.gen_bool(0.5);
+            let rand_bool = rng.random_bool(0.5);
             if is_last_addr {
                 if !had_successful_feelers {
                     true

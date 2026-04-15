@@ -324,7 +324,7 @@ mod tests {
                     prv_keys.insert(pub_key_dest.clone(), prv_key.clone());
                     prv_keys.insert(pub_key_hash_dest.clone(), prv_key);
 
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         (pub_key_dest, pub_key_hash_dest)
                     } else {
                         (pub_key_hash_dest, pub_key_dest)
@@ -335,7 +335,7 @@ mod tests {
                 let (prv_key, pub_key) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-                let dest = if rng.gen_bool(0.5) {
+                let dest = if rng.random_bool(0.5) {
                     Destination::PublicKey(pub_key)
                 } else {
                     Destination::PublicKeyHash((&pub_key).into())

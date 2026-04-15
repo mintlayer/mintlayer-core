@@ -1523,7 +1523,7 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
-        let total_supply_atoms = if rng.gen_bool(0.5) {
+        let total_supply_atoms = if rng.random_bool(0.5) {
             u128::MAX
         } else {
             rng.gen_range((i128::MAX as u128) + 1..u128::MAX)

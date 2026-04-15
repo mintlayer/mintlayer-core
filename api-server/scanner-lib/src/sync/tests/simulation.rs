@@ -309,7 +309,7 @@ async fn simulation(
 
     // Generate a random chain
     for current_height in 0..num_blocks {
-        let create_reorg = rng.gen_bool(0.1);
+        let create_reorg = rng.random_bool(0.1);
         let height_to_continue_from = if create_reorg {
             rng.gen_range(0..=current_height)
         } else {

@@ -101,7 +101,7 @@ fn conjunction_matches_explicit(#[case] seed: Seed, #[case] size_range: RangeInc
     let mut rng = make_seedable_rng(seed);
     let n = rng.gen_range(size_range);
 
-    let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.gen_bool(0.8))).collect();
+    let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.random_bool(0.8))).collect();
 
     let thr_conj = WitnessScript::conjunction(conds.clone());
     let thr_expl = WitnessScript::threshold(n, conds).unwrap();

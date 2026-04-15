@@ -291,7 +291,7 @@ mod tx_to_partially_signed_tx_general_test {
         let staker_balance_for_pool_for_unknown_produce_block_from_stake_utxo =
             Amount::from_atoms(rng.random());
 
-        let use_htlc_secret = rng.gen_bool(0.5);
+        let use_htlc_secret = rng.random_bool(0.5);
         let expected_htlc_dest = if use_htlc_secret {
             htlc_spend_key
         } else {

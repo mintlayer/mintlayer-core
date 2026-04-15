@@ -1233,7 +1233,7 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
 
         // Currently our good blocks are at the CheckBlockOk validation stage.
         // Optionally, force set it to FullyChecked, the expected results remain the same.
-        if rng.gen_bool(0.5) {
+        if rng.random_bool(0.5) {
             log::debug!("Resetting good block statuses to fully checked");
 
             tf.set_block_status(

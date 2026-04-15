@@ -928,7 +928,7 @@ mod tests {
             let err = CliUtxoOutPoint::from_str(&format!("foo({h256:x},{idx})")).unwrap_err();
             assert_eq!(err, ParseError::UnknownSourceIdType("foo".to_owned()));
 
-            let tag = if rng.gen_bool(0.5) { "tx" } else { "block" };
+            let tag = if rng.random_bool(0.5) { "tx" } else { "block" };
             // Sanity check
             CliUtxoOutPoint::from_str(&format!("{tag}({h256:x},{idx})")).unwrap();
 
@@ -1242,7 +1242,7 @@ mod tests {
             let expected_time_utc = DateTime::from_naive_utc_and_offset(expected_time, Utc);
             let tz_hours = rng.gen_range(0..24);
             let tz_mins = rng.gen_range(0..60);
-            let tz_positive = rng.gen_bool(0.5);
+            let tz_positive = rng.random_bool(0.5);
             let expected_time_with_tz = {
                 let offset = Duration::from_secs(tz_hours * 3600 + tz_mins * 60);
                 if tz_positive {

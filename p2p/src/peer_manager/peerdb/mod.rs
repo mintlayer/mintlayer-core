@@ -266,7 +266,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 (false, false) => {
                     break;
                 }
-                (true, true) => rng.gen_bool(0.5),
+                (true, true) => rng.random_bool(0.5),
                 _ => have_new,
             };
 

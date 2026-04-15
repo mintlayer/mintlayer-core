@@ -229,7 +229,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 
     // Pick a subset of these transactions, taking each with 90% probability.
     let tx_subseq_0: Vec<_> =
-        full_tx_sequence.iter().filter(|_| rng.gen_bool(0.9)).cloned().collect();
+        full_tx_sequence.iter().filter(|_| rng.random_bool(0.9)).cloned().collect();
 
     // Take the same subsequence but with randomly shuffled order.
     // This means some transactions will be temporarily in the orphan pool.

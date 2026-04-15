@@ -204,7 +204,7 @@ fn nft_zero_transfer(#[case] seed: Seed) {
             ));
         }
 
-        if rng.gen_bool(0.5) {
+        if rng.random_bool(0.5) {
             // Also make the actual transfer
             tx_builder = tx_builder.add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::from_atoms(1)),

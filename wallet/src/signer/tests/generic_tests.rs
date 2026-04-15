@@ -222,7 +222,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
 
     let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
         .map(|_| {
-            let source_id = if rng.gen_bool(0.5) {
+            let source_id = if rng.random_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(rng)).into()
             } else {
                 Id::<GenBlock>::new(H256::random_using(rng)).into()
@@ -429,7 +429,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let inputs: Vec<TxInput> = (0..utxos.len())
         .map(|_| {
-            let source_id = if rng.gen_bool(0.5) {
+            let source_id = if rng.random_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(rng)).into()
             } else {
                 Id::<GenBlock>::new(H256::random_using(rng)).into()
@@ -474,7 +474,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let multisig_dest = Destination::ClassicMultisig(multisig_hash1);
 
-    let source_id: OutPointSourceId = if rng.gen_bool(0.5) {
+    let source_id: OutPointSourceId = if rng.random_bool(0.5) {
         Id::<Transaction>::new(H256::random_using(rng)).into()
     } else {
         Id::<GenBlock>::new(H256::random_using(rng)).into()
@@ -485,7 +485,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         multisig_dest.clone(),
     );
 
-    let pub_key1_or_2 = if rng.gen_bool(0.5) {
+    let pub_key1_or_2 = if rng.random_bool(0.5) {
         log::debug!("pub_key1_or_2 is pub_key1");
         pub_key1.clone()
     } else {
@@ -493,7 +493,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         pub_key2.clone()
     };
     let pub_key1_or_2_is_key1 = pub_key1_or_2 == pub_key1;
-    let dest1_or_2 = if rng.gen_bool(0.5) {
+    let dest1_or_2 = if rng.random_bool(0.5) {
         log::debug!("dest1_or_2 is pub key");
         Destination::PublicKey(pub_key1_or_2)
     } else {
@@ -501,7 +501,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         Destination::PublicKeyHash((&pub_key1_or_2).into())
     };
 
-    let spend_htlc = rng.gen_bool(0.5);
+    let spend_htlc = rng.random_bool(0.5);
     let htlc_secret = HtlcSecret::new_from_rng(rng);
 
     // Note: in "first_account_can_sign_htlc", "sign" actually means "at least partially sign".
@@ -514,7 +514,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             pub_key1_or_2_is_key1,
         )
     } else {
-        let (refund_dest, first_account_can_sign_htlc) = if rng.gen_bool(0.5) {
+        let (refund_dest, first_account_can_sign_htlc) = if rng.random_bool(0.5) {
             log::debug!("htlc will be refunded, single sig");
 
             (dest1_or_2, pub_key1_or_2_is_key1)
@@ -693,7 +693,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
         total_supply: TokenTotalSupply::Unlimited,
         authority: Destination::PublicKey(dest_pub.clone()),
-        is_freezable: if rng.gen_bool(0.5) {
+        is_freezable: if rng.random_bool(0.5) {
             IsTokenFreezable::Yes
         } else {
             IsTokenFreezable::No
@@ -1022,7 +1022,7 @@ fn destination_from_account<K: AccountKeyChains>(
     db_tx: &mut impl TransactionRwUnlocked,
     rng: &mut impl Rng,
 ) -> Destination {
-    let purpose = if rng.gen_bool(0.5) {
+    let purpose = if rng.random_bool(0.5) {
         KeyPurpose::ReceiveFunds
     } else {
         KeyPurpose::Change

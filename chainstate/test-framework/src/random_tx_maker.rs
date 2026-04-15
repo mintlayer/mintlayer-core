@@ -605,7 +605,7 @@ impl<'a> RandomTxMaker<'a> {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             if token_data.can_be_frozen() {
                 // Freeze
                 let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
@@ -634,7 +634,7 @@ impl<'a> RandomTxMaker<'a> {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             // Change token authority
             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
             let new_authority =
@@ -658,7 +658,7 @@ impl<'a> RandomTxMaker<'a> {
             );
 
             (vec![account_input, fee_input], vec![fee_change_output])
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             // Change token metadata uri
             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
             let max_len = self.chainstate.get_chain_config().token_max_uri_len();
@@ -681,7 +681,7 @@ impl<'a> RandomTxMaker<'a> {
 
             (vec![account_input, fee_input], vec![fee_change_output])
         } else if !token_data.is_locked() {
-            if rng.gen_bool(0.9) {
+            if rng.random_bool(0.9) {
                 let circulating_supply = tokens_cache.get_circulating_supply(&token_id).unwrap();
 
                 // mint
@@ -808,7 +808,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateStakePool(pool_id, _)
                 | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    if self.staking_pool.is_none_or(|id| id != *pool_id) && rng.gen_bool(0.1) {
+                    if self.staking_pool.is_none_or(|id| id != *pool_id) && rng.random_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
                             .unwrap()
@@ -1087,7 +1087,7 @@ impl<'a> RandomTxMaker<'a> {
 
                     TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
                 } else {
-                    if rng.gen_bool(0.3) {
+                    if rng.random_bool(0.3) {
                         // Send coins to random delegation
                         if let Some((delegation_id, _)) = get_random_delegation_data(
                             rng,
@@ -1271,7 +1271,7 @@ impl<'a> RandomTxMaker<'a> {
                         }
                     }
                 }
-            } else if rng.gen_bool(0.4) && !self.account_command_used {
+            } else if rng.random_bool(0.4) && !self.account_command_used {
                 // unmint
                 let token_data = tokens_cache.get_token_data(&token_id).unwrap();
 
@@ -1317,7 +1317,7 @@ impl<'a> RandomTxMaker<'a> {
                         self.account_command_used = true;
                     }
                 }
-            } else if rng.gen_bool(0.4) && self.order_can_be_created && atoms > 0 {
+            } else if rng.random_bool(0.4) && self.order_can_be_created && atoms > 0 {
                 // create order to exchange part of available tokens for coins or other tokens
                 let random_token = get_random_token(rng, self.tokens_store, tokens_cache);
                 let ask_value = if rng.random::<bool>()
