@@ -120,7 +120,7 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         move || {
             let msg = match &message_to_sign {
                 MessageToSign::Random => {
-                    vec![rng.r#gen::<u8>(), rng.r#gen::<u8>(), rng.r#gen::<u8>()]
+                    vec![rng.random::<u8>(), rng.random::<u8>(), rng.random::<u8>()]
                 }
                 MessageToSign::Predefined(msg) => msg.clone(),
             };
