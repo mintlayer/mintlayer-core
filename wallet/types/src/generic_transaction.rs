@@ -82,9 +82,9 @@ mod tests {
             rng.random(),
             vec![TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::Transaction(Id::random_using(&mut rng)),
-                rng.r#gen(),
+                rng.random(),
             ))],
-            vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(rng.r#gen())))],
+            vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(rng.random())))],
         )
         .unwrap();
 
