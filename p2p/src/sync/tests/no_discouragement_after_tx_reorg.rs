@@ -89,10 +89,10 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
         let token_outpoint3 = tfxt.mint_token(token_id, token_mint_amount3, AccountNonce::new(2));
 
         let order_ask_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
-        let order_give_amount = Amount::from_atoms(
-            tfxt.rng
-                .random_range((token_mint_amount1.into_atoms() / 2)..token_mint_amount1.into_atoms()),
-        );
+        let order_give_amount =
+            Amount::from_atoms(tfxt.rng.random_range(
+                (token_mint_amount1.into_atoms() / 2)..token_mint_amount1.into_atoms(),
+            ));
         let order_id = tfxt.create_order(
             order_ask_amount,
             order_give_amount,
@@ -100,11 +100,12 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
             token_outpoint1,
         );
 
-        let another_order1_ask_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
-        let another_order1_give_amount = Amount::from_atoms(
-            tfxt.rng
-                .random_range((token_mint_amount2.into_atoms() / 2)..token_mint_amount2.into_atoms()),
-        );
+        let another_order1_ask_amount =
+            Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
+        let another_order1_give_amount =
+            Amount::from_atoms(tfxt.rng.random_range(
+                (token_mint_amount2.into_atoms() / 2)..token_mint_amount2.into_atoms(),
+            ));
         let another_order1_id = tfxt.create_order(
             another_order1_ask_amount,
             another_order1_give_amount,
@@ -114,18 +115,20 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
         let another_order1_ask_amount_to_fill =
             Amount::from_atoms(tfxt.rng.random_range(100..another_order1_ask_amount.into_atoms()));
 
-        let another_order2_ask_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
-        let another_order2_give_amount = Amount::from_atoms(
-            tfxt.rng
-                .random_range((token_mint_amount3.into_atoms() / 2)..token_mint_amount3.into_atoms()),
-        );
+        let another_order2_ask_amount =
+            Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
+        let another_order2_give_amount =
+            Amount::from_atoms(tfxt.rng.random_range(
+                (token_mint_amount3.into_atoms() / 2)..token_mint_amount3.into_atoms(),
+            ));
 
         let delegate_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
         let delg_id = tfxt.create_delegation(pool_id);
         tfxt.delegate(delg_id, delegate_amount);
 
         let another_delg_id = tfxt.create_delegation(pool_id);
-        let another_delegate_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
+        let another_delegate_amount =
+            Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
 
         let another_minted_token1_amount =
             Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
@@ -176,7 +179,8 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
             .rng
             .random_range(MIN_STAKE_POOL_PLEDGE_ATOMS..(MIN_STAKE_POOL_PLEDGE_ATOMS * 10));
 
-        let another_token_mint_mount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
+        let another_token_mint_mount =
+            Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
         let htlc_coins_amount = Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000));
 
         // Transactions to check. Note that the main case is withdrawal from a delegation, which caused the issue originally.
@@ -191,7 +195,9 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000))),
+                    OutputValue::Coin(Amount::from_atoms(
+                        tfxt.rng.random_range(1000..1_000_000_000),
+                    )),
                     Destination::AnyoneCanSpend,
                 ))
                 .build(),
@@ -201,7 +207,9 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::LockThenTransfer(
-                    OutputValue::Coin(Amount::from_atoms(tfxt.rng.random_range(1000..1_000_000_000))),
+                    OutputValue::Coin(Amount::from_atoms(
+                        tfxt.rng.random_range(1000..1_000_000_000),
+                    )),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(tfxt.rng.random_range(0..10)),
                 ))

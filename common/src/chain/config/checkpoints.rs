@@ -246,8 +246,9 @@ mod tests {
 
         // Anything above the last checkpoint should return the last checkpoint
         assert_eq!(
-            checkpoints
-                .parent_checkpoint_to_height(BlockHeight::new(rng.random::<u64>().saturating_add(15))),
+            checkpoints.parent_checkpoint_to_height(BlockHeight::new(
+                rng.random::<u64>().saturating_add(15)
+            )),
             (15.into(), *checkpoints_map.get(&15.into()).unwrap()),
         );
 

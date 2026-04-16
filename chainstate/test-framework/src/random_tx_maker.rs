@@ -471,7 +471,8 @@ impl<'a> RandomTxMaker<'a> {
                     let balance =
                         pos_accounting_before_tx.get_delegation_balance(delegation_id).unwrap();
                     if balance > Amount::ZERO {
-                        let to_spend = Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
+                        let to_spend =
+                            Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
                         let new_nonce = self.get_next_nonce(AccountType::Delegation(delegation_id));
 
                         result_inputs.push(TxInput::Account(AccountOutPoint::new(
@@ -983,7 +984,8 @@ impl<'a> RandomTxMaker<'a> {
                     if token_supply > Amount::ZERO {
                         let ask_amount =
                             Amount::from_atoms(rng.random_range(1u128..=token_supply.into_atoms()));
-                        let give_amount = Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
+                        let give_amount =
+                            Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
                         let order_data = OrderData::new(
                             Destination::AnyoneCanSpend,
                             OutputValue::TokenV1(token_id, ask_amount),

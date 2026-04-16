@@ -262,7 +262,9 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     )
     .unwrap();
 
-    let intent: String = [rng.random::<char>(), rng.random::<char>(), rng.random::<char>()].iter().collect();
+    let intent: String = [rng.random::<char>(), rng.random::<char>(), rng.random::<char>()]
+        .iter()
+        .collect();
     log::debug!("Generated intent: `{intent}`");
     let expected_signed_message =
         SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
@@ -646,7 +648,9 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 AccountCommand::FillOrder(
                     filled_order1_id,
                     Amount::from_atoms(
-                        rng.random_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
+                        rng.random_range(
+                            1..filled_order1_info.initially_asked.amount().into_atoms(),
+                        ),
                     ),
                     Destination::AnyoneCanSpend,
                 ),

@@ -263,8 +263,13 @@ async fn test_peer_manager_connect<T>(
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(transport, bind_addr, config, make_seedable_rng(rng.random())).await;
+    let (mut peer_manager, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        transport,
+        bind_addr,
+        config,
+        make_seedable_rng(rng.random()),
+    )
+    .await;
 
     peer_manager.try_connect(remote_addr, None, PeerRole::OutboundManual).unwrap();
 

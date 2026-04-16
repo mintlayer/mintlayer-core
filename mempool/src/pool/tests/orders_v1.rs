@@ -143,7 +143,9 @@ async fn non_orphans(#[case] seed: Seed) {
         &mut tf,
         another_order_id,
         token_id,
-        Amount::from_atoms(rng.random_range(10..another_order_initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(
+            rng.random_range(10..another_order_initial_ask_amount.into_atoms() / 10),
+        ),
         UtxoOutPoint::new(coins_src_id.clone(), 7),
         None,
     );

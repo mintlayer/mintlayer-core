@@ -132,10 +132,12 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.random_range(1..100_000));
+    let sighash_input_commitment_version_fork_height =
+        BlockHeight::new(rng.random_range(1..100_000));
     // The height shouldn't matter as long as it's below the fork
-    let tx_block_height =
-        BlockHeight::new(rng.random_range(0..sighash_input_commitment_version_fork_height.into_int()));
+    let tx_block_height = BlockHeight::new(
+        rng.random_range(0..sighash_input_commitment_version_fork_height.into_int()),
+    );
 
     let chain_config = Arc::new(
         chain::config::Builder::new(ChainType::Regtest)

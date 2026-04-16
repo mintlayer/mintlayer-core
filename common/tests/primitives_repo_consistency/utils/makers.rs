@@ -120,20 +120,25 @@ pub fn make_random_account_command_for_tag(
                 IsTokenUnfreezable::No
             },
         ),
-        AccountCommandTag::UnfreezeToken => AccountCommand::UnfreezeToken(H256(rng.random()).into()),
+        AccountCommandTag::UnfreezeToken => {
+            AccountCommand::UnfreezeToken(H256(rng.random()).into())
+        }
         AccountCommandTag::ChangeTokenAuthority => AccountCommand::ChangeTokenAuthority(
             H256(rng.random()).into(),
             make_random_destination(rng),
         ),
-        AccountCommandTag::ConcludeOrder => AccountCommand::ConcludeOrder(H256(rng.random()).into()),
+        AccountCommandTag::ConcludeOrder => {
+            AccountCommand::ConcludeOrder(H256(rng.random()).into())
+        }
         AccountCommandTag::FillOrder => AccountCommand::FillOrder(
             H256(rng.random()).into(),
             Amount::from_atoms(rng.random()),
             make_random_destination(rng),
         ),
-        AccountCommandTag::ChangeTokenMetadataUri => {
-            AccountCommand::ChangeTokenMetadataUri(H256(rng.random()).into(), make_random_bytes(rng))
-        }
+        AccountCommandTag::ChangeTokenMetadataUri => AccountCommand::ChangeTokenMetadataUri(
+            H256(rng.random()).into(),
+            make_random_bytes(rng),
+        ),
     }
 }
 
@@ -152,9 +157,10 @@ pub fn make_random_order_account_command_for_tag(
     tag: OrderAccountCommandTag,
 ) -> OrderAccountCommand {
     match tag {
-        OrderAccountCommandTag::FillOrder => {
-            OrderAccountCommand::FillOrder(H256(rng.random()).into(), Amount::from_atoms(rng.random()))
-        }
+        OrderAccountCommandTag::FillOrder => OrderAccountCommand::FillOrder(
+            H256(rng.random()).into(),
+            Amount::from_atoms(rng.random()),
+        ),
         OrderAccountCommandTag::FreezeOrder => {
             OrderAccountCommand::FreezeOrder(H256(rng.random()).into())
         }
@@ -169,8 +175,12 @@ pub fn make_random_outpoint_source_id_for_tag(
     tag: OutPointSourceIdTag,
 ) -> OutPointSourceId {
     match tag {
-        OutPointSourceIdTag::Transaction => OutPointSourceId::Transaction(H256(rng.random()).into()),
-        OutPointSourceIdTag::BlockReward => OutPointSourceId::BlockReward(H256(rng.random()).into()),
+        OutPointSourceIdTag::Transaction => {
+            OutPointSourceId::Transaction(H256(rng.random()).into())
+        }
+        OutPointSourceIdTag::BlockReward => {
+            OutPointSourceId::BlockReward(H256(rng.random()).into())
+        }
     }
 }
 
@@ -247,7 +257,9 @@ pub fn make_random_output_time_lock_for_tag(
     tag: OutputTimeLockTag,
 ) -> OutputTimeLock {
     match tag {
-        OutputTimeLockTag::UntilHeight => OutputTimeLock::UntilHeight(BlockHeight::new(rng.random())),
+        OutputTimeLockTag::UntilHeight => {
+            OutputTimeLock::UntilHeight(BlockHeight::new(rng.random()))
+        }
         OutputTimeLockTag::UntilTime => {
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(rng.random()))
         }

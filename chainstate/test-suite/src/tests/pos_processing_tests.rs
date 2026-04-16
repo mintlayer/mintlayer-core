@@ -1872,7 +1872,8 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .unwrap();
 
     // Process block_3: spend part of the share including reward
-    let amount_to_withdraw = Amount::from_atoms(rng.random_range(1..amount_to_delegate.into_atoms()));
+    let amount_to_withdraw =
+        Amount::from_atoms(rng.random_range(1..amount_to_delegate.into_atoms()));
     let tx_input_spend_from_delegation = TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(0),
         AccountSpending::DelegationBalance(delegation_id, amount_to_withdraw),
