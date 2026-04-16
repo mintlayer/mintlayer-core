@@ -1430,8 +1430,8 @@ user-login = "cpu"
 user-name = "Daniel McCarney"
 
 [[publisher.rustls-webpki]]
-version = "0.103.10"
-when = "2026-03-20"
+version = "0.103.12"
+when = "2026-04-14"
 user-id = 2751
 user-login = "ctz"
 user-name = "Joe Birr-Pixton"

@@ -86,7 +86,7 @@ fn emulator_apdu_port() -> u16 {
 }
 
 fn should_auto_confirm() -> bool {
-    bool_from_env("LEDGER_TESTS_AUTO_CONFIRM").unwrap().unwrap_or(false)
+    bool_from_env("LEDGER_TESTS_AUTO_CONFIRM").unwrap().unwrap_or(true)
 }
 
 async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, handle: Handle) {

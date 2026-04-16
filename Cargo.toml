@@ -280,28 +280,30 @@ zeroize = "1.5"
 
 [workspace.dependencies.ml_primitives]
 git = "https://github.com/mintlayer/mintlayer-core-primitives"
-# The commit "Add CoinType used for Ledger and encode/decode utils".
-rev = "13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b"
+# The commit "Merge pull request #4 from mintlayer/fix_typo".
+rev = "8644bfe06d932d687075939d2d175183ba1c369d"
 package = "mintlayer-core-primitives"
 
 [workspace.dependencies.ledger-lib]
-git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
-rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+git = "https://github.com/ledger-community/rust-ledger.git"
+# Note: we need this PR - https://github.com/ledger-community/rust-ledger/pull/14
+rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.ledger-proto]
-git = "https://github.com/ImplOfAnImpl/rust-ledger.git"
-rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+git = "https://github.com/ledger-community/rust-ledger.git"
+# The revision must be the same as for ledger-lib.
+rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Move StatusWord to messages crate"
-rev = "dbc41342564b2198037ed4ad41b4cf0c34617870"
+# The commit "Update mintlayer-core-primitives repo revision. Enable disabled CI workflows. ..."
+rev = "ffe0d6256877c1b4b18b2e4a27bdeeaa7fc5a2ff"
 package = "messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
-# The commit "Bump ml_primitives and parity scale codec deps"
-rev = "a2e67f6cf804dd905791ec36bff1981871f5321c"
+# The commit "Fix Mintlayer code after merge with v2.11.0. Update revisions of mintlayer-core-primitives and parity-scale-codec."
+rev = "596b3ebf536b438156132406d2e3a3f4dde53ebc"
 features = ["bitcoin", "mintlayer"]
 
 [workspace.metadata.dist.dependencies.apt]
@@ -346,10 +348,13 @@ opt-level = 2
 # TODO: investigate this further.
 fontconfig-parser = { git = "https://github.com/Riey/fontconfig-parser", rev = "f7d13a779e6ee282ce75acbc00a1270c0350e0c2" }
 
-# This patch is needed because there is no release of the library and because ledger-lib depends on ledger-proto, so this is the only way to make the former find the latter.
-# Note that the revision specified here must be the same as the one used in the workspace.dependencies section
-ledger-proto = { git = "https://github.com/ImplOfAnImpl/rust-ledger.git", rev = "035789ec436d47b938e8a3d2085ffb2fbf6f0559" }
-# The specific commit is chosen because it contains a fix for the Ledger NanoX,
-# and we use the same version across all Trezor, Ledger and Mintlayerr core primitives repos
-# If a different version is used the tests in Mintlayer core will stop compiling
+# This patch is needed because there is no release of the library and because ledger-lib depends on ledger-proto, so this
+# is the only way to make the former find the latter.
+# Note that the revision specified here must be the same as the one used in the workspace.dependencies section.
+ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89" }
+
+# Use a specific commit because we need a fix (github.com/paritytech/parity-scale-codec/pull/751)
+# that has not been released yet (should be part of the release coming after v3.7.5).
+# Note that the fix is needed for the Ledger app, but we have to use the same version of parity-scale-codec
+# across Trezor, Ledger, mintlayer-core and mintlayer-core-primitives repos.
 parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec.git", rev = "5021525697edc0661591ebc71392c48d950a10b0" }
