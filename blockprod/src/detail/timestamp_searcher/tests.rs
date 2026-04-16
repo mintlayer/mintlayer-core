@@ -425,7 +425,7 @@ mod collect_search_data {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let pledge =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
 
         let (pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
         let pool_id = PoolId::from_utxo(utxo_for_spending.outpoint());
@@ -448,7 +448,7 @@ mod collect_search_data {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_delegate =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
 
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
@@ -516,14 +516,14 @@ mod search {
 
         let mut rng = make_seedable_rng(seed);
 
-        let start_height = BlockHeight::new(rng.gen_range(0..10));
-        let items_count = rng.gen_range(10..20);
+        let start_height = BlockHeight::new(rng.random_range(0..10));
+        let items_count = rng.random_range(10..20);
 
         let mut data = Vec::with_capacity(items_count);
         for i in 0..items_count {
             let min_timestamp = rng.random::<u32>() as u64;
-            let max_timestamp = min_timestamp + rng.gen_range(1..10);
-            let staker_balance = rng.gen_range(1..u32::MAX) as u128;
+            let max_timestamp = min_timestamp + rng.random_range(1..10);
+            let staker_balance = rng.random_range(1..u32::MAX) as u128;
             let total_balance = staker_balance + rng.random::<u32>() as u128;
 
             data.push(SearchDataForHeight {
@@ -545,7 +545,7 @@ mod search {
             });
         }
 
-        let final_supply = Amount::from_atoms(rng.gen_range(u32::MAX as u64..u64::MAX) as u128);
+        let final_supply = Amount::from_atoms(rng.random_range(u32::MAX as u64..u64::MAX) as u128);
 
         let search_data1 = TimestampSearchData {
             start_height,

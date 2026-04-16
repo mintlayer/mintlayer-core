@@ -251,8 +251,8 @@ pub fn generate_transaction_graph(
     )];
 
     std::iter::from_fn(move || {
-        let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));
-        let n_outputs = rng.gen_range(1..=3);
+        let n_inputs = rng.random_range(1..=std::cmp::min(3, utxos.len()));
+        let n_outputs = rng.random_range(1..=3);
 
         let estimated_fee = get_relay_fee_from_tx_size(estimate_tx_size(n_inputs, n_outputs));
 
@@ -266,7 +266,7 @@ pub fn generate_transaction_graph(
         let mut input_count = 0;
         while input_count < n_inputs || total < estimated_fee.into_atoms() + min_valid_total_amount
         {
-            let (outpt, amt) = utxos.swap_remove(rng.gen_range(0..utxos.len()));
+            let (outpt, amt) = utxos.swap_remove(rng.random_range(0..utxos.len()));
             total += amt;
             builder = builder.add_input(outpt, empty_witness(rng));
             input_count += 1;
@@ -276,7 +276,7 @@ pub fn generate_transaction_graph(
             if total < min_valid_total_amount {
                 break;
             }
-            let amt = rng.gen_range((total / 2)..(95 * total / 100));
+            let amt = rng.random_range((total / 2)..(95 * total / 100));
             total -= amt;
             builder = builder.add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(amt)),

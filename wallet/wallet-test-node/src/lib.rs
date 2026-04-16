@@ -106,7 +106,7 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
     );
 
     // Must be less than the current time, otherwise block production will not work properly
-    let genesis_timestamp = rng.gen_range(1685000000..1685030000);
+    let genesis_timestamp = rng.random_range(1685000000..1685030000);
 
     Genesis::new(
         String::new(),

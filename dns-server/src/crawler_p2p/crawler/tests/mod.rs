@@ -237,7 +237,7 @@ fn randomized(#[case] seed: Seed) {
 
     let chain_config = common::chain::config::create_mainnet();
 
-    let nodes = (0..rng.gen_range(0..200))
+    let nodes = (0..rng.random_range(0..200))
         .map(|_| {
             if rng.random_bool(0.8) {
                 SocketAddr::V4(SocketAddrV4::new(
@@ -265,10 +265,10 @@ fn randomized(#[case] seed: Seed) {
         .map(SocketAddress::new)
         .collect::<Vec<_>>();
 
-    let reserved_count = rng.gen_range(0..5);
+    let reserved_count = rng.random_range(0..5);
     let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
 
-    let loaded_count = rng.gen_range(0..10);
+    let loaded_count = rng.random_range(0..10);
     let loaded_nodes = nodes
         .choose_multiple(&mut rng, loaded_count)
         .cloned()
@@ -291,8 +291,8 @@ fn randomized(#[case] seed: Seed) {
         Time::from_duration_since_epoch(Duration::ZERO),
     );
 
-    for _ in 0..rng.gen_range(0..100000) {
-        crawler.timer(Duration::from_secs(rng.gen_range(0..100)), &mut rng);
+    for _ in 0..rng.random_range(0..100000) {
+        crawler.timer(Duration::from_secs(rng.random_range(0..100)), &mut rng);
 
         // Randomly report a pending outbound connections as failed
         if !crawler.pending_connects.is_empty() && rng.random_bool(0.5) {

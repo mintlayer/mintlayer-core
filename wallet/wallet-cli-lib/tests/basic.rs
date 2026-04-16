@@ -106,8 +106,8 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert!(test
         .exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
         .contains("The transaction was submitted successfully with ID"));
@@ -132,8 +132,8 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert!(test
         .exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
         .contains("The transaction was submitted successfully with ID"));

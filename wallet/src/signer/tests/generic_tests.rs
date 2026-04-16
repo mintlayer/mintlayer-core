@@ -220,7 +220,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
-    let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
+    let inputs: Vec<TxInput> = (0..rng.random_range(3..6))
         .map(|_| {
             let source_id = if rng.random_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(rng)).into()
@@ -303,7 +303,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     // cannot sign when there is a random destination
     let (_, random_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let random_pk_destination = Destination::PublicKey(random_pk);
-    input_destinations[rng.gen_range(0..num_inputs)] = random_pk_destination;
+    input_destinations[rng.random_range(0..num_inputs)] = random_pk_destination;
 
     let err = signer
         .sign_transaction_intent(
@@ -332,10 +332,10 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
-        let fork_height = rng.gen_range(100..100_000);
+        let fork_height = rng.random_range(100..100_000);
         let tx_block_height = match input_commitments_version {
-            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
-            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+            SighashInputCommitmentVersion::V0 => rng.random_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.random_range(fork_height..fork_height * 2),
         };
         (
             BlockHeight::new(fork_height),
@@ -379,8 +379,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
 
-    let coin_input_amounts: Vec<Amount> = (0..rng.gen_range(2..7))
-        .map(|_| Amount::from_atoms(rng.gen_range(100..1000)))
+    let coin_input_amounts: Vec<Amount> = (0..rng.random_range(2..7))
+        .map(|_| Amount::from_atoms(rng.random_range(100..1000)))
         .collect();
 
     let total_coin_input_amount =
@@ -388,7 +388,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
     let decommissioned_pool_balance = Amount::from_atoms(
-        rng.gen_range(100..200)
+        rng.random_range(100..200)
             + chain_config.fungible_token_issuance_fee().into_atoms()
             + chain_config.nft_issuance_fee(tx_block_height).into_atoms() * 2
             + chain_config.token_supply_change_fee(tx_block_height).into_atoms() * 3
@@ -407,7 +407,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         stake_destination: random_destination(rng),
         vrf_public_key: VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel).1,
         margin_ratio_per_thousand: PerThousand::new_from_rng(rng),
-        cost_per_block: Amount::from_atoms(rng.gen_range(100..200)),
+        cost_per_block: Amount::from_atoms(rng.random_range(100..200)),
     };
 
     let produce_block_from_stake_utxo =
@@ -481,7 +481,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     };
     let multisig_input = TxInput::from_utxo(source_id.clone(), rng.next_u32());
     let multisig_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
         multisig_dest.clone(),
     );
 
@@ -546,7 +546,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let htlc = HashedTimelockContract {
         secret_hash: htlc_secret.hash(),
         spend_key: htlc_spend_dest,
-        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.gen_range(100..200))),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.random_range(100..200))),
         refund_key: htlc_refund_dest,
     };
 
@@ -557,14 +557,14 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     );
 
     let token_id = TokenId::new(H256::random_using(rng));
-    let token_mint_amount = Amount::from_atoms(rng.gen_range(100..200));
+    let token_mint_amount = Amount::from_atoms(rng.random_range(100..200));
 
-    let coin_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let coin_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let coin_lock_then_transfer_amount =
-        total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let coin_burn_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let delegate_staking_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let htlc_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+        total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let filled_order1_id = OrderId::new(H256::random_using(rng));
     let filled_order2_id = OrderId::new(H256::random_using(rng));
@@ -592,10 +592,10 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let mut acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(rng.gen_range(0..100)),
+            AccountNonce::new(rng.random_range(0..100)),
             AccountSpending::DelegationBalance(
                 DelegationId::new(H256::random_using(rng)),
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             ),
         )),
         TxInput::AccountCommand(
@@ -646,7 +646,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 AccountCommand::FillOrder(
                     filled_order1_id,
                     Amount::from_atoms(
-                        rng.gen_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
+                        rng.random_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
                     ),
                     Destination::AnyoneCanSpend,
                 ),
@@ -658,7 +658,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         filled_order2_info.initially_asked.amount(),
         token_mint_amount,
     );
-    let token_amount_to_fill = rng.gen_range(1..token_max_fill.into_atoms());
+    let token_amount_to_fill = rng.random_range(1..token_max_fill.into_atoms());
     acc_inputs.extend([
         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
@@ -680,16 +680,16 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let created_pool_id = PoolId::new(H256::random_using(rng));
     let delegation_id = DelegationId::new(H256::random_using(rng));
     let pool_data = StakePoolData::new(
-        Amount::from_atoms(rng.gen_range(100..200)),
+        Amount::from_atoms(rng.random_range(100..200)),
         Destination::PublicKey(dest_pub.clone()),
         vrf_public_key,
         Destination::PublicKey(dest_pub.clone()),
         PerThousand::new_from_rng(rng),
-        Amount::from_atoms(rng.gen_range(10..100)),
+        Amount::from_atoms(rng.random_range(10..100)),
     );
     let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
-        number_of_decimals: rng.gen_range(1..18),
+        number_of_decimals: rng.random_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
         total_supply: TokenTotalSupply::Unlimited,
         authority: Destination::PublicKey(dest_pub.clone()),
@@ -730,8 +730,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
-        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
-        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(100..200))),
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
     );
 
     let outputs = vec![
@@ -739,7 +739,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             OutputValue::TokenV1(
                 token_id,
                 Amount::from_atoms(
-                    rng.gen_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
+                    rng.random_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
                 ),
             ),
             Destination::PublicKey(dest_pub.clone()),
@@ -848,7 +848,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let tokens_additional_info = TokensAdditionalInfo::new().with_info(
         token_id,
         TokenAdditionalInfo {
-            num_decimals: rng.gen_range(5..10),
+            num_decimals: rng.random_range(5..10),
             ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
         },
     );
@@ -999,10 +999,10 @@ fn random_order_info(
     min_balance: u128,
     rng: &mut impl Rng,
 ) -> OrderAdditionalInfo {
-    let initially_asked = rng.gen_range(min_initial_value..=max_initial_value);
-    let initially_given = rng.gen_range(min_initial_value..=max_initial_value);
-    let ask_balance = rng.gen_range(min_balance..=initially_asked);
-    let give_balance = rng.gen_range(min_balance..=initially_given);
+    let initially_asked = rng.random_range(min_initial_value..=max_initial_value);
+    let initially_given = rng.random_range(min_initial_value..=max_initial_value);
+    let ask_balance = rng.random_range(min_balance..=initially_asked);
+    let give_balance = rng.random_range(min_balance..=initially_given);
 
     OrderAdditionalInfo {
         initially_asked: ask_currency.into_output_value(Amount::from_atoms(initially_asked)),

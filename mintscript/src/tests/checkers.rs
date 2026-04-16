@@ -29,7 +29,7 @@ fn make_dummy_tx(
 
     let mut gen_value = {
         let mut rng = make_seedable_rng(rng.random());
-        move || OutputValue::Coin(Amount::from_atoms(rng.gen_range(0..10_u128.pow(20))))
+        move || OutputValue::Coin(Amount::from_atoms(rng.random_range(0..10_u128.pow(20))))
     };
 
     let utxos: Vec<_> = (0_usize..n_inputs)
@@ -39,7 +39,7 @@ fn make_dummy_tx(
     let output = TxOutput::Burn(gen_value());
     let inputs = (0..n_inputs).map(|_| {
         let outpoint = OutPointSourceId::Transaction(Id::new(rng.random()));
-        TxInput::from_utxo(outpoint, rng.gen_range(0u32..200))
+        TxInput::from_utxo(outpoint, rng.random_range(0u32..200))
     });
     let input_commitments = utxos
         .iter()
@@ -77,7 +77,7 @@ fn check_sig(#[case] seed: Seed) {
     use common::chain::signature::EvaluatedInputWitness;
 
     let mut rng = make_seedable_rng(seed);
-    let n_inputs = rng.gen_range(1..5);
+    let n_inputs = rng.random_range(1..5);
 
     let keypairs: Vec<_> = (0..n_inputs)
         .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
@@ -123,7 +123,7 @@ fn check_timelocks(
     (utxo_height, spend_height, utxo_time, spend_time): (u64, u64, u64, u64),
     expected_ok: bool,
 ) {
-    let n_inputs = rng.gen_range(1..5);
+    let n_inputs = rng.random_range(1..5);
     let utxo_height = BlockHeight::new(utxo_height);
     let spend_height = BlockHeight::new(spend_height);
     let utxo_time = BlockTimestamp::from_int_seconds(utxo_time);
@@ -195,10 +195,10 @@ fn check_timelocks_rand(
 ) {
     let mut rng = TestRng::new(seed);
 
-    let utxo_height = rng.gen_range(0..100_000);
-    let spend_dist = rng.gen_range(1..100_000);
-    let utxo_time = rng.gen_range(0..10_000_000);
-    let spend_delay = rng.gen_range(1..10_000_000);
+    let utxo_height = rng.random_range(0..100_000);
+    let spend_dist = rng.random_range(1..100_000);
+    let utxo_time = rng.random_range(0..10_000_000);
+    let spend_delay = rng.random_range(1..10_000_000);
     let ctx_info = (
         utxo_height,
         utxo_height + spend_dist,
@@ -216,7 +216,7 @@ fn check_timelocks_rand(
 fn timelock_rand_abs_height_ok(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, h, d, _, _| tl_until_height(h + r.gen_range(0..=d)),
+        |r, h, d, _, _| tl_until_height(h + r.random_range(0..=d)),
         true,
     )
 }
@@ -227,7 +227,7 @@ fn timelock_rand_abs_height_ok(#[case] seed: Seed) {
 fn timelock_rand_abs_height_fail(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, h, d, _, _| tl_until_height(h + d + r.gen_range(1..1_000)),
+        |r, h, d, _, _| tl_until_height(h + d + r.random_range(1..1_000)),
         false,
     )
 }
@@ -238,7 +238,7 @@ fn timelock_rand_abs_height_fail(#[case] seed: Seed) {
 fn timelock_rand_rel_height_ok(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, _, d, _, _| tl_for_blocks(r.gen_range(0..=d)),
+        |r, _, d, _, _| tl_for_blocks(r.random_range(0..=d)),
         true,
     )
 }
@@ -249,7 +249,7 @@ fn timelock_rand_rel_height_ok(#[case] seed: Seed) {
 fn timelock_rand_rel_height_fail(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, _, d, _, _| tl_for_blocks(d + r.gen_range(1..1_000)),
+        |r, _, d, _, _| tl_for_blocks(d + r.random_range(1..1_000)),
         false,
     )
 }
@@ -260,7 +260,7 @@ fn timelock_rand_rel_height_fail(#[case] seed: Seed) {
 fn timelock_rand_abs_time_ok(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, _, _, t, d| tl_until_time(t + r.gen_range(0..=d)),
+        |r, _, _, t, d| tl_until_time(t + r.random_range(0..=d)),
         true,
     )
 }
@@ -271,7 +271,7 @@ fn timelock_rand_abs_time_ok(#[case] seed: Seed) {
 fn timelock_rand_abs_time_fail(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, _, _, t, d| tl_until_time(t + d + r.gen_range(1..1_000)),
+        |r, _, _, t, d| tl_until_time(t + d + r.random_range(1..1_000)),
         false,
     )
 }
@@ -280,7 +280,7 @@ fn timelock_rand_abs_time_fail(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn timelock_rand_rel_time_ok(#[case] seed: Seed) {
-    check_timelocks_rand(seed, |r, _, _, _, d| tl_for_secs(r.gen_range(0..=d)), true)
+    check_timelocks_rand(seed, |r, _, _, _, d| tl_for_secs(r.random_range(0..=d)), true)
 }
 
 #[rstest::rstest]
@@ -289,7 +289,7 @@ fn timelock_rand_rel_time_ok(#[case] seed: Seed) {
 fn timelock_rand_rel_time_fail(#[case] seed: Seed) {
     check_timelocks_rand(
         seed,
-        |r, _, _, _, d| tl_for_secs(d + r.gen_range(1..100_000)),
+        |r, _, _, _, d| tl_for_secs(d + r.random_range(1..100_000)),
         false,
     )
 }

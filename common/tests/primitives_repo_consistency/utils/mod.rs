@@ -63,7 +63,7 @@ where
             let max_val: u128 = T::max_value().into();
 
             if max_val >= range_start {
-                let val = rng.gen_range(range_start..=std::cmp::min(max_val, range_end_inclusive));
+                let val = rng.random_range(range_start..=std::cmp::min(max_val, range_end_inclusive));
 
                 // Sanity check
                 let encoded_size = CompactEncodedU128(val).encoded_size();

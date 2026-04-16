@@ -66,7 +66,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100_000..200_000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -80,7 +80,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..2000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..2000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -94,7 +94,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -308,7 +308,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100_000..200_000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -326,7 +326,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
                 pool_id,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..2000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..2000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -341,7 +341,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::DelegateStaking(
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
                 delegation_id,
             ))
             .build();

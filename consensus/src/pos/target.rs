@@ -395,7 +395,7 @@ mod tests {
         {
             // average block time <= target block time
             let prev_target = Uint256::from_u64(rng.random::<u64>());
-            let average_block_time = target_block_time.get() / rng.gen_range(1..10);
+            let average_block_time = target_block_time.get() / rng.random_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
                     .unwrap();
@@ -404,7 +404,7 @@ mod tests {
         {
             // average block time >= target block time
             let prev_target = Uint256::from_u64(rng.random::<u64>());
-            let average_block_time = target_block_time.get() * rng.gen_range(1..10);
+            let average_block_time = target_block_time.get() * rng.random_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
                     .unwrap();

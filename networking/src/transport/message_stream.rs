@@ -133,14 +133,14 @@ mod tests {
     async fn message_roundtrip(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let message_count = rng.gen_range(1..=20);
+        let message_count = rng.random_range(1..=20);
 
         let max_msg_size = 1000;
         let messages = (0..message_count)
             .map(|_| gen_random_bytes(&mut rng, 1, max_msg_size))
             .collect::<Vec<_>>();
 
-        let buf_size = rng.gen_range(10..max_msg_size + 10);
+        let buf_size = rng.random_range(10..max_msg_size + 10);
         let (stream1, stream2) = tokio::io::duplex(buf_size);
 
         let (_, mut sender) = new_message_stream(stream1, None);

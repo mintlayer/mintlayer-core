@@ -133,18 +133,18 @@ fn get_random_timelock(
 ) -> OutputTimeLock {
     const MAX_LOCK_FOR_NUM_BLOCKS: u64 = 5;
     let target_block_spacing_sec = chainstate.get_chain_config().target_block_spacing().as_secs();
-    match rng.gen_range(0..4) {
-        0 => OutputTimeLock::ForBlockCount(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)),
+    match rng.random_range(0..4) {
+        0 => OutputTimeLock::ForBlockCount(rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)),
         1 => OutputTimeLock::UntilHeight(
             chainstate
                 .get_best_block_height()
                 .unwrap()
-                .checked_add(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
+                .checked_add(rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
                 .unwrap(),
         ),
         2 => OutputTimeLock::ForSeconds(
-            target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                + rng.gen_range(0..=target_block_spacing_sec),
+            target_block_spacing_sec * rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                + rng.random_range(0..=target_block_spacing_sec),
         ),
         3 => OutputTimeLock::UntilTime(
             chainstate
@@ -152,8 +152,8 @@ fn get_random_timelock(
                 .unwrap()
                 .block_timestamp()
                 .add_int_seconds(
-                    target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                        + rng.gen_range(0..=target_block_spacing_sec),
+                    target_block_spacing_sec * rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                        + rng.random_range(0..=target_block_spacing_sec),
                 )
                 .unwrap(),
         ),
@@ -363,7 +363,7 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(TxInput, TxOutput)> {
-        let number_of_inputs = rng.gen_range(1..5);
+        let number_of_inputs = rng.random_range(1..5);
         self.utxo_set
             .utxos()
             .iter()
@@ -396,7 +396,7 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn select_accounts(&self, rng: &mut impl Rng) -> Vec<AccountType> {
-        let number_of_inputs = rng.gen_range(1..5);
+        let number_of_inputs = rng.random_range(1..5);
 
         let tokens = self
             .tokens_store
@@ -471,7 +471,7 @@ impl<'a> RandomTxMaker<'a> {
                     let balance =
                         pos_accounting_before_tx.get_delegation_balance(delegation_id).unwrap();
                     if balance > Amount::ZERO {
-                        let to_spend = Amount::from_atoms(rng.gen_range(1..=balance.into_atoms()));
+                        let to_spend = Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
                         let new_nonce = self.get_next_nonce(AccountType::Delegation(delegation_id));
 
                         result_inputs.push(TxInput::Account(AccountOutPoint::new(
@@ -508,7 +508,7 @@ impl<'a> RandomTxMaker<'a> {
                     result_outputs.extend(outputs);
                 }
                 AccountType::Order(order_id) => {
-                    let switch = rng.gen_range(0..3);
+                    let switch = rng.random_range(0..3);
 
                     if !self.account_command_used && switch != 0 {
                         // conclude an order
@@ -698,7 +698,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
 
                 let mint_limit = std::cmp::min(100_000, supply_left.into_atoms());
-                let to_mint = Amount::from_atoms(rng.gen_range(1..=mint_limit));
+                let to_mint = Amount::from_atoms(rng.random_range(1..=mint_limit));
 
                 let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                 let account_input = TxInput::AccountCommand(
@@ -911,7 +911,7 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for atoms_to_spend in atoms_vec {
-            let switch = rng.gen_range(0..6);
+            let switch = rng.random_range(0..6);
             let amount_to_spend = Amount::from_atoms(atoms_to_spend);
             if switch == 0 && self.token_can_be_issued {
                 // issue token v1
@@ -982,8 +982,8 @@ impl<'a> RandomTxMaker<'a> {
                 {
                     if token_supply > Amount::ZERO {
                         let ask_amount =
-                            Amount::from_atoms(rng.gen_range(1u128..=token_supply.into_atoms()));
-                        let give_amount = Amount::from_atoms(rng.gen_range(1u128..=atoms_to_spend));
+                            Amount::from_atoms(rng.random_range(1u128..=token_supply.into_atoms()));
+                        let give_amount = Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
                         let order_data = OrderData::new(
                             Destination::AnyoneCanSpend,
                             OutputValue::TokenV1(token_id, ask_amount),
@@ -1052,7 +1052,7 @@ impl<'a> RandomTxMaker<'a> {
                         .chainstate
                         .get_chain_config()
                         .data_deposit_max_size(BlockHeight::zero());
-                    let deposited_data_len = rng.gen_range(0..deposited_data_len);
+                    let deposited_data_len = rng.random_range(0..deposited_data_len);
                     let deposited_data =
                         (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
@@ -1082,7 +1082,7 @@ impl<'a> RandomTxMaker<'a> {
                         VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1,
                         Destination::AnyoneCanSpend,
                         PerThousand::new_from_rng(rng),
-                        Amount::from_atoms(rng.gen_range(0..1000)),
+                        Amount::from_atoms(rng.random_range(0..1000)),
                     );
 
                     TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
@@ -1106,7 +1106,7 @@ impl<'a> RandomTxMaker<'a> {
                     let destination =
                         key_manager.new_destination(self.chainstate.get_chain_config(), rng);
                     let timelock = get_random_timelock(rng, self.chainstate);
-                    match rng.gen_range(0..5) {
+                    match rng.random_range(0..5) {
                         0 => TxOutput::LockThenTransfer(
                             OutputValue::Coin(amount_to_spend),
                             destination,
@@ -1326,7 +1326,7 @@ impl<'a> RandomTxMaker<'a> {
                 {
                     OutputValue::TokenV1(random_token.unwrap().0, random_token.unwrap().1)
                 } else {
-                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..10000)))
+                    OutputValue::Coin(Amount::from_atoms(rng.random_range(100..10000)))
                 };
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));

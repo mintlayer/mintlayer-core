@@ -300,7 +300,7 @@ fn test_storage_transactions_with_result_check(#[case] seed: Seed) {
 /// returns a tuple of utxo and outpoint, for testing.
 fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
-    let random_value = rng.gen_range(0..(u128::MAX - 1));
+    let random_value = rng.random_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(random_value)),
@@ -327,7 +327,7 @@ pub fn create_rand_block_undo(
     max_lim_of_utxos: u8,
     max_lim_of_tx_undos: u8,
 ) -> UtxosBlockUndo {
-    let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
+    let utxo_rng = rng.random_range(1..max_lim_of_utxos);
     let reward_utxos = (0..utxo_rng)
         .enumerate()
         .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
@@ -335,9 +335,9 @@ pub fn create_rand_block_undo(
     let reward_undo = UtxosBlockRewardUndo::new(reward_utxos);
 
     let mut tx_undo = vec![];
-    let undo_rng = rng.gen_range(1..max_lim_of_tx_undos);
+    let undo_rng = rng.random_range(1..max_lim_of_tx_undos);
     for _ in 0..undo_rng {
-        let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
+        let utxo_rng = rng.random_range(1..max_lim_of_utxos);
         let tx_utxos = (0..utxo_rng)
             .enumerate()
             .map(|(i, _)| rng.random::<bool>().then(|| create_rand_utxo(rng, i as u64).0))

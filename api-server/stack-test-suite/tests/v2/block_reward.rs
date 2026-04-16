@@ -67,8 +67,8 @@ async fn no_reward(#[case] seed: Seed) {
         async move {
             let web_server_state = {
                 let mut rng = make_seedable_rng(seed);
-                let block_height = rng.gen_range(1..50);
-                let n_blocks = rng.gen_range(block_height..100);
+                let block_height = rng.random_range(1..50);
+                let n_blocks = rng.random_range(block_height..100);
 
                 let chain_config = create_unit_test_config();
 

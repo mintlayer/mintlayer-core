@@ -80,7 +80,7 @@ impl KeyManager {
         chain_config: &ChainConfig,
         rng: &mut (impl Rng + CryptoRng),
     ) -> Destination {
-        match rng.gen_range(0..5) {
+        match rng.random_range(0..5) {
             0 => {
                 let (private_key, public_key) =
                     PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -95,8 +95,8 @@ impl KeyManager {
                 Destination::PublicKey(public_key)
             }
             2 => {
-                let min_required_signatures = rng.gen_range(1..32);
-                let num_pub_keys = rng.gen_range(min_required_signatures..=32);
+                let min_required_signatures = rng.random_range(1..32);
+                let num_pub_keys = rng.random_range(min_required_signatures..=32);
                 let keys: Vec<_> = (0..num_pub_keys)
                     .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
                     .collect();

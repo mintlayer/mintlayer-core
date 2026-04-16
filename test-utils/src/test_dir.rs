@@ -35,7 +35,7 @@ fn backoff_delays(seed: Seed) -> impl Iterator<Item = Duration> {
     let mut rng = crate::random::make_seedable_rng(seed);
     let mut delay = Duration::from_millis(1);
     std::iter::from_fn(move || {
-        let item = rng.gen_range(Duration::ZERO..delay);
+        let item = rng.random_range(Duration::ZERO..delay);
         delay *= 2;
         Some(item)
     })

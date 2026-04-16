@@ -670,7 +670,7 @@ mod tests {
             let config = Builder::new(ChainType::Mainnet).build();
 
             let before_the_fork = BlockHeight::new(
-                rng.gen_range(0..MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()),
+                rng.random_range(0..MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
@@ -683,7 +683,7 @@ mod tests {
             );
 
             let after_the_fork = BlockHeight::new(
-                rng.gen_range(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()..u64::MAX),
+                rng.random_range(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()..u64::MAX),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
@@ -696,7 +696,7 @@ mod tests {
             let config = Builder::new(ChainType::Testnet).build();
 
             let before_the_fork =
-                BlockHeight::new(rng.gen_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
+                BlockHeight::new(rng.random_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
@@ -708,7 +708,7 @@ mod tests {
             );
 
             let after_the_fork =
-                BlockHeight::new(rng.gen_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
+                BlockHeight::new(rng.random_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(after_the_fork)

@@ -65,8 +65,8 @@ fn threshold_collect_satisfied(
     #[case] dissat_range: RangeInclusive<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let n_sat = rng.gen_range(sat_range);
-    let n_dissat = rng.gen_range(dissat_range);
+    let n_sat = rng.random_range(sat_range);
+    let n_dissat = rng.random_range(dissat_range);
     let conds = generate_conds(&mut rng, n_sat, n_dissat);
 
     {
@@ -78,12 +78,12 @@ fn threshold_collect_satisfied(
     }
 
     if n_sat > 0 {
-        let thresh = Threshold::new(rng.gen_range(0..n_sat), conds.clone()).unwrap();
+        let thresh = Threshold::new(rng.random_range(0..n_sat), conds.clone()).unwrap();
         assert_eq!(thresh.collect_satisfied(), Err(ThresholdError::Excessive));
     }
 
     if n_dissat > 0 {
-        let required = rng.gen_range((n_sat + 1)..=conds.len());
+        let required = rng.random_range((n_sat + 1)..=conds.len());
         let thresh = Threshold::new(required, conds.clone()).unwrap();
         assert_eq!(
             thresh.collect_satisfied(),
@@ -99,7 +99,7 @@ fn threshold_collect_satisfied(
 #[case::rand(Seed::from_entropy(), 2..=100)]
 fn conjunction_matches_explicit(#[case] seed: Seed, #[case] size_range: RangeInclusive<usize>) {
     let mut rng = make_seedable_rng(seed);
-    let n = rng.gen_range(size_range);
+    let n = rng.random_range(size_range);
 
     let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.random_bool(0.8))).collect();
 

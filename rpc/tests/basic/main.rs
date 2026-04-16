@@ -166,7 +166,7 @@ async fn http_request(rpc: &Rpc, rpc_auth: RpcAuthData) -> anyhow::Result<()> {
 }
 
 fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
-    let len = rng.gen_range(1..20);
+    let len = rng.random_range(1..20);
     loop {
         let val = Alphanumeric.sample_string(rng, len);
         if not_equal_to != val {

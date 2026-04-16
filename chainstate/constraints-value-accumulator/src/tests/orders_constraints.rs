@@ -46,9 +46,9 @@ fn create_order_constraints(#[case] seed: Seed) {
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = Box::new(OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
@@ -279,9 +279,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
@@ -633,9 +633,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),

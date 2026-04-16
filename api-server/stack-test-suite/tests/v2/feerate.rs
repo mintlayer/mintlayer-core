@@ -49,7 +49,7 @@ async fn invalid_query_parameter() {
 #[tokio::test]
 async fn ok(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let in_top_x_mb = rng.gen_range(1..100);
+    let in_top_x_mb = rng.random_range(1..100);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -115,7 +115,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
         }
     }
     let mut rng = make_seedable_rng(seed);
-    let in_top_x_mb = rng.gen_range(1..100);
+    let in_top_x_mb = rng.random_range(1..100);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -164,7 +164,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
         let body = response.text().await.unwrap();
         assert_eq!(body, format!("\"{in_top_x_mb}\""));
 
-        let sec_to_pass = rng.gen_range(1..REFRESH_INTERVAL_SEC);
+        let sec_to_pass = rng.random_range(1..REFRESH_INTERVAL_SEC);
         seconds.fetch_add(sec_to_pass);
         time_passed += sec_to_pass;
     }

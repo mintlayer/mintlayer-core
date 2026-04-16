@@ -460,7 +460,7 @@ fn update_conflicting_txs_frozen_token_only_in_outputs(#[case] seed: Seed) {
 fn token_id_in_add_tx(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let fork_height = BlockHeight::new(rng.gen_range(1000..1_000_000));
+    let fork_height = BlockHeight::new(rng.random_range(1000..1_000_000));
     let chain_config = create_unit_test_config_builder()
         .chainstate_upgrades(
             common::chain::NetUpgrades::initialize(vec![
@@ -500,7 +500,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
         .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
             TokenIssuanceV1 {
                 token_ticker: "XXXX".as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
+                number_of_decimals: rng.random_range(1..18),
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
                 authority: Destination::AnyoneCanSpend,
@@ -514,9 +514,9 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
     // Tx block height is before the fork, best block height is after the fork.
     // Expecting V0 token id.
     {
-        let tx_block_height = BlockHeight::new(rng.gen_range(0..fork_height.into_int()));
+        let tx_block_height = BlockHeight::new(rng.random_range(0..fork_height.into_int()));
         let best_block_height =
-            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2));
+            BlockHeight::new(rng.random_range(fork_height.into_int()..fork_height.into_int() * 2));
         let mut output_cache = OutputCache::empty();
 
         let wallet_tx = WalletTx::Tx(TxData::new(
@@ -553,8 +553,8 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
     // Expecting V1 token id.
     {
         let tx_block_height =
-            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2));
-        let best_block_height = BlockHeight::new(rng.gen_range(0..fork_height.into_int()));
+            BlockHeight::new(rng.random_range(fork_height.into_int()..fork_height.into_int() * 2));
+        let best_block_height = BlockHeight::new(rng.random_range(0..fork_height.into_int()));
         let mut output_cache = OutputCache::empty();
 
         let wallet_tx = WalletTx::Tx(TxData::new(
@@ -591,7 +591,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
         let best_block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap().prev_height().unwrap()
         } else {
-            BlockHeight::new(rng.gen_range(0..fork_height.into_int() - 2))
+            BlockHeight::new(rng.random_range(0..fork_height.into_int() - 2))
         };
         let mut output_cache = OutputCache::empty();
 
@@ -626,7 +626,7 @@ fn token_id_in_add_tx(#[case] seed: Seed) {
         let best_block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap()
         } else {
-            BlockHeight::new(rng.gen_range(fork_height.into_int()..fork_height.into_int() * 2))
+            BlockHeight::new(rng.random_range(fork_height.into_int()..fork_height.into_int() * 2))
         };
         let mut output_cache = OutputCache::empty();
 
@@ -922,10 +922,10 @@ fn orders_state_update(#[case] seed: Seed) {
 
     let conclude_key1 = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let conclude_key2 = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
-    let coins1 = OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_1000)));
-    let coins2 = OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_1000)));
-    let tokens1 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1000..100_1000)));
-    let tokens2 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1000..100_1000)));
+    let coins1 = OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..100_1000)));
+    let coins2 = OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..100_1000)));
+    let tokens1 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(1000..100_1000)));
+    let tokens2 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(1000..100_1000)));
 
     let parent_tx_1_id = Id::<Transaction>::random_using(&mut rng);
     let order1_creation_tx = TransactionBuilder::new()
@@ -940,9 +940,9 @@ fn orders_state_update(#[case] seed: Seed) {
         ))))
         .build();
     let order1_creation_tx_id = order1_creation_tx.transaction().get_id();
-    let order1_creation_timestamp = BlockTimestamp::from_int_seconds(rng.gen_range(0..10));
+    let order1_creation_timestamp = BlockTimestamp::from_int_seconds(rng.random_range(0..10));
     let order1_id = make_order_id(order1_creation_tx.inputs()).unwrap();
-    let order1_creation_tx_confirmation_height = BlockHeight::new(rng.gen_range(0..10));
+    let order1_creation_tx_confirmation_height = BlockHeight::new(rng.random_range(0..10));
 
     let mut output_cache = OutputCache::empty();
 
@@ -962,7 +962,7 @@ fn orders_state_update(#[case] seed: Seed) {
                 TxState::Confirmed(
                     order1_creation_tx_confirmation_height,
                     order1_creation_timestamp,
-                    rng.gen_range(0..10),
+                    rng.random_range(0..10),
                 ),
             )),
         )
@@ -1046,7 +1046,7 @@ fn orders_state_update(#[case] seed: Seed) {
         .add_input(
             TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                 order1_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             )),
             InputWitness::NoSignature(None),
         )
@@ -1061,9 +1061,9 @@ fn orders_state_update(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(
                 order1_fill_tx,
                 TxState::Confirmed(
-                    BlockHeight::new(rng.gen_range(20..30)),
-                    BlockTimestamp::from_int_seconds(rng.gen_range(20..30)),
-                    rng.gen_range(0..10),
+                    BlockHeight::new(rng.random_range(20..30)),
+                    BlockTimestamp::from_int_seconds(rng.random_range(20..30)),
+                    rng.random_range(0..10),
                 ),
             )),
         )
@@ -1088,7 +1088,7 @@ fn orders_state_update(#[case] seed: Seed) {
         .add_input(
             TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                 order2_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             )),
             InputWitness::NoSignature(None),
         )
@@ -1135,9 +1135,9 @@ fn orders_state_update(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(
                 order1_freeze_tx,
                 TxState::Confirmed(
-                    BlockHeight::new(rng.gen_range(40..50)),
-                    BlockTimestamp::from_int_seconds(rng.gen_range(40..50)),
-                    rng.gen_range(0..10),
+                    BlockHeight::new(rng.random_range(40..50)),
+                    BlockTimestamp::from_int_seconds(rng.random_range(40..50)),
+                    rng.random_range(0..10),
                 ),
             )),
         )
@@ -1208,9 +1208,9 @@ fn orders_state_update(#[case] seed: Seed) {
             WalletTx::Tx(TxData::new(
                 order1_conclude_tx,
                 TxState::Confirmed(
-                    BlockHeight::new(rng.gen_range(60..70)),
-                    BlockTimestamp::from_int_seconds(rng.gen_range(60..70)),
-                    rng.gen_range(0..10),
+                    BlockHeight::new(rng.random_range(60..70)),
+                    BlockTimestamp::from_int_seconds(rng.random_range(60..70)),
+                    rng.random_range(0..10),
                 ),
             )),
         )
@@ -1288,9 +1288,9 @@ fn add_random_transfer_tx(
 
     let tx_state = match TxStateTag::iter().choose(&mut rng).unwrap() {
         TxStateTag::Confirmed => TxState::Confirmed(
-            BlockHeight::new(rng.gen_range(0..100)),
-            BlockTimestamp::from_int_seconds(rng.gen_range(0..100)),
-            rng.gen_range(0..100),
+            BlockHeight::new(rng.random_range(0..100)),
+            BlockTimestamp::from_int_seconds(rng.random_range(0..100)),
+            rng.random_range(0..100),
         ),
         TxStateTag::InMempool => TxState::InMempool(rng.random()),
         TxStateTag::Conflicted => TxState::Conflicted(random_block_id),
@@ -1301,7 +1301,7 @@ fn add_random_transfer_tx(
     output_cache
         .add_tx(
             chain_config,
-            BlockHeight::new(rng.gen_range(0..100)),
+            BlockHeight::new(rng.random_range(0..100)),
             tx_id.into(),
             WalletTx::Tx(TxData::new(tx, tx_state)),
         )

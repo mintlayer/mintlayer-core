@@ -99,7 +99,7 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     if range_len.is_empty() {
         return String::new();
     }
-    let len = rng.gen_range(range_len);
+    let len = rng.random_range(range_len);
     Alphanumeric.sample_string(rng, len)
 }
 
@@ -138,10 +138,10 @@ where
 
 pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     let mut numbers = vec![0, value];
-    let n = rng.gen_range(0..10);
+    let n = rng.random_range(0..10);
 
     if value > 1 && n > 0 {
-        numbers.extend((0..=n).map(|_| rng.gen_range(1..value)).collect::<Vec<_>>());
+        numbers.extend((0..=n).map(|_| rng.random_range(1..value)).collect::<Vec<_>>());
         numbers.sort();
     }
 

@@ -50,7 +50,7 @@ fn create_transactions(
         .chunks(input_size)
         .map(|inputs| {
             let outputs = if max_num_of_outputs > 1 {
-                let rnd = rng.gen_range(1..max_num_of_outputs);
+                let rnd = rng.random_range(1..max_num_of_outputs);
                 create_tx_outputs(rng, rnd as u32)
             } else {
                 vec![]
@@ -273,7 +273,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let (db_impl, _) = initialize_db(&mut rng, tx_outputs_size);
     let db = UtxosDB::new(&db_impl);
 
-    let tx_inputs: Vec<TxInput> = (0..rng.gen_range(num_of_txs..20))
+    let tx_inputs: Vec<TxInput> = (0..rng.random_range(num_of_txs..20))
         .map(|i| {
             let id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
             let id = OutPointSourceId::BlockReward(id);
@@ -316,7 +316,7 @@ fn test_batch_write(#[case] seed: Seed) {
 
     // randomly get a key for checking
     let keys = utxos.container.keys().collect_vec();
-    let key_index = rng.gen_range(0..keys.len());
+    let key_index = rng.random_range(0..keys.len());
     let outpoint = keys[key_index].clone();
 
     // test the get_utxo

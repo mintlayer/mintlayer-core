@@ -140,7 +140,7 @@ mod tests {
         tokio::time::pause();
 
         // Spawn a task with a timeout
-        let timeout_duration = Duration::from_secs(rng.gen_range(1..120));
+        let timeout_duration = Duration::from_secs(rng.random_range(1..120));
         let test_task = tokio::spawn(async move {
             let txs = PendingTransactions::new();
             tokio::time::timeout(timeout_duration, txs.due()).await

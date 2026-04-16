@@ -354,7 +354,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let message_size = rng.gen_range(128..1024);
+        let message_size = rng.random_range(128..1024);
 
         let message = gen_random_bytes(&mut rng, 1, message_size);
         let (_, mut peer_stream_writer) =

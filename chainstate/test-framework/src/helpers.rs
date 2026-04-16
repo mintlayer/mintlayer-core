@@ -55,7 +55,7 @@ pub fn issue_and_mint_random_token_from_best_block(
             token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
                 .as_bytes()
                 .to_vec(),
-            number_of_decimals: rng.gen_range(1..max_dec_count),
+            number_of_decimals: rng.random_range(1..max_dec_count),
             metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
             total_supply,
             is_freezable,
@@ -139,7 +139,7 @@ pub fn make_token_issuance(
 ) -> TokenIssuance {
     TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
-        number_of_decimals: rng.gen_range(1..18),
+        number_of_decimals: rng.random_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         authority: Destination::AnyoneCanSpend,
@@ -331,7 +331,7 @@ pub fn split_u128(rng: &mut (impl Rng + CryptoRng), amount: u128, parts_count: u
         let amount_part_above_min = if i == parts_count - 1 {
             remaining_amount_above_min
         } else {
-            rng.gen_range(0..remaining_amount_above_min / 2)
+            rng.random_range(0..remaining_amount_above_min / 2)
         };
 
         result.push(min_part_amount + amount_part_above_min);

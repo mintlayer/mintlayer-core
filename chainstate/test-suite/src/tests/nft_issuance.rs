@@ -1848,7 +1848,7 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let invalid_token_id = TokenId::from_tx_input(
-            &UtxoOutPoint::new(outpoint_source_id.clone(), rng.gen_range(1..100)).into(),
+            &UtxoOutPoint::new(outpoint_source_id.clone(), rng.random_range(1..100)).into(),
         );
         let tx_first_input = TxInput::from_utxo(outpoint_source_id, 0);
         let valid_token_id = TokenId::from_tx_input(&tx_first_input);

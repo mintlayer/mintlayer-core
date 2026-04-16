@@ -41,7 +41,7 @@ fn check_block_reward_pow(#[case] seed: Seed) {
 
     let block_id = Id::<Block>::new(H256::zero());
     let block_height = BlockHeight::new(1);
-    let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+    let fee = Fee(Amount::from_atoms(rng.random_range(0..100_000)));
     let subsidy = chain_config.block_subsidy_at_height(&block_height);
 
     let check = |output_value| {
@@ -80,7 +80,7 @@ fn check_block_reward_pow(#[case] seed: Seed) {
     // invalid random case
     {
         let invalid_output_value =
-            Amount::from_atoms(rng.gen_range((expected_output_value.into_atoms() + 1)..u128::MAX));
+            Amount::from_atoms(rng.random_range((expected_output_value.into_atoms() + 1)..u128::MAX));
         let result = check(invalid_output_value);
         assert_eq!(
             result.unwrap_err(),
@@ -100,7 +100,7 @@ fn check_block_reward_pow(#[case] seed: Seed) {
     // valid random case
     {
         let valid_output_value =
-            Amount::from_atoms(rng.gen_range(0..expected_output_value.into_atoms()));
+            Amount::from_atoms(rng.random_range(0..expected_output_value.into_atoms()));
         let result = check(valid_output_value);
         assert_eq!(result, Ok(()));
     }
@@ -115,7 +115,7 @@ fn check_block_reward_pos(#[case] seed: Seed) {
 
     let pool_id = PoolId::new(H256::zero());
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-    let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+    let pledge_amount = Amount::from_atoms(rng.random_range(0..100_000));
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = vrf_sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let stake_pool_data = StakePoolData::new(
@@ -132,7 +132,7 @@ fn check_block_reward_pos(#[case] seed: Seed) {
         BTreeMap::from_iter([(outpoint.clone(), utxo::Utxo::new_for_mempool(input_utxo))]),
     );
 
-    let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+    let fee = Fee(Amount::from_atoms(rng.random_range(0..100_000)));
 
     let inputs = vec![outpoint.into()];
     let outputs = vec![TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id)];
@@ -167,7 +167,7 @@ fn check_block_reward_pos_pool_id_mismatch(#[case] seed: Seed) {
     let pool_id_2 = PoolId::new(H256::random_using(&mut rng));
 
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-    let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
+    let pledge_amount_1 = Amount::from_atoms(rng.random_range(0..100_000));
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = vrf_sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let stake_pool_data_1 = StakePoolData::new(
@@ -184,7 +184,7 @@ fn check_block_reward_pos_pool_id_mismatch(#[case] seed: Seed) {
         BTreeMap::from_iter([(outpoint.clone(), utxo::Utxo::new_for_mempool(input_utxo))]),
     );
 
-    let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+    let fee = Fee(Amount::from_atoms(rng.random_range(0..100_000)));
 
     let inputs = vec![outpoint.into()];
     let outputs = vec![TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id_2)];

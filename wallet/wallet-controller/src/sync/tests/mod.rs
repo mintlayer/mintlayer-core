@@ -600,7 +600,7 @@ async fn account_out_of_sync(#[case] seed: Seed) {
     let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
     wait_new_tip(&node, &mut new_tip_rx).await;
 
-    let reset_to = rng.gen_range(1..9);
+    let reset_to = rng.random_range(1..9);
     wallet.reset_unused_account_to_height(reset_to);
 
     // Build new blocks

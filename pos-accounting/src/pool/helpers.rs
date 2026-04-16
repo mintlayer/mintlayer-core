@@ -23,7 +23,7 @@ use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> PoSAccountingUndo {
     let delegation_target: DelegationId = H256::random_using(rng).into();
-    let amount_to_delegate = Amount::from_atoms(rng.gen_range(0..100_000));
+    let amount_to_delegate = Amount::from_atoms(rng.random_range(0..100_000));
 
     // TODO: return other undo types
     PoSAccountingUndo::DelegateStaking(DelegateStakingUndo {

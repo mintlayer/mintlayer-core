@@ -163,7 +163,7 @@ fn randomized_test(#[case] seed: Seed) {
         // anything explicitly.
         for _ in 0..100 {
             let mut did_something = false;
-            match rng.gen_range(0..5) {
+            match rng.random_range(0..5) {
                 0 => {
                     let _ = test_data.make_new_pool(&mut tf, &mut rng);
                     did_something = true;
@@ -406,7 +406,7 @@ impl TestData {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let pledge =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, staker_key) =
             create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
         let pool_id = PoolId::from_utxo(self.utxo_for_spending.outpoint());
@@ -498,7 +498,7 @@ impl TestData {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_delegate =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
 
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
@@ -557,7 +557,7 @@ impl TestData {
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
-        let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1000..10_000));
+        let amount_to_withdraw = Amount::from_atoms(rng.random_range(1000..10_000));
 
         let nonce = self.next_nonce(delegation_id);
 
@@ -605,7 +605,7 @@ impl TestData {
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
-        let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
+        let amount_to_add = Amount::from_atoms(rng.random_range(1000..10_000));
 
         let tx_builder = TransactionBuilder::new()
             .add_output(TxOutput::DelegateStaking(amount_to_add, *delegation_id));

@@ -72,12 +72,12 @@ async fn ok(#[case] seed: Seed) {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
     let mut rng = make_seedable_rng(seed);
-    let block_height = rng.gen_range(2..50);
+    let block_height = rng.random_range(2..50);
     let task = tokio::spawn(async move {
         let web_server_state = {
-            let n_blocks = rng.gen_range(block_height..100);
+            let n_blocks = rng.random_range(block_height..100);
 
-            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.random_range(10000..100000);
             let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let staking_key = Destination::PublicKey(pk.clone());
@@ -87,7 +87,7 @@ async fn ok(#[case] seed: Seed) {
                 vrf_pk,
                 staking_key.clone(),
                 PerThousand::new_from_rng(&mut rng),
-                Amount::from_atoms(rng.gen_range(0..100)),
+                Amount::from_atoms(rng.random_range(0..100)),
             );
             let pool_id = PoolId::new(H256::random_using(&mut rng));
 
@@ -165,7 +165,7 @@ async fn ok(#[case] seed: Seed) {
             // create a reorg
             let parent_block = chainstate_blocks.get(block_height - 2).unwrap();
             let mut prev_block_hash = parent_block.get_id().into();
-            let count = rng.gen_range(block_height..=100);
+            let count = rng.random_range(block_height..=100);
             tf.set_time_seconds_since_epoch(parent_block.timestamp().as_int_seconds());
 
             let new_chainstate_blocks: Vec<_> = (block_height - 1..count)

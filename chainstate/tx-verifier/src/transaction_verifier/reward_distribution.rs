@@ -351,13 +351,13 @@ mod tests {
     fn calculate_staker_reward_test_v0(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(1..=reward.into_atoms()));
         let cost_per_block_over_reward =
-            (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
+            (reward + Amount::from_atoms(rng.random_range(1..=100_000_000))).unwrap();
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
-        let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
+        let mpt_more_than_one = PerThousand::new(rng.random_range(2..=1000)).unwrap();
 
         assert!(calculate_staker_reward_v0(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
         assert!(calculate_staker_reward_v0(Amount::ZERO, Amount::ZERO, mpt).is_some());
@@ -501,16 +501,16 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let pool_id = new_pool_id(1);
-        let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let pool_balance = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let staker_balance = Amount::from_atoms(rng.gen_range(1..=pool_balance.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let pool_balance = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let staker_balance = Amount::from_atoms(rng.random_range(1..=pool_balance.into_atoms()));
 
-        let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let cost_per_block = Amount::from_atoms(rng.random_range(1..=reward.into_atoms()));
         let cost_per_block_over_reward =
-            (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
+            (reward + Amount::from_atoms(rng.random_range(1..=100_000_000))).unwrap();
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
-        let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
+        let mpt_more_than_one = PerThousand::new(rng.random_range(2..=1000)).unwrap();
 
         assert_eq!(
             calculate_staker_reward_v1(
@@ -813,9 +813,9 @@ mod tests {
         let delegation_id_1 = new_delegation_id(1);
         let delegation_id_2 = new_delegation_id(2);
 
-        let original_pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_1_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_2_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let original_pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let delegation_1_balance = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let delegation_2_balance = Amount::from_atoms(rng.random_range(0..100_000_000));
         let total_delegation_shares = (delegation_1_balance + delegation_2_balance).unwrap();
 
         let original_pool_balance = amount_sum!(
@@ -825,8 +825,8 @@ mod tests {
         )
         .unwrap();
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
         let staker_reward = match version {
             RewardDistributionVersion::V0 => {
@@ -963,12 +963,12 @@ mod tests {
         let pool_id = new_pool_id(1);
         let delegation_id = new_delegation_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
         let delegation_id_amount = Amount::ZERO;
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
@@ -1038,12 +1038,12 @@ mod tests {
         let pool_id = new_pool_id(1);
         let delegation_id = new_delegation_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
-        let delegation_id_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let delegation_id_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new(1000).unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
@@ -1108,11 +1108,11 @@ mod tests {
         let block_id = Id::new(H256::random_using(&mut rng));
         let pool_id = new_pool_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);

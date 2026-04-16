@@ -74,14 +74,14 @@ fn pool_decommissioning(#[case] seed: Seed) {
     let genesis_pool_pledge_amount = min_pledge;
 
     let genesis_output_amount = Amount::from_atoms(
-        rng.gen_range(min_pledge.into_atoms() * 5..min_pledge.into_atoms() * 10),
+        rng.random_range(min_pledge.into_atoms() * 5..min_pledge.into_atoms() * 10),
     );
 
-    let blocks_to_produce_by_another_pool = rng.gen_range(1..=3);
+    let blocks_to_produce_by_another_pool = rng.random_range(1..=3);
     // This is the number of blocks after "another pool" has produced its last block until
     // the fork to SighashInputCommitmentVersion::V1 happens. We want it to be non-zero,
     // so that we can try V0 commitments too.
-    let fork_distance_after_setup_finished = rng.gen_range(1..=3);
+    let fork_distance_after_setup_finished = rng.random_range(1..=3);
     // Add 1 to account for the block that creates "another pool".
     // Add another 1 because we're interested in what happens on "next_block_height" after the setup is finished.
     let fork_height = BlockHeight::new(
@@ -128,7 +128,7 @@ fn pool_decommissioning(#[case] seed: Seed) {
         tf.chain_config().staking_pool_spend_maturity_block_count(1.into()).to_int();
 
     let another_pool_pledge_amount =
-        Amount::from_atoms(rng.gen_range(min_pledge.into_atoms()..min_pledge.into_atoms() * 2));
+        Amount::from_atoms(rng.random_range(min_pledge.into_atoms()..min_pledge.into_atoms() * 2));
 
     let another_pool_id = PoolId::from_utxo(&coins_outpoint);
     let another_pool_info = PoolInfoForStaking::new_random(&mut rng, another_pool_id);
@@ -305,7 +305,7 @@ fn pool_decommissioning(#[case] seed: Seed) {
 fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
-    let fork_distance_after_setup_finished = rng.gen_range(1..=3);
+    let fork_distance_after_setup_finished = rng.random_range(1..=3);
 
     // Add 4 to account for creating and minting a token and creating and partially filling an order.
     // Add another 1 because we're interested in what happens on "next_block_height" after the setup is finished.
@@ -342,7 +342,7 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         0,
     );
 
-    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1_000_000..2_000_000));
+    let token_amount_to_mint = Amount::from_atoms(rng.random_range(1_000_000..2_000_000));
     let (token_id, tokens_outpoint, coins_outpoint) = issue_and_mint_random_token_from_best_block(
         &mut rng,
         &mut tf,
@@ -353,9 +353,9 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     );
     let coins_left = tf.coin_amount_from_utxo(&coins_outpoint);
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(10..1000));
+    let initial_ask_amount = Amount::from_atoms(rng.random_range(10..1000));
     let initial_give_amount =
-        Amount::from_atoms(rng.gen_range(10..=token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.random_range(10..=token_amount_to_mint.into_atoms()));
     let initially_asked = OutputValue::Coin(initial_ask_amount);
     let initially_given = OutputValue::TokenV1(token_id, initial_give_amount);
     let order_data = OrderData::new(
@@ -375,7 +375,7 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         .build_and_process(&mut rng)
         .unwrap();
 
-    let fill_amount = Amount::from_atoms(rng.gen_range(1..initial_ask_amount.into_atoms() / 2));
+    let fill_amount = Amount::from_atoms(rng.random_range(1..initial_ask_amount.into_atoms() / 2));
     let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, orders_version);
     let left_to_fill = (initial_ask_amount - fill_amount).unwrap();
     let coins_left = (coins_left - fill_amount).unwrap();
@@ -412,7 +412,7 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         |tf: &TestFramework,
          mut rng: &mut dyn RngCoreAndCrypto,
          current_commitment_version: SighashInputCommitmentVersion| {
-            let fill_amount = Amount::from_atoms(rng.gen_range(1..left_to_fill.into_atoms() / 2));
+            let fill_amount = Amount::from_atoms(rng.random_range(1..left_to_fill.into_atoms() / 2));
             let filled_amount = calculate_fill_order(tf, &order_id, fill_amount, orders_version);
 
             let fill_order_input =
@@ -591,7 +591,7 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
 fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
-    let fork_distance_after_setup_finished = rng.gen_range(1..=3);
+    let fork_distance_after_setup_finished = rng.random_range(1..=3);
 
     // Add 4 to account for creating and minting a token and creating and partially filling an order.
     // Add another 1 because we're interested in what happens on "next_block_height" after the setup is finished.
@@ -628,7 +628,7 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         0,
     );
 
-    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1_000_000..2_000_000));
+    let token_amount_to_mint = Amount::from_atoms(rng.random_range(1_000_000..2_000_000));
     let (token_id, tokens_outpoint, coins_outpoint) = issue_and_mint_random_token_from_best_block(
         &mut rng,
         &mut tf,
@@ -643,9 +643,9 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let order_owner_dest = Destination::PublicKey(order_owner_pk);
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(10..1000));
+    let initial_ask_amount = Amount::from_atoms(rng.random_range(10..1000));
     let initial_give_amount =
-        Amount::from_atoms(rng.gen_range(10..=token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.random_range(10..=token_amount_to_mint.into_atoms()));
     let initially_asked = OutputValue::Coin(initial_ask_amount);
     let initially_given = OutputValue::TokenV1(token_id, initial_give_amount);
     let order_data = OrderData::new(
@@ -665,7 +665,7 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         .build_and_process(&mut rng)
         .unwrap();
 
-    let fill_amount = Amount::from_atoms(rng.gen_range(1..initial_ask_amount.into_atoms() / 2));
+    let fill_amount = Amount::from_atoms(rng.random_range(1..initial_ask_amount.into_atoms() / 2));
     let filled_amount = calculate_fill_order(&tf, &order_id, fill_amount, orders_version);
     let ask_balance = (initial_ask_amount - fill_amount).unwrap();
     let give_balance = (initial_give_amount - filled_amount).unwrap();

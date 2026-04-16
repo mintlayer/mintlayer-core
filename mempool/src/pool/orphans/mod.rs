@@ -249,7 +249,7 @@ impl TxOrphanPool {
 
         let mut n_evicted = 0;
         while self.len() > max_size {
-            self.remove_at(InternalId::new(rng.gen_range(0..self.len())));
+            self.remove_at(InternalId::new(rng.random_range(0..self.len())));
             n_evicted += 1;
         }
 

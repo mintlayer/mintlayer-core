@@ -79,7 +79,7 @@ fn stake_pool_reorg(
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let pledge_amount =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
 
         // prepare tx_a
         let destination_a = new_pub_key_destination(&mut rng);
@@ -649,7 +649,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
             Amount::ZERO,
         );
 
-        let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let mint_amount = Amount::from_atoms(rng.random_range(100..100_000));
         let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
             &mut rng,
             mint_amount,

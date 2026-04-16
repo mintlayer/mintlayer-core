@@ -38,7 +38,7 @@ impl PerThousand {
     }
 
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
-        Self(rng.gen_range(0..=DENOMINATOR))
+        Self(rng.random_range(0..=DENOMINATOR))
     }
 
     pub fn value(&self) -> u16 {
@@ -191,7 +191,7 @@ mod tests {
         }
         // test an invalid value
         {
-            let value = rng.gen_range(1001..u16::MAX);
+            let value = rng.random_range(1001..u16::MAX);
             let per_thousand_str =
                 Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
             let per_thousand_str_percent =
@@ -272,12 +272,12 @@ mod tests {
         assert!(PerThousand::new(u16::MAX).is_none());
 
         {
-            let valid_value = rng.gen_range(0..=DENOMINATOR);
+            let valid_value = rng.random_range(0..=DENOMINATOR);
             assert_eq!(PerThousand::new(valid_value).unwrap().value(), valid_value);
         }
 
         {
-            let invalid_value = rng.gen_range(1001..=u16::MAX);
+            let invalid_value = rng.random_range(1001..=u16::MAX);
             assert!(PerThousand::new(invalid_value).is_none());
         }
     }
@@ -291,7 +291,7 @@ mod tests {
         let encoded_valid = PerThousand::new_from_rng(&mut rng).encode();
         PerThousand::decode(&mut encoded_valid.as_slice()).unwrap();
 
-        let encoded_invalid = rng.gen_range(1001..=u16::MAX).encode();
+        let encoded_invalid = rng.random_range(1001..=u16::MAX).encode();
         PerThousand::decode(&mut encoded_invalid.as_slice()).unwrap_err();
 
         let mut encoded_1001: &[u8] = b"\xE9\x03";
@@ -479,7 +479,7 @@ mod tests {
 
         {
             // in range
-            let v = rng.gen_range(0..=DENOMINATOR);
+            let v = rng.random_range(0..=DENOMINATOR);
 
             // Serialize in all possible ways, and ensure it'll fail since it's larger than the max allowed value
             let v1 = serde_json::from_str::<PerThousand>(&v.to_string()).unwrap();
@@ -501,7 +501,7 @@ mod tests {
 
         {
             // out of range
-            let v = rng.gen_range(DENOMINATOR + 1..u16::MAX);
+            let v = rng.random_range(DENOMINATOR + 1..u16::MAX);
 
             // Serialize in all possible ways, and ensure it'll fail since it's larger than the max allowed value
             let err1 = serde_json::from_str::<PerThousand>(&v.to_string()).unwrap_err();

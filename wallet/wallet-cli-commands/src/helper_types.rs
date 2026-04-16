@@ -846,7 +846,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
-            let args_count = rng.gen_range(1..5);
+            let args_count = rng.random_range(1..5);
             let args = (0..args_count)
                 .map(|_| gen_random_alnum_string(&mut rng, 1, 5))
                 .collect::<Vec<_>>();
@@ -960,8 +960,8 @@ mod tests {
             let pkh = PublicKeyHash::random_using(&mut rng);
             let addr = Address::new(&chain_config, Destination::PublicKeyHash(pkh)).unwrap();
             let amount = DecimalAmount::from_uint_decimal(
-                rng.gen_range(0..=u128::MAX),
-                rng.gen_range(0..=u8::MAX),
+                rng.random_range(0..=u128::MAX),
+                rng.random_range(0..=u8::MAX),
             );
 
             for tag in ["transfer", "Transfer", "traNSfer"] {
@@ -1029,8 +1029,8 @@ mod tests {
             let pkh = PublicKeyHash::random_using(&mut rng);
             let addr = Address::new(&chain_config, Destination::PublicKeyHash(pkh)).unwrap();
             let amount = DecimalAmount::from_uint_decimal(
-                rng.gen_range(0..=u128::MAX),
-                rng.gen_range(0..=u8::MAX),
+                rng.random_range(0..=u128::MAX),
+                rng.random_range(0..=u8::MAX),
             );
 
             for tag in ["transfer", "Transfer", "traNSfer"] {
@@ -1111,7 +1111,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
-            let token_number_of_decimals = rng.gen_range(0..20);
+            let token_number_of_decimals = rng.random_range(0..20);
 
             for tag in ["unlimited", "Unlimited", "unLImited"] {
                 let parsed_supply = CliTokenTotalSupply::from_str(tag)
@@ -1130,8 +1130,8 @@ mod tests {
             }
 
             let decimal_amount = DecimalAmount::from_uint_decimal(
-                rng.gen_range(0..=1_000_000_000_000),
-                rng.gen_range(0..=token_number_of_decimals),
+                rng.random_range(0..=1_000_000_000_000),
+                rng.random_range(0..=token_number_of_decimals),
             );
 
             for tag in ["fixed", "Fixed", "fIXed"] {
@@ -1175,10 +1175,10 @@ mod tests {
             assert_eq!(err, ParseError::InvalidInputFormat);
 
             let decimal_amount_with_too_many_decimals = {
-                let mut mantissa = rng.gen_range(0..=1_000_000_000_000);
+                let mut mantissa = rng.random_range(0..=1_000_000_000_000);
                 // Make sure that the number has indeed more decimals than `token_number_of_decimals`.
                 if mantissa % 10 == 0 {
-                    mantissa += rng.gen_range(1..=9);
+                    mantissa += rng.random_range(1..=9);
                 }
                 DecimalAmount::from_uint_decimal(mantissa, token_number_of_decimals + 1)
             };
@@ -1227,21 +1227,21 @@ mod tests {
                 assert_eq!(parsed_timelock, OutputTimeLock::UntilHeight(u64_val.into()));
             }
 
-            let year = rng.gen_range(1970..=3000);
-            let month = rng.gen_range(1..=12);
+            let year = rng.random_range(1970..=3000);
+            let month = rng.random_range(1..=12);
             let days_in_month =
                 NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
-            let day = rng.gen_range(1..=days_in_month);
-            let hour = rng.gen_range(0..24);
-            let min = rng.gen_range(0..60);
-            let sec = rng.gen_range(0..60);
+            let day = rng.random_range(1..=days_in_month);
+            let hour = rng.random_range(0..24);
+            let min = rng.random_range(0..60);
+            let sec = rng.random_range(0..60);
             let expected_time = NaiveDateTime::new(
                 NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
                 NaiveTime::from_hms_opt(hour, min, sec).unwrap(),
             );
             let expected_time_utc = DateTime::from_naive_utc_and_offset(expected_time, Utc);
-            let tz_hours = rng.gen_range(0..24);
-            let tz_mins = rng.gen_range(0..60);
+            let tz_hours = rng.random_range(0..24);
+            let tz_mins = rng.random_range(0..60);
             let tz_positive = rng.random_bool(0.5);
             let expected_time_with_tz = {
                 let offset = Duration::from_secs(tz_hours * 3600 + tz_mins * 60);
@@ -1282,7 +1282,7 @@ mod tests {
                 );
             }
 
-            let sec_frac = rng.gen_range(1..1000);
+            let sec_frac = rng.random_range(1..1000);
             let err = CliOutputTimeLock::from_str(&format!(
                 "until_time({datetime_base_str}.{sec_frac}Z)"
             ))

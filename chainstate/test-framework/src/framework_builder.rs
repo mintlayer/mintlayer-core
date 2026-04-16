@@ -70,7 +70,7 @@ impl TestFrameworkBuilder {
         let staking_pools = StakingPools::new();
 
         assert_eq!(TxVerificationStrategy::COUNT, 3);
-        let tx_verification_strategy = match rng.gen_range(0..3) {
+        let tx_verification_strategy = match rng.random_range(0..3) {
             0 => TxVerificationStrategy::Default,
             1 => TxVerificationStrategy::Disposable,
             2 => TxVerificationStrategy::Randomized(Seed::from_u64(rng.next_u64())),

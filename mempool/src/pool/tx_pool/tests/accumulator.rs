@@ -48,7 +48,7 @@ fn fill_accumulator(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
-    let size_limit = rng.gen_range(10_000..=200_000);
+    let size_limit = rng.random_range(10_000..=200_000);
 
     let mut accumulator = DefaultTxAccumulator::new(size_limit, genesis_id.into(), DUMMY_TIMESTAMP);
 
@@ -58,7 +58,7 @@ fn fill_accumulator(#[case] seed: Seed) {
     while accumulator.transactions().encoded_size() + 15_000 <= size_limit {
         let tx = make_tx(&mut rng, &[(source, 0)], &[amount]);
         source = OutPointSourceId::Transaction(tx.transaction().get_id());
-        amount -= rng.gen_range(1_000_000..=5_000_000);
+        amount -= rng.random_range(1_000_000..=5_000_000);
         accumulator.add_tx(tx, Fee::new(Amount::from_atoms(0))).unwrap();
         assert!(!accumulator.done());
     }

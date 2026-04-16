@@ -103,7 +103,7 @@ fn data_deposit_insufficient_fee(
         let mut rng = make_seedable_rng(seed);
 
         let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
-        let deposited_data_len = rng.gen_range(0..deposited_data_len);
+        let deposited_data_len = rng.random_range(0..deposited_data_len);
         let deposited_data = (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let data_fee = if expect_success {
@@ -182,7 +182,7 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
-        let deposited_data_len = rng.gen_range(0..deposited_data_len);
+        let deposited_data_len = rng.random_range(0..deposited_data_len);
         let deposited_data = (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let at_least_data_fee =

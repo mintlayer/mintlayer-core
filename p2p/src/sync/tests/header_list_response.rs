@@ -283,9 +283,9 @@ async fn header_check_happens_before_checking_if_blocks_were_requested(
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let time_getter = BasicTestTimeGetter::new();
 
-        let node_blocks_count = rng.gen_range(1..3);
-        let branch1_len = rng.gen_range(3..5);
-        let branch2_len = rng.gen_range(3..5);
+        let node_blocks_count = rng.random_range(1..3);
+        let branch1_len = rng.random_range(3..5);
+        let branch2_len = rng.random_range(3..5);
 
         log::debug!(
             "node_blocks_count = {}, branch1_len = {}, branch2_len = {}",
@@ -320,7 +320,7 @@ async fn header_check_happens_before_checking_if_blocks_were_requested(
 
         let chain_config = if make_branch2_invalid {
             let branch2_invalid_header_idx =
-                rng.gen_range(0..std::cmp::min(branch1_blocks.len(), branch2_blocks.len()));
+                rng.random_range(0..std::cmp::min(branch1_blocks.len(), branch2_blocks.len()));
 
             // To make one of the headers on branch2 invalid, specify a checkpoint referring to
             // a block on branch1.
@@ -441,10 +441,10 @@ async fn extending_invalidated_chain_should_fail_at_header_check(
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let time_getter = BasicTestTimeGetter::new();
 
-        let common_blocks_count = rng.gen_range(1..3);
-        let branch1_blocks_count = rng.gen_range(3..5);
-        let branch2_known_blocks_count = rng.gen_range(1..3);
-        let branch2_unknown_blocks_count = rng.gen_range(1..3);
+        let common_blocks_count = rng.random_range(1..3);
+        let branch1_blocks_count = rng.random_range(3..5);
+        let branch2_known_blocks_count = rng.random_range(1..3);
+        let branch2_unknown_blocks_count = rng.random_range(1..3);
 
         log::debug!(
             "common blk = {}, branch1 blk = {}, branch2 known blk = {}, branch2 unknown blk = {}",
@@ -505,7 +505,7 @@ async fn extending_invalidated_chain_should_fail_at_header_check(
 
         if invalidate_branch2 {
             let block_id_to_invalidate =
-                branch2_known_blocks[rng.gen_range(0..branch2_known_blocks.len())].get_id();
+                branch2_known_blocks[rng.random_range(0..branch2_known_blocks.len())].get_id();
             node.chainstate()
                 .call_mut(move |cs| cs.invalidate_block(&block_id_to_invalidate))
                 .await
@@ -515,7 +515,7 @@ async fn extending_invalidated_chain_should_fail_at_header_check(
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let branch2_first_known_block_to_send_idx = rng.gen_range(0..=branch2_known_blocks.len());
+        let branch2_first_known_block_to_send_idx = rng.random_range(0..=branch2_known_blocks.len());
         let branch2_headers = branch2_known_blocks[branch2_first_known_block_to_send_idx..]
             .iter()
             .chain(branch2_unknown_blocks.iter())

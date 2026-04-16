@@ -51,9 +51,9 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
 
         let block = tf
             .make_block_builder()
@@ -87,10 +87,10 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let first_tx_id = first_tx.transaction().get_id();
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
 
         assert_eq!(
             tf.make_block_builder()
@@ -132,10 +132,10 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
-        let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
+        let third_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
 
         let block = tf
             .make_block_builder()
@@ -179,14 +179,14 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let first_block = tf.make_block_builder().add_transaction(first_tx).build(&mut rng);
         let first_block_id = first_block.get_id();
         tf.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), first_block_id);
 
-        let tx2_output_value = rng.gen_range(100_000..200_000);
+        let tx2_output_value = rng.random_range(100_000..200_000);
         let second_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx2_output_value);
         let second_block = tf.make_block_builder().add_transaction(second_tx).build(&mut rng);
         assert_eq!(
@@ -222,8 +222,8 @@ fn overspend_single_output(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(1000..2000);
-        let tx2_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(1000..2000);
+        let tx2_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, tx2_output_value);
         let second_tx_id = second_tx.transaction().get_id();
@@ -256,7 +256,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(1000..2000);
+        let tx1_output_value = rng.random_range(1000..2000);
         let tx1 = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let tx2_output_value = tx1_output_value - 1;
@@ -312,7 +312,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let witness = InputWitness::NoSignature(None);
@@ -321,7 +321,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
             .add_input(input.clone(), witness.clone())
             .add_input(input, witness)
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100_000..200_000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -366,7 +366,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let tx1_output_value = rng.random_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let witness1 = InputWitness::NoSignature(Some(vec![0, 1, 2]));
@@ -377,7 +377,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
             .add_input(input1, witness1)
             .add_input(input2, witness2)
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100_000..200_000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -426,7 +426,7 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
 
         let txs = vec![first_tx, second_tx];
         let tx_duplicate = txs.choose(&mut rng).unwrap().clone();
@@ -457,8 +457,8 @@ fn triplicate_tx_in_the_same_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
-        let third_tx = tx_from_tx(&second_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
+        let third_tx = tx_from_tx(&second_tx, rng.random_range(1000..2000));
 
         let txs = vec![first_tx, second_tx, third_tx];
         let tx_duplicate = txs.choose(&mut rng).unwrap().clone();
@@ -496,11 +496,11 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
-                rng.gen_range(100_000..200_000),
+                rng.random_range(100_000..200_000),
             ))))
             .build();
         let first_tx_id = first_tx.transaction().get_id();
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
 
         let block = tf
             .make_block_builder()
@@ -537,7 +537,7 @@ fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
-                rng.gen_range(100_000..200_000),
+                rng.random_range(100_000..200_000),
             ))))
             .build();
         let block = tf
@@ -546,7 +546,7 @@ fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
             .build(&mut rng);
         tf.process_block(block, BlockSource::Local).unwrap();
 
-        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let second_tx = tx_from_tx(&first_tx, rng.random_range(1000..2000));
         let block_2 = tf.make_block_builder().with_transactions(vec![second_tx]).build(&mut rng);
         assert_eq!(
             tf.process_block(block_2, BlockSource::Local).unwrap_err(),

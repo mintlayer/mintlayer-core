@@ -73,7 +73,7 @@ mod tests {
 
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let str = rng.gen_range(MSB_BIT..u32::MAX).to_string();
+        let str = rng.random_range(MSB_BIT..u32::MAX).to_string();
 
         serde_json::from_str::<AccountId>(&str).unwrap_err();
     }

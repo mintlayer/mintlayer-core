@@ -78,8 +78,8 @@ pub mod test {
         let normal = SliceEqualityCheckMethod::Normal;
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
-        let data1_len = rng.gen_range(1..256);
-        let data3_len = rng.gen_range(1..256);
+        let data1_len = rng.random_range(1..256);
+        let data3_len = rng.random_range(1..256);
 
         let data1: Vec<u8> = (0..data1_len).map(|_| rng.random::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
@@ -109,7 +109,7 @@ pub mod test {
         let normal = SliceEqualityCheckMethod::Normal;
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
-        let data_len = rng.gen_range(1..256);
+        let data_len = rng.random_range(1..256);
 
         let data1: Vec<u8> = (0..data_len).map(|_| rng.random::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
@@ -140,7 +140,7 @@ pub mod test {
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
         let empty_slice = b"";
-        let data_len = rng.gen_range(1..256);
+        let data_len = rng.random_range(1..256);
 
         let data: Vec<u8> = (0..data_len).map(|_| rng.random::<u8>()).collect();
         assert_eq!(data.len(), data_len);

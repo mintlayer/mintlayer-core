@@ -29,7 +29,7 @@ fn test_rolling_bloom_filter(#[case] seed: Seed) {
         filter.insert(&i, &mut rng);
 
         // Last 100 must be remembered, select random number from all recently added
-        let num = rng.gen_range((i.saturating_sub(99))..=i);
+        let num = rng.random_range((i.saturating_sub(99))..=i);
         assert!(filter.contains(&num), "not found {num}, i: {i}");
     }
 
@@ -59,7 +59,7 @@ fn test_rolling_bloom_filter_2(#[case] seed: Seed) {
         filter.insert(&i, &mut rng);
 
         // Last 1000 must be remembered, select random number from all recently added
-        let num = rng.gen_range((i.saturating_sub(999))..=i);
+        let num = rng.random_range((i.saturating_sub(999))..=i);
         assert!(filter.contains(&num), "not found {num}, i: {i}");
     }
 

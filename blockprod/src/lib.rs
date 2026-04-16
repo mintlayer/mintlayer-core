@@ -323,7 +323,7 @@ mod tests {
             (time_getter.get_time()
                 - Duration::new(
                     // Genesis must be in the past: now - (1 day..2 weeks)
-                    rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
+                    rng.random_range(60 * 60 * 24..60 * 60 * 24 * 14),
                     0,
                 ))
             .expect("No time underflow")
