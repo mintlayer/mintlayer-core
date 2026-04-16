@@ -222,21 +222,21 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         // The only reason a manual decode is done is to enforce witness rules, hence we double check that round-trip encoding works
-        let input_count = 1 + rng.gen::<usize>() % 10;
+        let input_count = 1 + rng.random::<usize>() % 10;
         let inputs = (0..input_count)
             .map(|_| {
                 TxInput::from_utxo(
                     Id::<Transaction>::new(H256::random_using(&mut rng)).into(),
-                    rng.gen::<u32>() % 10,
+                    rng.random::<u32>() % 10,
                 )
             })
             .collect::<Vec<_>>();
 
-        let output_count = 1 + rng.gen::<usize>() % 10;
+        let output_count = 1 + rng.random::<usize>() % 10;
         let outputs = (0..output_count)
             .map(|_| {
                 TxOutput::Transfer(
-                    OutputValue::Coin(Amount::from_atoms(rng.gen::<u128>())),
+                    OutputValue::Coin(Amount::from_atoms(rng.random::<u128>())),
                     crate::chain::Destination::AnyoneCanSpend,
                 )
             })
@@ -244,15 +244,15 @@ mod tests {
 
         let witnesses = (0..input_count)
             .map(|_| {
-                let witness_size = 1 + rng.gen::<usize>() % 100;
-                let witness = (0..witness_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                let witness_size = 1 + rng.random::<usize>() % 100;
+                let witness = (0..witness_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
                 InputWitness::NoSignature(Some(witness))
             })
             .collect::<Vec<_>>();
 
         // Witness count that isn't equal to the input count
         let invalid_witness_count = loop {
-            let invalid_witness_count = rng.gen::<usize>() % input_count;
+            let invalid_witness_count = rng.random::<usize>() % input_count;
             if invalid_witness_count != witnesses.len() {
                 break invalid_witness_count;
             }
@@ -260,14 +260,14 @@ mod tests {
 
         let invalid_witnesses = (0..invalid_witness_count)
             .map(|_| {
-                let witness_size = 1 + rng.gen::<usize>() % 100;
-                let witness = (0..witness_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                let witness_size = 1 + rng.random::<usize>() % 100;
+                let witness = (0..witness_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
                 InputWitness::NoSignature(Some(witness))
             })
             .collect::<Vec<_>>();
 
         {
-            let flags = rng.gen::<u128>();
+            let flags = rng.random::<u128>();
 
             let tx = Transaction::new(flags, inputs, outputs).unwrap();
             let signed_tx = SignedTransaction::new(tx, witnesses).unwrap();

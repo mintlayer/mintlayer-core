@@ -189,7 +189,7 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
         &[100_000_000, 50_000_000],
     );
     let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
-    let dangling = OutPointSourceId::Transaction(Id::new(H256(rng.gen())));
+    let dangling = OutPointSourceId::Transaction(Id::new(H256(rng.random())));
 
     let tx1a = make_tx(&mut rng, &[(tx0_outpt.clone(), 0)], &[80_000_000]);
     let tx1b = make_tx(&mut rng, &[(dangling, 0), (tx0_outpt, 0)], &[30_000_000]);
@@ -215,7 +215,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let mut gen_origin = {
-        let seed = Seed::from_u64(rng.gen());
+        let seed = Seed::from_u64(rng.random());
         let mut rng = make_seedable_rng(seed);
         move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(1..=4)))
     };
@@ -235,7 +235,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     // This means some transactions will be temporarily in the orphan pool.
     let tx_subseq_1 = {
         let mut subseq = tx_subseq_0.clone();
-        let salt = rng.gen::<u64>();
+        let salt = rng.random::<u64>();
         subseq.sort_unstable_by_key(|tx| hash_encoded(&(tx.tx_id(), salt)));
         subseq
     };
@@ -357,7 +357,7 @@ async fn orphan_scheduling(#[case] seed: Seed) {
     let genesis_id = tf.genesis().get_id();
 
     let mut gen_origin = {
-        let seed = Seed::from_u64(rng.gen());
+        let seed = Seed::from_u64(rng.random());
         let mut rng = make_seedable_rng(seed);
         move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(1..=4)))
     };

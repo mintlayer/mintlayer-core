@@ -102,7 +102,7 @@ fn make_tx_with_stake_pool(
 
     // random order of transfer and stake outputs so that tests can use different outpoint 0 or 1
     // to make the next pool
-    let (tx, transfer_output_idx) = if rng.gen::<bool>() {
+    let (tx, transfer_output_idx) = if rng.random::<bool>() {
         (
             tx_builder.add_output(transfer_output).add_output(stake_output).build(),
             0,

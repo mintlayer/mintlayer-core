@@ -179,7 +179,7 @@ fn test_knapsack_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
 
         // randomly add to the target_value so we know there is an exact match from a subset of the
         // groups
-        if rng.gen::<bool>() || target_value == Amount::ZERO {
+        if rng.random::<bool>() || target_value == Amount::ZERO {
             target_value = (target_value + value).expect("can't overflow");
         }
     }
@@ -230,7 +230,7 @@ fn test_knapsack_solver_not_exact_solution(#[case] seed: Seed) {
 
     // cannot make 9 from [1,2,5] will use lowest larger value which is 10
     let target_value = Amount::from_atoms(9);
-    let pay_fees = if rng.gen::<bool>() {
+    let pay_fees = if rng.random::<bool>() {
         PayFee::PayFeeWithThisCurrency
     } else {
         PayFee::DoNotPayFeeWithThisCurrency
@@ -340,7 +340,7 @@ fn test_bnb_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
 
         // randomly add to the target_value so we know there is an exact match from a subset of the
         // groups
-        if rng.gen::<bool>() || target_value == Amount::ZERO {
+        if rng.random::<bool>() || target_value == Amount::ZERO {
             target_value = (target_value + value).expect("can't overflow");
         }
     }

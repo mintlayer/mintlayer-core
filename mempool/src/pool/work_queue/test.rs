@@ -35,9 +35,9 @@ impl<W: Ord> WorkQueue<W> {
 }
 
 fn random_peer_queue(rng: &mut impl Rng) -> PeerQueue<u16> {
-    let mut pq = PeerQueue::new(rng.gen());
+    let mut pq = PeerQueue::new(rng.random());
     let n_items = rng.gen_range(0..100);
-    pq.queue.extend((0..n_items).map(|_| rng.gen::<u16>()));
+    pq.queue.extend((0..n_items).map(|_| rng.random::<u16>()));
     pq
 }
 
@@ -132,7 +132,7 @@ fn simulation(#[case] seed: Seed) {
     for _ in 0..500 {
         match rng.gen_range(1..=6) {
             1..=3 => {
-                let peer = peer_supply.gen(&mut rng, 2);
+                let peer = peer_supply.random(&mut rng, 2);
                 log::debug!("Inserting into peer{peer}'s queue: {next_item:03}");
 
                 wq.insert(peer, next_item);
@@ -150,7 +150,7 @@ fn simulation(#[case] seed: Seed) {
                 }
             }
             6..=6 => {
-                let peer = peer_supply.gen(&mut rng, 1);
+                let peer = peer_supply.random(&mut rng, 1);
                 log::debug!("Removing peer{peer}");
 
                 // Mark peer's work set as processed

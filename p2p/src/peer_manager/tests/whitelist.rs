@@ -97,7 +97,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         Default::default(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -107,7 +107,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         Default::default(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -189,7 +189,7 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&chain_config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -240,7 +240,7 @@ where
         peer_receiver,
         time_getter.get_time_getter(),
         db,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -332,7 +332,7 @@ fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
         peer_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 

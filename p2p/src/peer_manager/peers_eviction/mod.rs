@@ -76,7 +76,7 @@ pub struct RandomState(u64, u64);
 
 impl RandomState {
     pub fn new<R: Rng>(rng: &mut R) -> Self {
-        Self(rng.gen(), rng.gen())
+        Self(rng.random(), rng.random())
     }
 
     fn get_hash<A: std::hash::Hash>(&self, value: &A) -> u64 {

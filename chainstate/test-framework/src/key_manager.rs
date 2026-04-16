@@ -115,7 +115,7 @@ impl KeyManager {
                 );
                 Destination::ClassicMultisig(multisig_hash)
             }
-            // 3 => Destination::ScriptHash(Id::new(H256::from_slice(&rng.gen::<[u8; 32]>()))),
+            // 3 => Destination::ScriptHash(Id::new(H256::from_slice(&rng.random::<[u8; 32]>()))),
             _ => Destination::AnyoneCanSpend,
         }
     }

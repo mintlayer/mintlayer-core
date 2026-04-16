@@ -1023,7 +1023,7 @@ where
 
     for (idx, item) in items.iter().enumerate() {
         let is_last = idx == items.len() - 1;
-        if rng.gen::<u32>() % 2 == 0 || (is_last && first.is_empty()) {
+        if rng.random::<u32>() % 2 == 0 || (is_last && first.is_empty()) {
             first.insert(item.clone());
         } else {
             second.insert(item.clone());

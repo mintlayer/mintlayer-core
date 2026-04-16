@@ -1126,7 +1126,7 @@ mod tests {
     fn uint256_from_uint128(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         for _ in 0..1000 {
-            let v = rng.gen::<u128>();
+            let v = rng.random::<u128>();
             let b1 = v << 64;
             let a1 = Uint256::from_u64(v as u64);
             let b2 = a1 << 64;
@@ -1141,7 +1141,7 @@ mod tests {
     fn uint512_from_uint256(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         for _ in 0..1000 {
-            let v = rng.gen::<u128>();
+            let v = rng.random::<u128>();
             let a1 = v << 64;
             let b1 = Uint256::from_u128(a1) << (64 * 2);
             let a2 = Uint512::from_u64(v as u64);
@@ -1198,7 +1198,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         for _ in 0..1000 {
-            let a = rng.gen::<u128>();
+            let a = rng.random::<u128>();
             let b = Uint128::from_u128(a);
             assert_eq!(a, b.into());
         }
@@ -1241,7 +1241,7 @@ mod tests {
             assert!(b.checked_add(&a).is_none());
         }
         {
-            let a: Uint128 = rng.gen::<u128>().into();
+            let a: Uint128 = rng.random::<u128>().into();
             let b = (Uint128::MAX - a).unwrap();
             assert_eq!(a.checked_add(&b), Some(a.overflowing_add(&b).0));
         }
@@ -1258,7 +1258,7 @@ mod tests {
             assert!(a.checked_sub(&b).is_none());
         }
         {
-            let a = rng.gen::<u128>();
+            let a = rng.random::<u128>();
             let b: Uint128 = rng.gen_range(0..a).into();
             let a: Uint128 = a.into();
             assert_eq!(a.checked_sub(&b), Some(a.unchecked_sub(&b)));
@@ -1278,15 +1278,15 @@ mod tests {
             assert!(b.checked_mul(&a).is_none());
         }
         {
-            let a: Uint128 = rng.gen::<u128>().into();
+            let a: Uint128 = rng.random::<u128>().into();
             let b = Uint128::ZERO;
             assert_eq!(a.checked_mul(&b), Some(Uint128::ZERO));
             assert_eq!(b.checked_mul(&a), Some(Uint128::ZERO));
             assert_eq!(b.checked_mul(&b), Some(Uint128::ZERO));
         }
         {
-            let a = Uint128::from_u64(rng.gen::<u64>());
-            let b = Uint128::from_u64(rng.gen::<u64>());
+            let a = Uint128::from_u64(rng.random::<u64>());
+            let b = Uint128::from_u64(rng.random::<u64>());
             assert_eq!(a.checked_mul(&b), Some(a.widening_mul(&b).0));
         }
     }
@@ -1297,18 +1297,18 @@ mod tests {
     fn checked_div(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         {
-            let a: Uint128 = rng.gen::<u128>().into();
+            let a: Uint128 = rng.random::<u128>().into();
             let b = Uint128::ZERO;
             assert!(a.checked_div(&b).is_none());
         }
         {
             let a = Uint128::ZERO;
-            let b: Uint128 = rng.gen::<u128>().into();
+            let b: Uint128 = rng.random::<u128>().into();
             assert_eq!(a.checked_div(&b), Some(Uint128::ZERO));
         }
         {
-            let a: Uint128 = rng.gen::<u128>().into();
-            let b: Uint128 = rng.gen::<u128>().into();
+            let a: Uint128 = rng.random::<u128>().into();
+            let b: Uint128 = rng.random::<u128>().into();
             assert_eq!(a.checked_div(&b), Some(a.unchecked_div(&b)));
         }
     }

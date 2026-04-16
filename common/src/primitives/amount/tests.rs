@@ -175,8 +175,8 @@ fn bit_shifts() {
 #[case(Seed::from_entropy())]
 fn abs_diff_never_fails(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let a = Amount::from_atoms(rng.gen());
-    let b = Amount::from_atoms(rng.gen());
+    let a = Amount::from_atoms(rng.random());
+    let b = Amount::from_atoms(rng.random());
     let _ = a.abs_diff(b);
 }
 
@@ -651,7 +651,7 @@ fn serde_serialization() {
 fn serde_serialization_randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let amount: Amount = Amount::from_atoms(rng.gen());
+    let amount: Amount = Amount::from_atoms(rng.random());
 
     let serialized = serde_json::to_string(&amount).unwrap();
 

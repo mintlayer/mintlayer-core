@@ -91,7 +91,7 @@ pub enum KdfChallenge {
 
 fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Vec<u8> {
     let len = len.get();
-    (0..len).map(|_| rng.gen::<u8>()).collect()
+    (0..len).map(|_| rng.random::<u8>()).collect()
 }
 
 /// Recalculate a previously hashed password to recover an encryption key

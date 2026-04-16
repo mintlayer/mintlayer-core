@@ -269,7 +269,7 @@ pub mod test_utils {
 
     pub fn make_random_address(rng: &mut impl Rng) -> SocketAddress {
         let addr_v4 = SocketAddrV4::new(
-            Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
             // Note: addresses with zero port are never considered discoverable
             // (PeerAddress::.as_discoverable_socket_address always returns None for them),
             // so some test may malfunction if such an address is generated.

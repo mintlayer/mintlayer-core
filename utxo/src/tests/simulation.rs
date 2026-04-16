@@ -150,14 +150,14 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
             assert!(cache.spend_utxo(&outpoint).is_ok());
             spent_an_entry = true;
         } else if utxo.is_some() {
-            let possible_overwrite = rng.gen::<bool>();
+            let possible_overwrite = rng.random::<bool>();
             assert!(cache.add_utxo(&outpoint, utxo.unwrap(), possible_overwrite).is_ok());
             added_an_entry = true;
         }
 
         // every 10 iterations call uncache
         if i % 10 == 0 {
-            if rng.gen::<bool>() && prev_result.len() > 1 {
+            if rng.random::<bool>() && prev_result.len() > 1 {
                 let idx = rng.gen_range(0..prev_result.len());
                 let _ = cache.uncache(&prev_result[idx]);
             } else if result.len() > 1 {

@@ -153,7 +153,7 @@ mod tests {
     use super::*;
 
     fn generate_random_input(rng: &mut impl Rng) -> TxInput {
-        let outpoint = if rng.gen::<bool>() {
+        let outpoint = if rng.random::<bool>() {
             OutPointSourceId::Transaction(Id::new(H256::random_using(rng)))
         } else {
             OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)))

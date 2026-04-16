@@ -85,7 +85,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 

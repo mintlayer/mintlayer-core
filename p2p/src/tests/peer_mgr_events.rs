@@ -98,7 +98,7 @@ async fn first_sync_message_received_must_be_sent(
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -187,7 +187,7 @@ async fn first_sync_message_received_must_be_sent(
                         })
                     }
                     PeerManagerMessageTag::PingRequest => {
-                        Message::PingRequest(PingRequest { nonce: rng.gen() })
+                        Message::PingRequest(PingRequest { nonce: rng.random() })
                     }
                     PeerManagerMessageTag::AddrListResponse => {
                         Message::AddrListResponse(AddrListResponse {
@@ -195,7 +195,7 @@ async fn first_sync_message_received_must_be_sent(
                         })
                     }
                     PeerManagerMessageTag::PingResponse => {
-                        Message::PingResponse(PingResponse { nonce: rng.gen() })
+                        Message::PingResponse(PingResponse { nonce: rng.random() })
                     }
                     PeerManagerMessageTag::WillDisconnect => {
                         Message::WillDisconnect(WillDisconnectMessage {
@@ -260,7 +260,7 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -327,8 +327,8 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
 
 fn random_peer_addr(rng: &mut impl Rng) -> PeerAddress {
     SocketAddr::V4(SocketAddrV4::new(
-        Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
-        rng.gen(),
+        Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
+        rng.random(),
     ))
     .into()
 }

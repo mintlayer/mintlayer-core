@@ -27,7 +27,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::keys::RootKeys;
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
-    (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
+    (0..rng.gen_range(1..100)).map(|_| rng.random::<char>()).collect()
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
         let mut store = Store::new(DefaultBackend::new_in_memory()).unwrap();
         let (xpriv_key, _xpub_key) =
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
-        let seed_bytes: Vec<u8> = (0..64).map(|_| rng.gen::<u8>()).collect();
+        let seed_bytes: Vec<u8> = (0..64).map(|_| rng.random::<u8>()).collect();
         let vrf_key = ExtendedVRFPrivateKey::new_master(
             seed_bytes.as_slice(),
             crypto::vrf::VRFKeyKind::Schnorrkel,

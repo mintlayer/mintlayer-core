@@ -150,7 +150,7 @@ fn unmint_tokens_in_block(
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
@@ -903,7 +903,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
 fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token1_id, issuance1_block_id, issuance1_tx, issuance1, utxo_with_change) =
@@ -2759,7 +2759,7 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
 fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id_1, _, _, _, utxo_with_change) = issue_token_from_genesis(
@@ -3497,7 +3497,7 @@ fn reorg_test_simple(#[case] seed: Seed) {
 fn reorg_test_2_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_block_id = tf.best_block_id();
 
@@ -5548,8 +5548,8 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
 fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
-        let mut rng3 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
+        let mut rng3 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let token_freeze_fee =
             tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());

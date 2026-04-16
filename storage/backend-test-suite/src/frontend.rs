@@ -55,7 +55,7 @@ mod iter_sort_preserving_numbers {
 
             let test_values = (0..100)
                 .map(|_| CompoundKey1 {
-                    main_part: OrderPreservingValue::new(rng.gen::<u64>()),
+                    main_part: OrderPreservingValue::new(rng.random::<u64>()),
                     aux_part: gen_random_bytes(&mut rng, 1, 100),
                 })
                 .collect::<Vec<_>>();
@@ -122,7 +122,7 @@ mod iter_sort_preserving_numbers {
             let test_values = (0..100)
                 .map(|_| {
                     (
-                        OrderPreservingValue::new(rng.gen::<u64>()),
+                        OrderPreservingValue::new(rng.random::<u64>()),
                         gen_random_bytes(&mut rng, 1, 100),
                     )
                 })

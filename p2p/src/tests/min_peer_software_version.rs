@@ -174,7 +174,7 @@ async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams)
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -288,7 +288,7 @@ async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -407,7 +407,7 @@ async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

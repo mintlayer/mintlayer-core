@@ -92,7 +92,7 @@ impl<T> FailingImpl<T> {
     }
 
     fn make_rng_impl(rng: &Mutex<TestRng>) -> TestRng {
-        TestRng::new(Seed(rng.lock().expect("lock poisoned").gen()))
+        TestRng::new(Seed(rng.lock().expect("lock poisoned").random()))
     }
 
     fn make_rw_tx_state<'a>(

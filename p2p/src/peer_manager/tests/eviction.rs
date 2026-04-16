@@ -159,7 +159,7 @@ mod dont_evict_if_blocks_in_flight {
             Arc::clone(&p2p_config),
             vec![bind_address],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
         let addr_count = 3;

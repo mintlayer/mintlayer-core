@@ -160,12 +160,12 @@ mod tests {
 
         let mut rng = make_pseudo_rng();
 
-        let label_size = 1 + rng.gen::<usize>() % 10000;
-        let label: Vec<u8> = (1..label_size).map(|_| rng.gen::<u8>()).collect();
+        let label_size = 1 + rng.random::<usize>() % 10000;
+        let label: Vec<u8> = (1..label_size).map(|_| rng.random::<u8>()).collect();
 
         let ctx = signing_context(&label);
-        let msg_size = 1 + rng.gen::<usize>() % 10000;
-        let msg: Vec<u8> = (1..msg_size).map(|_| rng.gen::<u8>()).collect();
+        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg: Vec<u8> = (1..msg_size).map(|_| rng.random::<u8>()).collect();
         let (input_and_output, proof, _proof1batchable) = keypair.vrf_sign(ctx.bytes(&msg));
         let preout = &input_and_output.to_preout();
 

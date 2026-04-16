@@ -97,7 +97,7 @@ impl CustomId {
 
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
         Self {
-            data: rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
+            data: rng.random::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
         }
     }
 

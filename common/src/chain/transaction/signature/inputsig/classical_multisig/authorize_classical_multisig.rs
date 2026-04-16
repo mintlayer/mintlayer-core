@@ -286,9 +286,9 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures = (rng.random::<u8>() % 10) + 1;
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -413,9 +413,9 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 2; // we need at least 2 signatures for this test
+        let min_required_signatures = (rng.random::<u8>() % 10) + 2; // we need at least 2 signatures for this test
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -554,9 +554,9 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures = (rng.random::<u8>() % 10) + 1;
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -717,9 +717,9 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 2; // minimum is two, so that multiple signatures are required
+        let min_required_signatures = (rng.random::<u8>() % 10) + 2; // minimum is two, so that multiple signatures are required
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -751,7 +751,7 @@ mod tests {
             let invalid_challenge =
                 ClassicMultisigChallenge::decode(&mut encoded_challenge.as_slice()).unwrap();
 
-            let key_index = rng.gen::<u8>() % total_parties;
+            let key_index = rng.random::<u8>() % total_parties;
             let private_key = &priv_keys[key_index as usize];
 
             let sign_err = sign_classical_multisig_spending(
@@ -775,7 +775,7 @@ mod tests {
 
         // Signing the same signature multiple times should fail
         {
-            let key_index = rng.gen::<u8>() % total_parties;
+            let key_index = rng.random::<u8>() % total_parties;
             let private_key = &priv_keys[key_index as usize];
 
             let sign_result = sign_classical_multisig_spending(
@@ -812,7 +812,7 @@ mod tests {
 
         // Making the signatures structurally invalid should make signing fail
         {
-            let key_index = rng.gen::<u8>() % total_parties;
+            let key_index = rng.random::<u8>() % total_parties;
             let private_key = &priv_keys[key_index as usize];
 
             let sign_result = sign_classical_multisig_spending(
@@ -861,7 +861,7 @@ mod tests {
 
         // Signing with a private key that doesn't match the public key in the challenge should fail
         {
-            let key_index = rng.gen::<u8>() % total_parties;
+            let key_index = rng.random::<u8>() % total_parties;
 
             let (new_random_private_key, _) =
                 PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -886,12 +886,12 @@ mod tests {
         {
             // we need to be able to sign with at least 2 keys, so that we can botch the first signature
             assert!(min_required_signatures.get() > 1);
-            let key_index = rng.gen::<u8>() % total_parties;
+            let key_index = rng.random::<u8>() % total_parties;
             let private_key = &priv_keys[key_index as usize];
 
             // Second key index to attempt to sign with
             let second_key_index = loop {
-                let index = rng.gen::<u8>() % total_parties;
+                let index = rng.random::<u8>() % total_parties;
                 if index != key_index {
                     break index;
                 }

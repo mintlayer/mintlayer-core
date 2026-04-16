@@ -609,7 +609,7 @@ impl<'a> RandomTxMaker<'a> {
             if token_data.can_be_frozen() {
                 // Freeze
                 let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                let unfreezable = if rng.gen::<bool>() {
+                let unfreezable = if rng.random::<bool>() {
                     IsTokenUnfreezable::Yes
                 } else {
                     IsTokenUnfreezable::No
@@ -1054,7 +1054,7 @@ impl<'a> RandomTxMaker<'a> {
                         .data_deposit_max_size(BlockHeight::zero());
                     let deposited_data_len = rng.gen_range(0..deposited_data_len);
                     let deposited_data =
-                        (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                        (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
                     let outputs = vec![
                         TxOutput::DataDeposit(deposited_data),
@@ -1134,7 +1134,7 @@ impl<'a> RandomTxMaker<'a> {
                 result_outputs.push(output);
 
                 // Occasionally create new delegation id
-                if rng.gen::<bool>() && self.delegation_can_be_created {
+                if rng.random::<bool>() && self.delegation_can_be_created {
                     if let Some((pool_id, _)) =
                         get_random_pool_data(rng, self.pos_accounting_store, &pos_accounting_cache)
                     {
@@ -1222,9 +1222,9 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for atoms in atoms_vec {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 let output_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
-                if rng.gen::<bool>() {
+                if rng.random::<bool>() {
                     // transfer
                     result_outputs.push(TxOutput::Transfer(
                         output_value,
@@ -1320,7 +1320,7 @@ impl<'a> RandomTxMaker<'a> {
             } else if rng.gen_bool(0.4) && self.order_can_be_created && atoms > 0 {
                 // create order to exchange part of available tokens for coins or other tokens
                 let random_token = get_random_token(rng, self.tokens_store, tokens_cache);
-                let ask_value = if rng.gen::<bool>()
+                let ask_value = if rng.random::<bool>()
                     && random_token
                         .is_some_and(|(id, amount)| id != token_id && amount > Amount::ZERO)
                 {

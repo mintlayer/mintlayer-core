@@ -97,19 +97,19 @@ fn test_scale_btree_map() {
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
         btree_map.insert(
-            format!("Office Space {}", rng.gen::<u64>()),
+            format!("Office Space {}", rng.random::<u64>()),
             "Deals with real issues in the workplace.".to_string(),
         );
         btree_map.insert(
-            format!("Pulp Fiction {}", rng.gen::<u64>()),
+            format!("Pulp Fiction {}", rng.random::<u64>()),
             "Masterpiece.".to_string(),
         );
         btree_map.insert(
-            format!("The Godfather {}", rng.gen::<u64>()),
+            format!("The Godfather {}", rng.random::<u64>()),
             "Very enjoyable.".to_string(),
         );
         btree_map.insert(
-            format!("The Blues Brothers {}", rng.gen::<u64>()),
+            format!("The Blues Brothers {}", rng.random::<u64>()),
             "Eye lyked it a lot.".to_string(),
         );
     }

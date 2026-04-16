@@ -394,7 +394,7 @@ mod tests {
         let config = PoSChainConfigBuilder::new_for_unit_test().build();
         {
             // average block time <= target block time
-            let prev_target = Uint256::from_u64(rng.gen::<u64>());
+            let prev_target = Uint256::from_u64(rng.random::<u64>());
             let average_block_time = target_block_time.get() / rng.gen_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
@@ -403,7 +403,7 @@ mod tests {
         }
         {
             // average block time >= target block time
-            let prev_target = Uint256::from_u64(rng.gen::<u64>());
+            let prev_target = Uint256::from_u64(rng.random::<u64>());
             let average_block_time = target_block_time.get() * rng.gen_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
@@ -688,8 +688,8 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_target_required_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
-        let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
+        let target_limit_1 = Uint256::from_u64(rng.random::<u64>());
+        let target_limit_2 = Uint256::from_u64(rng.random::<u64>());
         let pos_config_1 = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit_1)
             .block_count_to_average_for_blocktime(2)
@@ -838,7 +838,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_target_through_netupgrade(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let target_limit = Uint256::from_u64(rng.gen::<u64>());
+        let target_limit = Uint256::from_u64(rng.random::<u64>());
         let pos_config = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit)
             .block_count_to_average_for_blocktime(3)
@@ -937,7 +937,7 @@ mod tests {
             let current_hash = {
                 let mut words = [0u64; 4];
                 for w in &mut words {
-                    *w = rng.gen::<u64>();
+                    *w = rng.random::<u64>();
                 }
                 Uint256(words)
             };

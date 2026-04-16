@@ -241,20 +241,20 @@ fn randomized(#[case] seed: Seed) {
         .map(|_| {
             if rng.gen_bool(0.8) {
                 SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+                    Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
                     chain_config.p2p_port(),
                 ))
             } else {
                 SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::new(
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
                     ),
                     chain_config.p2p_port(),
                     0,

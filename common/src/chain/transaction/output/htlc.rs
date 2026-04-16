@@ -48,7 +48,7 @@ impl HtlcSecret {
     }
 
     pub fn new_from_rng(rng: &mut (impl Rng + CryptoRng)) -> Self {
-        let secret: [u8; HTLC_SECRET_SIZE] = std::array::from_fn(|_| rng.gen::<u8>());
+        let secret: [u8; HTLC_SECRET_SIZE] = std::array::from_fn(|_| rng.random::<u8>());
         Self { secret }
     }
 

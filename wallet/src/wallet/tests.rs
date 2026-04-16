@@ -97,14 +97,14 @@ where
 }
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
-    (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
+    (0..rng.gen_range(1..100)).map(|_| rng.random::<char>()).collect()
 }
 
 fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOutput {
     let destination = Destination::PublicKey(
         crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1,
     );
-    match rng.gen::<bool>() {
+    match rng.random::<bool>() {
         true => TxOutput::Transfer(OutputValue::Coin(amount), destination),
         false => {
             let lock_for_blocks = rng.gen_range(0..1000);
@@ -562,7 +562,7 @@ async fn wallet_migration_to_v2(#[case] seed: Seed) {
         );
         txs.insert(
             id.encode(),
-            (0..rng.gen_range(1..10)).map(|_| rng.gen::<u8>()).collect(),
+            (0..rng.gen_range(1..10)).map(|_| rng.random::<u8>()).collect(),
         );
     }
 
@@ -618,7 +618,7 @@ async fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         assert!(seed_phrase.is_none());
     }
 
-    let wallet_passphrase: Option<String> = if rng.gen::<bool>() {
+    let wallet_passphrase: Option<String> = if rng.random::<bool>() {
         Some(gen_random_password(&mut rng))
     } else {
         None
@@ -1256,7 +1256,7 @@ async fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
         ))
     );
 
-    let name: String = (0..rng.gen_range(0..10)).map(|_| rng.gen::<char>()).collect();
+    let name: String = (0..rng.gen_range(0..10)).map(|_| rng.random::<char>()).collect();
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
@@ -1390,7 +1390,7 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    if rng.gen::<bool>() {
+    if rng.random::<bool>() {
         wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
@@ -1477,13 +1477,13 @@ async fn locked_wallet_standalone_keys(
 
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
 
-    let standalone_destination = if rng.gen::<bool>() {
+    let standalone_destination = if rng.random::<bool>() {
         Destination::PublicKey(standalone_pk)
     } else {
         Destination::PublicKeyHash((&standalone_pk).into())
     };
 
-    if rng.gen::<bool>() {
+    if rng.random::<bool>() {
         // test that wallet will recognise a destination belonging to a standalone key in a block
         // reward
         let _ = create_block_with_reward_address(
@@ -3037,7 +3037,7 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // True for fungible, false for NFT
-    let issue_fungible_token = rng.gen::<bool>();
+    let issue_fungible_token = rng.random::<bool>();
 
     let issuance_fee = if issue_fungible_token {
         chain_config.fungible_token_issuance_fee()
@@ -3060,7 +3060,7 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let token_authority_and_destination = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     // Issue token randomly from wallet2 to wallet1 or wallet1 to wallet2
-    let (random_issuing_wallet, other_wallet) = if rng.gen::<bool>() {
+    let (random_issuing_wallet, other_wallet) = if rng.random::<bool>() {
         (&mut wallet, &mut wallet2)
     } else {
         (&mut wallet2, &mut wallet)

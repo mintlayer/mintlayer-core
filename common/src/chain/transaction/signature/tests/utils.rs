@@ -54,10 +54,10 @@ use crate::{
 };
 
 fn make_random_output_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
-    if rng.gen::<bool>() {
-        OutputValue::Coin(Amount::from_atoms(rng.gen()))
+    if rng.random::<bool>() {
+        OutputValue::Coin(Amount::from_atoms(rng.random()))
     } else {
-        OutputValue::TokenV1(H256(rng.gen()).into(), Amount::from_atoms(rng.gen()))
+        OutputValue::TokenV1(H256(rng.random()).into(), Amount::from_atoms(rng.random()))
     }
 }
 
@@ -81,18 +81,18 @@ pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutp
         TxOutputTag::LockThenTransfer => TxOutput::LockThenTransfer(
             make_random_output_value(rng),
             make_random_destination(rng),
-            OutputTimeLock::ForBlockCount(rng.gen()),
+            OutputTimeLock::ForBlockCount(rng.random()),
         ),
         TxOutputTag::Burn => TxOutput::Burn(make_random_output_value(rng)),
         TxOutputTag::CreateStakePool => {
             let pool_id = PoolId::random_using(rng);
             let pool_data = StakePoolData::new(
-                Amount::from_atoms(rng.gen()),
+                Amount::from_atoms(rng.random()),
                 make_random_destination(rng),
                 make_random_vrf_pub_key(rng),
                 make_random_destination(rng),
                 PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
-                Amount::from_atoms(rng.gen()),
+                Amount::from_atoms(rng.random()),
             );
             TxOutput::CreateStakePool(pool_id, Box::new(pool_data))
         }
@@ -103,15 +103,15 @@ pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutp
             TxOutput::CreateDelegationId(make_random_destination(rng), PoolId::random_using(rng))
         }
         TxOutputTag::DelegateStaking => TxOutput::DelegateStaking(
-            Amount::from_atoms(rng.gen()),
+            Amount::from_atoms(rng.random()),
             DelegationId::random_using(rng),
         ),
         TxOutputTag::IssueFungibleToken => {
             let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: random_ascii_alphanumeric_string(rng, 3..5).into_bytes(),
-                number_of_decimals: rng.gen(),
+                number_of_decimals: rng.random(),
                 metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
-                total_supply: TokenTotalSupply::Fixed(Amount::from_atoms(rng.gen())),
+                total_supply: TokenTotalSupply::Fixed(Amount::from_atoms(rng.random())),
                 authority: make_random_destination(rng),
                 is_freezable: IsTokenFreezable::Yes,
             });
@@ -141,7 +141,7 @@ pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutp
             let htlc = HashedTimelockContract {
                 secret_hash: HtlcSecretHash::random_using(rng),
                 spend_key: make_random_destination(rng),
-                refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+                refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
                 refund_key: make_random_destination(rng),
             };
             TxOutput::Htlc(make_random_output_value(rng), Box::new(htlc))
@@ -174,7 +174,7 @@ pub fn generate_input_commitment_for_tag(
         }
         SighashInputCommitmentTag::ProduceBlockFromStakeUtxo => {
             let utxo = generate_input_utxo(rng);
-            let staker_balance = Amount::from_atoms(rng.gen::<UnsignedIntType>());
+            let staker_balance = Amount::from_atoms(rng.random::<UnsignedIntType>());
             SighashInputCommitment::ProduceBlockFromStakeUtxo {
                 utxo: Cow::Owned(utxo),
                 staker_balance,
@@ -192,8 +192,8 @@ pub fn generate_input_commitment_for_tag(
         SighashInputCommitmentTag::ConcludeOrderAccountCommand => {
             let initially_asked = make_random_output_value(rng);
             let initially_given = make_random_output_value(rng);
-            let ask_balance = Amount::from_atoms(rng.gen());
-            let give_balance = Amount::from_atoms(rng.gen());
+            let ask_balance = Amount::from_atoms(rng.random());
+            let give_balance = Amount::from_atoms(rng.random());
 
             SighashInputCommitment::ConcludeOrderAccountCommand {
                 initially_asked,
@@ -225,7 +225,7 @@ pub fn generate_inputs_utxos(
 ) -> Vec<Option<TxOutput>> {
     (0..input_count)
         .map(|_| {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 Some(generate_input_utxo(rng))
             } else {
                 None
@@ -279,14 +279,14 @@ pub fn generate_unsigned_tx(
             if rng.gen_bool(0.5) {
                 TxInput::from_utxo(
                     Id::<Transaction>::new(H256::random_using(rng)).into(),
-                    rng.gen(),
+                    rng.random(),
                 )
             } else {
                 TxInput::from_account(
-                    AccountNonce::new(rng.gen()),
+                    AccountNonce::new(rng.random()),
                     AccountSpending::DelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
-                        Amount::from_atoms(rng.gen()),
+                        Amount::from_atoms(rng.random()),
                     ),
                 )
             }
@@ -295,14 +295,14 @@ pub fn generate_unsigned_tx(
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen::<UnsignedIntType>())),
+            OutputValue::Coin(Amount::from_atoms(rng.random::<UnsignedIntType>())),
             destination.clone(),
         ))
     })
     .take(outputs_count)
     .collect();
 
-    let tx = Transaction::new(rng.gen(), inputs, outputs)?;
+    let tx = Transaction::new(rng.random(), inputs, outputs)?;
     Ok(tx)
 }
 

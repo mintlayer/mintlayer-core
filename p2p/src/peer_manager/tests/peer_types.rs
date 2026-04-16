@@ -94,7 +94,7 @@ fn validate_services(#[case] seed: Seed) {
             peer_mgr_event_receiver,
             time_getter.get_time_getter(),
             peerdb_inmemory_store(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .unwrap();
 

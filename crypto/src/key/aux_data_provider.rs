@@ -35,7 +35,7 @@ where
     R: Rng + CryptoRng,
 {
     fn get_secp256k1_schnorr_aux_data(&mut self) -> [u8; 32] {
-        self.gen()
+        self.random()
     }
 }
 

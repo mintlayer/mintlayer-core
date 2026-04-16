@@ -62,13 +62,13 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
             if rng.gen_bool(0.8) {
-                let source: Id<Transaction> = H256(rng.gen()).into();
+                let source: Id<Transaction> = H256(rng.random()).into();
                 let output_index = rng.gen_range(0..=400);
                 TxInput::from_utxo(source.into(), output_index)
             } else {
-                let nonce = AccountNonce::new(rng.gen());
-                let delegation_id: DelegationId = H256(rng.gen()).into();
-                let amount = Amount::from_atoms(rng.gen());
+                let nonce = AccountNonce::new(rng.random());
+                let delegation_id: DelegationId = H256(rng.random()).into();
+                let amount = Amount::from_atoms(rng.random());
                 TxInput::from_account(
                     nonce,
                     AccountSpending::DelegationBalance(delegation_id, amount),
@@ -80,7 +80,7 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let transaction = Transaction::new(0, inputs, Vec::new()).unwrap();
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
-    let insertion_time = Duration::from_secs(rng.gen());
+    let insertion_time = Duration::from_secs(rng.random());
     let origin = random_peer_origin(rng);
     let options = crate::TxOptions::default_for(origin.into());
 

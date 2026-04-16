@@ -359,7 +359,7 @@ mod tests {
             let expected_signed_message =
                 SignedTransactionIntent::get_message_to_sign(&intent_str, &tx_id);
             // Use the same state of rng for all "produce_" calls to be able to compare the signatures.
-            let signer_rng_seed = rng.gen();
+            let signer_rng_seed = rng.random();
 
             let signed_intent1 = SignedTransactionIntent::produce_from_transaction(
                 &tx,

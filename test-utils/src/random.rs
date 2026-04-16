@@ -25,11 +25,11 @@ pub struct Seed(pub u64);
 
 impl Seed {
     pub fn from_entropy() -> Self {
-        Seed(randomness::make_true_rng().gen::<u64>())
+        Seed(randomness::make_true_rng().random::<u64>())
     }
 
     pub fn from_entropy_and_print(test_name: &str) -> Self {
-        let result = Seed(randomness::make_true_rng().gen::<u64>());
+        let result = Seed(randomness::make_true_rng().random::<u64>());
         result.print_with_decoration(test_name);
         result
     }
@@ -64,7 +64,7 @@ impl From<u64> for Seed {
 
 impl randomness::distributions::Distribution<Seed> for randomness::distributions::Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Seed {
-        let new_seed = rng.gen::<u64>();
+        let new_seed = rng.random::<u64>();
         Seed::from_u64(new_seed)
     }
 }
@@ -78,7 +78,7 @@ impl TestRng {
     }
 
     pub fn random(rng: &mut (impl Rng + CryptoRng)) -> Self {
-        Self::new(Seed(rng.gen()))
+        Self::new(Seed(rng.random()))
     }
 
     pub fn from_entropy() -> Self {
@@ -240,7 +240,7 @@ mod tests {
     fn flip_random_bit_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let data: Vec<u8> = (1..20).map(|_| rng.gen()).collect();
+        let data: Vec<u8> = (1..20).map(|_| rng.random()).collect();
         let data_with_flipped_bit = with_random_bit_flipped(&data, &mut rng);
         assert_eq!(data.len(), data_with_flipped_bit.len());
         assert_ne!(data, data_with_flipped_bit);
