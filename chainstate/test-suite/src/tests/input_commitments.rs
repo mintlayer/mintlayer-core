@@ -412,7 +412,8 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         |tf: &TestFramework,
          mut rng: &mut dyn RngCoreAndCrypto,
          current_commitment_version: SighashInputCommitmentVersion| {
-            let fill_amount = Amount::from_atoms(rng.random_range(1..left_to_fill.into_atoms() / 2));
+            let fill_amount =
+                Amount::from_atoms(rng.random_range(1..left_to_fill.into_atoms() / 2));
             let filled_amount = calculate_fill_order(tf, &order_id, fill_amount, orders_version);
 
             let fill_order_input =

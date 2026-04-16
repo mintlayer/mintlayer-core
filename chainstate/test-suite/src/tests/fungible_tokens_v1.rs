@@ -1156,7 +1156,8 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
 
         // Unmint n tokens
         // Note: -1 because 1 was unminted previously
-        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..total_supply.into_atoms() - 1));
+        let amount_to_unmint =
+            Amount::from_atoms(rng.random_range(1..total_supply.into_atoms() - 1));
         let best_block_id = tf.best_block_id();
         let (_, unmint_n_tokens_tx_id) = unmint_tokens_in_block(
             &mut rng,
@@ -1626,7 +1627,8 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
 
         {
             // Try minting a random number of atoms, so that the total is below the specified max supply.
-            let amount = Amount::from_atoms(rng.random_range(1..=total_supply_atoms_above_i128_max));
+            let amount =
+                Amount::from_atoms(rng.random_range(1..=total_supply_atoms_above_i128_max));
             let mint_tx = make_mint_tx(amount);
             let mint_tx_id = mint_tx.transaction().get_id();
             let result =

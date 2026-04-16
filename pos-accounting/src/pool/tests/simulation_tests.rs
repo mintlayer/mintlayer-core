@@ -152,7 +152,8 @@ fn perform_random_operation(
         // spend share from delegation
         7 => {
             if let Some((delegation_id, balance)) = random_delegation_balance {
-                let amount_to_spent = Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
+                let amount_to_spent =
+                    Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
 
                 let undo =
                     op.spend_share_from_delegation_id(delegation_id, amount_to_spent).unwrap();

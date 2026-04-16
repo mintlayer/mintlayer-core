@@ -115,7 +115,8 @@ mod test {
     fn test_password_to_challenge_and_back(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let password: String = (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect();
+        let password: String =
+            (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect();
         let (original_key, kdf_challenge) = password_to_sym_key(&password).unwrap();
 
         let reconstructed_key = challenge_to_sym_key(&password, kdf_challenge).unwrap();

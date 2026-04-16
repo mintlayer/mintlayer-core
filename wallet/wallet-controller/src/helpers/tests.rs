@@ -112,8 +112,10 @@ mod tx_to_partially_signed_tx_general_test {
             OutputValue::TokenV1(random_token_ids[1], Amount::from_atoms(rng.random())),
             token1_transfer_utxo_dest.clone(),
         );
-        let token1_transfer_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let token1_transfer_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let lock_then_transfer_utxo_dest =
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
@@ -122,8 +124,10 @@ mod tx_to_partially_signed_tx_general_test {
             lock_then_transfer_utxo_dest.clone(),
             OutputTimeLock::ForBlockCount(rng.random()),
         );
-        let lock_then_transfer_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let lock_then_transfer_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let delegation_dest = wallet_new_dest(&mut wallet);
         let tx_with_delegation = SignedTransaction::new(
@@ -250,16 +254,20 @@ mod tx_to_partially_signed_tx_general_test {
                 refund_key: htlc_refund_key.clone(),
             }),
         );
-        let create_htlc_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let create_htlc_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let coins_utxo_dest = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let coins_utxo = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.random())),
             coins_utxo_dest.clone(),
         );
-        let coins_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let coins_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let pool_id_for_unknown_create_pool_utxo = PoolId::random_using(&mut rng);
         let pool_decommission_dest_for_unknown_create_pool_utxo =
@@ -275,8 +283,10 @@ mod tx_to_partially_signed_tx_general_test {
                 Amount::from_atoms(rng.random()),
             )),
         );
-        let unknown_create_pool_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let unknown_create_pool_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
         let staker_balance_for_pool_for_unknown_create_pool_utxo = Amount::from_atoms(rng.random());
 
         let pool_id_for_unknown_produce_block_from_stake_utxo = PoolId::random_using(&mut rng);
@@ -286,8 +296,10 @@ mod tx_to_partially_signed_tx_general_test {
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             pool_id_for_unknown_produce_block_from_stake_utxo,
         );
-        let unknown_produce_block_from_stake_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+        let unknown_produce_block_from_stake_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
         let staker_balance_for_pool_for_unknown_produce_block_from_stake_utxo =
             Amount::from_atoms(rng.random());
 
@@ -782,7 +794,8 @@ mod tx_to_partially_signed_tx_general_test {
             ))];
             let id = make_order_id(&tx_inputs).unwrap();
             let initially_asked = curencies.ask.into_output_value(Amount::from_atoms(rng.random()));
-            let initially_given = curencies.give.into_output_value(Amount::from_atoms(rng.random()));
+            let initially_given =
+                curencies.give.into_output_value(Amount::from_atoms(rng.random()));
             let ask_balance = Amount::from_atoms(rng.random());
             let give_balance = Amount::from_atoms(rng.random());
             let conclude_key = wallet_new_dest(wallet);

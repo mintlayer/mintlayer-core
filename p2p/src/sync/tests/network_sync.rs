@@ -665,7 +665,8 @@ async fn process_block_interference1(#[case] seed: Seed) {
                                 ))
                                 .await;
 
-                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10))).await;
+                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10)))
+                                .await;
                         }
                     };
 
@@ -792,7 +793,8 @@ async fn process_block_interference2(#[case] seed: Seed) {
                                 ))
                                 .await;
 
-                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10))).await;
+                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10)))
+                                .await;
                         }
                     };
 

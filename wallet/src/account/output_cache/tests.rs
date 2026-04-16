@@ -924,8 +924,14 @@ fn orders_state_update(#[case] seed: Seed) {
     let conclude_key2 = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let coins1 = OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..100_1000)));
     let coins2 = OutputValue::Coin(Amount::from_atoms(rng.random_range(1000..100_1000)));
-    let tokens1 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(1000..100_1000)));
-    let tokens2 = OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(1000..100_1000)));
+    let tokens1 = OutputValue::TokenV1(
+        token_id,
+        Amount::from_atoms(rng.random_range(1000..100_1000)),
+    );
+    let tokens2 = OutputValue::TokenV1(
+        token_id,
+        Amount::from_atoms(rng.random_range(1000..100_1000)),
+    );
 
     let parent_tx_1_id = Id::<Transaction>::random_using(&mut rng);
     let order1_creation_tx = TransactionBuilder::new()
@@ -1172,7 +1178,10 @@ fn orders_state_update(#[case] seed: Seed) {
             &chain_config,
             BlockHeight::new(60),
             order2_freeze_tx_id.into(),
-            WalletTx::Tx(TxData::new(order2_freeze_tx, TxState::Inactive(rng.random()))),
+            WalletTx::Tx(TxData::new(
+                order2_freeze_tx,
+                TxState::Inactive(rng.random()),
+            )),
         )
         .unwrap();
 

@@ -78,8 +78,9 @@ fn stake_pool_reorg(
         let genesis_id = tf.genesis().get_id();
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let pledge_amount =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let pledge_amount = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
 
         // prepare tx_a
         let destination_a = new_pub_key_destination(&mut rng);

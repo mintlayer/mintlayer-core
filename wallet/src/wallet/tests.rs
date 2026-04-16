@@ -2078,7 +2078,8 @@ async fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
@@ -2277,7 +2278,8 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
     assert_eq!(coin_balance2, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
 
@@ -2293,8 +2295,9 @@ async fn create_stake_pool_for_different_wallet_and_list_pool_ids(#[case] seed: 
 
     let pool_amount = block1_amount;
     let margin_ratio_per_thousand = PerThousand::new_from_rng(&mut rng);
-    let cost_per_block =
-        Amount::from_atoms(rng.random_range(0..10) * 10_u128.pow(chain_config.coin_decimals() as u32));
+    let cost_per_block = Amount::from_atoms(
+        rng.random_range(0..10) * 10_u128.pow(chain_config.coin_decimals() as u32),
+    );
 
     let decommission_dest = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
 
@@ -2547,7 +2550,8 @@ async fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet);
@@ -3311,10 +3315,9 @@ async fn issue_and_transfer_tokens(#[case] seed: Seed) {
         (token_amount_to_issue - tokens_to_transfer).expect("")
     );
 
-    let not_enough_tokens_to_transfer =
-        Amount::from_atoms(rng.random_range(
-            token_amount_to_issue.into_atoms()..=token_amount_to_issue.into_atoms() + 100,
-        ));
+    let not_enough_tokens_to_transfer = Amount::from_atoms(rng.random_range(
+        token_amount_to_issue.into_atoms()..=token_amount_to_issue.into_atoms() + 100,
+    ));
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
@@ -3366,9 +3369,10 @@ async fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -3427,9 +3431,10 @@ async fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + (chain_config.fungible_token_issuance_fee() * 4).unwrap())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + (chain_config.fungible_token_issuance_fee() * 4).unwrap())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -3744,9 +3749,10 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -3816,7 +3822,8 @@ async fn change_token_supply_fixed(#[case] seed: Seed) {
         Amount::ZERO,
     );
 
-    let token_amount_to_mint = Amount::from_atoms(rng.random_range(1..=fixed_max_amount.into_atoms()));
+    let token_amount_to_mint =
+        Amount::from_atoms(rng.random_range(1..=fixed_max_amount.into_atoms()));
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
@@ -4011,9 +4018,10 @@ async fn change_token_supply_unlimited(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -4217,9 +4225,10 @@ async fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -4486,7 +4495,8 @@ async fn lock_then_transfer(#[case] seed: Seed) {
     let timestamp = chain_config.genesis_block().timestamp().add_int_seconds(10).unwrap();
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let address = get_address(
         &chain_config,
         MNEMONIC,
@@ -4631,7 +4641,8 @@ async fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     let mut amounts = vec![];
     for i in 0..blocks_to_add {
         // Generate a new block which sends reward to the wallet
-        let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
+        let block1_amount =
+            Amount::from_atoms(rng.random_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
         let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, i as u64).await;
         amounts.push(block1_amount);
     }
@@ -4924,9 +4935,9 @@ async fn wallet_abandon_transactions(#[case] seed: Seed) {
     let mut total_amount = block1_amount;
 
     for idx in 0..total_num_transactions {
-        let amount_to_transfer = Amount::from_atoms(
-            rng.random_range(1..=(total_amount.into_atoms() - (total_num_transactions - idx) as u128)),
-        );
+        let amount_to_transfer = Amount::from_atoms(rng.random_range(
+            1..=(total_amount.into_atoms() - (total_num_transactions - idx) as u128),
+        ));
         let change = (total_amount - amount_to_transfer).unwrap();
 
         let address = get_address(
@@ -5167,7 +5178,8 @@ async fn decommission_pool_wrong_account(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
@@ -5271,7 +5283,8 @@ async fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = wallet.get_pools(acc_0_index, WalletPoolsFilter::All).unwrap();
@@ -5366,7 +5379,8 @@ async fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
     let utxo = make_address_output(addr.clone().into_object(), block1_amount);
 
@@ -5500,7 +5514,8 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
@@ -5616,7 +5631,8 @@ async fn filter_pools(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
     let _ = create_block(&chain_config, &mut wallet2, vec![], block1_amount, 0).await;
 
@@ -5709,7 +5725,8 @@ async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the cold wallet address
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let reward_output =
         make_address_output(cold_wallet_address.clone().into_object(), block1_amount);
     let block1 = Block::new(
@@ -5824,7 +5841,8 @@ async fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     // Generate a new block which sends reward to the cold wallet address
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let reward_output = make_address_output(address.clone().into_object(), block1_amount);
     let block1 = Block::new(
         vec![],
@@ -5899,7 +5917,8 @@ async fn test_add_standalone_multisig(#[case] seed: Seed) {
         Address::new(&chain_config, Destination::ClassicMultisig(multisig_hash)).unwrap();
 
     // Generate a new block which sends reward to the new multisig address
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let output = make_address_output(multisig_address.clone().into_object(), block1_amount);
 
     let tx =
@@ -6009,7 +6028,8 @@ async fn create_htlc_and_spend(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet1);
@@ -6155,7 +6175,8 @@ async fn create_htlc_and_refund(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
 
     let coin_balance = get_coin_balance(&wallet1);
@@ -6319,9 +6340,10 @@ async fn create_order(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -6459,9 +6481,10 @@ async fn create_order_and_conclude(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
@@ -6661,9 +6684,10 @@ async fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;
@@ -7054,9 +7078,10 @@ async fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.fungible_token_issuance_fee())
-    .unwrap();
+    let block1_amount =
+        (Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.fungible_token_issuance_fee())
+        .unwrap();
 
     let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0).await;
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]).await;

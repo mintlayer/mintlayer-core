@@ -186,17 +186,17 @@ async fn first_sync_message_received_must_be_sent(
                             address: random_peer_addr(&mut rng),
                         })
                     }
-                    PeerManagerMessageTag::PingRequest => {
-                        Message::PingRequest(PingRequest { nonce: rng.random() })
-                    }
+                    PeerManagerMessageTag::PingRequest => Message::PingRequest(PingRequest {
+                        nonce: rng.random(),
+                    }),
                     PeerManagerMessageTag::AddrListResponse => {
                         Message::AddrListResponse(AddrListResponse {
                             addresses: vec![random_peer_addr(&mut rng)],
                         })
                     }
-                    PeerManagerMessageTag::PingResponse => {
-                        Message::PingResponse(PingResponse { nonce: rng.random() })
-                    }
+                    PeerManagerMessageTag::PingResponse => Message::PingResponse(PingResponse {
+                        nonce: rng.random(),
+                    }),
                     PeerManagerMessageTag::WillDisconnect => {
                         Message::WillDisconnect(WillDisconnectMessage {
                             reason: gen_random_alnum_string(&mut rng, 10, 20),

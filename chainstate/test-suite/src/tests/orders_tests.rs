@@ -462,8 +462,9 @@ fn create_two_identical_orders_same_tx(#[case] seed: Seed) {
         let half_tokens_circulating_supply = (tokens_circulating_supply / 2).unwrap();
 
         let ask_amount = Amount::from_atoms(rng.random_range(1u128..1000));
-        let give_amount =
-            Amount::from_atoms(rng.random_range(1u128..=half_tokens_circulating_supply.into_atoms()));
+        let give_amount = Amount::from_atoms(
+            rng.random_range(1u128..=half_tokens_circulating_supply.into_atoms()),
+        );
         let order_data = Box::new(OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -1976,7 +1977,9 @@ fn test_activation(#[case] seed: Seed) {
             OutputValue::Coin(Amount::from_atoms(rng.random_range(1u128..1000))),
             OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.random_range(1u128..=tokens_circulating_supply.into_atoms())),
+                Amount::from_atoms(
+                    rng.random_range(1u128..=tokens_circulating_supply.into_atoms()),
+                ),
             ),
         ));
 
@@ -2566,7 +2569,8 @@ fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let min_give_atoms = 100;
         let max_give_atoms = 200;
 
-        let token_amount_to_mint = Amount::from_atoms(rng.random_range(max_give_atoms..100_000_000));
+        let token_amount_to_mint =
+            Amount::from_atoms(rng.random_range(max_give_atoms..100_000_000));
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_amount_from_genesis(&mut rng, &mut tf, token_amount_to_mint);
 
@@ -2776,7 +2780,9 @@ fn orders_v1_activation(#[case] seed: Seed) {
             OutputValue::Coin(Amount::from_atoms(rng.random_range(1u128..1000))),
             OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.random_range(1u128..=tokens_circulating_supply.into_atoms())),
+                Amount::from_atoms(
+                    rng.random_range(1u128..=tokens_circulating_supply.into_atoms()),
+                ),
             ),
         ));
 

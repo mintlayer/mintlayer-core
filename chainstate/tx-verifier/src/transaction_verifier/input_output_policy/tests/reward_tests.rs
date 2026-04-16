@@ -79,8 +79,9 @@ fn check_block_reward_pow(#[case] seed: Seed) {
 
     // invalid random case
     {
-        let invalid_output_value =
-            Amount::from_atoms(rng.random_range((expected_output_value.into_atoms() + 1)..u128::MAX));
+        let invalid_output_value = Amount::from_atoms(
+            rng.random_range((expected_output_value.into_atoms() + 1)..u128::MAX),
+        );
         let result = check(invalid_output_value);
         assert_eq!(
             result.unwrap_err(),

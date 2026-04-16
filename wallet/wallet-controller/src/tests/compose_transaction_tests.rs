@@ -103,8 +103,10 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let last_height = 1;
 
     let token1_outpoint = UtxoOutPoint::new(tx_with_token1_id.into(), 0);
-    let token2_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+    let token2_outpoint = UtxoOutPoint::new(
+        Id::<Transaction>::random_using(&mut rng).into(),
+        rng.random(),
+    );
 
     let token4_num_decimals = rng.random_range(1..20);
     let token4_ticker = gen_random_alnum_string(&mut rng, 5, 10);
@@ -129,12 +131,15 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             refund_key: htlc_refund_key.clone(),
         }),
     );
-    let create_htlc_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
+    let create_htlc_outpoint = UtxoOutPoint::new(
+        Id::<Transaction>::random_using(&mut rng).into(),
+        rng.random(),
+    );
 
     let coins_outpoint = UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), 0);
-    let coins_outpoint_amount =
-        (created_order_coin_give_amount + Amount::from_atoms(rng.random_range(1000..2000))).unwrap();
+    let coins_outpoint_amount = (created_order_coin_give_amount
+        + Amount::from_atoms(rng.random_range(1000..2000)))
+    .unwrap();
     let coins_utxo_dest = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let coins_utxo = TxOutput::LockThenTransfer(
         OutputValue::Coin(coins_outpoint_amount),

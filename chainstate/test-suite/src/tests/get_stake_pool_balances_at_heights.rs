@@ -405,8 +405,9 @@ impl TestData {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let pledge =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let pledge = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, staker_key) =
             create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
         let pool_id = PoolId::from_utxo(self.utxo_for_spending.outpoint());
@@ -497,8 +498,9 @@ impl TestData {
     ) -> (DelegationId, Amount) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_delegate =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
+        let amount_to_delegate = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2),
+        );
 
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(

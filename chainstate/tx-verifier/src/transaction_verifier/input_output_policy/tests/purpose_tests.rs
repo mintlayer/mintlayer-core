@@ -586,7 +586,9 @@ fn staker_destination_change(#[case] seed: Seed) {
         let block_height = if rng.random_bool(0.5) {
             fork_height
         } else {
-            BlockHeight::new(rng.random_range(fork_height.into_int()..=BlockHeight::max().into_int()))
+            BlockHeight::new(
+                rng.random_range(fork_height.into_int()..=BlockHeight::max().into_int()),
+            )
         };
 
         let result = check_reward_inputs_outputs_purposes(

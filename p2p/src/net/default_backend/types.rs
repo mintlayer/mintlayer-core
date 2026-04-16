@@ -477,7 +477,12 @@ mod tests {
                 },
                 receiver_address: Some(
                     SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random())),
+                        IpAddr::V4(Ipv4Addr::new(
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                        )),
                         rng.random(),
                     )
                     .into(),
@@ -497,15 +502,24 @@ mod tests {
                 },
                 receiver_address: Some(
                     SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random())),
+                        IpAddr::V4(Ipv4Addr::new(
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                        )),
                         rng.random(),
                     )
                     .into(),
                 ),
                 current_time: P2pTimestamp::from_int_seconds(rng.random()),
             }),
-            Message::PingRequest(PingRequest { nonce: rng.random() }),
-            Message::PingResponse(PingResponse { nonce: rng.random() }),
+            Message::PingRequest(PingRequest {
+                nonce: rng.random(),
+            }),
+            Message::PingResponse(PingResponse {
+                nonce: rng.random(),
+            }),
             Message::NewTransaction(Id::new(rng.random())),
             Message::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![
                 Id::new(rng.random()),
@@ -524,7 +538,12 @@ mod tests {
             )),
             Message::AnnounceAddrRequest(AnnounceAddrRequest {
                 address: SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random())),
+                    IpAddr::V4(Ipv4Addr::new(
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                    )),
                     rng.random(),
                 )
                 .into(),
@@ -532,7 +551,12 @@ mod tests {
             Message::AddrListRequest(AddrListRequest {}),
             Message::AddrListResponse(AddrListResponse {
                 addresses: vec![SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random())),
+                    IpAddr::V4(Ipv4Addr::new(
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                    )),
                     rng.random(),
                 )
                 .into()],

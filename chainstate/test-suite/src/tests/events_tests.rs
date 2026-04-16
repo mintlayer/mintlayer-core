@@ -309,7 +309,10 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
         let (time_advance, is_ibd) = match idx.cmp(&first_fresh_block_idx) {
             std::cmp::Ordering::Less => {
                 // The block will not be considered fresh and the chainstate will remain in ibd.
-                (rng.random_range(max_tip_age_secs..max_tip_age_secs * 2), true)
+                (
+                    rng.random_range(max_tip_age_secs..max_tip_age_secs * 2),
+                    true,
+                )
             }
             std::cmp::Ordering::Equal => {
                 // The block will be considered fresh and the chainstate will no longer be in ibd.

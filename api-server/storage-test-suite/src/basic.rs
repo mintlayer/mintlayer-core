@@ -580,7 +580,8 @@ where
             let last_num = db_tx.get_last_transaction_global_index().await.unwrap();
             assert_eq!(last_num, Some(expected_last_tx_global_index));
 
-            let take_txs = rng.random_range(1..expected_last_tx_global_index - start_tx_global_index);
+            let take_txs =
+                rng.random_range(1..expected_last_tx_global_index - start_tx_global_index);
             let txs = db_tx
                 .get_transactions_with_block_info_before_tx_global_index(
                     take_txs as u32,

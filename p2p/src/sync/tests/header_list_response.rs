@@ -515,7 +515,8 @@ async fn extending_invalidated_chain_should_fail_at_header_check(
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let branch2_first_known_block_to_send_idx = rng.random_range(0..=branch2_known_blocks.len());
+        let branch2_first_known_block_to_send_idx =
+            rng.random_range(0..=branch2_known_blocks.len());
         let branch2_headers = branch2_known_blocks[branch2_first_known_block_to_send_idx..]
             .iter()
             .chain(branch2_unknown_blocks.iter())

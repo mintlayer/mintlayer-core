@@ -62,8 +62,9 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -106,8 +107,9 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -147,8 +149,9 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -192,8 +195,9 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
         let amount_to_mint = Amount::from_atoms(100);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let tx0 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(
@@ -286,8 +290,9 @@ fn stake_pool_twice(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -334,8 +339,9 @@ fn stake_pool_twice_two_blocks(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -385,8 +391,9 @@ fn stake_pool_twice_two_txs(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -548,8 +555,9 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -642,8 +650,9 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -708,8 +717,9 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
 
         let stake_pool_data = StakePoolData::new(
             amount_to_stake,

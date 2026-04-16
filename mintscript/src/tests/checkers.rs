@@ -280,7 +280,11 @@ fn timelock_rand_abs_time_fail(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn timelock_rand_rel_time_ok(#[case] seed: Seed) {
-    check_timelocks_rand(seed, |r, _, _, _, d| tl_for_secs(r.random_range(0..=d)), true)
+    check_timelocks_rand(
+        seed,
+        |r, _, _, _, d| tl_for_secs(r.random_range(0..=d)),
+        true,
+    )
 }
 
 #[rstest::rstest]
