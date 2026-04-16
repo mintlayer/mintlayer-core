@@ -179,14 +179,14 @@ mod tests {
         // One can decrypt their own cipher texts
         {
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let cipher_text = shared_secret1.encrypt(&random_message, &mut rng).unwrap();
                 let plain_text = shared_secret1.decrypt(&cipher_text).unwrap();
                 assert_eq!(random_message, plain_text);
             }
 
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
                 let plain_text = shared_secret2.decrypt(&cipher_text).unwrap();
                 assert_eq!(random_message, plain_text);
@@ -196,14 +196,14 @@ mod tests {
         // One can decrypt others' cipher texts
         {
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let cipher_text = shared_secret1.encrypt(&random_message, &mut rng).unwrap();
                 let plain_text = shared_secret2.decrypt(&cipher_text).unwrap();
                 assert_eq!(random_message, plain_text);
             }
 
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
                 let plain_text = shared_secret1.decrypt(&cipher_text).unwrap();
                 assert_eq!(random_message, plain_text);
@@ -257,7 +257,7 @@ mod tests {
         // One cannot decrypt others' tampered cipher texts
         {
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let mut cipher_text = shared_secret1.encrypt(&random_message, &mut rng).unwrap();
                 let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
@@ -265,7 +265,7 @@ mod tests {
             }
 
             {
-                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let mut cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
                 let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);

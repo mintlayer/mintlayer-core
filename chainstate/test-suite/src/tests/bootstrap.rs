@@ -470,7 +470,7 @@ fn file_too_small(#[case] seed: Seed) {
         tf.create_chain(&genesis_id.into(), 5, &mut rng).unwrap();
         let orig_block_ids = tf.chainstate.get_block_id_tree_as_list().unwrap();
 
-        let header_data = make_header_data(&chain_config, 0, rng.gen());
+        let header_data = make_header_data(&chain_config, 0, rng.random());
 
         let incomplete_header_data =
             &header_data[0..rng.gen_range(EXPECTED_MAGIC_BYTES.len()..header_data.len() - 1)];

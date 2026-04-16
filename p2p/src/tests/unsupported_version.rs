@@ -60,7 +60,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -160,7 +160,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -251,7 +251,7 @@ where
         TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 

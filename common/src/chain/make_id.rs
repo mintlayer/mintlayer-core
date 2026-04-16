@@ -213,10 +213,10 @@ mod tests {
         logging::log::warn!("fork_height = {fork_height}");
 
         let non_utxo_input = TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(rng.gen()),
+            AccountNonce::new(rng.random()),
             AccountSpending::DelegationBalance(
                 Id::random_using(&mut rng),
-                Amount::from_atoms(rng.gen()),
+                Amount::from_atoms(rng.random()),
             ),
         ));
         let utxo_input = TxInput::Utxo(UtxoOutPoint::new(
@@ -225,7 +225,7 @@ mod tests {
             } else {
                 OutPointSourceId::BlockReward(Id::random_using(&mut rng))
             },
-            rng.gen(),
+            rng.random(),
         ));
 
         // Sanity check - if the first input is non-utxo, the ids will be generated differently

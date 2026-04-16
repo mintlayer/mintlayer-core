@@ -69,7 +69,7 @@ async fn disable_networking_impl(seed: Seed) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("test_node"),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -83,7 +83,7 @@ async fn disable_networking_impl(seed: Seed) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node1"),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -97,7 +97,7 @@ async fn disable_networking_impl(seed: Seed) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node2"),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 

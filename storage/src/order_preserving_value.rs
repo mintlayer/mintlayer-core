@@ -88,8 +88,8 @@ mod tests {
         OrderPreservingValue<T>: Encode + Decode,
         randomness::distributions::Standard: Distribution<T>,
     {
-        let val16_1 = OrderPreservingValue::new(rng.gen::<T>());
-        let val16_2 = OrderPreservingValue::new(rng.gen::<T>());
+        let val16_1 = OrderPreservingValue::new(rng.random::<T>());
+        let val16_2 = OrderPreservingValue::new(rng.random::<T>());
         let val16_1_encoded = val16_1.encode();
         let val16_2_encoded = val16_2.encode();
 

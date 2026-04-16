@@ -719,7 +719,7 @@ mod tests {
         {
             let config = Builder::new(ChainType::Regtest).build();
 
-            let height = BlockHeight::new(rng.gen::<u64>());
+            let height = BlockHeight::new(rng.random::<u64>());
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(height)
@@ -728,12 +728,12 @@ mod tests {
 
         // Custom
         {
-            let custom_offset = Duration::from_secs(rng.gen::<u64>());
+            let custom_offset = Duration::from_secs(rng.random::<u64>());
             let config = Builder::new(ChainType::Regtest)
                 .max_future_block_time_offset(Some(custom_offset))
                 .build();
 
-            let height = BlockHeight::new(rng.gen::<u64>());
+            let height = BlockHeight::new(rng.random::<u64>());
             assert_eq!(custom_offset, config.max_future_block_time_offset(height));
         }
     }

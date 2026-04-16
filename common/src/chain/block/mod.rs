@@ -291,10 +291,10 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.random()),
+            witness_merkle_root: H256::from_low_u64_be(rng.random()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.random())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         };
 
         let body = BlockBody {
@@ -323,10 +323,10 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.random()),
+            witness_merkle_root: H256::from_low_u64_be(rng.random()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.random())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         };
 
         let body = BlockBody {
@@ -359,10 +359,10 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.random()),
+            witness_merkle_root: H256::from_low_u64_be(rng.random()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.random())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         };
 
         let reward = BlockReward::new(vec![TxOutput::Transfer(
@@ -390,10 +390,10 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.random()),
+            witness_merkle_root: H256::from_low_u64_be(rng.random()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.random())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         };
 
         let one_transaction =
@@ -450,10 +450,10 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.random()),
+            witness_merkle_root: H256::from_low_u64_be(rng.random()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.random())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         };
 
         let body = BlockBody {

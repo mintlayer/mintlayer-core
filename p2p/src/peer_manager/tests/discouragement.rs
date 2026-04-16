@@ -90,7 +90,7 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_mgr_join_handle = tokio_spawn_in_current_tracing_span(
@@ -219,7 +219,7 @@ async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reac
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
     let peer_addr: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
@@ -296,7 +296,7 @@ async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[cas
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -419,7 +419,7 @@ async fn no_outgoing_connection_to_discouraged_peer(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -505,7 +505,7 @@ async fn discouraged_address_is_not_announced(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
     let addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -630,7 +630,7 @@ async fn discouraged_address_not_in_addr_response(#[case] seed: Seed) {
             Arc::clone(&p2p_config),
             vec![bind_addr],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
     let addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(

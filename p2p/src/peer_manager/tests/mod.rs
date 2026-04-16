@@ -253,7 +253,7 @@ async fn send_and_sync(
         })
         .unwrap();
 
-    let sent_nonce = rng.gen();
+    let sent_nonce = rng.random();
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,

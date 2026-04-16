@@ -110,7 +110,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let (decommission_tx, decommission_tx_inputs_utxos) = {
-        let decommission_pool_utxo = if rng.gen::<bool>() {
+        let decommission_pool_utxo = if rng.random::<bool>() {
             TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
         } else {
             TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id)

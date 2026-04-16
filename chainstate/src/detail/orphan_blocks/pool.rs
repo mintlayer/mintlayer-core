@@ -183,8 +183,8 @@ mod tests {
 
             Block::new(
                 vec![SignedTransaction::new(tx, vec![]).expect("invalid witness count")],
-                prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
-                BlockTimestamp::from_int_seconds(rng.gen()),
+                prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.random()).into()),
+                BlockTimestamp::from_int_seconds(rng.random()),
                 ConsensusData::None,
                 BlockReward::new(Vec::new()),
             )
@@ -220,7 +220,7 @@ mod tests {
             prev_block_id: Option<Id<Block>>,
         ) -> Vec<Block> {
             let prev_block_id =
-                prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into());
+                prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.random()).into());
 
             (0..count).map(|_| gen_block_from_id(rng, Some(prev_block_id.into()))).collect()
         }

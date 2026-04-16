@@ -1159,7 +1159,7 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
     let public_key_dest = Destination::PublicKey(pub_key.clone());
     let public_key_hash_dest = Destination::PublicKeyHash((&pub_key).into());
     let classic_multisig_dest = Destination::ClassicMultisig((&pub_key).into());
-    let script_dest = Destination::ScriptHash(Id::new(H256::from_slice(&rng.gen::<[u8; 32]>())));
+    let script_dest = Destination::ScriptHash(Id::new(H256::from_slice(&rng.random::<[u8; 32]>())));
 
     let with_public_key = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1)),

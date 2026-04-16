@@ -227,7 +227,7 @@ where
     ) -> crate::Result<()> {
         match connection_res {
             Ok(socket) => {
-                let handshake_nonce = make_pseudo_rng().gen();
+                let handshake_nonce = make_pseudo_rng().random();
 
                 self.create_pending_peer(
                     socket,

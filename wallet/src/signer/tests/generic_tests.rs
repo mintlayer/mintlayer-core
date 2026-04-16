@@ -116,7 +116,7 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 
     let mut make_message = {
         // Note: can't pass rng to the closure without knowing its exact type, so we create a new one.
-        let mut rng = make_seedable_rng(rng.gen());
+        let mut rng = make_seedable_rng(rng.random());
         move || {
             let msg = match &message_to_sign {
                 MessageToSign::Random => {
@@ -238,7 +238,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
                 .unwrap()
                 .1
                 .into_object();
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 pkh_destination
             } else {
                 let pkh = match pkh_destination {
@@ -256,13 +256,13 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
         0,
         inputs,
         vec![TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
             account.get_new_address(&mut db_tx, KeyPurpose::Change).unwrap().1.into_object(),
         )],
     )
     .unwrap();
 
-    let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
+    let intent: String = [rng.random::<char>(), rng.random::<char>(), rng.random::<char>()].iter().collect();
     log::debug!("Generated intent: `{intent}`");
     let expected_signed_message =
         SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
@@ -400,8 +400,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let decommissioned_pool_data = PoolData {
         utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
         creation_block: BlockInfo {
-            height: BlockHeight::new(rng.gen()),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            height: BlockHeight::new(rng.random()),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         },
         decommission_key: destination_from_account(&mut account, &mut db_tx, rng),
         stake_destination: random_destination(rng),
@@ -552,7 +552,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
     let htlc_utxo = TxOutput::Htlc(
-        OutputValue::Coin(Amount::from_atoms(rng.gen::<u32>() as u128)),
+        OutputValue::Coin(Amount::from_atoms(rng.random::<u32>() as u128)),
         Box::new(htlc.clone()),
     );
 

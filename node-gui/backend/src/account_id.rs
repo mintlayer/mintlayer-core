@@ -58,7 +58,7 @@ mod tests {
     fn test_json_valid(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let id = AccountId::new(U31::from_u32_with_msb(rng.gen::<u32>()).0);
+        let id = AccountId::new(U31::from_u32_with_msb(rng.random::<u32>()).0);
 
         let id_json = serde_json::to_string(&id).unwrap();
         let id_decoded = serde_json::from_str::<AccountId>(&id_json).unwrap();

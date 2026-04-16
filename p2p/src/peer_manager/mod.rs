@@ -2146,7 +2146,7 @@ where
                     }
                 }
                 None => {
-                    let nonce = Self::lock_rng(&self.rng).gen();
+                    let nonce = Self::lock_rng(&self.rng).random();
                     Self::send_peer_message(
                         &mut self.peer_connectivity_handle,
                         *peer_id,

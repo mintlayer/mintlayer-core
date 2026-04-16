@@ -446,7 +446,7 @@ fn approximate_best_subset(
                 //because there may be some privacy improvement by making
                 //the selection random.
                 let rand_bool = if n_pass == 0 {
-                    rng.gen::<bool>()
+                    rng.random::<bool>()
                 } else {
                     !current_solution_included[i]
                 };

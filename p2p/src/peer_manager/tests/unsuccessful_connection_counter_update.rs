@@ -115,7 +115,7 @@ async fn auto_connection_fails_peer_state_becomes_disconnected(
         Arc::clone(&p2p_config),
         vec![bind_address],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_address: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
@@ -322,7 +322,7 @@ async fn auto_connection_fails_peer_state_becomes_unreachable(
         Arc::clone(&p2p_config),
         vec![bind_address],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_address: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
@@ -494,7 +494,7 @@ async fn manual_connection_fails(#[case] seed: Seed, #[values(false, true)] make
         Arc::clone(&p2p_config),
         vec![bind_address],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_address: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
@@ -647,7 +647,7 @@ async fn auto_connection_without_peer_activity(
         Arc::clone(&p2p_config),
         vec![bind_address],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_address: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
@@ -875,7 +875,7 @@ async fn feeler_connection_without_peer_activity(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_address],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_address: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();

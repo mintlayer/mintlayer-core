@@ -174,9 +174,9 @@ mod tests {
         fn new_random(rng: &mut (impl Rng + CryptoRng)) -> Self {
             let chain_config = create_mainnet();
 
-            let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+            let min_required_signatures = (rng.random::<u8>() % 10) + 1;
             let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-            let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+            let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
             let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
                 .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
                 .unzip();

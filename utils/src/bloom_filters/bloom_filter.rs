@@ -32,8 +32,8 @@ impl<T: Hash> BloomFilter<T> {
                 size,
                 fpp,
                 [
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+                    SipHasherBuilder::from_seed(rng.random(), rng.random()),
+                    SipHasherBuilder::from_seed(rng.random(), rng.random()),
                 ],
             ),
         )

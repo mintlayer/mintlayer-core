@@ -71,7 +71,7 @@ mod test {
 
         let key_size = rng.gen_range(0..=1000);
 
-        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let _hmac = new_hmac_sha_512(&key);
     }

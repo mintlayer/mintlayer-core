@@ -28,7 +28,7 @@ fn make_dummy_tx(
     let n_inputs = privkeys.len();
 
     let mut gen_value = {
-        let mut rng = make_seedable_rng(rng.gen());
+        let mut rng = make_seedable_rng(rng.random());
         move || OutputValue::Coin(Amount::from_atoms(rng.gen_range(0..10_u128.pow(20))))
     };
 
@@ -38,7 +38,7 @@ fn make_dummy_tx(
 
     let output = TxOutput::Burn(gen_value());
     let inputs = (0..n_inputs).map(|_| {
-        let outpoint = OutPointSourceId::Transaction(Id::new(rng.gen()));
+        let outpoint = OutPointSourceId::Transaction(Id::new(rng.random()));
         TxInput::from_utxo(outpoint, rng.gen_range(0u32..200))
     });
     let input_commitments = utxos

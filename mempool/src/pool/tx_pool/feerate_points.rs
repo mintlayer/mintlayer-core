@@ -159,7 +159,7 @@ mod tests {
         let mut map = BTreeMap::new();
         for _ in 0..rng.gen_range(1..10) {
             map.insert(
-                rng.gen::<usize>(),
+                rng.random::<usize>(),
                 DescendantScore::new(FeeRate::from_atoms_per_kb(rng.gen_range(0..1_000_000))),
             );
         }

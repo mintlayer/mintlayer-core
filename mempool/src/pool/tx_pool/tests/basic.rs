@@ -1427,7 +1427,7 @@ async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] ac
         // size of the full transaction matches the size required by the test.
         let data_size = tx_size - 147;
         let data_size = data_size - serialization::Compact::<u64>(data_size as u64).encoded_size();
-        let data = (0..data_size).map(|_| rng.gen()).collect();
+        let data = (0..data_size).map(|_| rng.random()).collect();
 
         let tx_builder = tx_builder.add_output(TxOutput::DataDeposit(data));
         let transaction = tx_builder.build();

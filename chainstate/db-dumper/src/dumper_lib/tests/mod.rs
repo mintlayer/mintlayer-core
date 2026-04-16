@@ -386,10 +386,10 @@ impl TestBlockInputInfo {
             height,
             is_mainchain,
             parent_id: Id::random_using(rng),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
             pool_id: PoolId::random_using(rng),
             target: gen_target(rng),
-            chain_trust: Uint256::from_bytes(rng.gen()),
+            chain_trust: Uint256::from_bytes(rng.random()),
             status: BlockStatusOutput::iter().choose(rng).unwrap(),
         }
     }
@@ -502,9 +502,9 @@ fn make_consensus_data(pool_id: PoolId, compact_target: Compact) -> ConsensusDat
 fn bogus_vrf_return(rng: &mut (impl Rng + CryptoRng)) -> VRFReturn {
     let (vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let vrf_transcript = construct_transcript(
-        rng.gen(),
-        &rng.gen(),
-        BlockTimestamp::from_int_seconds(rng.gen()),
+        rng.random(),
+        &rng.random(),
+        BlockTimestamp::from_int_seconds(rng.random()),
     )
     .with_rng(rng);
 
@@ -512,7 +512,7 @@ fn bogus_vrf_return(rng: &mut (impl Rng + CryptoRng)) -> VRFReturn {
 }
 
 fn gen_compact_target(rng: &mut (impl Rng + CryptoRng)) -> Compact {
-    let target = Uint256::from_bytes(rng.gen());
+    let target = Uint256::from_bytes(rng.random());
     target.into()
 }
 

@@ -28,7 +28,7 @@ impl Salt {
     }
 
     pub fn new_random(rng: &mut impl Rng) -> Self {
-        Self(rng.gen::<u64>())
+        Self(rng.random::<u64>())
     }
 
     pub fn mix_with<T: Hash>(&self, data: T) -> Self {

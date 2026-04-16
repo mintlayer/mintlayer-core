@@ -905,7 +905,7 @@ mod tests {
 
         for _ in 0..10 {
             let h256 = H256::random_using(&mut rng);
-            let idx = rng.gen::<u32>();
+            let idx = rng.random::<u32>();
 
             for tag in ["tx", "Tx", "tX"] {
                 let parsed_outpoint: UtxoOutPoint =
@@ -1207,7 +1207,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
-            let u64_val = rng.gen::<u64>();
+            let u64_val = rng.random::<u64>();
 
             for tag in ["block_count", "Block_count", "blocK_Count"] {
                 let parsed_timelock: OutputTimeLock =

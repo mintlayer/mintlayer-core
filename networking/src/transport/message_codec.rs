@@ -130,7 +130,7 @@ mod tests {
     fn size_limit_encode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
@@ -161,7 +161,7 @@ mod tests {
     fn size_limit_decode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
         let mut encoded = BytesMut::new();
         MessageCodec::new(Some(rng.gen_range(126..512)))
             .encode(message, &mut encoded)
@@ -189,7 +189,7 @@ mod tests {
     fn roundtrip(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
 
         let mut encoder = MessageCodec::new(Some(rng.gen_range(128..2048)));
 

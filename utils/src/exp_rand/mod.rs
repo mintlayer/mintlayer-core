@@ -19,7 +19,7 @@ use randomness::Rng;
 ///
 /// The result will be in the range (0, max], where max = -ln(f64::MIN_POSITIVE) ~= 708.396418532264.
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
-    let mut random_f64 = rng.gen::<f64>();
+    let mut random_f64 = rng.random::<f64>();
     // The generated number will be in the range [0, 1). Turn it into (0, 1) to avoid
     // infinity when taking the logarithm.
     if random_f64 == 0.0 {

@@ -44,7 +44,7 @@ fn random_input_utxos(
     split_value(rng, total_input_atoms)
         .into_iter()
         .map(|v| {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(v)),
                     Destination::AnyoneCanSpend,
@@ -109,7 +109,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
-    let decommission_pool_utxo = if rng.gen::<bool>() {
+    let decommission_pool_utxo = if rng.random::<bool>() {
         TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
     } else {
         produce_block()

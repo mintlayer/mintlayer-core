@@ -121,7 +121,7 @@ mod tests {
             .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
 
         for _ in 0..100 {
-            assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
+            assert_eq!(g1.random::<u64>(), g2.random::<u64>());
         }
     }
 

@@ -104,7 +104,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
 
     let token1_outpoint = UtxoOutPoint::new(tx_with_token1_id.into(), 0);
     let token2_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
 
     let token4_num_decimals = rng.gen_range(1..20);
     let token4_ticker = gen_random_alnum_string(&mut rng, 5, 10);
@@ -112,7 +112,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let created_order_coin_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
     let create_order_output = TxOutput::CreateOrder(Box::new(OrderData::new(
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-        OutputValue::TokenV1(token3_id, Amount::from_atoms(rng.gen())),
+        OutputValue::TokenV1(token3_id, Amount::from_atoms(rng.random())),
         OutputValue::Coin(created_order_coin_give_amount),
     )));
     let htlc_amount = Amount::from_atoms(rng.gen_range(1000..2000));
@@ -125,12 +125,12 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
         Box::new(HashedTimelockContract {
             secret_hash: HtlcSecretHash::random_using(&mut rng),
             spend_key: htlc_spend_key.clone(),
-            refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+            refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
             refund_key: htlc_refund_key.clone(),
         }),
     );
     let create_htlc_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
 
     let coins_outpoint = UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), 0);
     let coins_outpoint_amount =
@@ -139,7 +139,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let coins_utxo = TxOutput::LockThenTransfer(
         OutputValue::Coin(coins_outpoint_amount),
         coins_utxo_dest.clone(),
-        OutputTimeLock::ForBlockCount(rng.gen()),
+        OutputTimeLock::ForBlockCount(rng.random()),
     );
 
     let node_mock = {
@@ -167,7 +167,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             best_block_height: BlockHeight::new(last_height),
             best_block_id: last_block.get_id().into(),
             best_block_timestamp: last_block.timestamp(),
-            median_time: BlockTimestamp::from_int_seconds(rng.gen()),
+            median_time: BlockTimestamp::from_int_seconds(rng.random()),
             is_initial_block_download: false,
         };
 

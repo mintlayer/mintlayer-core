@@ -165,7 +165,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 //spend random utxo in a transaction
 
                 //get random outpoint from existing outpoints
-                let outpoint = if rng.gen::<bool>() && !prev_result.utxo_outpoints.is_empty() {
+                let outpoint = if rng.random::<bool>() && !prev_result.utxo_outpoints.is_empty() {
                     let outpoint_idx = rng.gen_range(0..prev_result.utxo_outpoints.len());
                     //this outpoint will be spent so remove strait away
                     prev_result.utxo_outpoints.remove(outpoint_idx)

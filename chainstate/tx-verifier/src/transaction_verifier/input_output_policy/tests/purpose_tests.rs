@@ -296,7 +296,7 @@ fn reward_one_to_one(#[case] seed: Seed) {
     );
 
     let block = make_block(vec![outpoint.into()], vec![output.clone()]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let result = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -335,7 +335,7 @@ fn reward_one_to_none(#[case] seed: Seed) {
     );
 
     let block = make_block(vec![outpoint.into()], vec![]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let res = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -360,7 +360,7 @@ fn reward_none_to_any(#[case] seed: Seed) {
     let chain_config = chain::config::Builder::test_chain().build();
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     {
         // valid cases
@@ -436,7 +436,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, kernel_outputs);
 
     let block = make_block(inputs, vec![]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let res = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -479,7 +479,7 @@ fn reward_accounts_in_inputs(#[case] seed: Seed) {
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
 
     let block = make_block(invalid_inputs, outputs);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     assert_eq!(
         check_reward_inputs_outputs_purposes(

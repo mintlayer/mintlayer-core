@@ -521,15 +521,15 @@ mod search {
 
         let mut data = Vec::with_capacity(items_count);
         for i in 0..items_count {
-            let min_timestamp = rng.gen::<u32>() as u64;
+            let min_timestamp = rng.random::<u32>() as u64;
             let max_timestamp = min_timestamp + rng.gen_range(1..10);
             let staker_balance = rng.gen_range(1..u32::MAX) as u128;
-            let total_balance = staker_balance + rng.gen::<u32>() as u128;
+            let total_balance = staker_balance + rng.random::<u32>() as u128;
 
             data.push(SearchDataForHeight {
                 sealed_epoch_randomness: PoSRandomness::new(H256::random_using(&mut rng)),
                 epoch_index: i as u64,
-                target_required: Uint256::from_u64(rng.gen()).into(),
+                target_required: Uint256::from_u64(rng.random()).into(),
                 min_timestamp: BlockTimestamp::from_int_seconds(min_timestamp),
                 max_timestamp: BlockTimestamp::from_int_seconds(max_timestamp),
                 pool_balances: NonZeroPoolBalances::new(

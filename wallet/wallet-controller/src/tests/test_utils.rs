@@ -86,7 +86,7 @@ pub fn random_rpc_ft_info_with_id_ticker_decimals(
         token_ticker: ticker.into(),
         number_of_decimals: num_decimals,
         metadata_uri: gen_random_alnum_string(rng, 10, 20).into(),
-        circulating_supply: Amount::from_atoms(rng.gen()),
+        circulating_supply: Amount::from_atoms(rng.random()),
         total_supply: RPCTokenTotalSupply::Unlimited,
         is_locked: rng.gen_bool(0.5),
         frozen: random_rpc_is_token_frozen(rng),
@@ -97,11 +97,11 @@ pub fn random_rpc_ft_info_with_id_ticker_decimals(
 pub fn random_rpc_is_token_frozen(rng: &mut impl Rng) -> RPCIsTokenFrozen {
     if rng.gen_bool(0.5) {
         RPCIsTokenFrozen::NotFrozen {
-            freezable: rng.gen(),
+            freezable: rng.random(),
         }
     } else {
         RPCIsTokenFrozen::Frozen {
-            unfreezable: rng.gen(),
+            unfreezable: rng.random(),
         }
     }
 }
@@ -124,7 +124,7 @@ pub fn random_is_token_unfreezable(rng: &mut impl Rng) -> IsTokenUnfreezable {
 
 pub fn random_token_total_supply(rng: &mut impl Rng) -> TokenTotalSupply {
     match rng.gen_range(0..3) {
-        0 => TokenTotalSupply::Fixed(Amount::from_atoms(rng.gen())),
+        0 => TokenTotalSupply::Fixed(Amount::from_atoms(rng.random())),
         1 => TokenTotalSupply::Lockable,
         _ => TokenTotalSupply::Unlimited,
     }

@@ -79,7 +79,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let tx = Transaction::new(
-            rng.gen(),
+            rng.random(),
             vec![TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::Transaction(Id::random_using(&mut rng)),
                 rng.r#gen(),

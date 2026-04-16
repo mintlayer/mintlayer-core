@@ -62,7 +62,7 @@ impl SymmetricKey {
         let key = match kind {
             SymmetricKeyKind::XChacha20Poly1305 => {
                 SymmetricKeyHolder::XChacha20Poly1305(Chacha20poly1305Key::new_from_array(
-                    rng.gen::<[u8; Chacha20poly1305Key::KEY_LEN]>(),
+                    rng.random::<[u8; Chacha20poly1305Key::KEY_LEN]>(),
                 ))
             }
         };
@@ -114,7 +114,7 @@ mod test {
     #[test]
     fn encode_then_decode_key_from_slice() {
         let mut rng = make_true_rng();
-        let bytes = rng.gen::<[u8; Chacha20poly1305Key::KEY_LEN]>();
+        let bytes = rng.random::<[u8; Chacha20poly1305Key::KEY_LEN]>();
         let key = SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, &bytes).unwrap();
         let encoded = key.encode();
         let decoded = SymmetricKey::decode_all(&mut encoded.as_slice()).unwrap();
@@ -124,7 +124,7 @@ mod test {
     #[test]
     fn construct_key_from_slice_random_size() {
         let mut rng = make_true_rng();
-        let bytes: Vec<u8> = (0..rng.gen_range(0..100)).map(|_| rng.gen::<u8>()).collect();
+        let bytes: Vec<u8> = (0..rng.gen_range(0..100)).map(|_| rng.random::<u8>()).collect();
         let result =
             SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, bytes.as_slice());
         if bytes.len() == Chacha20poly1305Key::KEY_LEN {
@@ -153,8 +153,8 @@ mod test {
     fn encrypt_then_decrypt() {
         let mut rng = make_true_rng();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
-        let message_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let message_len = 1 + rng.random::<u32>() % 10000;
+        let message = (0..message_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, None).unwrap();
         let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
@@ -164,10 +164,10 @@ mod test {
     fn encrypt_then_decrypt_with_associated_data() {
         let mut rng = make_true_rng();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
-        let message_len = 1 + rng.gen::<u32>() % 10000;
-        let aead_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
-        let aead = (0..aead_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let message_len = 1 + rng.random::<u32>() % 10000;
+        let aead_len = 1 + rng.random::<u32>() % 10000;
+        let message = (0..message_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
+        let aead = (0..aead_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, Some(&aead)).unwrap();
         let decrypted = key.decrypt(&encrypted, Some(&aead)).unwrap();
         assert_eq!(message, decrypted);

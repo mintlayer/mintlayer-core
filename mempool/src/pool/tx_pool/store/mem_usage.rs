@@ -393,7 +393,7 @@ mod test {
     fn box_size(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let data: Vec<u8> = (0u32..rng.gen_range(0..=1000)).map(|_| rng.gen()).collect();
+        let data: Vec<u8> = (0u32..rng.gen_range(0..=1000)).map(|_| rng.random()).collect();
         let box_data = Box::new(data.clone());
         assert_eq!(total_memory_usage(&data), box_data.indirect_memory_usage());
     }
@@ -430,13 +430,13 @@ mod test {
 
         let len1 = rng.gen_range(0..=100);
         tracker.modify(&mut data, |data, _| {
-            data.extend((0..len1).map(|_| rng.gen::<u8>()))
+            data.extend((0..len1).map(|_| rng.random::<u8>()))
         });
         assert_eq!(tracker.get_usage(), len1);
 
         let len2 = rng.gen_range(0..=300);
         tracker.modify(&mut data, |data, _| {
-            data.extend((0..len2).map(|_| rng.gen::<u8>()))
+            data.extend((0..len2).map(|_| rng.random::<u8>()))
         });
         assert_eq!(tracker.get_usage(), len1 + len2);
     }

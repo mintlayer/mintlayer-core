@@ -82,7 +82,7 @@ where
 
 pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
     for _ in 0..1000 {
-        let random_byte = rng.gen::<u8>();
+        let random_byte = rng.random::<u8>();
         if !random_byte.is_ascii_alphanumeric() {
             return random_byte;
         }
@@ -105,8 +105,8 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
 
 pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
     assert!(!c.is_ascii_alphanumeric());
-    let text_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % text_len;
+    let text_len = 1 + rng.random::<usize>() % max_len;
+    let random_index_to_replace = rng.random::<usize>() % text_len;
     let token_ticker: Vec<u8> = (0..text_len)
         .map(|idx| {
             if idx != random_index_to_replace {
@@ -239,7 +239,7 @@ mod tests {
         assert_eq!(vec![0], split_value(&mut rng, 0));
         assert_eq!(vec![1], split_value(&mut rng, 1));
 
-        let value = rng.gen::<u128>();
+        let value = rng.random::<u128>();
         let result = split_value(&mut rng, value);
         assert_eq!(value, result.iter().sum());
     }

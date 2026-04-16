@@ -255,7 +255,7 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
             let (raw_sig, htlc_spend_tag) = match rng.gen_range(0..3) {
                 0 => (raw_sig, None),
                 1 => {
-                    let secret = HtlcSecret::new(rng.gen());
+                    let secret = HtlcSecret::new(rng.random());
                     let raw_sig =
                         AuthorizedHashedTimelockContractSpend::Spend(secret, raw_sig).encode();
 

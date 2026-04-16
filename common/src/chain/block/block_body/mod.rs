@@ -152,7 +152,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        let flags = rng.gen::<u128>();
+        let flags = rng.random::<u128>();
 
         let tx = Transaction::new(flags, inputs.clone(), outputs).expect("Creating tx caused fail");
 

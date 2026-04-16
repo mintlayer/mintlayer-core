@@ -556,7 +556,7 @@ where
         {
             let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
             let height1 = height1_u64.into();
-            let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
+            let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.random::<u64>());
             let aux_data1 =
                 BlockAuxData::new(owning_block1.into(), height1, random_block_timestamp);
             db_tx.set_block_aux_data(owning_block1, &aux_data1).await.unwrap();
@@ -602,7 +602,7 @@ where
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let random_block_id = Id::<Block>::random_using(&mut rng);
-        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
+        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.random::<u64>());
         let block = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert!(block.is_none());
 
@@ -619,7 +619,7 @@ where
         // Test overwrite
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
-        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
+        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.random::<u64>());
         let aux_data2 =
             BlockAuxData::new(existing_block_id.into(), height2, random_block_timestamp);
         db_tx.set_block_aux_data(existing_block_id, &aux_data2).await.unwrap();
@@ -652,7 +652,7 @@ where
         let random_tx_id = Id::<Transaction>::random_using(&mut rng);
         let outpoint = UtxoOutPoint::new(
             OutPointSourceId::Transaction(random_tx_id),
-            rng.gen::<u32>(),
+            rng.random::<u32>(),
         );
         let output = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
@@ -768,7 +768,7 @@ where
             let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let outpoint = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
-                rng.gen::<u32>(),
+                rng.random::<u32>(),
             );
             let output = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
@@ -820,7 +820,7 @@ where
             let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let locked_outpoint = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
-                rng.gen::<u32>(),
+                rng.random::<u32>(),
             );
             let locked_output = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
@@ -879,7 +879,7 @@ where
             let random_tx_id = Id::<Transaction>::random_using(&mut rng);
             let outpoint2 = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(random_tx_id),
-                rng.gen::<u32>(),
+                rng.random::<u32>(),
             );
             let output2 = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
@@ -1118,10 +1118,10 @@ where
 
         {
             let random_pool_id = PoolId::random_using(&mut rng);
-            let random_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
+            let random_block_height = BlockHeight::new(rng.random::<u32>() as u64);
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
-            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let amount_to_stake = Amount::from_atoms(rng.random::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.random::<u128>());
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
@@ -1152,13 +1152,13 @@ where
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let amount_to_stake = {
-                let mut amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+                let mut amount_to_stake = Amount::from_atoms(rng.random::<u128>());
                 while amount_to_stake == random_pool_data.staker_balance().unwrap() {
-                    amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+                    amount_to_stake = Amount::from_atoms(rng.random::<u128>());
                 }
                 amount_to_stake
             };
-            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.random::<u128>());
             let margin_ratio_per_thousand = rng.gen_range(1..=1000);
             let random_pool_data2 = PoolData::new(
                 Destination::PublicKey(pk),
@@ -1169,9 +1169,9 @@ where
                 cost_per_block,
             );
             let random_block_height2 = {
-                let mut height = BlockHeight::new(rng.gen::<u32>() as u64);
+                let mut height = BlockHeight::new(rng.random::<u32>() as u64);
                 while height == random_block_height {
-                    height = BlockHeight::new(rng.gen::<u32>() as u64)
+                    height = BlockHeight::new(rng.random::<u32>() as u64)
                 }
                 height
             };
@@ -1220,8 +1220,8 @@ where
             // update the first one
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
-            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let amount_to_stake = Amount::from_atoms(rng.random::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.random::<u128>());
             let margin_ratio_per_thousand = rng.gen_range(1..=1000);
             let random_pool_data_new = PoolData::new(
                 Destination::PublicKey(pk.clone()),
@@ -1346,10 +1346,10 @@ where
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let random_pool_id = PoolId::random_using(&mut rng);
             let random_pool_id2 = PoolId::random_using(&mut rng);
-            let random_balance = Amount::from_atoms(rng.gen::<u128>());
-            let random_balance2 = Amount::from_atoms(rng.gen::<u128>());
-            let random_nonce = AccountNonce::new(rng.gen::<u64>());
-            let random_nonce2 = AccountNonce::new(rng.gen::<u64>());
+            let random_balance = Amount::from_atoms(rng.random::<u128>());
+            let random_balance2 = Amount::from_atoms(rng.random::<u128>());
+            let random_nonce = AccountNonce::new(rng.random::<u64>());
+            let random_nonce2 = AccountNonce::new(rng.random::<u64>());
 
             let random_delegation = Delegation::new(
                 random_block_height,
@@ -1406,8 +1406,8 @@ where
             assert_eq!(delegation, &random_delegation2);
 
             // update delegation on new height
-            let random_balance = Amount::from_atoms(rng.gen::<u128>());
-            let random_nonce = AccountNonce::new(rng.gen::<u64>());
+            let random_balance = Amount::from_atoms(rng.random::<u128>());
+            let random_nonce = AccountNonce::new(rng.random::<u64>());
 
             let random_delegation_new = Delegation::new(
                 random_block_height,
@@ -2176,7 +2176,7 @@ fn random_order(
         initially_asked: ask_amount,
         ask_balance: ask_amount,
         is_frozen: false,
-        next_nonce: AccountNonce::new(rng.gen::<u64>()),
+        next_nonce: AccountNonce::new(rng.random::<u64>()),
     };
     (order_id, order)
 }

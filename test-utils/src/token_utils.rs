@@ -70,7 +70,7 @@ pub fn random_token_issuance_v1_with_min_supply(
         TokenTotalSupplyTag::Unlimited => TokenTotalSupply::Unlimited,
     };
 
-    let is_freezable = if rng.gen::<bool>() {
+    let is_freezable = if rng.random::<bool>() {
         IsTokenFreezable::Yes
     } else {
         IsTokenFreezable::No

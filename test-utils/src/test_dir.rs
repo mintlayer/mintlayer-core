@@ -87,8 +87,8 @@ impl TestRoot {
         // Create the top-level directory if it does not exist already
         fs::create_dir_all(top_path.as_ref())?;
 
-        for delay in backoff_delays(Seed::from_u64(rng.gen())) {
-            let path = top_path.as_ref().join(format!("run_{:08x}", rng.gen::<u32>()));
+        for delay in backoff_delays(Seed::from_u64(rng.random())) {
+            let path = top_path.as_ref().join(format!("run_{:08x}", rng.random::<u32>()));
 
             // Attempt to create the candidate directory
             match try_create_dir(&path)? {

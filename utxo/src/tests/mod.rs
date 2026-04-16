@@ -916,10 +916,10 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
 
     // spend from an account in a transaction
     let input = TxInput::from_account(
-        AccountNonce::new(rng.gen()),
+        AccountNonce::new(rng.random()),
         AccountSpending::DelegationBalance(
             DelegationId::new(H256::random_using(&mut rng)),
-            Amount::from_atoms(rng.gen()),
+            Amount::from_atoms(rng.random()),
         ),
     );
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();

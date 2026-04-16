@@ -31,7 +31,7 @@ fn random_candidate(peer_role: PeerRole, rng: &mut impl Rng) -> EvictionCandidat
     EvictionCandidate {
         age: Duration::from_secs(rng.gen_range(0..10000)),
         peer_id: PeerId::new(),
-        net_group_keyed: NetGroupKeyed(rng.gen()),
+        net_group_keyed: NetGroupKeyed(rng.random()),
         ping_min: rng.gen_range(0..100),
         peer_role,
         last_tip_block_time: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),

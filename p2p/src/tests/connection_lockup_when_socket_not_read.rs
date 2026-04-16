@@ -141,7 +141,7 @@ async fn no_connection_lockup_when_socket_not_read(#[case] seed: Seed) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -343,7 +343,7 @@ async fn timeout_when_socket_not_read(
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

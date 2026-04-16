@@ -949,7 +949,7 @@ pub async fn make_new_top_blocks_return_headers(
 ) -> Vec<SignedBlockHeader> {
     assert!(count > 0);
 
-    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.gen()));
+    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.random()));
 
     chainstate
         .call_mut(move |cs| {

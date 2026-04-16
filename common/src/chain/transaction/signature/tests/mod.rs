@@ -719,7 +719,7 @@ fn check_append_input(
         OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(rng)));
 
     let inputs_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(rng.gen())),
+        OutputValue::Coin(Amount::from_atoms(rng.random())),
         Destination::AnyoneCanSpend,
     );
     let mut input_commitments = original_tx.input_commitments.clone();
@@ -787,7 +787,7 @@ fn check_append_output(
     let mut tx_updater = MutableTransaction::from(&original_tx.tx);
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     tx_updater.outputs.push(TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(rng.gen())),
+        OutputValue::Coin(Amount::from_atoms(rng.random())),
         Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
@@ -898,7 +898,7 @@ fn check_mutate_input_commitment(
     should_fail: bool,
 ) {
     let input_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(rng.gen())),
+        OutputValue::Coin(Amount::from_atoms(rng.random())),
         Destination::AnyoneCanSpend,
     );
     let mut input_commitments = original_tx.input_commitments.clone();
@@ -958,7 +958,7 @@ fn mutate_each_input_commitment_check_same_input(
 ) {
     for input_index in 0..original_tx.input_commitments.len() {
         let input_utxo = TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
             Destination::AnyoneCanSpend,
         );
         let mut input_commitments = original_tx.input_commitments.clone();
