@@ -310,8 +310,8 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let final_supply = Amount::from_atoms(600_000_000);
-        let pool_balance = Amount::from_atoms(rng.gen_range(2..final_supply.into_atoms()));
-        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+        let pool_balance = Amount::from_atoms(rng.random_range(2..final_supply.into_atoms()));
+        let pledge_amount = Amount::from_atoms(rng.random_range(1..pool_balance.into_atoms()));
 
         let actual = effective_pool_balance_impl(
             pledge_amount,
@@ -343,8 +343,8 @@ mod tests {
     ) {
         let mut rng = make_seedable_rng(seed);
 
-        let pool_balance = Amount::from_atoms(rng.gen_range(2..(final_supply.into_atoms() / K)));
-        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+        let pool_balance = Amount::from_atoms(rng.random_range(2..(final_supply.into_atoms() / K)));
+        let pledge_amount = Amount::from_atoms(rng.random_range(1..pool_balance.into_atoms()));
 
         let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
         let expected = effective_pool_balance_float_impl(
@@ -370,8 +370,8 @@ mod tests {
             .unwrap();
 
         let pool_balance =
-            Amount::from_atoms(rng.gen_range(cap.into_atoms()..final_supply.into_atoms()));
-        let pledge_amount = Amount::from_atoms(rng.gen_range(1..cap.into_atoms()));
+            Amount::from_atoms(rng.random_range(cap.into_atoms()..final_supply.into_atoms()));
+        let pledge_amount = Amount::from_atoms(rng.random_range(1..cap.into_atoms()));
 
         let expected = effective_pool_balance(pledge_amount, cap, final_supply).unwrap();
         let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
@@ -388,8 +388,8 @@ mod tests {
 
         let cap = (final_supply / 100).unwrap();
         let pool_balance =
-            Amount::from_atoms(rng.gen_range(cap.into_atoms()..final_supply.into_atoms()));
-        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+            Amount::from_atoms(rng.random_range(cap.into_atoms()..final_supply.into_atoms()));
+        let pledge_amount = Amount::from_atoms(rng.random_range(1..pool_balance.into_atoms()));
 
         let _ = effective_pool_balance_impl(
             pledge_amount,
@@ -408,7 +408,7 @@ mod tests {
     fn effective_balance_proportional(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let final_supply =
-            CoinUnit::from_coins(rng.gen_range(1_000_000..600_000_000)).to_amount_atoms();
+            CoinUnit::from_coins(rng.random_range(1_000_000..600_000_000)).to_amount_atoms();
         let pool_balance = (final_supply / 1000).unwrap();
 
         let step = CoinUnit::from_coins(1000).to_amount_atoms().into_atoms();
@@ -438,14 +438,14 @@ mod tests {
     fn effective_balance_curve(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let final_supply =
-            CoinUnit::from_coins(rng.gen_range(10_000..600_000_000)).to_amount_atoms();
+            CoinUnit::from_coins(rng.random_range(10_000..600_000_000)).to_amount_atoms();
 
         let min_pool_balance = CoinUnit::from_coins(1).to_amount_atoms();
         let max_pool_balance = (final_supply * (*POOL_SATURATION_LEVEL.numer()))
             .and_then(|v| v / *POOL_SATURATION_LEVEL.denom())
             .unwrap();
         let pool_balance = Amount::from_atoms(
-            rng.gen_range(min_pool_balance.into_atoms()..max_pool_balance.into_atoms()),
+            rng.random_range(min_pool_balance.into_atoms()..max_pool_balance.into_atoms()),
         );
 
         let step = CoinUnit::from_coins(1000).to_amount_atoms().into_atoms();

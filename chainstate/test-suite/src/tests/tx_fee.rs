@@ -61,7 +61,7 @@ fn simple_fee_from_coin_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, tf) = setup(&mut rng);
 
-        let transfer_atoms = rng.gen_range(1..100_000);
+        let transfer_atoms = rng.random_range(1..100_000);
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
             .coin_amount()
@@ -110,9 +110,9 @@ fn transfer_lock_and_burn_outputs_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, tf) = setup(&mut rng);
 
-        let locked_atoms = rng.gen_range(1..100_000);
-        let not_locked_atoms = rng.gen_range(1..100_000);
-        let burned_atoms = rng.gen_range(1..100_000);
+        let locked_atoms = rng.random_range(1..100_000);
+        let not_locked_atoms = rng.random_range(1..100_000);
+        let burned_atoms = rng.random_range(1..100_000);
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
             .coin_amount()
@@ -182,7 +182,7 @@ fn locked_outputs_can_go_to_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
 
-        let locked_atoms = rng.gen_range(1..100_000);
+        let locked_atoms = rng.random_range(1..100_000);
         let timelock_secs = 10;
         let locked_outputs = test_utils::split_value(&mut rng, locked_atoms)
             .into_iter()
@@ -206,7 +206,7 @@ fn locked_outputs_can_go_to_fee(#[case] seed: Seed) {
         let tx_id = tx.transaction().get_id();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        let not_locked_atoms = rng.gen_range(1..=locked_atoms);
+        let not_locked_atoms = rng.random_range(1..=locked_atoms);
         let expected_fee = Fee(Amount::from_atoms(locked_atoms - not_locked_atoms));
 
         let not_locked_outputs = test_utils::split_value(&mut rng, not_locked_atoms)
@@ -261,7 +261,7 @@ fn create_stake_pool(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -309,10 +309,10 @@ fn delegate_staking(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
-        let delegated_atoms = rng.gen_range(1..100_000);
+        let delegated_atoms = rng.random_range(1..100_000);
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
         let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
@@ -395,7 +395,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -421,7 +421,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             .build();
         let required_maturity_distance =
             chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(2));
-        let maturity_distance = rng.gen_range(
+        let maturity_distance = rng.random_range(
             required_maturity_distance.to_int()..(required_maturity_distance.to_int() * 2),
         );
 
@@ -481,7 +481,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
         let pool_id = PoolId::from_utxo(&stake_pool_outpoint);
         let delegation_id = DelegationId::from_utxo(&stake_pool_outpoint);
-        let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_delegate = Amount::from_atoms(rng.random_range(1..100_000));
 
         let delegate_staking_tx = TransactionBuilder::new()
             .add_input(TxInput::Utxo(stake_pool_outpoint), empty_witness(&mut rng))
@@ -507,7 +507,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
             .build();
         let required_maturity_distance =
             chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(2));
-        let maturity_distance = rng.gen_range(
+        let maturity_distance = rng.random_range(
             required_maturity_distance.to_int()..(required_maturity_distance.to_int() * 2),
         );
 
@@ -583,7 +583,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
         let issuance = TokenIssuanceV0 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(100),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         };
 
@@ -633,7 +633,7 @@ fn issue_fungible_token_v1(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -681,7 +681,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -709,7 +709,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
         let token_mint_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(token_issuance_tx_id.into(), 1),

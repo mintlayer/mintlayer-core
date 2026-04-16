@@ -259,7 +259,7 @@ mod tests {
             {
                 let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let mut cipher_text = shared_secret1.encrypt(&random_message, &mut rng).unwrap();
-                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                let char_to_tamper_with = rng.random_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
                 shared_secret2.decrypt(&cipher_text).unwrap_err();
             }
@@ -267,7 +267,7 @@ mod tests {
             {
                 let random_message: Vec<u8> = (0..100).map(|_| rng.random()).collect();
                 let mut cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
-                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                let char_to_tamper_with = rng.random_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
                 shared_secret1.decrypt(&cipher_text).unwrap_err();
             }
@@ -283,7 +283,7 @@ mod tests {
                     .collect();
 
                 let mut cipher_text = shared_secret1.encode_then_encrypt(&obj, &mut rng).unwrap();
-                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                let char_to_tamper_with = rng.random_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
                 shared_secret2.decrypt_then_decode::<String>(&cipher_text).unwrap_err();
             }
@@ -296,7 +296,7 @@ mod tests {
                     .collect();
 
                 let mut cipher_text = shared_secret2.encode_then_encrypt(&obj, &mut rng).unwrap();
-                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                let char_to_tamper_with = rng.random_range(0..cipher_text.len());
                 cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
                 shared_secret1.decrypt_then_decode::<String>(&cipher_text).unwrap_err();
             }

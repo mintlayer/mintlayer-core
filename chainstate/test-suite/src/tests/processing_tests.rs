@@ -446,7 +446,7 @@ fn straight_chain(#[case] seed: Seed) {
         let mut block_index = GenBlockIndex::genesis(chain_config_clone);
         let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
-        for _ in 0..rng.gen_range(100..200) {
+        for _ in 0..rng.random_range(100..200) {
             assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_blk_id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();

@@ -76,7 +76,7 @@ async fn ok(#[case] seed: Seed) {
 
                     let token_issuance = TokenIssuanceV1 {
                         token_ticker: "XXXX".as_bytes().to_vec(),
-                        number_of_decimals: rng.gen_range(1..18),
+                        number_of_decimals: rng.random_range(1..18),
                         metadata_uri: "http://uri".as_bytes().to_vec(),
                         total_supply: TokenTotalSupply::Unlimited,
                         authority: dest.clone(),
@@ -121,7 +121,7 @@ async fn ok(#[case] seed: Seed) {
                         && (bob_token_ids.is_empty() || rng.random_bool(0.5))
                     {
                         (
-                            alice_token_ids.remove(rng.gen_range(0..alice_token_ids.len())),
+                            alice_token_ids.remove(rng.random_range(0..alice_token_ids.len())),
                             alice_destination.clone(),
                             bob_destination.clone(),
                             &alice_sk,
@@ -129,7 +129,7 @@ async fn ok(#[case] seed: Seed) {
                         )
                     } else {
                         (
-                            bob_token_ids.remove(rng.gen_range(0..bob_token_ids.len())),
+                            bob_token_ids.remove(rng.random_range(0..bob_token_ids.len())),
                             bob_destination.clone(),
                             alice_destination.clone(),
                             &bob_sk,

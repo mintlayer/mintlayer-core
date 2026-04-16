@@ -1269,7 +1269,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 async fn mempool_full_real(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let num_txs = rng.gen_range(5..20);
+    let num_txs = rng.random_range(5..20);
     let time = TimeGetter::default().get_time();
     let txs: Vec<_> = generate_transaction_graph(&mut rng, time).take(num_txs).collect();
 
@@ -1471,7 +1471,7 @@ async fn initial_values(#[case] seed: Seed) {
 
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: FeeRate::from_atoms_per_kb(
-            rng.gen_range(100_000..100_000_000_000_000),
+            rng.random_range(100_000..100_000_000_000_000),
         )
         .into(),
     };
@@ -1480,13 +1480,13 @@ async fn initial_values(#[case] seed: Seed) {
 
     let initial_fee_rate =
         TxPool::<StoreMemoryUsageEstimator>::get_initial_fee_rate(&mempool_config);
-    let fee_rate = tx_pool.get_fee_rate(rng.gen_range(1..100));
+    let fee_rate = tx_pool.get_fee_rate(rng.random_range(1..100));
     assert_eq!(initial_fee_rate, fee_rate);
 
     let initial_fee_rate_points =
         TxPool::<StoreMemoryUsageEstimator>::get_initial_fee_rate_points(&mempool_config).unwrap();
     let fee_rate_points = tx_pool
-        .get_fee_rate_points(NonZeroUsize::new(rng.gen_range(1..100)).unwrap())
+        .get_fee_rate_points(NonZeroUsize::new(rng.random_range(1..100)).unwrap())
         .unwrap();
     assert_eq!(initial_fee_rate_points, fee_rate_points);
 }

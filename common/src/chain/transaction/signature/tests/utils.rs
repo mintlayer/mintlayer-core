@@ -91,7 +91,7 @@ pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutp
                 make_random_destination(rng),
                 make_random_vrf_pub_key(rng),
                 make_random_destination(rng),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
                 Amount::from_atoms(rng.random()),
             );
             TxOutput::CreateStakePool(pool_id, Box::new(pool_data))

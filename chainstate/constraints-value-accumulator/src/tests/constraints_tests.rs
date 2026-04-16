@@ -71,8 +71,8 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(100..1000);
-    let fee_atoms = rng.gen_range(1..100);
+    let staked_atoms = rng.random_range(100..1000);
+    let fee_atoms = rng.random_range(1..100);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = InMemoryPoSAccounting::from_values(
@@ -146,8 +146,8 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let delegation_id = DelegationId::new(H256::zero());
     let delegation_data =
         DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
-    let delegated_atoms = rng.gen_range(100..1000);
-    let fee_atoms = rng.gen_range(1..100);
+    let delegated_atoms = rng.random_range(100..1000);
+    let fee_atoms = rng.random_range(1..100);
 
     let pos_store = InMemoryPoSAccounting::from_values(
         BTreeMap::new(),
@@ -216,8 +216,8 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     let block_height = BlockHeight::new(1);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(100..1000);
-    let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
+    let staked_atoms = rng.random_range(100..1000);
+    let less_than_staked_amount = Amount::from_atoms(rng.random_range(1..staked_atoms));
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = InMemoryPoSAccounting::from_values(
@@ -329,8 +329,8 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(100..1000);
-    let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
+    let staked_atoms = rng.random_range(100..1000);
+    let less_than_staked_amount = Amount::from_atoms(rng.random_range(1..staked_atoms));
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = InMemoryPoSAccounting::from_values(
@@ -473,15 +473,15 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let block_height = BlockHeight::new(1);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(100..1000);
+    let staked_atoms = rng.random_range(100..1000);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let delegation_id = DelegationId::new(H256::zero());
     let delegation_data =
         DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
-    let delegated_atoms = rng.gen_range(1..1000);
+    let delegated_atoms = rng.random_range(1..1000);
 
-    let transferred_atoms = rng.gen_range(100..1000);
+    let transferred_atoms = rng.random_range(100..1000);
 
     let pos_store = InMemoryPoSAccounting::from_values(
         BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
@@ -606,7 +606,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     let delegation_id = DelegationId::new(H256::zero());
     let delegation_data =
         DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
-    let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
+    let delegation_balance = Amount::from_atoms(rng.random_range(100..1000));
     let overspent_amount = (delegation_balance + Amount::from_atoms(1)).unwrap();
 
     let pos_store = InMemoryPoSAccounting::from_values(
@@ -1373,7 +1373,7 @@ fn htlc_output(#[case] seed: Seed) {
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let block_height = BlockHeight::new(1);
-    let balance = Amount::from_atoms(rng.gen_range(1..1000));
+    let balance = Amount::from_atoms(rng.random_range(1..1000));
 
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);
@@ -1467,7 +1467,7 @@ fn htlc_input(#[case] seed: Seed) {
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let block_height = BlockHeight::new(1);
-    let balance = Amount::from_atoms(rng.gen_range(1..1000));
+    let balance = Amount::from_atoms(rng.random_range(1..1000));
 
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);

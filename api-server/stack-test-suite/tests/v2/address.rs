@@ -143,9 +143,9 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
 
                 // Generate two outputs for a single transaction
 
-                let random_coin_amount1 = rng.gen_range(1..10);
-                let random_coin_amount2 = rng.gen_range(1..10);
-                let random_coin_amount3 = rng.gen_range(1..10);
+                let random_coin_amount1 = rng.random_range(1..10);
+                let random_coin_amount2 = rng.random_range(1..10);
+                let random_coin_amount3 = rng.random_range(1..10);
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
@@ -385,9 +385,9 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
 
                 // Generate two outputs for a single transaction
 
-                let random_coin_amount1 = rng.gen_range(1..10);
-                let random_coin_amount2 = rng.gen_range(1..10);
-                let random_coin_amount3 = rng.gen_range(1..10);
+                let random_coin_amount1 = rng.random_range(1..10);
+                let random_coin_amount2 = rng.random_range(1..10);
+                let random_coin_amount3 = rng.random_range(1..10);
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
@@ -633,8 +633,8 @@ async fn ok(#[case] seed: Seed) {
                     .unwrap()
                     .block_id()];
 
-                for _ in 0..rng.gen_range(1..100) {
-                    let random_coin_amount = rng.gen_range(1..10);
+                for _ in 0..rng.random_range(1..100) {
+                    let random_coin_amount = rng.random_range(1..10);
 
                     alice_balance =
                         (alice_balance - Amount::from_atoms(random_coin_amount)).unwrap();

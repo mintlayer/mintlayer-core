@@ -124,7 +124,7 @@ mod test {
     #[test]
     fn construct_key_from_slice_random_size() {
         let mut rng = make_true_rng();
-        let bytes: Vec<u8> = (0..rng.gen_range(0..100)).map(|_| rng.random::<u8>()).collect();
+        let bytes: Vec<u8> = (0..rng.random_range(0..100)).map(|_| rng.random::<u8>()).collect();
         let result =
             SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, bytes.as_slice());
         if bytes.len() == Chacha20poly1305Key::KEY_LEN {

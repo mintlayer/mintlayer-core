@@ -1578,7 +1578,7 @@ mod produce_block {
             )
         };
 
-        let blocks_to_generate = rng.gen_range(100..=1000);
+        let blocks_to_generate = rng.random_range(100..=1000);
 
         let override_chain_config = {
             let genesis_block = Genesis::new(
@@ -1606,14 +1606,14 @@ mod produce_block {
             let mut next_height_consensus_change = 1;
 
             while next_height_consensus_change < blocks_to_generate {
-                let next_consensus_type = rng.gen_range(0..consensus_types.len());
+                let next_consensus_type = rng.random_range(0..consensus_types.len());
 
                 randomized_net_upgrades.push((
                     BlockHeight::new(next_height_consensus_change),
                     consensus_types[next_consensus_type].clone(),
                 ));
 
-                next_height_consensus_change += rng.gen_range(1..50);
+                next_height_consensus_change += rng.random_range(1..50);
             }
 
             let net_upgrades =

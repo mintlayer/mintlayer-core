@@ -44,8 +44,8 @@ pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> 
 
     TokenIssuanceV0 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
-        amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-        number_of_decimals: rng.gen_range(1..max_dec_count),
+        amount_to_issue: Amount::from_atoms(rng.random_range(1..u128::MAX)),
+        number_of_decimals: rng.random_range(1..max_dec_count),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
     }
 }
@@ -63,7 +63,7 @@ pub fn random_token_issuance_v1_with_min_supply(
     let supply = match TokenTotalSupplyTag::iter().choose(rng).expect("cannot fail") {
         TokenTotalSupplyTag::Fixed => {
             let max_supply = std::cmp::max(min_supply * 2, 1_000_000);
-            let supply = Amount::from_atoms(rng.gen_range(min_supply..=max_supply));
+            let supply = Amount::from_atoms(rng.random_range(min_supply..=max_supply));
             TokenTotalSupply::Fixed(supply)
         }
         TokenTotalSupplyTag::Lockable => TokenTotalSupply::Lockable,
@@ -78,7 +78,7 @@ pub fn random_token_issuance_v1_with_min_supply(
 
     TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
-        number_of_decimals: rng.gen_range(1..max_dec_count),
+        number_of_decimals: rng.random_range(1..max_dec_count),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
         total_supply: supply,
         is_freezable,

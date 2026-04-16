@@ -96,7 +96,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let token_issuance = TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
-                    number_of_decimals: rng.gen_range(1..18),
+                    number_of_decimals: rng.random_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                     total_supply: TokenTotalSupply::Unlimited,
                     authority: alice_destination,

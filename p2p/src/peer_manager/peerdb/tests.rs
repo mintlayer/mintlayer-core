@@ -954,7 +954,7 @@ fn new_tried_addr_selection_frequency() {
             let mut total_selected_new_addrs = 0;
             let mut total_selected_tried_addrs = 0;
             for _ in 0..100 {
-                let count_to_select = rng.gen_range(count_to_select_range.clone());
+                let count_to_select = rng.random_range(count_to_select_range.clone());
                 let selected_addrs = peerdb.select_non_reserved_outbound_addresses(
                     &empty_addr_groups_set,
                     &|_| true,

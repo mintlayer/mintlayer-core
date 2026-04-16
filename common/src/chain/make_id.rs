@@ -188,7 +188,7 @@ mod tests {
     fn token_id_consistency(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let fork_height = BlockHeight::new(rng.gen_range(1..1_000_000));
+        let fork_height = BlockHeight::new(rng.random_range(1..1_000_000));
         let chain_config = config::Builder::test_chain()
             .chainstate_upgrades(
                 NetUpgrades::initialize(vec![

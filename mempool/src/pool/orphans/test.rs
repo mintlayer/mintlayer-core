@@ -54,16 +54,16 @@ fn check_integrity(orphans: &TxOrphanPool) {
 }
 
 fn random_peer_origin(rng: &mut impl Rng) -> RemoteTxOrigin {
-    RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
+    RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.random_range(0u64..20)))
 }
 
 fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
-    let n_inputs = rng.gen_range(1..=10);
+    let n_inputs = rng.random_range(1..=10);
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
             if rng.random_bool(0.8) {
                 let source: Id<Transaction> = H256(rng.random()).into();
-                let output_index = rng.gen_range(0..=400);
+                let output_index = rng.random_range(0..=400);
                 TxInput::from_utxo(source.into(), output_index)
             } else {
                 let nonce = AccountNonce::new(rng.random());
@@ -141,7 +141,7 @@ fn capacity_reached(#[case] seed: Seed) {
 
     assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
 
-    for entry in (0..rng.gen_range(1..100)).map(|_| random_tx_entry(&mut rng)) {
+    for entry in (0..rng.random_range(1..100)).map(|_| random_tx_entry(&mut rng)) {
         let _ = orphans.insert_and_enforce_limits(entry, time);
         assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
     }
@@ -157,7 +157,7 @@ fn simulation(#[case] seed: Seed) {
 
     for _ in 0..300 {
         let len_before = orphans.len();
-        match rng.gen_range(0..=4) {
+        match rng.random_range(0..=4) {
             // Insert a random tx
             0..=1 => {
                 let entry = random_tx_entry(&mut rng);
@@ -174,7 +174,7 @@ fn simulation(#[case] seed: Seed) {
                 if orphans.transactions.is_empty() {
                     continue;
                 }
-                let i = rng.gen_range(0..orphans.transactions.len());
+                let i = rng.random_range(0..orphans.transactions.len());
                 let id = *orphans.transactions[i].tx_id();
                 assert!(
                     orphans.entry(&id).map(|e| e.take()).is_some(),
@@ -185,7 +185,7 @@ fn simulation(#[case] seed: Seed) {
 
             // Enforce size limits
             3..=3 => {
-                let limit = rng.gen_range(0..=150);
+                let limit = rng.random_range(0..=150);
                 orphans.enforce_max_size(limit);
                 assert!(orphans.len() <= limit);
                 assert!(orphans.len() <= len_before);

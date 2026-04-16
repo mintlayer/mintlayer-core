@@ -275,7 +275,7 @@ pub mod test_utils {
             // so some test may malfunction if such an address is generated.
             // On the other hand, in general, it doesn't make much sense to produce random socket
             // addresses with zero port, so we disable it on this level.
-            rng.gen_range(1..=u16::MAX),
+            rng.random_range(1..=u16::MAX),
         );
         SocketAddress::new(SocketAddr::V4(addr_v4))
     }

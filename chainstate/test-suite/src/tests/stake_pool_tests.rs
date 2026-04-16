@@ -63,7 +63,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -107,7 +107,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -123,7 +123,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(100_000..200_000))),
                 anyonecanspend_address(),
             ))
             .build();
@@ -148,7 +148,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -193,7 +193,7 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let tx0 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(
@@ -287,7 +287,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -335,7 +335,7 @@ fn stake_pool_twice_two_blocks(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -386,7 +386,7 @@ fn stake_pool_twice_two_txs(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
@@ -494,7 +494,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
         let min_pledge = tf.chainstate.get_chain_config().min_stake_pool_pledge();
 
         // invalid case
-        let amount_to_stake = Amount::from_atoms(rng.gen_range(1..min_pledge.into_atoms()));
+        let amount_to_stake = Amount::from_atoms(rng.random_range(1..min_pledge.into_atoms()));
         let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(
             &mut rng,
             amount_to_stake,
@@ -549,7 +549,7 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -643,7 +643,7 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -709,7 +709,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+            Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
 
         let stake_pool_data = StakePoolData::new(
             amount_to_stake,

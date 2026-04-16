@@ -253,9 +253,9 @@ pub fn coins(amount: u32) -> OutputValue {
 }
 
 pub fn some_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
-    coins(rng.gen_range(100_000..200_000))
+    coins(rng.random_range(100_000..200_000))
 }
 
 pub fn less_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
-    coins(rng.gen_range(50_000..100_000))
+    coins(rng.random_range(50_000..100_000))
 }

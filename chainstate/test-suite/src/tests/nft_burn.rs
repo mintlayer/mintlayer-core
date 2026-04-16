@@ -70,7 +70,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Burn(OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.gen_range(2..123)),
+                Amount::from_atoms(rng.random_range(2..123)),
             )))
             .build();
         let tx_id = tx.transaction().get_id();

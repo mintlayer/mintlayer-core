@@ -70,7 +70,7 @@ pub enum Presence {
 pub fn create_tx_outputs(rng: &mut (impl Rng + CryptoRng), size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
     for _ in 0..size {
-        let random_amt = rng.gen_range(1..u128::MAX);
+        let random_amt = rng.random_range(1..u128::MAX);
         let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         tx_outputs.push(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(random_amt)),
@@ -109,13 +109,13 @@ pub fn convert_to_utxo(
 }
 
 pub fn create_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
-    let random_value = rng.gen_range(0..u128::MAX);
+    let random_value = rng.random_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, Some(block_height))
 }
 
 pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, UtxoOutPoint) {
-    let random_value = rng.gen_range(0..u128::MAX);
+    let random_value = rng.random_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, None)
 }
@@ -134,7 +134,7 @@ fn inner_create_utxo(
     block_height: Option<u64>,
 ) -> (Utxo, UtxoOutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
-    let output_value = rng.gen_range(0..u128::MAX);
+    let output_value = rng.random_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(output_value)),
@@ -177,7 +177,7 @@ pub fn insert_single_entry<P>(
     cache_flags: Option<(IsFresh, IsDirty)>,
     outpoint: Option<UtxoOutPoint>,
 ) -> (Utxo, UtxoOutPoint) {
-    let rng_height = rng.gen_range(0..(u64::MAX - 1));
+    let rng_height = rng.random_range(0..(u64::MAX - 1));
     let (utxo, outpoint_x) = create_utxo(rng, rng_height);
     let outpoint = outpoint.unwrap_or(outpoint_x);
     let key = &outpoint;

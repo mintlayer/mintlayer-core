@@ -69,7 +69,7 @@ mod test {
     fn mac_key_of_any_size(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let key_size = rng.gen_range(0..=1000);
+        let key_size = rng.random_range(0..=1000);
 
         let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 

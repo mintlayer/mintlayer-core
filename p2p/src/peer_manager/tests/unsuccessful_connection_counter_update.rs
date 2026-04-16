@@ -99,7 +99,7 @@ async fn auto_connection_fails_peer_state_becomes_disconnected(
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let feeler_connections_interval = Duration::from_secs(rng.gen_range(1..100));
+    let feeler_connections_interval = Duration::from_secs(rng.random_range(1..100));
     let p2p_config = make_p2p_config_for_auto_connection(conn_type, feeler_connections_interval);
     let time_getter = BasicTestTimeGetter::new();
 
@@ -154,7 +154,7 @@ async fn auto_connection_fails_peer_state_becomes_disconnected(
         add_reserved_peer(&peer_mgr_event_sender, peer_address.socket_addr().into()).await;
     }
 
-    let num_iterations = rng.gen_range(5..10);
+    let num_iterations = rng.random_range(5..10);
     let mut last_connect_after = Time::from_duration_since_epoch(Duration::ZERO);
 
     for i in 0..num_iterations {
@@ -306,7 +306,7 @@ async fn auto_connection_fails_peer_state_becomes_unreachable(
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let feeler_connections_interval = Duration::from_secs(rng.gen_range(1..100));
+    let feeler_connections_interval = Duration::from_secs(rng.random_range(1..100));
     let p2p_config = make_p2p_config_for_auto_connection(conn_type, feeler_connections_interval);
     let time_getter = BasicTestTimeGetter::new();
 
@@ -529,7 +529,7 @@ async fn manual_connection_fails(#[case] seed: Seed, #[values(false, true)] make
         expect_no_peer_state(&peer_mgr_event_sender, peer_address).await;
     }
 
-    let num_iterations = rng.gen_range(5..10);
+    let num_iterations = rng.random_range(5..10);
     let mut erase_after = None;
 
     let now = time_getter.get_time_getter().get_time();
@@ -686,7 +686,7 @@ async fn auto_connection_without_peer_activity(
         add_reserved_peer(&peer_mgr_event_sender, peer_address.socket_addr().into()).await;
     }
 
-    let num_iterations = rng.gen_range(5..10);
+    let num_iterations = rng.random_range(5..10);
     let mut last_connect_after = Time::from_duration_since_epoch(Duration::ZERO);
 
     for i in 0..num_iterations {
@@ -766,7 +766,7 @@ async fn auto_connection_without_peer_activity(
 
         // An inbound or manual connection without peer activity shouldn't affect connections_without_activity_count.
         // Same for a failed outbound connection.
-        let extra_outbound_connection_failed = match rng.gen_range(0..4) {
+        let extra_outbound_connection_failed = match rng.random_range(0..4) {
             0 => {
                 log::debug!("Accepting an extra inbound connection");
 
@@ -858,7 +858,7 @@ async fn feeler_connection_without_peer_activity(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let feeler_connections_interval = Duration::from_secs(rng.gen_range(1..100));
+    let feeler_connections_interval = Duration::from_secs(rng.random_range(1..100));
     let p2p_config =
         make_p2p_config_for_auto_connection(AutoConnType::Feeler, feeler_connections_interval);
     let time_getter = BasicTestTimeGetter::new();

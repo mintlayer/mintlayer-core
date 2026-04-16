@@ -271,7 +271,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
         let time_advancement = if self.randomize_timediffs {
-            rng.gen_range(1..target_block_time.as_secs() * 2)
+            rng.random_range(1..target_block_time.as_secs() * 2)
         } else {
             target_block_time.as_secs()
         };

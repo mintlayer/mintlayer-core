@@ -74,9 +74,9 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let token3_id = TokenId::random_using(&mut rng);
     let token4_id = TokenId::random_using(&mut rng);
 
-    let token1_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let token2_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let block_reward_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let token1_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let token2_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let block_reward_amount = Amount::from_atoms(rng.random_range(1000..2000));
 
     let token1_tx_output_dest = wallet_new_dest(&mut wallet);
     let token1_tx_output = TxOutput::Transfer(
@@ -106,16 +106,16 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let token2_outpoint =
         UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.random());
 
-    let token4_num_decimals = rng.gen_range(1..20);
+    let token4_num_decimals = rng.random_range(1..20);
     let token4_ticker = gen_random_alnum_string(&mut rng, 5, 10);
 
-    let created_order_coin_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let created_order_coin_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let create_order_output = TxOutput::CreateOrder(Box::new(OrderData::new(
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
         OutputValue::TokenV1(token3_id, Amount::from_atoms(rng.random())),
         OutputValue::Coin(created_order_coin_give_amount),
     )));
-    let htlc_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let htlc_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let htlc_spend_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let htlc_refund_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     // Note: the wallet doesn't check that the secret and the secret hash are consistent.
@@ -134,7 +134,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
 
     let coins_outpoint = UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), 0);
     let coins_outpoint_amount =
-        (created_order_coin_give_amount + Amount::from_atoms(rng.gen_range(1000..2000))).unwrap();
+        (created_order_coin_give_amount + Amount::from_atoms(rng.random_range(1000..2000))).unwrap();
     let coins_utxo_dest = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let coins_utxo = TxOutput::LockThenTransfer(
         OutputValue::Coin(coins_outpoint_amount),

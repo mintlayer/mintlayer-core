@@ -27,7 +27,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::keys::RootKeys;
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
-    (0..rng.gen_range(1..100)).map(|_| rng.random::<char>()).collect()
+    (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect()
 }
 
 #[test]

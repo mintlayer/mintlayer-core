@@ -222,7 +222,7 @@ async fn locator_must_be_from_peers_known_best_block(#[case] seed: Seed) {
 
         let node_blocks_count = 10;
         let msg_header_count_limit = 5;
-        let common_blocks_count = rng.gen_range(0..=msg_header_count_limit);
+        let common_blocks_count = rng.random_range(0..=msg_header_count_limit);
         let peer_specific_blocks_count = msg_header_count_limit - common_blocks_count;
 
         log::debug!("common_blocks_count = {common_blocks_count}");

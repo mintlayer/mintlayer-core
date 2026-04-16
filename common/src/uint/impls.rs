@@ -1236,7 +1236,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         {
             let a = Uint128::MAX;
-            let b = rng.gen_range(1..u128::MAX).into();
+            let b = rng.random_range(1..u128::MAX).into();
             assert!(a.checked_add(&b).is_none());
             assert!(b.checked_add(&a).is_none());
         }
@@ -1254,12 +1254,12 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         {
             let a = Uint128::ZERO;
-            let b = rng.gen_range(1..u128::MAX).into();
+            let b = rng.random_range(1..u128::MAX).into();
             assert!(a.checked_sub(&b).is_none());
         }
         {
             let a = rng.random::<u128>();
-            let b: Uint128 = rng.gen_range(0..a).into();
+            let b: Uint128 = rng.random_range(0..a).into();
             let a: Uint128 = a.into();
             assert_eq!(a.checked_sub(&b), Some(a.unchecked_sub(&b)));
             assert_eq!(b.checked_sub(&a), None);
@@ -1273,7 +1273,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         {
             let a = Uint128::MAX;
-            let b = rng.gen_range(2..u128::MAX).into();
+            let b = rng.random_range(2..u128::MAX).into();
             assert!(a.checked_mul(&b).is_none());
             assert!(b.checked_mul(&a).is_none());
         }

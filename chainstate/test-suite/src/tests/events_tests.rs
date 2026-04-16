@@ -95,7 +95,7 @@ fn several_subscribers(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let subscribers = rng.gen_range(8..256);
+        let subscribers = rng.random_range(8..256);
         let events = subscribe(&mut tf.chainstate, subscribers);
 
         let block = tf
@@ -124,8 +124,8 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let subscribers = rng.gen_range(4..16);
-        let blocks = rng.gen_range(8..128);
+        let subscribers = rng.random_range(4..16);
+        let blocks = rng.random_range(8..128);
 
         let events = subscribe(&mut tf.chainstate, subscribers);
         assert!(!tf.chainstate.subscribers().is_empty());
@@ -282,8 +282,8 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
         .build();
     let mock_time = Arc::clone(tf.time_value.as_ref().unwrap());
 
-    let subscribers_count = rng.gen_range(4..16);
-    let blocks_count = rng.gen_range(8..128);
+    let subscribers_count = rng.random_range(4..16);
+    let blocks_count = rng.random_range(8..128);
 
     let mut receivers: Vec<_> = (0..subscribers_count)
         .map(|_| tf.chainstate.subscribe_to_rpc_events())
@@ -302,23 +302,23 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
         events
     });
 
-    let first_fresh_block_idx = rng.gen_range(0..blocks_count);
+    let first_fresh_block_idx = rng.random_range(0..blocks_count);
 
     let mut expected_events = Vec::new();
     for idx in 0..blocks_count {
         let (time_advance, is_ibd) = match idx.cmp(&first_fresh_block_idx) {
             std::cmp::Ordering::Less => {
                 // The block will not be considered fresh and the chainstate will remain in ibd.
-                (rng.gen_range(max_tip_age_secs..max_tip_age_secs * 2), true)
+                (rng.random_range(max_tip_age_secs..max_tip_age_secs * 2), true)
             }
             std::cmp::Ordering::Equal => {
                 // The block will be considered fresh and the chainstate will no longer be in ibd.
-                (rng.gen_range(0..max_tip_age_secs), false)
+                (rng.random_range(0..max_tip_age_secs), false)
             }
             std::cmp::Ordering::Greater => {
                 // The chainstate can't return to ibd once it switched to non-ibd,
                 // so block time can be arbitrary here.
-                (rng.gen_range(0..max_tip_age_secs * 2), false)
+                (rng.random_range(0..max_tip_age_secs * 2), false)
             }
         };
 

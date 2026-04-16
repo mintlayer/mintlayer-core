@@ -129,7 +129,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(2..123))),
+                OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(2..123))),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -196,7 +196,7 @@ fn nft_zero_transfer(#[case] seed: Seed) {
         // and optionally a normal output as well.
         let mut tx_builder = TransactionBuilder::new()
             .add_input(issuance_outpoint.into(), InputWitness::NoSignature(None));
-        let zero_outputs_count = rng.gen_range(1..5);
+        let zero_outputs_count = rng.random_range(1..5);
         for _ in 0..zero_outputs_count {
             tx_builder = tx_builder.add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::ZERO),

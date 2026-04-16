@@ -262,7 +262,7 @@ impl TestFramework {
             let mut ids = Vec::with_capacity(blocks_count);
             for _ in 0..blocks_count {
                 if advance_time {
-                    let seconds = rng.gen_range(1..target_block_time.as_secs() * 2);
+                    let seconds = rng.random_range(1..target_block_time.as_secs() * 2);
                     self.progress_time_seconds_since_epoch(seconds);
                 }
 

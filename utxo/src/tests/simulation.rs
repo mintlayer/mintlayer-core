@@ -130,15 +130,15 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
 
     for i in 0..iterations_count {
         //select outpoint and utxo from existing or create new
-        let flip = rng.gen_range(0..3);
+        let flip = rng.random_range(0..3);
         let (outpoint, utxo) = if flip == 0 && prev_result.len() > 1 {
-            let outpoint_idx = rng.gen_range(0..prev_result.len());
+            let outpoint_idx = rng.random_range(0..prev_result.len());
             (prev_result[outpoint_idx].clone(), None)
         } else if flip == 1 && result.len() > 1 {
-            let outpoint_idx = rng.gen_range(0..result.len());
+            let outpoint_idx = rng.random_range(0..result.len());
             (result[outpoint_idx].clone(), None)
         } else {
-            let block_height = rng.gen_range(0..iterations_count);
+            let block_height = rng.random_range(0..iterations_count);
             let (utxo, outpoint) = create_utxo(rng, block_height.try_into().unwrap());
 
             result.push(outpoint.clone());
@@ -158,10 +158,10 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
         // every 10 iterations call uncache
         if i % 10 == 0 {
             if rng.random::<bool>() && prev_result.len() > 1 {
-                let idx = rng.gen_range(0..prev_result.len());
+                let idx = rng.random_range(0..prev_result.len());
                 let _ = cache.uncache(&prev_result[idx]);
             } else if result.len() > 1 {
-                let idx = rng.gen_range(0..result.len());
+                let idx = rng.random_range(0..result.len());
                 let _ = cache.uncache(&result[idx]);
             }
             removed_an_entry = true;

@@ -134,7 +134,7 @@ where
         // Create a test framework and blocks
 
         let genesis_id = chain_config.genesis_block_id();
-        let num_blocks = rng.gen_range(10..20);
+        let num_blocks = rng.random_range(10..20);
         test_framework
             .create_chain_advancing_time_return_ids(&genesis_id, num_blocks, &mut rng)
             .unwrap();
@@ -417,14 +417,14 @@ where
                     .unwrap();
             }
 
-            let random_height = rng.gen_range(1..3);
+            let random_height = rng.random_range(1..3);
             let block_id = test_framework
                 .block_id(random_height)
                 .classify(&chain_config)
                 .chain_block_id()
                 .unwrap();
             let block1 = test_framework.block(block_id);
-            let random_height2 = rng.gen_range(3..10);
+            let random_height2 = rng.random_range(3..10);
             let block_id2 = test_framework
                 .block_id(random_height2)
                 .classify(&chain_config)
@@ -491,7 +491,7 @@ where
             )
             .build();
         let tx1_input_utxos = vec![Some(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100))),
+            OutputValue::Coin(Amount::from_atoms(rng.random_range(1..100))),
             Destination::AnyoneCanSpend,
         ))];
 
@@ -511,7 +511,7 @@ where
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 additional_info: TxAdditionalInfo {
-                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    fee: Amount::from_atoms(rng.random_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
                     token_decimals: BTreeMap::new(),
                 },
@@ -532,7 +532,7 @@ where
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 additional_info: TxAdditionalInfo {
-                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    fee: Amount::from_atoms(rng.random_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
                     token_decimals: BTreeMap::new(),
                 },
@@ -554,7 +554,7 @@ where
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
         {
-            let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+            let height1_u64 = rng.random_range::<u64, _>(1..i64::MAX as u64);
             let height1 = height1_u64.into();
             let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.random::<u64>());
             let aux_data1 =
@@ -564,7 +564,7 @@ where
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 additional_info: TxAdditionalInfo {
-                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    fee: Amount::from_atoms(rng.random_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
                     token_decimals: BTreeMap::new(),
                 },
@@ -580,7 +580,7 @@ where
             let last_num = db_tx.get_last_transaction_global_index().await.unwrap();
             assert_eq!(last_num, Some(expected_last_tx_global_index));
 
-            let take_txs = rng.gen_range(1..expected_last_tx_global_index - start_tx_global_index);
+            let take_txs = rng.random_range(1..expected_last_tx_global_index - start_tx_global_index);
             let txs = db_tx
                 .get_transactions_with_block_info_before_tx_global_index(
                     take_txs as u32,
@@ -607,7 +607,7 @@ where
         assert!(block.is_none());
 
         let existing_block_id: Id<Block> = block_id;
-        let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+        let height1_u64 = rng.random_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
         let aux_data1 =
             BlockAuxData::new(existing_block_id.into(), height1, random_block_timestamp);
@@ -617,7 +617,7 @@ where
         assert_eq!(retrieved_aux_data, Some(aux_data1));
 
         // Test overwrite
-        let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+        let height2_u64 = rng.random_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.random::<u64>());
         let aux_data2 =
@@ -655,12 +655,12 @@ where
             rng.random::<u32>(),
         );
         let output = TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+            OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
             bob_destination.clone(),
         );
 
         let utxo = Utxo::new(output.clone(), None, None);
-        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let block_height = BlockHeight::new(rng.random_range(1..100));
 
         // set one and get it
         {
@@ -771,7 +771,7 @@ where
                 rng.random::<u32>(),
             );
             let output = TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
                 bob_destination.clone(),
             );
 
@@ -823,14 +823,14 @@ where
                 rng.random::<u32>(),
             );
             let locked_output = TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
                 bob_destination.clone(),
             );
 
             let locked_utxo = LockedUtxo::new(
                 locked_output.clone(),
                 None,
-                UtxoLock::UntilHeight(BlockHeight::new(rng.gen_range(10000..100000))),
+                UtxoLock::UntilHeight(BlockHeight::new(rng.random_range(10000..100000))),
             );
             db_tx
                 .set_locked_utxo_at_height(
@@ -882,12 +882,12 @@ where
                 rng.random::<u32>(),
             );
             let output2 = TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
                 bob_destination,
             );
 
             let utxo = Utxo::new(output2.clone(), None, None);
-            let block_height = BlockHeight::new(rng.gen_range(1..100));
+            let block_height = BlockHeight::new(rng.random_range(1..100));
             db_tx
                 .set_utxo_at_height(
                     outpoint2.clone(),
@@ -1078,8 +1078,8 @@ where
                 .unwrap();
         }
 
-        let len = rng.gen_range(0..5);
-        let global_idx = rng.gen_range(5..=10);
+        let len = rng.random_range(0..5);
+        let global_idx = rng.random_range(5..=10);
         let token_txs =
             db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
         eprintln!("getting len: {len} < idx {global_idx}");
@@ -1125,7 +1125,7 @@ where
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let margin_ratio_per_thousand = rng.random_range(1..=1000);
             let random_pool_data = PoolData::new(
                 Destination::PublicKey(pk),
                 amount_to_stake,
@@ -1136,7 +1136,7 @@ where
             );
             let random_pool_data = PoolDataWithExtraInfo {
                 pool_data: random_pool_data,
-                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+                delegations_balance: Amount::from_atoms(rng.random_range(0..=1000)),
             };
 
             db_tx
@@ -1159,7 +1159,7 @@ where
                 amount_to_stake
             };
             let cost_per_block = Amount::from_atoms(rng.random::<u128>());
-            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let margin_ratio_per_thousand = rng.random_range(1..=1000);
             let random_pool_data2 = PoolData::new(
                 Destination::PublicKey(pk),
                 amount_to_stake,
@@ -1177,7 +1177,7 @@ where
             };
             let random_pool_data2 = PoolDataWithExtraInfo {
                 pool_data: random_pool_data2,
-                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+                delegations_balance: Amount::from_atoms(rng.random_range(0..=1000)),
             };
 
             db_tx
@@ -1222,7 +1222,7 @@ where
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let amount_to_stake = Amount::from_atoms(rng.random::<u128>());
             let cost_per_block = Amount::from_atoms(rng.random::<u128>());
-            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let margin_ratio_per_thousand = rng.random_range(1..=1000);
             let random_pool_data_new = PoolData::new(
                 Destination::PublicKey(pk.clone()),
                 amount_to_stake,
@@ -1233,7 +1233,7 @@ where
             );
             let random_pool_data_new = PoolDataWithExtraInfo {
                 pool_data: random_pool_data_new,
-                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+                delegations_balance: Amount::from_atoms(rng.random_range(0..=1000)),
             };
 
             // update pool data in next block height
@@ -1280,7 +1280,7 @@ where
             );
             let decommissioned_random_pool_data = PoolDataWithExtraInfo {
                 pool_data: decommissioned_random_pool_data,
-                delegations_balance: Amount::from_atoms(rng.gen_range(0..=1000)),
+                delegations_balance: Amount::from_atoms(rng.random_range(0..=1000)),
             };
             eprintln!("setting pledge to 0 for pool {random_pool_id:?}");
             db_tx
@@ -1340,8 +1340,8 @@ where
                 }
             };
 
-            let random_block_height = BlockHeight::new(rng.gen_range(500..1000) as u64);
-            let random_block_height2 = BlockHeight::new(rng.gen_range(1..500) as u64);
+            let random_block_height = BlockHeight::new(rng.random_range(500..1000) as u64);
+            let random_block_height2 = BlockHeight::new(rng.random_range(1..500) as u64);
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let random_pool_id = PoolId::random_using(&mut rng);
@@ -1508,7 +1508,7 @@ where
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let block_height = BlockHeight::new(rng.random_range(1..100));
         db_tx
             .set_nft_token_issuance(random_token_id, block_height, nft.clone(), &random_owner)
             .await
@@ -1596,7 +1596,7 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
-        let random_num_decimals = rng.gen_range(1..18);
+        let random_num_decimals = rng.random_range(1..18);
 
         let token_data = FungibleTokenData {
             token_ticker: "XXXX".as_bytes().to_vec(),
@@ -1612,7 +1612,7 @@ where
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let block_height = BlockHeight::new(rng.random_range(1..100));
         db_tx
             .set_fungible_token_issuance(random_token_id, block_height, token_data.clone())
             .await
@@ -1633,7 +1633,7 @@ where
         let locked_token_data = token_data
             .clone()
             .mint_tokens(
-                Amount::from_atoms(rng.gen_range(1..1000)),
+                Amount::from_atoms(rng.random_range(1..1000)),
                 token_data.next_nonce,
             )
             .lock(token_data.next_nonce.increment().unwrap());
@@ -1653,7 +1653,7 @@ where
         assert_eq!(returned_token, locked_token_data);
 
         let address = Address::new(&chain_config, random_destination.clone()).unwrap();
-        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        let random_amount = Amount::from_atoms(rng.random_range(0..100_000));
         db_tx
             .set_address_balance_at_height(
                 &address,
@@ -1734,7 +1734,7 @@ where
         let token_ticker = String::from("AB\\CD");
         let token_data = FungibleTokenData {
             token_ticker: token_ticker.as_bytes().to_vec().clone(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
             total_supply: TokenTotalSupply::Unlimited,
@@ -1744,7 +1744,7 @@ where
             next_nonce: AccountNonce::new(0),
         };
 
-        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let block_height = BlockHeight::new(rng.random_range(1..100));
         let random_token_id1 = TokenId::random_using(&mut rng);
         db_tx
             .set_fungible_token_issuance(random_token_id1, block_height, token_data.clone())
@@ -1870,7 +1870,7 @@ where
 
         let random_token_id = TokenId::random_using(&mut rng);
         let random_coin_or_token_id = CoinOrTokenId::TokenId(random_token_id);
-        let random_statistic = match rng.gen_range(0..4) {
+        let random_statistic = match rng.random_range(0..4) {
             0 => CoinOrTokenStatistic::CirculatingSupply,
             1 => CoinOrTokenStatistic::Staked,
             2 => CoinOrTokenStatistic::Burned,
@@ -1884,8 +1884,8 @@ where
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        let random_block_height = BlockHeight::new(rng.gen_range(1..100));
-        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        let random_block_height = BlockHeight::new(rng.random_range(1..100));
+        let random_amount = Amount::from_atoms(rng.random_range(0..100_000));
         db_tx
             .set_statistic(
                 random_statistic,
@@ -1901,7 +1901,7 @@ where
 
         assert_eq!(returned_amount, Some(random_amount));
 
-        let random_amount2 = Amount::from_atoms(rng.gen_range(0..100_000));
+        let random_amount2 = Amount::from_atoms(rng.random_range(0..100_000));
 
         db_tx
             .set_statistic(
@@ -2000,7 +2000,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
 
     let mut db_tx = storage.transaction_rw().await.unwrap();
 
-    let block_height = BlockHeight::new(rng.gen_range(100..1000));
+    let block_height = BlockHeight::new(rng.random_range(100..1000));
 
     db_tx
         .set_order_at_height(order1_id, &order1, BlockHeight::new(1))
@@ -2164,8 +2164,8 @@ fn random_order(
     let order_id = OrderId::random_using(rng);
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
-    let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
-    let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+    let give_amount = Amount::from_atoms(rng.random_range(1000..10000));
+    let ask_amount = Amount::from_atoms(rng.random_range(1000..10000));
     let order = Order {
         creation_block_height: creation_height,
         conclude_destination,

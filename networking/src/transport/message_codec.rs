@@ -134,13 +134,13 @@ mod tests {
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
-        MessageCodec::new(Some(rng.gen_range(64..128)))
+        MessageCodec::new(Some(rng.random_range(64..128)))
             .encode(message.clone(), &mut buf)
             .unwrap();
         assert!(buf.len() > size_of::<MsgLenHeader>());
 
         let message_length = buf.len() - size_of::<MsgLenHeader>();
-        let max_length = rng.gen_range(0..message_length);
+        let max_length = rng.random_range(0..message_length);
         let mut encoder = MessageCodec::new(Some(max_length));
         let result = encoder.encode(message, &mut buf);
         assert_eq!(
@@ -163,12 +163,12 @@ mod tests {
 
         let message = TestMessage { data: rng.random() };
         let mut encoded = BytesMut::new();
-        MessageCodec::new(Some(rng.gen_range(126..512)))
+        MessageCodec::new(Some(rng.random_range(126..512)))
             .encode(message, &mut encoded)
             .unwrap();
 
         let message_length = encoded.len() - size_of::<MsgLenHeader>();
-        let max_length = rng.gen_range(0..message_length);
+        let max_length = rng.random_range(0..message_length);
         let mut decoder = MessageCodec::<TestMessage>::new(Some(max_length));
         let result = decoder.decode(&mut encoded);
         assert_eq!(
@@ -191,7 +191,7 @@ mod tests {
 
         let message = TestMessage { data: rng.random() };
 
-        let mut encoder = MessageCodec::new(Some(rng.gen_range(128..2048)));
+        let mut encoder = MessageCodec::new(Some(rng.random_range(128..2048)));
 
         let mut buf = BytesMut::new();
         encoder.encode(message.clone(), &mut buf).unwrap();

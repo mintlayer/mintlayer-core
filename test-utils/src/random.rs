@@ -120,7 +120,7 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut (impl Rng + ?Sized)
         let mut swapped = false;
 
         for i in (1..slice.len()).rev() {
-            let other_idx = rng.gen_range(0..(i + 1));
+            let other_idx = rng.random_range(0..(i + 1));
             if other_idx != i {
                 slice.swap(i, other_idx);
                 swapped = true;
@@ -138,8 +138,8 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut (impl Rng + ?Sized)
 pub fn flip_random_bit(data: &mut [u8], rng: &mut (impl Rng + ?Sized)) {
     assert!(!data.is_empty());
 
-    let byte_idx = rng.gen_range(0..data.len());
-    let bit_idx = rng.gen_range(0..8);
+    let byte_idx = rng.random_range(0..data.len());
+    let bit_idx = rng.random_range(0..8);
     let bit_mask = (1 << bit_idx) as u8;
 
     let byte = &mut data[byte_idx];
@@ -153,7 +153,7 @@ pub fn with_random_bit_flipped(data: &[u8], rng: &mut (impl Rng + ?Sized)) -> Ve
 }
 
 pub fn gen_random_bytes(rng: &mut (impl Rng + ?Sized), min_len: usize, max_len: usize) -> Vec<u8> {
-    let data_length = rng.gen_range(min_len..=max_len);
+    let data_length = rng.random_range(min_len..=max_len);
     let mut bytes = vec![0; data_length];
     rng.fill_bytes(&mut bytes);
     bytes
@@ -165,7 +165,7 @@ pub fn gen_random_alnum_string(
     min_len: usize,
     max_len: usize,
 ) -> String {
-    let len = rng.gen_range(min_len..=max_len);
+    let len = rng.random_range(min_len..=max_len);
 
     rng.sample_iter::<char, _>(randomness::distributions::Standard)
         .filter(|ch| ch.is_alphanumeric())
@@ -187,7 +187,7 @@ pub fn gen_random_spaces(
         '\u{2029}', // paragraph separator
         '\u{3000}', // ideographic space
     ];
-    let count = rng.gen_range(min_count..=max_count);
+    let count = rng.random_range(min_count..=max_count);
     SPACES.choose_multiple(rng, count).copied()
 }
 

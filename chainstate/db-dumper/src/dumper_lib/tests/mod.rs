@@ -241,13 +241,13 @@ fn dump_blocks_random(
     let mut rng = make_seedable_rng(seed);
 
     let genesis_msg = random_ascii_alphanumeric_string(&mut rng, 10..20);
-    let genesis_timestamp = BlockTimestamp::from_int_seconds(rng.gen_range(0..1_000_000));
+    let genesis_timestamp = BlockTimestamp::from_int_seconds(rng.random_range(0..1_000_000));
     let genesis = Genesis::new(genesis_msg, genesis_timestamp, vec![]);
     let chain_config =
         Arc::new(chain::config::create_unit_test_config_builder().genesis_custom(genesis).build());
 
-    let mainchain_block_count = rng.gen_range(10..20);
-    let stale_block_count = rng.gen_range(0..mainchain_block_count);
+    let mainchain_block_count = rng.random_range(10..20);
+    let stale_block_count = rng.random_range(0..mainchain_block_count);
 
     let block_infos = {
         let mut infos = Vec::new();
@@ -260,7 +260,7 @@ fn dump_blocks_random(
 
         if !mainchain_only {
             for _ in 0..stale_block_count {
-                let height = BlockHeight::new(rng.gen_range(1..=mainchain_block_count));
+                let height = BlockHeight::new(rng.random_range(1..=mainchain_block_count));
                 let input_info = TestBlockInputInfo::from_rng(height, false, &mut rng);
                 infos.push(TestBlockInfo::from_input_info(input_info));
             }
@@ -312,7 +312,7 @@ fn dump_blocks_random(
     let start_height = if start_from_zero_height {
         0
     } else {
-        rng.gen_range(1..=mainchain_block_count)
+        rng.random_range(1..=mainchain_block_count)
     };
 
     let starting_block_info_index = block_infos

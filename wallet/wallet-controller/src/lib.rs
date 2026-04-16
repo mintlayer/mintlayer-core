@@ -1558,7 +1558,7 @@ where
             }
 
             // Reset the timer with a new random interval between 2 and 5 minutes
-            let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
+            let sleep_interval_sec = make_pseudo_rng().random_range(120..=300);
             *rebroadcast_txs_again_at = (get_time() + Duration::from_secs(sleep_interval_sec))
                 .expect("Sleep intervals cannot be this large");
         }

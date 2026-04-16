@@ -126,7 +126,7 @@ pub fn create_utxo_data(
             let new_output = match v {
                 OutputValue::Coin(output_value) => {
                     let spent_value =
-                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                        Amount::from_atoms(rng.random_range(0..output_value.into_atoms()));
                     let new_value = (*output_value - spent_value).unwrap();
                     utils::ensure!(new_value >= Amount::from_atoms(1));
                     TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
@@ -134,7 +134,7 @@ pub fn create_utxo_data(
                 OutputValue::TokenV0(_) => return None, // ignore
                 OutputValue::TokenV1(token_id, output_value) => {
                     let spent_value =
-                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                        Amount::from_atoms(rng.random_range(0..output_value.into_atoms()));
                     let new_value = (*output_value - spent_value).unwrap();
                     utils::ensure!(new_value >= Amount::from_atoms(1));
                     TxOutput::Transfer(
@@ -238,7 +238,7 @@ pub fn create_chain_config_with_staking_pool(
 
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(rng.gen_range(0..1639975460)),
+        BlockTimestamp::from_int_seconds(rng.random_range(0..1639975460)),
         vec![mint_output, pool],
     );
 

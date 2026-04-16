@@ -123,7 +123,7 @@ pub fn random_is_token_unfreezable(rng: &mut impl Rng) -> IsTokenUnfreezable {
 }
 
 pub fn random_token_total_supply(rng: &mut impl Rng) -> TokenTotalSupply {
-    match rng.gen_range(0..3) {
+    match rng.random_range(0..3) {
         0 => TokenTotalSupply::Fixed(Amount::from_atoms(rng.random())),
         1 => TokenTotalSupply::Lockable,
         _ => TokenTotalSupply::Unlimited,
@@ -211,7 +211,7 @@ pub fn random_token_data_with_id_and_authority(
 ) -> TestTokenData {
     TestTokenData {
         id: token_id,
-        num_decimals: rng.gen_range(1..20),
+        num_decimals: rng.random_range(1..20),
         ticker: gen_random_alnum_string(rng, 5, 10),
         metadata_uri: gen_random_alnum_string(rng, 5, 10),
         total_supply: random_token_total_supply(rng),

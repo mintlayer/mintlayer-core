@@ -150,7 +150,7 @@ mod test {
                 destination.clone(),
                 &tx,
                 &input_commitments,
-                rng.gen_range(0..INPUTS_COUNT),
+                rng.random_range(0..INPUTS_COUNT),
                 &mut rng,
             )
             .unwrap();
@@ -190,7 +190,7 @@ mod test {
                 destination.clone(),
                 &tx,
                 &input_commitments,
-                rng.gen_range(0..INPUTS_COUNT),
+                rng.random_range(0..INPUTS_COUNT),
                 &mut rng,
             )
             .unwrap();
@@ -230,7 +230,7 @@ mod test {
         .unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..INPUTS_COUNT);
+            let input = rng.random_range(0..INPUTS_COUNT);
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
@@ -271,7 +271,7 @@ mod test {
         .unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..INPUTS_COUNT);
+            let input = rng.random_range(0..INPUTS_COUNT);
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,

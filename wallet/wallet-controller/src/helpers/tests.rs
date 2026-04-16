@@ -156,7 +156,7 @@ mod tx_to_partially_signed_tx_general_test {
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 known_pool_decommission_dest.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
                 Amount::from_atoms(rng.random()),
             )),
         )]);
@@ -213,7 +213,7 @@ mod tx_to_partially_signed_tx_general_test {
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 pool_decommission_dest_for_known_create_pool_utxo.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
                 Amount::from_atoms(rng.random()),
             )),
         );
@@ -271,7 +271,7 @@ mod tx_to_partially_signed_tx_general_test {
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 pool_decommission_dest_for_unknown_create_pool_utxo.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
                 Amount::from_atoms(rng.random()),
             )),
         );
@@ -524,7 +524,7 @@ mod tx_to_partially_signed_tx_general_test {
                     Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                     random_vrf_pub_key(&mut rng),
                     Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                    PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
+                    PerThousand::new(rng.random_range(0..=1000)).unwrap(),
                     Amount::from_atoms(rng.random()),
                 )),
             ),
@@ -989,7 +989,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
 async fn fetch_token_infos_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let tokens_count = rng.gen_range(10..20);
+    let tokens_count = rng.random_range(10..20);
     let tokens_data = (0..tokens_count)
         .map(|_| {
             use crate::tests::test_utils::random_token_data_with_id_and_authority;
