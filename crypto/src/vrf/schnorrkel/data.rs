@@ -150,7 +150,7 @@ mod tests {
     use hex::FromHex;
     use schnorrkel::{signing_context, Keypair, PublicKey, SecretKey};
 
-    use randomness::{adapters::RngCore08Adapter, make_pseudo_rng, make_true_rng, RngExt as _};
+    use randomness::{adapters::Rng08Adapter, make_pseudo_rng, make_true_rng, RngExt as _};
     use serialization::{DecodeAll, Encode};
 
     use super::*;
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn serialization_of_result() {
         let mut csprng = make_true_rng();
-        let keypair = Keypair::generate_with(&mut RngCore08Adapter(&mut csprng));
+        let keypair = Keypair::generate_with(&mut Rng08Adapter(&mut csprng));
 
         let mut rng = make_pseudo_rng();
 

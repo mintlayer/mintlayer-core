@@ -19,7 +19,7 @@ use hmac::{Hmac, Mac};
 use secp256k1;
 use sha2::Sha512;
 
-use randomness::{adapters::RngCore09Adapter, CryptoRng};
+use randomness::{adapters::Rng09Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -92,7 +92,7 @@ impl Secp256k1ExtendedPrivateKey {
         let mut chain_code = [0u8; 32];
         rng.fill_bytes(&mut chain_code);
         let chain_code = chain_code.into();
-        let private_key = secp256k1::SecretKey::new(&mut RngCore09Adapter(rng)).into();
+        let private_key = secp256k1::SecretKey::new(&mut Rng09Adapter(rng)).into();
         // Generate a new private key
         let ext_priv = Secp256k1ExtendedPrivateKey {
             derivation_path: DerivationPath::empty(),

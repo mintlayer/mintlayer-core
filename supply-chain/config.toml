@@ -1005,7 +1005,7 @@ version = "1.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.proptest]]
-version = "1.6.0"
+version = "1.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.protobuf]]
@@ -1060,12 +1060,28 @@ criteria = "safe-to-deploy"
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.rand]]
+version = "0.8.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand]]
+version = "0.9.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.rand_chacha]]
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.rand_chacha]]
+version = "0.10.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.rand_core]]
 version = "0.5.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_core]]
+version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_hc]]

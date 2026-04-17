@@ -50,9 +50,9 @@ ignore = [
     # "bincode" is no longer maintained.
     "RUSTSEC-2025-0141",
 
-    # `rand` is unsound. Note that this has been patched in versions 0.10.1, 0.9.3 and 0.8.6, but we still have
-    # one place where 0.7.x is technically used - it's a dependency of `probabilistic-collections` v0.7.0.
-    # But in that crate the actual RNG is only created in `SipHasherBuilder::from_entropy`, which we do not use,
-    # so our code is still sound.
+    # `rand` is unsound. Note that this has been patched in versions 0.10.1, 0.9.3 and 0.8.6, but we still
+    # have one place where `rand` 0.7.x is used - it's a dependency of `probabilistic-collections` v0.7.0.
+    # But we don't use any code from `probabilistic-collections` that actually creates an RNG, so our code
+    # is still sound.
     "RUSTSEC-2026-0097"
 ]

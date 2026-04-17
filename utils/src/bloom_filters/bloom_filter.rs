@@ -16,6 +16,7 @@
 use std::{fmt::Debug, hash::Hash};
 
 use probabilistic_collections::SipHasherBuilder;
+
 use randomness::{Rng, RngExt as _};
 
 /// A space-efficient probabilistic data structure to test for membership in a set.

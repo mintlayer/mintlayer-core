@@ -15,7 +15,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng};
+use randomness::{adapters::Rng08Adapter, CryptoRng};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
@@ -78,7 +78,7 @@ impl schnorrkel::context::SigningTranscript for VRFTranscriptWithRng<'_> {
 
     fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
         let mut r = self.1.lock().expect("Poisoned mutex");
-        self.witness_bytes_rng(label, dest, nonce_seeds, &mut RngCore08Adapter(&mut *r))
+        self.witness_bytes_rng(label, dest, nonce_seeds, Rng08Adapter(&mut *r))
     }
 }
 
@@ -113,11 +113,11 @@ mod tests {
         // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript
             .build_rng()
-            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
         let mut g2 = assembled_transcript
             .0
             .build_rng()
-            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
 
         for _ in 0..100 {
             assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());

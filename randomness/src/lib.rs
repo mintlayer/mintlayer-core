@@ -80,7 +80,8 @@ impl<'a, R: rand::Rng + ?Sized> rand::TryRng for BoxedRngMutexWrapper<'a, R> {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
-        Ok(self.0.lock().expect("poisoned mutex").fill_bytes(dest))
+        self.0.lock().expect("poisoned mutex").fill_bytes(dest);
+        Ok(())
     }
 }
 
@@ -94,13 +95,15 @@ impl<'a, R: rand::TryCryptoRng<Error = std::convert::Infallible>> rand::TryCrypt
 mod tests {
     use static_assertions::{assert_impl_all, assert_not_impl_any};
 
+    use crate::adapters::*;
+
     use super::*;
 
-    // `DumbRng` implements `Rng` but not `CryptoRng`.
+    // `NonCryptoRngType` implements `Rng` but not `CryptoRng`.
     #[allow(dead_code)]
-    struct DumbRng;
+    struct NonCryptoRngType;
 
-    impl TryRng for DumbRng {
+    impl TryRng for NonCryptoRngType {
         type Error = std::convert::Infallible;
 
         fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -117,9 +120,22 @@ mod tests {
         }
     }
 
-    assert_impl_all!(BoxedRngMutexWrapper<'static, DumbRng>: Rng);
-    assert_not_impl_any!(BoxedRngMutexWrapper<'static, DumbRng>: CryptoRng);
+    type CryptoRngType = rand::rngs::StdRng;
 
-    // Note: `ThreadRng` actually implements `CryptoRng`, even though we use it in `make_pseudo_rng`.
-    assert_impl_all!(BoxedRngMutexWrapper<'static, rand::rngs::ThreadRng>: Rng, CryptoRng);
+    // Sanity checks
+    assert_impl_all!(CryptoRngType: Rng, CryptoRng);
+    assert_impl_all!(NonCryptoRngType: Rng);
+    assert_not_impl_any!(NonCryptoRngType: CryptoRng);
+
+    assert_impl_all!(BoxedRngMutexWrapper<'static, NonCryptoRngType>: Rng);
+    assert_not_impl_any!(BoxedRngMutexWrapper<'static, NonCryptoRngType>: CryptoRng);
+    assert_impl_all!(BoxedRngMutexWrapper<'static, CryptoRngType>: Rng, CryptoRng);
+
+    assert_impl_all!(Rng08Adapter<NonCryptoRngType>: rand_0_8::RngCore);
+    assert_not_impl_any!(Rng08Adapter<NonCryptoRngType>: rand_0_8::CryptoRng);
+    assert_impl_all!(Rng08Adapter<CryptoRngType>: rand_0_8::Rng, rand_0_8::CryptoRng);
+
+    assert_impl_all!(Rng09Adapter<NonCryptoRngType>: rand_0_9::RngCore);
+    assert_not_impl_any!(Rng09Adapter<NonCryptoRngType>: rand_0_9::CryptoRng);
+    assert_impl_all!(Rng09Adapter<CryptoRngType>: rand_0_9::Rng, rand_0_9::CryptoRng);
 }
