@@ -330,7 +330,8 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.transaction.get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+        self.transaction
+            .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
     }
 
     async fn get_mempool_address_locked_balance_with_fallback(
@@ -338,7 +339,8 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.transaction.get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+        self.transaction
+            .get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
     }
 
     async fn get_mempool_transaction(

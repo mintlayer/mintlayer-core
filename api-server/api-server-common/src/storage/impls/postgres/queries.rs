@@ -1118,7 +1118,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             );",
         )
         .await?;
-        
+
         self.just_execute(
             "CREATE TABLE ml.mempool_pool_data (
                     pool_id TEXT NOT NULL,
@@ -1944,7 +1944,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_id_addr = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
-        let row = self.tx
+        let row = self
+            .tx
             .query_opt(
                 r#"
                 SELECT data
@@ -1956,11 +1957,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-                
+
         if let Some(row) = row {
             let pool_data: Vec<u8> = row.get(0);
-            let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
-                .map_err(|e| {
+            let pool_data =
+                PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
                         e
@@ -1997,7 +1998,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         Ok(())
     }
-
 
     #[allow(clippy::type_complexity)]
     pub async fn get_transaction(

@@ -465,7 +465,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_mempool_address_balance_with_fallback(address, coin_or_token_id).await?;
+        let res = conn
+            .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+            .await?;
 
         Ok(res)
     }
@@ -476,7 +478,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id).await?;
+        let res = conn
+            .get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+            .await?;
 
         Ok(res)
     }
