@@ -27,7 +27,7 @@ use networking::{
 };
 use p2p_test_utils::expect_recv;
 use p2p_types::peer_address::PeerAddress;
-use randomness::{Rng, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},
@@ -275,7 +275,7 @@ fn setup_peer_mgr(
     chain_config: &Arc<ChainConfig>,
     p2p_config: &Arc<P2pConfig>,
     time_getter: &BasicTestTimeGetter,
-    mut rng: impl RngCore + Send + 'static,
+    mut rng: impl Rng + Send + 'static,
 ) -> (
     PeerManager<TestNetworkingService, impl PeerDbStorage>,
     UnboundedReceiver<Command>,

@@ -44,7 +44,7 @@ use common::{
 use logging::log;
 use networking::types::ConnectionDirection;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
-use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngCore};
+use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngExt as _};
 use utils::{
     bloom_filters::rolling_bloom_filter::RollingBloomFilter, debug_panic_or_log, ensure,
     set_flag::SetFlag,
@@ -210,7 +210,7 @@ where
     dns_seed: Box<dyn DnsSeed>,
 
     /// An RNG used to generate various delays when dealing with peers.
-    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
+    rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 
     /// The time when PeerManager was initialized.
     init_time: Time,
@@ -249,7 +249,7 @@ where
         peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
-        rng: impl RngCore + Send + 'static,
+        rng: impl Rng + Send + 'static,
     ) -> crate::Result<Self> {
         Self::new_generic(
             networking_enabled,
@@ -276,7 +276,7 @@ where
         peerdb_storage: S,
         observer: Option<Box<dyn PeerManagerObserver + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
-        mut rng: impl RngCore + Send + 'static,
+        mut rng: impl Rng + Send + 'static,
     ) -> crate::Result<Self> {
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
@@ -320,15 +320,15 @@ where
     }
 
     fn lock_rng(
-        rng: &std::sync::Mutex<Box<dyn RngCore + Send>>,
-    ) -> std::sync::MutexGuard<'_, Box<dyn RngCore + Send>> {
+        rng: &std::sync::Mutex<Box<dyn Rng + Send>>,
+    ) -> std::sync::MutexGuard<'_, Box<dyn Rng + Send>> {
         rng.lock().expect("poisoned mutex")
     }
 
     fn choose_next_feeler_connection_time(
         p2p_config: &P2pConfig,
         now: Time,
-        rng: &mut impl RngCore,
+        rng: &mut impl Rng,
     ) -> Time {
         let delay = p2p_config
             .peer_manager_config

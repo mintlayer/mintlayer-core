@@ -25,8 +25,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 use hex::ToHex;
 use itertools::Itertools;
 
-use randomness::distributions::uniform::SampleRange;
-use randomness::Rng;
+use randomness::{distributions::uniform::SampleRange, Rng, RngExt as _};
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
 
@@ -95,7 +94,7 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     rng: &mut impl Rng,
     range_len: R,
 ) -> String {
-    use randomness::distributions::{Alphanumeric, DistString};
+    use randomness::distributions::{Alphanumeric, SampleString};
     if range_len.is_empty() {
         return String::new();
     }

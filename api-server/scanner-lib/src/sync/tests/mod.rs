@@ -70,7 +70,7 @@ use crypto::{
 };
 use logging::log;
 use mempool::FeeRate;
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, RngExt as _};
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 

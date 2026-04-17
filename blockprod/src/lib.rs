@@ -182,7 +182,7 @@ mod tests {
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, test_helpers::test_p2p_config,
     };
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, Rng, RngExt as _};
     use storage_inmemory::InMemory;
     use subsystem::Manager;
 

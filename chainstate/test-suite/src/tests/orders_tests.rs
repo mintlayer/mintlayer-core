@@ -49,7 +49,7 @@ use common::{
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use orders_accounting::OrdersAccountingStorageRead as _;
-use randomness::{CryptoRng, Rng, SliceRandom};
+use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 use tx_verifier::{
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},

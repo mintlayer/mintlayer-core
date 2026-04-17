@@ -29,7 +29,7 @@ use common::{
         AccountOutPoint, ChainstateUpgradeBuilder, OrderData, TokenIdGenerationVersion,
     },
 };
-use randomness::{seq::IteratorRandom as _, Rng};
+use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::wallet_tx::TxStateTag;
 

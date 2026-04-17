@@ -38,7 +38,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use randomness::{
     seq::{IndexedRandom as _, IteratorRandom},
-    Rng,
+    RngExt as _,
 };
 
 use mock_crawler::test_crawler;

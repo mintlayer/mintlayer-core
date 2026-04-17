@@ -34,7 +34,7 @@ use common::{
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoolData};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},

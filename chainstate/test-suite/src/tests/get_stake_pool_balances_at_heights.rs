@@ -38,7 +38,7 @@ use crypto::{
 };
 use logging::log;
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]

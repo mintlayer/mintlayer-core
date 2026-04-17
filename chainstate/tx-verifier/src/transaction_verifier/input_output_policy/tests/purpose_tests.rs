@@ -25,7 +25,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{Rng, SliceRandom};
+use randomness::{RngExt as _, SliceRandom};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

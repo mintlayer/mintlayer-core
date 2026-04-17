@@ -50,7 +50,7 @@ mod tests {
     use super::*;
 
     use rstest::rstest;
-    use test_utils::random::{Rng, Seed};
+    use test_utils::random::{RngExt as _, Seed};
 
     #[rstest]
     #[trace]

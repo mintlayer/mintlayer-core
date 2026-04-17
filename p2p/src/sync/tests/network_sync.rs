@@ -26,7 +26,7 @@ use common::{
 use logging::log;
 use p2p_test_utils::{create_n_blocks, run_with_timeout, MEDIUM_TIMEOUT};
 use p2p_types::PeerId;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},

@@ -15,6 +15,8 @@
 
 use std::collections::BTreeMap;
 
+use rstest::rstest;
+
 use common::{
     chain::{
         tokens::{
@@ -25,8 +27,7 @@ use common::{
     },
     primitives::Amount,
 };
-use randomness::Rng;
-use rstest::rstest;
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,

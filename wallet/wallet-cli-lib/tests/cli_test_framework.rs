@@ -13,16 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::ChainConfig;
-use randomness::Rng;
-use tokio::task::JoinHandle;
-use wallet_rpc_lib::types::NodeInterface;
-
 use std::{
     sync::{mpsc, Arc},
     time::Duration,
 };
 
+use tokio::task::JoinHandle;
+
+use common::chain::ChainConfig;
+use randomness::Rng;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
@@ -30,6 +29,7 @@ use wallet_cli_lib::{
     console::{ConsoleInput, ConsoleOutput},
     errors::WalletCliError,
 };
+use wallet_rpc_lib::types::NodeInterface;
 use wallet_test_node::{
     create_chain_config, default_chain_config_options, start_node, COLD_WALLET_MENEMONIC,
     RPC_PASSWORD, RPC_USERNAME,

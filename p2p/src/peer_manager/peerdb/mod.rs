@@ -41,7 +41,7 @@ use std::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, Rng, SliceRandom};
+use randomness::{seq::IteratorRandom, Rng, RngExt as _, SliceRandom};
 
 use crate::{config::P2pConfig, net::types::OutboundPeerRole};
 

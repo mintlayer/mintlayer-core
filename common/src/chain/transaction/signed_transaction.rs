@@ -150,7 +150,7 @@ impl OutputValuesHolder for SignedTransaction {
 mod tests {
     use crate::primitives::Amount;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     use super::*;
 

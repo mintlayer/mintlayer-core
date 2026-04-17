@@ -15,7 +15,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use serialization::{Decode, Encode};
 
 /// A random number that is generated once and then mixed into certain hashes in the peer manager.

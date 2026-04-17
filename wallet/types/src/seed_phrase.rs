@@ -147,7 +147,7 @@ impl Decode for SeedPhrase {
 mod tests {
     use super::*;
     use hex::FromHex;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use serialization::DecodeAll;
 

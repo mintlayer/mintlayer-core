@@ -21,7 +21,7 @@ use common::{
     chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,

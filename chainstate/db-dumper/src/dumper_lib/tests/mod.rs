@@ -36,7 +36,8 @@ use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFReturn};
 use mocks::MockChainstateInterface;
 use test_utils::{
     random::{
-        make_seedable_rng, randomness::SliceRandom, CryptoRng, IteratorRandom as _, Rng, Seed,
+        make_seedable_rng, randomness::SliceRandom, CryptoRng, IteratorRandom as _, RngExt as _,
+        Seed,
     },
     random_ascii_alphanumeric_string,
 };

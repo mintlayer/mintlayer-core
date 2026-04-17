@@ -15,13 +15,16 @@
 
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
-use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::rpc_params;
-use randomness::{
-    distributions::{Alphanumeric, DistString},
-    Rng,
+use jsonrpsee::{
+    core::client::{ClientT, SubscriptionClientT},
+    rpc_params,
 };
 use rstest::rstest;
+
+use randomness::{
+    distributions::{Alphanumeric, SampleString},
+    Rng, RngExt as _,
+};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use rpc::{

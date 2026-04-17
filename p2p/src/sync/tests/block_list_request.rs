@@ -23,7 +23,7 @@ use common::{
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{

@@ -270,7 +270,7 @@ mod tests {
     use std::num::NonZeroU8;
 
     use crypto::key::{KeyKind, PrivateKey};
-    use randomness::{Rng, SliceRandom};
+    use randomness::{RngExt as _, SliceRandom};
     use rstest::rstest;
     use std::cmp::Ordering;
     use test_utils::random::{make_seedable_rng, Seed};

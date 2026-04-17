@@ -16,7 +16,7 @@
 // FIXME rename?
 pub struct RngCore08Adapter<R>(pub R);
 
-impl<R: crate::RngCore> rand_0_8::RngCore for RngCore08Adapter<R> {
+impl<R: crate::Rng> rand_0_8::RngCore for RngCore08Adapter<R> {
     fn next_u32(&mut self) -> u32 {
         self.0.next_u32()
     }
@@ -39,7 +39,7 @@ impl<R: crate::CryptoRng> rand_0_8::CryptoRng for RngCore08Adapter<R> {}
 
 pub struct RngCore09Adapter<R>(pub R);
 
-impl<R: crate::RngCore> rand_0_9::RngCore for RngCore09Adapter<R> {
+impl<R: crate::Rng> rand_0_9::RngCore for RngCore09Adapter<R> {
     fn next_u32(&mut self) -> u32 {
         self.0.next_u32()
     }

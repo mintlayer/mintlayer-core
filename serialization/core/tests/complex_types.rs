@@ -17,7 +17,7 @@ mod utils;
 
 use std::collections::BTreeMap;
 
-use randomness::{make_pseudo_rng, Rng as _};
+use randomness::{make_pseudo_rng, RngExt as _};
 use serialization_core::{Decode, DecodeAll, Encode};
 use utils::{OptionWrapper, SimpleWrapper};
 

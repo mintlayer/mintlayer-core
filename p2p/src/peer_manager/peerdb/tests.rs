@@ -31,7 +31,7 @@ use ::test_utils::{
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
 use networking::test_helpers::TestAddressMaker;
 use p2p_types::socket_addr_ext::SocketAddrExt;
-use randomness::{seq::IteratorRandom as _, Rng};
+use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
 
 use crate::{
     ban_config::BanConfig,

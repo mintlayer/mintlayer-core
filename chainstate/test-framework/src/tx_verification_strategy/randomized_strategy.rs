@@ -24,7 +24,7 @@ use common::{
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
-use randomness::{Rng, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
@@ -53,7 +53,7 @@ use utxo::UtxosView;
 /// ```
 ///
 pub struct RandomizedTransactionVerificationStrategy {
-    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
+    rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 }
 
 impl RandomizedTransactionVerificationStrategy {

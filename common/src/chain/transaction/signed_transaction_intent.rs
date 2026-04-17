@@ -271,7 +271,7 @@ mod tests {
     use rstest::rstest;
 
     use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::{
         assert_matches,
         random::{make_seedable_rng, Seed},

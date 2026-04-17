@@ -24,7 +24,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use randomness::Rng;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -48,6 +47,7 @@ use p2p::{
     },
     P2pEventHandler,
 };
+use randomness::Rng;
 use test_utils::BasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;

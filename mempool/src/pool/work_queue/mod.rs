@@ -18,7 +18,7 @@
 use std::collections::{btree_map, BTreeMap, BTreeSet};
 
 use p2p_types::PeerId;
-use randomness::{self, Rng, SliceRandom};
+use randomness::{self, RngExt as _, SliceRandom};
 
 /// Per-peer work schedule queue
 #[derive(Eq, PartialEq, Clone, Debug)]

@@ -51,7 +51,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},

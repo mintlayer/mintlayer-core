@@ -36,9 +36,11 @@ macro_rules! construct_fixed_hash {
 macro_rules! impl_rand_for_fixed_hash {
     ( $name:ident ) => {
         impl randomness::distributions::Distribution<$name>
-            for randomness::distributions::Standard
+            for randomness::distributions::StandardUniform
         {
             fn sample<R: randomness::Rng + ?Sized>(&self, rng: &mut R) -> $name {
+                use randomness::RngExt as _;
+
                 let mut ret = $name::zero();
                 for byte in ret.as_bytes_mut().iter_mut() {
                     *byte = rng.random();
@@ -53,7 +55,7 @@ macro_rules! impl_rand_for_fixed_hash {
                 R: randomness::Rng + ?Sized,
             {
                 use randomness::distributions::Distribution;
-                *self = randomness::distributions::Standard.sample(rng);
+                *self = randomness::distributions::StandardUniform.sample(rng);
             }
 
             pub fn random_using<R>(rng: &mut R) -> Self
@@ -74,7 +76,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use serialization::{Decode, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
 

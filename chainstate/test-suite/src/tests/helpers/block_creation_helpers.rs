@@ -24,7 +24,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 // Build a block that spends some outputs of its parent.
 pub fn build_block(

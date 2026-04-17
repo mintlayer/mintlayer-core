@@ -37,7 +37,7 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use pos_accounting::{PoSAccountingDB, PoSAccountingData};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use utils::atomics::SeqCstAtomicU64;
 use utxo::{Utxo, UtxosDB};
 

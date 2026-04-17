@@ -15,7 +15,7 @@
 
 use bitcoin_bech32::WitnessProgram;
 use hex::FromHex;
-use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

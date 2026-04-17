@@ -50,7 +50,7 @@ use common::{
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val, gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},

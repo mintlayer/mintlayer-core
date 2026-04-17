@@ -105,7 +105,7 @@ mod test {
     use rstest::rstest;
 
     use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::Seed;
 
     use crate::chain::{

@@ -60,7 +60,7 @@ use crypto::{
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

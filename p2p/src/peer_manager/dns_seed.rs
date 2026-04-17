@@ -20,13 +20,13 @@ use async_trait::async_trait;
 use common::chain::ChainConfig;
 use logging::log;
 use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, RngCore};
+use randomness::{seq::IteratorRandom, Rng};
 
 use crate::config::P2pConfig;
 
 #[async_trait]
 pub trait DnsSeed: Send + Sync {
-    async fn obtain_addresses(&self, rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress>;
+    async fn obtain_addresses(&self, rng: &mut (dyn Rng + Send)) -> Vec<SocketAddress>;
 }
 
 pub struct DefaultDnsSeed {
@@ -48,7 +48,7 @@ const MAX_DNS_RECORDS: usize = 10;
 
 #[async_trait]
 impl DnsSeed for DefaultDnsSeed {
-    async fn obtain_addresses(&self, rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress> {
+    async fn obtain_addresses(&self, rng: &mut (dyn Rng + Send)) -> Vec<SocketAddress> {
         let dns_seeds = self.chain_config.dns_seeds();
 
         if dns_seeds.is_empty() {

@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
-use randomness::{IndexedRandom as _, SliceRandom};
+use randomness::{IndexedRandom as _, Rng, SliceRandom};
 use tx_verifier::CheckTransactionError;
 
 use super::*;

@@ -18,7 +18,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use logging::{init_logging, log};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use crate::{detail::timestamp_searcher::SearchDataForHeight, TimestampSearchData};
 

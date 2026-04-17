@@ -25,7 +25,7 @@ use common::{
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

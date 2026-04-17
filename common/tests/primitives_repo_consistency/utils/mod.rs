@@ -16,7 +16,7 @@
 use itertools::Itertools as _;
 use rstest::rstest;
 
-use randomness::{CryptoRng, Rng, SliceRandom};
+use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::sorted::Sorted;

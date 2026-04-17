@@ -30,7 +30,7 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer},
 };
 use networking::test_helpers::TestAddressMaker;
-use randomness::{Rng, SliceRandom};
+use randomness::{Rng, RngExt as _, SliceRandom};
 use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
 use crate::{

@@ -150,7 +150,7 @@ mod tests {
     use hex::FromHex;
     use schnorrkel::{signing_context, Keypair, PublicKey, SecretKey};
 
-    use randomness::{adapters::RngCore08Adapter, make_pseudo_rng, make_true_rng, Rng};
+    use randomness::{adapters::RngCore08Adapter, make_pseudo_rng, make_true_rng, RngExt as _};
     use serialization::{DecodeAll, Encode};
 
     use super::*;

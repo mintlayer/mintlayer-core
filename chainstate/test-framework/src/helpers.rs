@@ -27,7 +27,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
-use randomness::{CryptoRng, Rng, SliceRandom as _};
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom as _};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
 use crate::{get_output_value, TestFramework, TransactionBuilder};

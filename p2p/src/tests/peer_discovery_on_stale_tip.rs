@@ -24,7 +24,7 @@ use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::{run_with_timeout, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
-use randomness::{Rng as _, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -533,7 +533,7 @@ async fn start_node(
     node_index: usize,
     initial_block: Option<Block>,
     name: &str,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> TestNode<Transport> {
     let node = TestNode::<Transport>::start(
         true,

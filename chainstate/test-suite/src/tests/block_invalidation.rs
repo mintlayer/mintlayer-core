@@ -31,7 +31,7 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     mock_time_getter::mocked_time_getter_seconds,

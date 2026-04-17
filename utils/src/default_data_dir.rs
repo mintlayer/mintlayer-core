@@ -86,7 +86,7 @@ pub fn prepare_data_dir<F: Fn() -> PathBuf>(
 mod test {
     use std::io::{Read, Write};
 
-    use randomness::{make_pseudo_rng, Rng};
+    use randomness::{make_pseudo_rng, RngExt as _};
     use tempfile::TempDir;
 
     use super::*;

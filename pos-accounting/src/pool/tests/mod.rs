@@ -23,7 +23,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use crate::{
     error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,

@@ -209,7 +209,7 @@ mod test {
     use hex::ToHex;
     use rstest::rstest;
 
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
 

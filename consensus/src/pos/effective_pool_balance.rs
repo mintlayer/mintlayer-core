@@ -228,7 +228,7 @@ mod tests {
     use super::*;
 
     use common::{chain::CoinUnit, primitives::Amount};
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

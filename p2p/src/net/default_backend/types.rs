@@ -432,7 +432,7 @@ mod tests {
     use networking::test_helpers::{get_two_connected_sockets, TestTransportChannel};
     use networking::transport::{new_message_stream, MpscChannelTransport};
     use p2p_types::services::Service;
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::Seed;
 
     use crate::{

@@ -44,7 +44,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     token_utils::random_token_issuance_v1,

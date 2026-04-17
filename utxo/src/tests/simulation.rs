@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use rstest::rstest;
 
 use common::chain::UtxoOutPoint;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,

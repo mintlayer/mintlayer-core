@@ -55,7 +55,7 @@ use mempool::{
     TxOptions,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
-use randomness::Rng;
+use randomness::RngExt as _;
 use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,

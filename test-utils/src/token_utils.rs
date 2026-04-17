@@ -27,7 +27,7 @@ use common::{
     primitives::{amount, Amount},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 
 use crate::random_ascii_alphanumeric_string;

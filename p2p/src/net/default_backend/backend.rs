@@ -34,7 +34,7 @@ use common::{
 use logging::log;
 use networking::transport::{ConnectedSocketInfo, TransportListener, TransportSocket};
 use p2p_types::socket_address::SocketAddress;
-use randomness::{make_pseudo_rng, Rng};
+use randomness::{make_pseudo_rng, RngExt as _};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
     shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,

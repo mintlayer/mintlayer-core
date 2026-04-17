@@ -20,7 +20,7 @@ use common::chain::{Block, Destination, OutPointSourceId, TxOutput, UtxoOutPoint
 use common::primitives::Id;
 use common::primitives::{Amount, BlockHeight, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};

@@ -30,7 +30,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 pub fn prepare_stake_pool(
     stake_pool_outpoint: UtxoOutPoint,

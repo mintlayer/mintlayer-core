@@ -38,7 +38,7 @@ use common::{
     },
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 #[derive(Clone)]
 struct Multisig {

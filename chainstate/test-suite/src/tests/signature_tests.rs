@@ -44,7 +44,7 @@ use common::{
     primitives::{Amount, BlockHeight, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{Rng, SliceRandom};
+use randomness::{RngExt as _, SliceRandom};
 use serialization::Encode;
 use test_utils::random::{gen_random_bytes, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};

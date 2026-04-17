@@ -41,7 +41,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoSAccountingDeltaData;
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
