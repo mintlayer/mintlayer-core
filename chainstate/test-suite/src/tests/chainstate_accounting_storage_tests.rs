@@ -39,7 +39,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxosStorageRead;
 
 fn create_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     decommission_destination: Destination,
     pledged_amount: Amount,
 ) -> PoolData {
@@ -57,7 +57,7 @@ fn create_pool_data(
 }
 
 fn make_tx_with_stake_pool_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
@@ -72,7 +72,7 @@ fn make_tx_with_stake_pool_from_genesis(
 }
 
 fn make_tx_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input0_outpoint: UtxoOutPoint,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,

@@ -60,7 +60,7 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn new(rng: &mut impl CryptoRng) -> Self {
         let chain_config = common::chain::config::create_unit_test_config();
         let chainstate_config = ChainstateConfig::new();
         let chainstate_storage = TestStore::new_empty().unwrap();

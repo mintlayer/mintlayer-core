@@ -42,7 +42,7 @@ pub mod rand_core_utils {
 }
 
 #[must_use]
-pub fn make_true_rng() -> impl Rng + CryptoRng {
+pub fn make_true_rng() -> impl CryptoRng {
     // Note: the old call `StdRng::from_entropy()` from rand v0.8.x that we used to have here would
     // also panic on RNG creation failure. In either case, the possible failure comes from `getrandom`,
     // which states in its docs (https://docs.rs/getrandom/latest/getrandom/#error-handling)

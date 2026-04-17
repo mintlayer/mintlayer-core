@@ -25,7 +25,7 @@ use super::*;
 
 #[must_use]
 fn create_random_data_map_with_target_byte_size(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     required_size: usize,
     key_max_size: usize,
     val_max_size: usize,

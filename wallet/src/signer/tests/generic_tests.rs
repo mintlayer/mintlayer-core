@@ -98,7 +98,7 @@ pub fn sign_message_test_params(
 }
 
 pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     message_to_sign: MessageToSign,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -197,7 +197,7 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 }
 
 pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
 ) where
@@ -322,7 +322,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
 }
 
 pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -1016,7 +1016,7 @@ fn random_order_info(
     }
 }
 
-fn random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+fn random_destination(rng: &mut impl CryptoRng) -> Destination {
     let (_sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pk)
 }

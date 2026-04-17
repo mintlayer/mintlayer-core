@@ -15,25 +15,21 @@
 
 use std::sync::{Arc, Mutex};
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng, RngCore};
+use randomness::{adapters::RngCore08Adapter, CryptoRng};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
-
-pub trait RngCoreAndCrypto: RngCore + CryptoRng {}
-
-impl<R> RngCoreAndCrypto for R where R: RngCore + CryptoRng {}
 
 /// A transcript that produces deterministic vrf signatures based on the provided rng
 #[must_use]
 #[derive(Clone)]
-pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn RngCoreAndCrypto + 'a>>);
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn CryptoRng + 'a>>);
 
 impl<'a> VRFTranscriptWithRng<'a> {
-    pub fn new<R: RngCoreAndCrypto + 'a>(label: &'static [u8], rng: R) -> Self {
+    pub fn new<R: CryptoRng + 'a>(label: &'static [u8], rng: R) -> Self {
         Self(merlin::Transcript::new(label), Arc::new(Mutex::new(rng)))
     }
 
-    pub(crate) fn from_no_rng<R: RngCoreAndCrypto + 'a>(transcript: VRFTranscript, rng: R) -> Self {
+    pub(crate) fn from_no_rng<R: CryptoRng + 'a>(transcript: VRFTranscript, rng: R) -> Self {
         VRFTranscriptWithRng(transcript.take(), Arc::new(Mutex::new(rng)))
     }
 

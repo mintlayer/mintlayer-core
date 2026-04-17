@@ -17,7 +17,7 @@ pub mod error;
 
 use zeroize::Zeroize;
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng, Rng};
+use randomness::{adapters::RngCore08Adapter, CryptoRng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::symkey;
@@ -46,7 +46,7 @@ pub struct EndToEndPrivateKey {
 }
 
 impl EndToEndPrivateKey {
-    pub fn new_from_rng<R: Rng + CryptoRng>(rng: &mut R) -> EndToEndPrivateKey {
+    pub fn new_from_rng<R: CryptoRng>(rng: &mut R) -> EndToEndPrivateKey {
         EndToEndPrivateKey {
             key: x25519_dalek::ReusableSecret::random_from_rng(&mut RngCore08Adapter(rng)),
         }
@@ -105,7 +105,7 @@ pub struct SharedSecret {
 }
 
 impl SharedSecret {
-    pub fn encode_then_encrypt<T: Encode, R: Rng + CryptoRng>(
+    pub fn encode_then_encrypt<T: Encode, R: CryptoRng>(
         &self,
         obj: &T,
         rng: &mut R,
@@ -113,11 +113,7 @@ impl SharedSecret {
         obj.using_encoded(|encoded| self.encrypt(encoded, rng))
     }
 
-    pub fn encrypt<R: Rng + CryptoRng>(
-        &self,
-        message: &[u8],
-        rng: &mut R,
-    ) -> Result<Vec<u8>, Error> {
+    pub fn encrypt<R: CryptoRng>(&self, message: &[u8], rng: &mut R) -> Result<Vec<u8>, Error> {
         let symkey = symkey::SymmetricKey::from_raw_key(
             symkey::SymmetricKeyKind::XChacha20Poly1305,
             &self.secret,
@@ -158,6 +154,8 @@ impl SharedSecret {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+
+    use randomness::Rng as _;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;

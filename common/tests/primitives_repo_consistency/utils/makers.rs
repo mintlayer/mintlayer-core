@@ -47,7 +47,7 @@ use crypto::{
 use test_utils::random::{CryptoRng, IteratorRandom, Rng};
 
 pub fn make_random_destination_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: DestinationTag,
 ) -> Destination {
     match tag {
@@ -63,45 +63,42 @@ pub fn make_random_destination_for_tag(
     }
 }
 
-pub fn make_random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+pub fn make_random_destination(rng: &mut impl CryptoRng) -> Destination {
     let tag = DestinationTag::iter().choose(rng).unwrap();
     make_random_destination_for_tag(rng, tag)
 }
 
-pub fn make_random_public_key_hash(rng: &mut (impl Rng + CryptoRng)) -> PublicKeyHash {
+pub fn make_random_public_key_hash(rng: &mut impl CryptoRng) -> PublicKeyHash {
     (&PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1).into()
 }
 
-pub fn make_random_public_key_for_kind(
-    rng: &mut (impl Rng + CryptoRng),
-    kind: KeyKind,
-) -> PublicKey {
+pub fn make_random_public_key_for_kind(rng: &mut impl CryptoRng, kind: KeyKind) -> PublicKey {
     PrivateKey::new_from_rng(rng, kind).1
 }
 
-pub fn make_random_public_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
+pub fn make_random_public_key(rng: &mut impl CryptoRng) -> PublicKey {
     let kind = KeyKind::iter().choose(rng).unwrap();
     make_random_public_key_for_kind(rng, kind)
 }
 
 pub fn make_random_vrf_public_key_for_kind(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     kind: VRFKeyKind,
 ) -> VRFPublicKey {
     VRFPrivateKey::new_from_rng(rng, kind).1
 }
 
-pub fn make_random_vrf_public_key(rng: &mut (impl Rng + CryptoRng)) -> VRFPublicKey {
+pub fn make_random_vrf_public_key(rng: &mut impl CryptoRng) -> VRFPublicKey {
     let kind = VRFKeyKind::iter().choose(rng).unwrap();
     make_random_vrf_public_key_for_kind(rng, kind)
 }
 
-pub fn make_random_bytes(rng: &mut (impl Rng + CryptoRng)) -> Vec<u8> {
+pub fn make_random_bytes(rng: &mut impl CryptoRng) -> Vec<u8> {
     test_utils::random::gen_random_bytes(rng, 1, 20)
 }
 
 pub fn make_random_account_command_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: AccountCommandTag,
 ) -> AccountCommand {
     match tag {
@@ -142,18 +139,18 @@ pub fn make_random_account_command_for_tag(
     }
 }
 
-pub fn make_random_account_command(rng: &mut (impl Rng + CryptoRng)) -> AccountCommand {
+pub fn make_random_account_command(rng: &mut impl CryptoRng) -> AccountCommand {
     let tag = AccountCommandTag::iter().choose(rng).unwrap();
     make_random_account_command_for_tag(rng, tag)
 }
 
-pub fn make_random_order_account_command(rng: &mut (impl Rng + CryptoRng)) -> OrderAccountCommand {
+pub fn make_random_order_account_command(rng: &mut impl CryptoRng) -> OrderAccountCommand {
     let tag = OrderAccountCommandTag::iter().choose(rng).unwrap();
     make_random_order_account_command_for_tag(rng, tag)
 }
 
 pub fn make_random_order_account_command_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: OrderAccountCommandTag,
 ) -> OrderAccountCommand {
     match tag {
@@ -171,7 +168,7 @@ pub fn make_random_order_account_command_for_tag(
 }
 
 pub fn make_random_outpoint_source_id_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: OutPointSourceIdTag,
 ) -> OutPointSourceId {
     match tag {
@@ -184,16 +181,16 @@ pub fn make_random_outpoint_source_id_for_tag(
     }
 }
 
-pub fn make_random_outpoint_source_id(rng: &mut (impl Rng + CryptoRng)) -> OutPointSourceId {
+pub fn make_random_outpoint_source_id(rng: &mut impl CryptoRng) -> OutPointSourceId {
     let tag = OutPointSourceIdTag::iter().choose(rng).unwrap();
     make_random_outpoint_source_id_for_tag(rng, tag)
 }
 
-pub fn make_random_utxo_outpoint(rng: &mut (impl Rng + CryptoRng)) -> UtxoOutPoint {
+pub fn make_random_utxo_outpoint(rng: &mut impl CryptoRng) -> UtxoOutPoint {
     UtxoOutPoint::new(make_random_outpoint_source_id(rng), rng.random())
 }
 
-pub fn make_random_tx_input_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxInputTag) -> TxInput {
+pub fn make_random_tx_input_for_tag(rng: &mut impl CryptoRng, tag: TxInputTag) -> TxInput {
     match tag {
         TxInputTag::Utxo => TxInput::Utxo(make_random_utxo_outpoint(rng)),
         TxInputTag::Account => TxInput::Account(AccountOutPoint::new(
@@ -211,7 +208,7 @@ pub fn make_random_tx_input_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxInp
 }
 
 pub fn make_random_account_spending_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: AccountSpendingTag,
 ) -> AccountSpending {
     match tag {
@@ -222,12 +219,12 @@ pub fn make_random_account_spending_for_tag(
     }
 }
 
-pub fn make_random_account_spending(rng: &mut (impl Rng + CryptoRng)) -> AccountSpending {
+pub fn make_random_account_spending(rng: &mut impl CryptoRng) -> AccountSpending {
     let tag = AccountSpendingTag::iter().choose(rng).unwrap();
     make_random_account_spending_for_tag(rng, tag)
 }
 
-pub fn make_random_account_outpoint(rng: &mut (impl Rng + CryptoRng)) -> AccountOutPoint {
+pub fn make_random_account_outpoint(rng: &mut impl CryptoRng) -> AccountOutPoint {
     AccountOutPoint::new(
         AccountNonce::new(rng.random()),
         make_random_account_spending(rng),
@@ -235,7 +232,7 @@ pub fn make_random_account_outpoint(rng: &mut (impl Rng + CryptoRng)) -> Account
 }
 
 pub fn make_random_output_value_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: OutputValueTag,
 ) -> OutputValue {
     match tag {
@@ -247,13 +244,13 @@ pub fn make_random_output_value_for_tag(
     }
 }
 
-pub fn make_random_output_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
+pub fn make_random_output_value(rng: &mut impl CryptoRng) -> OutputValue {
     let tag = OutputValueTag::iter().choose(rng).unwrap();
     make_random_output_value_for_tag(rng, tag)
 }
 
 pub fn make_random_output_time_lock_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: OutputTimeLockTag,
 ) -> OutputTimeLock {
     match tag {
@@ -268,13 +265,13 @@ pub fn make_random_output_time_lock_for_tag(
     }
 }
 
-pub fn make_random_output_time_lock(rng: &mut (impl Rng + CryptoRng)) -> OutputTimeLock {
+pub fn make_random_output_time_lock(rng: &mut impl CryptoRng) -> OutputTimeLock {
     let tag = OutputTimeLockTag::iter().choose(rng).unwrap();
     make_random_output_time_lock_for_tag(rng, tag)
 }
 
 pub fn make_random_token_total_supply_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: TokenTotalSupplyTag,
 ) -> TokenTotalSupply {
     match tag {
@@ -284,12 +281,12 @@ pub fn make_random_token_total_supply_for_tag(
     }
 }
 
-pub fn make_random_token_total_supply(rng: &mut (impl Rng + CryptoRng)) -> TokenTotalSupply {
+pub fn make_random_token_total_supply(rng: &mut impl CryptoRng) -> TokenTotalSupply {
     let tag = TokenTotalSupplyTag::iter().choose(rng).unwrap();
     make_random_token_total_supply_for_tag(rng, tag)
 }
 
-pub fn make_random_token_issuance_v1(rng: &mut (impl Rng + CryptoRng)) -> TokenIssuanceV1 {
+pub fn make_random_token_issuance_v1(rng: &mut impl CryptoRng) -> TokenIssuanceV1 {
     TokenIssuanceV1 {
         token_ticker: make_random_bytes(rng),
         number_of_decimals: rng.random(),
@@ -305,7 +302,7 @@ pub fn make_random_token_issuance_v1(rng: &mut (impl Rng + CryptoRng)) -> TokenI
 }
 
 pub fn make_random_token_issuance_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: TokenIssuanceTag,
 ) -> TokenIssuance {
     match tag {
@@ -313,12 +310,12 @@ pub fn make_random_token_issuance_for_tag(
     }
 }
 
-pub fn make_random_token_issuance(rng: &mut (impl Rng + CryptoRng)) -> TokenIssuance {
+pub fn make_random_token_issuance(rng: &mut impl CryptoRng) -> TokenIssuance {
     let tag = TokenIssuanceTag::iter().choose(rng).unwrap();
     make_random_token_issuance_for_tag(rng, tag)
 }
 
-pub fn make_random_nft_issuance_v0(rng: &mut (impl Rng + CryptoRng)) -> NftIssuanceV0 {
+pub fn make_random_nft_issuance_v0(rng: &mut impl CryptoRng) -> NftIssuanceV0 {
     NftIssuanceV0 {
         metadata: Metadata {
             creator: if rng.random::<bool>() {
@@ -352,7 +349,7 @@ pub fn make_random_nft_issuance_v0(rng: &mut (impl Rng + CryptoRng)) -> NftIssua
 }
 
 pub fn make_random_nft_issuance_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: NftIssuanceTag,
 ) -> NftIssuance {
     match tag {
@@ -360,12 +357,12 @@ pub fn make_random_nft_issuance_for_tag(
     }
 }
 
-pub fn make_random_nft_issuance(rng: &mut (impl Rng + CryptoRng)) -> NftIssuance {
+pub fn make_random_nft_issuance(rng: &mut impl CryptoRng) -> NftIssuance {
     let tag = NftIssuanceTag::iter().choose(rng).unwrap();
     make_random_nft_issuance_for_tag(rng, tag)
 }
 
-pub fn make_random_stake_pool_data(rng: &mut (impl Rng + CryptoRng)) -> StakePoolData {
+pub fn make_random_stake_pool_data(rng: &mut impl CryptoRng) -> StakePoolData {
     StakePoolData::new(
         Amount::from_atoms(rng.random()),
         make_random_destination(rng),
@@ -376,7 +373,7 @@ pub fn make_random_stake_pool_data(rng: &mut (impl Rng + CryptoRng)) -> StakePoo
     )
 }
 
-pub fn make_random_order_data(rng: &mut (impl Rng + CryptoRng)) -> OrderData {
+pub fn make_random_order_data(rng: &mut impl CryptoRng) -> OrderData {
     OrderData::new(
         make_random_destination(rng),
         make_random_output_value(rng),
@@ -384,7 +381,7 @@ pub fn make_random_order_data(rng: &mut (impl Rng + CryptoRng)) -> OrderData {
     )
 }
 
-pub fn make_random_htlc(rng: &mut (impl Rng + CryptoRng)) -> HashedTimelockContract {
+pub fn make_random_htlc(rng: &mut impl CryptoRng) -> HashedTimelockContract {
     HashedTimelockContract {
         secret_hash: HtlcSecretHash(rng.random()),
         spend_key: make_random_destination(rng),
@@ -393,10 +390,7 @@ pub fn make_random_htlc(rng: &mut (impl Rng + CryptoRng)) -> HashedTimelockContr
     }
 }
 
-pub fn make_random_tx_output_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
-    tag: TxOutputTag,
-) -> TxOutput {
+pub fn make_random_tx_output_for_tag(rng: &mut impl CryptoRng, tag: TxOutputTag) -> TxOutput {
     match tag {
         TxOutputTag::Transfer => {
             TxOutput::Transfer(make_random_output_value(rng), make_random_destination(rng))
@@ -437,13 +431,13 @@ pub fn make_random_tx_output_for_tag(
     }
 }
 
-pub fn make_random_tx_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+pub fn make_random_tx_output(rng: &mut impl CryptoRng) -> TxOutput {
     let tag = TxOutputTag::iter().choose(rng).unwrap();
     make_random_tx_output_for_tag(rng, tag)
 }
 
 pub fn make_random_input_commitment_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: SighashInputCommitmentTag,
 ) -> SighashInputCommitment<'static> {
     type CommTag = SighashInputCommitmentTag;

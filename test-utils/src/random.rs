@@ -78,7 +78,7 @@ impl TestRng {
         Self(ChaChaRng::seed_from_u64(seed.as_u64()))
     }
 
-    pub fn random(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn random(rng: &mut impl CryptoRng) -> Self {
         Self::new(Seed(rng.random()))
     }
 
@@ -106,7 +106,7 @@ impl TryRngCore for TestRng {
 impl TryCryptoRng for TestRng {}
 
 #[must_use]
-pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
+pub fn make_seedable_rng(seed: Seed) -> impl CryptoRng {
     TestRng::new(seed)
 }
 

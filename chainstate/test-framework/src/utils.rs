@@ -250,7 +250,7 @@ pub fn create_chain_config_with_staking_pool(
 
 pub fn produce_kernel_signature(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
     staking_destination: Destination,
@@ -291,7 +291,7 @@ pub fn produce_kernel_signature(
 
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     storage: &impl BlockchainStorageRead,
     pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
@@ -374,7 +374,7 @@ pub fn assert_gen_block_index_opt_identical_to(
 
 #[allow(clippy::too_many_arguments)]
 pub fn sign_witnesses(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     key_manager: &KeyManager,
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
@@ -451,7 +451,7 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
 // Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
 // with this pool data
 pub fn create_stake_pool_data_with_all_reward_to_staker(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     amount: Amount,
     vrf_pk: VRFPublicKey,
 ) -> (StakePoolData, PrivateKey) {

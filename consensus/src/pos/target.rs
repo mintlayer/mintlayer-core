@@ -248,7 +248,7 @@ mod tests {
     use super::*;
 
     fn make_block(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         prev_block: Id<GenBlock>,
         timestamp: BlockTimestamp,
         target: Uint256,
@@ -285,7 +285,7 @@ mod tests {
         }
 
         pub fn new_with_blocks(
-            rng: &mut (impl Rng + CryptoRng),
+            rng: &mut impl CryptoRng,
             chain_config: &'a ChainConfig,
             timestamps: &[u64],
         ) -> Self {

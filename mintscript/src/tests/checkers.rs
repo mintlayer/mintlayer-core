@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use super::*;
 
 fn make_dummy_tx(
-    mut rng: impl Rng + CryptoRng,
+    mut rng: impl CryptoRng,
     privkeys: &[&PrivateKey],
 ) -> (SignedTransaction, Vec<SighashInputCommitment<'static>>) {
     // Create a simple single output transaction. We can afford to put dummy data
@@ -118,7 +118,7 @@ fn check_sig(#[case] seed: Seed) {
 }
 
 fn check_timelocks(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     timelock: OutputTimeLock,
     (utxo_height, spend_height, utxo_time, spend_time): (u64, u64, u64, u64),
     expected_ok: bool,

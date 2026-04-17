@@ -44,7 +44,7 @@ use test_utils::{
 };
 use tx_verifier::CheckTransactionError;
 
-fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
+fn make_test_framework_with_v0(rng: &mut impl CryptoRng) -> TestFramework {
     TestFramework::builder(rng)
         .with_chain_config(
             common::chain::config::Builder::test_chain()

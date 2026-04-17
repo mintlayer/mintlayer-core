@@ -31,7 +31,7 @@ impl Chacha20poly1305Key {
     pub const KEY_LEN: usize = 32;
 
     #[allow(dead_code)]
-    pub fn new_from_rng<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+    pub fn new_from_rng<R: CryptoRng>(rng: &mut R) -> Self {
         let k = rng.random::<[u8; Self::KEY_LEN]>();
 
         Self { key_data: k.into() }
@@ -67,7 +67,7 @@ impl Chacha20poly1305Key {
         Ok(result)
     }
 
-    pub fn encrypt<T: AsRef<[u8]>, R: Rng + CryptoRng>(
+    pub fn encrypt<T: AsRef<[u8]>, R: CryptoRng>(
         &self,
         message: T,
         rng: &mut R,

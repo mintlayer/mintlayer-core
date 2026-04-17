@@ -20,7 +20,7 @@ mod key_holder;
 pub mod secp256k1;
 pub mod signature;
 
-use randomness::{make_true_rng, CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng};
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use crate::key::{
@@ -83,10 +83,7 @@ impl PrivateKey {
         Self::new_from_rng(&mut make_true_rng(), key_kind)
     }
 
-    pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
-        key_kind: KeyKind,
-    ) -> (PrivateKey, PublicKey) {
+    pub fn new_from_rng(rng: &mut impl CryptoRng, key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         match key_kind {
             KeyKind::Secp256k1Schnorr => {
                 let k = Secp256k1PrivateKey::new(rng);
@@ -178,10 +175,12 @@ impl TryFrom<PublicKey> for Secp256k1PublicKey {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use rstest::rstest;
-    use test_utils::random::make_seedable_rng;
-    use test_utils::random::Seed;
+
+    use randomness::Rng as _;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     #[rstest]
     #[trace]

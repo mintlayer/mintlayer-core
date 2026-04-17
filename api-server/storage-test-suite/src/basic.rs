@@ -1943,10 +1943,7 @@ where
     Ok(())
 }
 
-async fn orders<'a, S: for<'b> Transactional<'b>>(
-    rng: &mut (impl Rng + CryptoRng),
-    storage: &'a mut S,
-) {
+async fn orders<'a, S: for<'b> Transactional<'b>>(rng: &mut impl CryptoRng, storage: &'a mut S) {
     let chain_config = common::chain::config::create_regtest();
     {
         let db_tx = storage.transaction_ro().await.unwrap();
@@ -2156,7 +2153,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
 }
 
 fn random_order(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     creation_height: BlockHeight,
     ask_currency: CoinOrTokenId,
     give_currency: CoinOrTokenId,

@@ -32,7 +32,7 @@ impl<T> SigAuxDataProvider for T where T: Secp256k1SchnorrAuxDataProvider {}
 
 impl<R> Secp256k1SchnorrAuxDataProvider for R
 where
-    R: Rng + CryptoRng,
+    R: CryptoRng,
 {
     fn get_secp256k1_schnorr_aux_data(&mut self) -> [u8; 32] {
         self.random()

@@ -826,9 +826,7 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
     }
 }
 
-fn create_test_framework_builder_with_orders_v1(
-    rng: &mut (impl Rng + CryptoRng),
-) -> TestFrameworkBuilder {
+fn create_test_framework_builder_with_orders_v1(rng: &mut impl CryptoRng) -> TestFrameworkBuilder {
     TestFramework::builder(rng).with_chain_config(
         common::chain::config::Builder::test_chain()
             .chainstate_upgrades(
@@ -843,7 +841,7 @@ fn create_test_framework_builder_with_orders_v1(
 }
 
 fn issue_and_mint_token_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
     let genesis_block_id = tf.genesis().get_id();

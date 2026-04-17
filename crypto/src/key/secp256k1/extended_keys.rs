@@ -19,7 +19,7 @@ use hmac::{Hmac, Mac};
 use secp256k1;
 use sha2::Sha512;
 
-use randomness::{adapters::RngCore09Adapter, CryptoRng, Rng};
+use randomness::{adapters::RngCore09Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -85,7 +85,7 @@ impl Secp256k1ExtendedPrivateKey {
         })
     }
 
-    pub fn new<R: Rng + CryptoRng>(
+    pub fn new<R: CryptoRng>(
         rng: &mut R,
     ) -> (Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey) {
         // Create a new chain code

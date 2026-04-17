@@ -150,7 +150,7 @@ struct MockRemoteNode {
 }
 
 impl MockRemoteNode {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let tf = Arc::new(Mutex::new(TestFramework::builder(rng).build()));
         Self { tf }
     }
@@ -199,12 +199,7 @@ impl RemoteNode for MockRemoteNode {
     }
 }
 
-fn create_chain(
-    node: &MockRemoteNode,
-    rng: &mut (impl Rng + CryptoRng),
-    parent: u64,
-    count: usize,
-) {
+fn create_chain(node: &MockRemoteNode, rng: &mut impl CryptoRng, parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
     let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
@@ -1038,7 +1033,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
 #[allow(clippy::too_many_arguments)]
 fn create_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     target_block_time: Duration,
     prev_block_hash: Id<GenBlock>,

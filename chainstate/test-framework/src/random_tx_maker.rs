@@ -237,7 +237,7 @@ impl<'a> RandomTxMaker<'a> {
 
     pub fn make(
         mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         staking_pools_observer: &mut impl StakingPoolsObserver,
         key_manager: &mut KeyManager,
     ) -> (
@@ -453,7 +453,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn create_account_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_before_tx: &impl PoSAccountingView,
         pos_accounting_latest: &mut (impl PoSAccountingView
@@ -570,7 +570,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn create_token_account_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         token_id: TokenId,
         key_manager: &mut KeyManager,
@@ -768,7 +768,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn create_utxo_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         staking_pools_observer: &mut impl StakingPoolsObserver,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
@@ -892,7 +892,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn spend_coins(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         coins: Amount,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
@@ -1156,7 +1156,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn spend_output_value(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
@@ -1208,7 +1208,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn spend_tokens_v1(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
         token_id: TokenId,
@@ -1354,7 +1354,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn tx_outputs_post_process(
         &self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),

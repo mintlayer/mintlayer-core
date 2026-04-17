@@ -23,7 +23,7 @@ use crate::key::secp256k1::extended_keys::{
     Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey,
 };
 use crate::key::{PrivateKey, PublicKey};
-use randomness::{make_true_rng, CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng};
 
 use super::hdkd::chain_code::ChainCode;
 
@@ -62,7 +62,7 @@ impl ExtendedPrivateKey {
     }
 
     pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         key_kind: ExtendedKeyKind,
     ) -> (ExtendedPrivateKey, ExtendedPublicKey) {
         match key_kind {
@@ -185,14 +185,18 @@ impl Derivable for ExtendedPublicKey {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::key::hdkd::derivation_path::DerivationPath;
+    use std::str::FromStr;
+
     use bip39::Mnemonic;
     use hex::ToHex;
     use rstest::rstest;
-    use std::str::FromStr;
-    use test_utils::random::make_seedable_rng;
-    use test_utils::random::Seed;
+
+    use randomness::Rng as _;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::key::hdkd::derivation_path::DerivationPath;
+
+    use super::*;
 
     #[rstest]
     #[trace]

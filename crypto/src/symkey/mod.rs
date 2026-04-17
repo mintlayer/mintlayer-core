@@ -58,7 +58,7 @@ pub struct SymmetricKey {
 }
 
 impl SymmetricKey {
-    pub fn new<R: Rng + CryptoRng>(kind: SymmetricKeyKind, rng: &mut R) -> Self {
+    pub fn new<R: CryptoRng>(kind: SymmetricKeyKind, rng: &mut R) -> Self {
         let key = match kind {
             SymmetricKeyKind::XChacha20Poly1305 => {
                 SymmetricKeyHolder::XChacha20Poly1305(Chacha20poly1305Key::new_from_array(
@@ -78,7 +78,7 @@ impl SymmetricKey {
         Ok(Self { key })
     }
 
-    pub fn encrypt<R: Rng + CryptoRng>(
+    pub fn encrypt<R: CryptoRng>(
         &self,
         message: &[u8],
         rng: &mut R,

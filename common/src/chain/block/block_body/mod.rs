@@ -131,7 +131,7 @@ mod tests {
         TxInput::from_utxo(outpoint, rng.next_u32())
     }
 
-    fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+    fn generate_random_invalid_output(rng: &mut impl CryptoRng) -> TxOutput {
         let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
@@ -139,7 +139,7 @@ mod tests {
         )
     }
 
-    fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> SignedTransaction {
+    fn generate_random_invalid_transaction(rng: &mut impl CryptoRng) -> SignedTransaction {
         let inputs = {
             let input_count = 1 + (rng.next_u32() as usize) % 10;
             (0..input_count).map(|_| generate_random_invalid_input(rng)).collect::<Vec<_>>()
@@ -159,7 +159,7 @@ mod tests {
         SignedTransaction::new(tx, generate_random_invalid_witness(inputs.len(), rng)).unwrap()
     }
 
-    fn generate_random_invalid_block_reward(rng: &mut (impl Rng + CryptoRng)) -> BlockReward {
+    fn generate_random_invalid_block_reward(rng: &mut impl CryptoRng) -> BlockReward {
         let output_count = (rng.next_u32() as usize) % 10;
         let outputs = (0..output_count)
             .map(|_| generate_random_invalid_output(rng))

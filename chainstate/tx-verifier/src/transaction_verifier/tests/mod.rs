@@ -32,10 +32,7 @@ use crypto::{
 use randomness::{CryptoRng, Rng};
 use utxo::Utxo;
 
-pub fn create_utxo(
-    rng: &mut (impl Rng + CryptoRng),
-    value: UnsignedIntType,
-) -> (UtxoOutPoint, Utxo) {
+pub fn create_utxo(rng: &mut impl CryptoRng, value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
         0,
@@ -49,13 +46,13 @@ pub fn create_utxo(
     (outpoint, utxo)
 }
 
-fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+fn new_pub_key_destination(rng: &mut impl CryptoRng) -> Destination {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
 }
 
 fn create_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     staker: Destination,
     decommission_destination: Destination,
     pledged_amount: Amount,

@@ -194,7 +194,7 @@ struct MockNode {
 }
 
 impl MockNode {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let tf = Arc::new(Mutex::new(TestFramework::builder(rng).build()));
         Self { tf }
     }
@@ -455,7 +455,7 @@ impl NodeInterface for MockNode {
     }
 }
 
-fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
+fn create_chain(node: &MockNode, rng: &mut impl CryptoRng, parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
     let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();

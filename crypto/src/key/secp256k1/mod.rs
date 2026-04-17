@@ -18,7 +18,7 @@ pub mod extended_keys;
 use secp256k1;
 use zeroize::Zeroize;
 
-use randomness::{adapters::RngCore09Adapter, CryptoRng, Rng};
+use randomness::{adapters::RngCore09Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -61,7 +61,7 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 }
 
 impl Secp256k1PrivateKey {
-    pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
+    pub fn new<R: CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secp = secp256k1::Secp256k1::new();
         let (secret, public) = secp.generate_keypair(&mut RngCore09Adapter(rng));
         (
@@ -206,12 +206,14 @@ lazy_static::lazy_static! {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use hex::ToHex;
     use rstest::rstest;
-    use serialization::DecodeAll;
-    use serialization::Encode;
+
+    use randomness::Rng as _;
+    use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     #[rstest]
     #[trace]

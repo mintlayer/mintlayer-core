@@ -25,7 +25,7 @@ use common::{
     },
     primitives::{time, BlockHeight},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::{
@@ -33,7 +33,7 @@ use tx_verifier::{
     transaction_verifier::{TransactionSourceForConnect, TransactionVerifier},
 };
 
-fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
+fn setup(rng: &mut impl CryptoRng) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
     let tf = TestFramework::builder(rng).with_storage(storage.clone()).build();
 
