@@ -230,7 +230,7 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut impl CryptoRng) -> (Block, &'f mut TestFramework) {
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
             None => {
@@ -288,21 +288,21 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+    pub fn build(self, rng: &mut impl CryptoRng) -> Block {
         self.build_impl(&mut *rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(
         self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let (block, framework) = self.build_impl(&mut *rng);
         let res = framework.process_block(block, BlockSource::Local)?;
         Ok(res)
     }
 
-    fn mine_pos_block(&self, rng: &mut (impl Rng + CryptoRng)) -> (PoSData, BlockTimestamp) {
+    fn mine_pos_block(&self, rng: &mut impl CryptoRng) -> (PoSData, BlockTimestamp) {
         let parent_block_index = self.framework.gen_block_index(&self.prev_block_hash);
 
         let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
@@ -375,7 +375,7 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos and accounts
-    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn add_test_transaction(mut self, rng: &mut impl CryptoRng) -> Self {
         let utxo_set = self
             .framework
             .storage

@@ -58,7 +58,7 @@ use tx_verifier::{
 };
 
 fn create_test_framework_with_orders(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     orders_version: OrdersVersion,
 ) -> TestFramework {
     TestFramework::builder(rng)
@@ -77,7 +77,7 @@ fn create_test_framework_with_orders(
 }
 
 fn issue_and_mint_token_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (
     TokenId,
@@ -89,7 +89,7 @@ fn issue_and_mint_token_from_genesis(
 }
 
 fn issue_and_mint_token_amount_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     to_mint: Amount,
 ) -> (
@@ -111,7 +111,7 @@ fn issue_and_mint_token_amount_from_genesis(
 }
 
 fn issue_and_mint_token_amount_from_best_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     utxo_to_pay_fee: UtxoOutPoint,
     to_mint: Amount,
@@ -140,7 +140,7 @@ struct ExpectedOrderData {
 
 fn assert_order_exists(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     order_id: &OrderId,
     expected_data: &ExpectedOrderData,
     no_other_orders_present: bool,

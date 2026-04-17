@@ -66,7 +66,7 @@ struct TestFixture {
 }
 
 impl TestFixture {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let secret = HtlcSecret::new_from_rng(rng);
 
         let (alice_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);

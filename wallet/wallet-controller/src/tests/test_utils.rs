@@ -130,7 +130,7 @@ pub fn random_token_total_supply(rng: &mut impl Rng) -> TokenTotalSupply {
     }
 }
 
-pub fn random_nft_issuance(rng: &mut (impl Rng + CryptoRng)) -> NftIssuance {
+pub fn random_nft_issuance(rng: &mut impl CryptoRng) -> NftIssuance {
     NftIssuance::V0(NftIssuanceV0 {
         metadata: Metadata {
             creator: Some(TokenCreator {
@@ -151,11 +151,11 @@ pub fn wallet_new_dest(wallet: &mut DefaultWallet) -> Destination {
     wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object()
 }
 
-pub fn random_pub_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
+pub fn random_pub_key(rng: &mut impl CryptoRng) -> PublicKey {
     PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1
 }
 
-pub fn random_vrf_pub_key(rng: &mut (impl Rng + CryptoRng)) -> VRFPublicKey {
+pub fn random_vrf_pub_key(rng: &mut impl CryptoRng) -> VRFPublicKey {
     VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1
 }
 

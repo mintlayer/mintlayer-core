@@ -40,7 +40,7 @@ use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 
-fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
+fn setup(rng: &mut impl CryptoRng) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
 
     let chain_config = create_unit_test_config();

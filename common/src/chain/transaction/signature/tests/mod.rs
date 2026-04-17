@@ -650,7 +650,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 
 fn sign_mutate_then_verify(
     chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -708,7 +708,7 @@ fn check_change_flags(
 
 fn check_append_input(
     chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     original_tx: &SignedTransactionWithInputCommitments,
     destination: &Destination,
     input_index_to_check: usize,
@@ -778,7 +778,7 @@ fn check_mutate_witness(
 
 fn check_append_output(
     chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     original_tx: &SignedTransactionWithInputCommitments,
     destination: &Destination,
     input_index_to_check: usize,

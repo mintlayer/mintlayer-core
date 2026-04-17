@@ -944,7 +944,7 @@ fn mutate_first_input(
 }
 
 fn mutate_first_input_commitment(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
     let mut input_commitments = tx.input_commitments.clone();

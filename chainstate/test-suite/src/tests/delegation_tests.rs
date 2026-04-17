@@ -49,7 +49,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 fn prepare_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (PoolId, UtxoOutPoint, UtxoOutPoint) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -91,7 +91,7 @@ fn prepare_stake_pool(
 }
 
 fn prepare_delegation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (
     PoolId,

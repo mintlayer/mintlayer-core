@@ -96,11 +96,11 @@ where
     *wallet.get_best_block().first_key_value().unwrap().1
 }
 
-fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
+fn gen_random_password(rng: &mut impl CryptoRng) -> String {
     (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect()
 }
 
-fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOutput {
+fn gen_random_transfer(rng: &mut impl CryptoRng, amount: Amount) -> TxOutput {
     let destination = Destination::PublicKey(
         crypto::key::PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1,
     );
@@ -125,7 +125,7 @@ fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOu
 }
 
 fn gen_random_lock_then_transfer(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     amount: Amount,
     destination: Destination,
     lock_for_blocks: u64,

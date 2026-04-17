@@ -16,7 +16,7 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 
-use randomness::{make_true_rng, CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng};
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use crate::{
@@ -111,7 +111,7 @@ impl VRFPrivateKey {
     }
 
     pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         key_kind: VRFKeyKind,
     ) -> (VRFPrivateKey, VRFPublicKey) {
         match key_kind {

@@ -230,7 +230,7 @@ fn randomized_test(#[case] seed: Seed) {
     });
 }
 
-fn make_test_framework(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
+fn make_test_framework(rng: &mut impl CryptoRng) -> TestFramework {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
 
@@ -400,7 +400,7 @@ impl TestData {
     fn make_new_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (PoolId, Amount) {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
@@ -451,7 +451,7 @@ impl TestData {
     fn decommission_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) {
         let info = self.pools.remove(pool_id).unwrap();
@@ -493,7 +493,7 @@ impl TestData {
     fn create_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) -> (DelegationId, Amount) {
         let min_stake_pool_pledge =
@@ -555,7 +555,7 @@ impl TestData {
     fn withdraw_from_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
@@ -603,7 +603,7 @@ impl TestData {
     fn add_to_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
@@ -643,7 +643,7 @@ impl TestData {
     fn produce_trivial_block_with_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) {
         make_block_builder_with_pool(tf, pool_id).build_and_process(rng).unwrap();

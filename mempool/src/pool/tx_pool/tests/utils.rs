@@ -219,7 +219,7 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
 }
 
 pub fn make_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     ins: &[(OutPointSourceId, u32)],
     outs: &[u128],
 ) -> SignedTransaction {
@@ -241,7 +241,7 @@ pub fn make_tx(
 /// * The transaction fees may drop below minimum threshold.
 /// * In extreme, 0-value outputs may be generated.
 pub fn generate_transaction_graph(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     time: Time,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
     let tf = TestFramework::builder(rng).build();

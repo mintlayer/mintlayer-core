@@ -77,7 +77,7 @@ const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
 
 fn add_block_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     stake_pool_data: StakePoolData,
 ) -> (UtxoOutPoint, PoolId) {
@@ -106,7 +106,7 @@ fn add_block_with_stake_pool(
 }
 
 fn add_block_with_2_stake_pools(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     stake_pool_data1: StakePoolData,
     stake_pool_data2: StakePoolData,
@@ -169,7 +169,7 @@ fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<Con
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
 fn setup_test_chain_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
     let net_upgrades = consensus_upgrades_with_pos_at_height(BlockHeight::new(2));
@@ -194,7 +194,7 @@ fn setup_test_chain_with_stake_pool(
 // Create a chain genesis <- block_1
 // block_1 has txs with 2 StakePool output
 fn setup_test_chain_with_2_stake_pools(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
 ) -> (
@@ -221,7 +221,7 @@ fn setup_test_chain_with_2_stake_pools(
 }
 
 fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
     upgrades: Vec<(BlockHeight, ConsensusUpgrade)>,
@@ -268,7 +268,7 @@ fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
 }
 
 fn produce_kernel_signature(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &TestFramework,
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
@@ -2421,7 +2421,7 @@ mod staker_destination_change_test_utils {
         next_staking_destination: Destination,
         vrf_sk: &VRFPrivateKey,
         kernel_outpoint: UtxoOutPoint,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (PoSData, BlockTimestamp, Vec<TxOutput>) {
         let reward_outputs =
             vec![TxOutput::ProduceBlockFromStake(next_staking_destination, pool_id)];

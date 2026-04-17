@@ -139,7 +139,7 @@ impl<'f> BlockBuilder<'f> {
 
     /// Adds a transaction that uses random utxos and accounts
     // TODO: this function is currently unused. Remove it?
-    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn add_test_transaction(mut self, rng: &mut impl CryptoRng) -> Self {
         let utxo_set = self
             .framework
             .storage
@@ -345,7 +345,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut impl CryptoRng) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
@@ -372,14 +372,14 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+    pub fn build(self, rng: &mut impl CryptoRng) -> Block {
         self.build_impl(rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(
         self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let block_source = self.block_source;
         let (block, framework) = self.build_impl(rng);

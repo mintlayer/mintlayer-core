@@ -67,7 +67,7 @@ use crate::tests::helpers::token_checks::{
 };
 
 fn unmint_tokens_in_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     token_id: TokenId,

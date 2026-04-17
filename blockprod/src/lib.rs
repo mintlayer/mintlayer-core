@@ -359,7 +359,7 @@ mod tests {
     pub fn create_genesis_for_pos_tests(
         timestamp: BlockTimestamp,
         extra_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (
         Genesis,
         /*stake_private_key:*/ PrivateKey,
@@ -409,7 +409,7 @@ mod tests {
         time_getter: &TimeGetter,
         switch_to_pos_at: BlockHeight,
         extra_genesis_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
         let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
         setup_pos_with_genesis_timestamp(
@@ -424,7 +424,7 @@ mod tests {
         genesis_timestamp: BlockTimestamp,
         switch_to_pos_at: BlockHeight,
         extra_genesis_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
         let initial_target = pos_initial_difficulty(ChainType::Regtest);
 

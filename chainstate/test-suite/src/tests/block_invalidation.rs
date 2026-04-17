@@ -256,7 +256,7 @@ struct TestChainBlockIds {
 //      |      |------d0----d1----d2
 //      |      |      /----?e0----e1----e2
 // G----m0----(m1)----m2----m3----m4----m5----m6
-fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestChainBlockIds) {
+fn make_complex_chain(rng: &mut impl CryptoRng) -> (TestFramework, TestChainBlockIds) {
     let mut tf = TestFramework::builder(rng)
         .with_chain_config(
             chain::config::create_unit_test_config_builder()

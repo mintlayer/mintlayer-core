@@ -32,7 +32,7 @@ use serialization::extras::non_empty_vec::DataOrNoVec;
 
 use crate::random_ascii_alphanumeric_string;
 
-pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
+pub fn random_creator(rng: &mut impl CryptoRng) -> TokenCreator {
     let (_, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     TokenCreator::from(public_key)
 }
@@ -94,10 +94,7 @@ pub fn random_token_issuance_v1(
     random_token_issuance_v1_with_min_supply(chain_config, authority, 1, rng)
 }
 
-pub fn random_nft_issuance(
-    chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
-) -> NftIssuanceV0 {
+pub fn random_nft_issuance(chain_config: &ChainConfig, rng: &mut impl CryptoRng) -> NftIssuanceV0 {
     let max_desc_len = chain_config.token_max_description_len();
     let max_name_len = chain_config.token_max_name_len();
     let max_ticker_len = chain_config.token_max_ticker_len();

@@ -67,7 +67,7 @@ pub enum Presence {
     Spent,
 }
 
-pub fn create_tx_outputs(rng: &mut (impl Rng + CryptoRng), size: u32) -> Vec<TxOutput> {
+pub fn create_tx_outputs(rng: &mut impl CryptoRng, size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
     for _ in 0..size {
         let random_amt = rng.random_range(1..u128::MAX);
@@ -108,20 +108,20 @@ pub fn convert_to_utxo(
     (outpoint, utxo)
 }
 
-pub fn create_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
+pub fn create_utxo(rng: &mut impl CryptoRng, block_height: u64) -> (Utxo, UtxoOutPoint) {
     let random_value = rng.random_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, Some(block_height))
 }
 
-pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, UtxoOutPoint) {
+pub fn create_utxo_for_mempool(rng: &mut impl CryptoRng) -> (Utxo, UtxoOutPoint) {
     let random_value = rng.random_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, None)
 }
 
 pub fn create_utxo_from_reward(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     block_height: u64,
 ) -> (Utxo, UtxoOutPoint) {
     inner_create_utxo(rng, true, Some(block_height))
@@ -129,7 +129,7 @@ pub fn create_utxo_from_reward(
 
 /// returns a tuple of utxo and outpoint, for testing.
 fn inner_create_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     is_block_reward: bool,
     block_height: Option<u64>,
 ) -> (Utxo, UtxoOutPoint) {
@@ -171,7 +171,7 @@ fn inner_create_utxo(
 /// `cache_flags` - sets the entry of the utxo (fresh/not, dirty/not)
 /// `outpoint` - optional key to be used, rather than a randomly generated one.
 pub fn insert_single_entry<P>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache: &mut UtxosCache<P>,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,

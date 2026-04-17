@@ -171,7 +171,7 @@ mod tests {
     }
 
     impl TestChallengeData {
-        fn new_random(rng: &mut (impl Rng + CryptoRng)) -> Self {
+        fn new_random(rng: &mut impl CryptoRng) -> Self {
             let chain_config = create_mainnet();
 
             let min_required_signatures = (rng.random::<u8>() % 10) + 1;
@@ -350,7 +350,7 @@ mod tests {
         }
     }
 
-    fn check_wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
+    fn check_wrong_key(rng: &mut impl CryptoRng, data: &TestChallengeData) {
         let TestChallengeData {
             chain_config,
             challenge,

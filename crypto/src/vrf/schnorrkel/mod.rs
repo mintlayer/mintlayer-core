@@ -15,7 +15,7 @@
 
 use schnorrkel::{derive::Derivation, Keypair};
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng, Rng};
+use randomness::{adapters::RngCore08Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::key::hdkd::{
@@ -122,7 +122,7 @@ pub struct SchnorrkelPrivateKey {
 }
 
 impl SchnorrkelPrivateKey {
-    pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
+    pub fn new<R: CryptoRng>(rng: &mut R) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
         let sk = schnorrkel::SecretKey::generate_with(&mut RngCore08Adapter(rng));
         let pk = sk.to_public();
         let sk = Self { key: sk };
