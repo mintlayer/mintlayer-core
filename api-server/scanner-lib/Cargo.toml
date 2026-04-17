@@ -36,3 +36,4 @@ test-utils = { path = "../../test-utils" }
 
 ctor.workspace = true
 rstest.workspace = true
+strum.workspace = true

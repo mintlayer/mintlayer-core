@@ -244,7 +244,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, crate::storage::storage_api::ApiServerStorageError>
     {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
@@ -288,7 +288,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         outpoint: UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_utxo(outpoint).await?;
 
         Ok(res)
@@ -445,6 +445,123 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_utxo_mempool_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_utxo_mempool_with_fallback(outpoint).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+            .await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_locked_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+            .await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<common::chain::Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_transaction(transaction_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_transactions(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<common::chain::Transaction>>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_transactions(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_balances(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_address_all_utxos(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_pool_data_with_fallback(pool_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_token_num_decimals_with_fallback(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_token_num_decimals_with_fallback(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_order_with_fallback(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_order_with_fallback(order_id, &self.chain_config).await?;
 
         Ok(res)
     }
