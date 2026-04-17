@@ -908,7 +908,7 @@ where
                 .await
                 .unwrap();
 
-            let fetched_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+            let fetched_utxo = db_tx.get_utxo_mempool_with_fallback(&outpoint).await.unwrap();
             assert_eq!(fetched_utxo, Some(utxo.clone()));
 
             let bob_utxos =
@@ -937,7 +937,7 @@ where
                 .unwrap();
 
             // even if the utxo is confirmed it should be returned by the fallback
-            let fetched_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+            let fetched_utxo = db_tx.get_utxo_mempool_with_fallback(&outpoint).await.unwrap();
             assert_eq!(fetched_utxo, Some(utxo.clone()));
 
             let bob_utxos = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
@@ -2153,7 +2153,7 @@ where
         let mempool_txs = db_tx.get_mempool_transactions(10, 0).await.unwrap();
         assert_eq!(mempool_txs, vec![tx_info]);
 
-        let retrieved_utxo = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+        let retrieved_utxo = db_tx.get_utxo_mempool_with_fallback(&outpoint).await.unwrap();
         assert_eq!(retrieved_utxo, Some(utxo.clone()));
 
         let addr1_utxos = db_tx.get_mempool_address_all_utxos(addr1.as_str()).await.unwrap();
@@ -2185,12 +2185,12 @@ where
         assert_eq!(addr2_balances, expected_balances);
 
         let b1 = db_tx
-            .get_mempool_address_balance(addr2.as_str(), CoinOrTokenId::Coin)
+            .get_mempool_address_balance_with_fallback(addr2.as_str(), CoinOrTokenId::Coin)
             .await
             .unwrap();
         assert_eq!(b1, Some(Amount::from_atoms(100)));
         let b2 = db_tx
-            .get_mempool_locked_address_balance(
+            .get_mempool_address_locked_balance_with_fallback(
                 addr2.as_str(),
                 CoinOrTokenId::TokenId(token_id_bal),
             )
@@ -2201,14 +2201,16 @@ where
         let addr3_txs = db_tx.get_mempool_address_transactions(addr3.as_str()).await.unwrap();
         assert_eq!(addr3_txs, vec![tx_id]);
 
-        let retrieved_order = db_tx.get_mempool_order(order_id).await.unwrap();
+        let retrieved_order = db_tx.get_mempool_order_with_fallback(order_id).await.unwrap();
         assert_eq!(retrieved_order, Some(order));
 
-        let token_decimals = db_tx.get_mempool_token_num_decimals(token_id1).await.unwrap();
+        let token_decimals =
+            db_tx.get_mempool_token_num_decimals_with_fallback(token_id1).await.unwrap();
         assert_eq!(token_decimals, Some(token1_number_of_decimals));
 
         // nfts have 0 decimals
-        let token2_decimals = db_tx.get_mempool_token_num_decimals(nft_id).await.unwrap();
+        let token2_decimals =
+            db_tx.get_mempool_token_num_decimals_with_fallback(nft_id).await.unwrap();
         assert_eq!(token2_decimals, Some(0));
 
         drop(db_tx);
@@ -2226,10 +2228,11 @@ where
         let mempool_txs_cleared = db_tx.get_mempool_transactions(10, 0).await.unwrap();
         assert!(mempool_txs_cleared.is_empty());
 
-        let retrieved_utxo_cleared = db_tx.get_utxo_mempool_fallback(&outpoint).await.unwrap();
+        let retrieved_utxo_cleared = db_tx.get_utxo_mempool_with_fallback(&outpoint).await.unwrap();
         assert_eq!(retrieved_utxo_cleared, None);
 
-        let retrieved_order_cleared = db_tx.get_mempool_order(order_id).await.unwrap();
+        let retrieved_order_cleared =
+            db_tx.get_mempool_order_with_fallback(order_id).await.unwrap();
         assert_eq!(retrieved_order_cleared, None);
 
         let addr1_utxos_cleared =
