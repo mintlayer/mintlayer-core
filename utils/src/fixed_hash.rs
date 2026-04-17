@@ -15,6 +15,11 @@
 
 pub use fixed_hash::construct_fixed_hash as construct_fixed_hash_orig;
 
+/// A macro that wraps the namesake one from `fixed_hash`(which is compiled with its `rand` feature
+/// disabled) and adds custom RNG-related methods to the generated type.
+///
+/// It's a temporary workaround to avoid creating an RNG adapter every time `random_using` is
+/// called. Once `fixed_hash` is updated to use `rand` v0.10, this wrapper can be removed.
 #[macro_export]
 macro_rules! construct_fixed_hash {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ( $n_bytes:expr ); ) => {
@@ -27,9 +32,9 @@ macro_rules! construct_fixed_hash {
     }
 }
 
-// This is basically a copy of the similar macro in the fixed_hash src, except that here we
-// use rng primitives from `randomness` and omit the `randomize` and `random` methods that would
-// create a new rng on the fly (mainly because the RNG they were creating originally is no longer
+// This is basically a copy of the similar macro in the fixed_hash src, except that here we use
+// rng primitives from `randomness` and omit the `randomize` and `random` methods that would create
+// a new rng on the fly (mainly because the RNG that they were creating originally is no longer
 // infallible).
 #[macro_export]
 #[doc(hidden)]
@@ -94,6 +99,8 @@ mod tests {
         // Check some basic stuff coming from the original macro.
         let hash = TestHash::repeat_byte(0xAB);
         assert_eq!(hash.as_bytes(), &[0xAB; 32]);
+        // Note: we actually want to call `clone` here, to make sure it's callable.
+        #[allow(clippy::clone_on_copy)]
         let hash_clone = hash.clone();
         let hash_copy = hash;
         assert_eq!(hash_clone, hash);

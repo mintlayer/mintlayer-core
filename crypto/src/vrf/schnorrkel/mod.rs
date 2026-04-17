@@ -15,7 +15,7 @@
 
 use schnorrkel::{derive::Derivation, Keypair};
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng};
+use randomness::{adapters::Rng08Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::key::hdkd::{
@@ -123,7 +123,7 @@ pub struct SchnorrkelPrivateKey {
 
 impl SchnorrkelPrivateKey {
     pub fn new<R: CryptoRng>(rng: &mut R) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
-        let sk = schnorrkel::SecretKey::generate_with(&mut RngCore08Adapter(rng));
+        let sk = schnorrkel::SecretKey::generate_with(&mut Rng08Adapter(rng));
         let pk = sk.to_public();
         let sk = Self { key: sk };
         let pk = SchnorrkelPublicKey { key: pk };
@@ -265,7 +265,7 @@ mod tests {
     fn vrf_internal_simple() {
         let mut csprng = make_true_rng();
 
-        let keypair1 = Keypair::generate_with(&mut RngCore08Adapter(&mut csprng));
+        let keypair1 = Keypair::generate_with(&mut Rng08Adapter(&mut csprng));
 
         let ctx = signing_context(b"yoo!");
         let msg = b"meow";
@@ -299,7 +299,7 @@ mod tests {
             "VRF verification with incorrect message passed!"
         );
 
-        let keypair2 = Keypair::generate_with(&mut RngCore08Adapter(&mut csprng));
+        let keypair2 = Keypair::generate_with(&mut Rng08Adapter(&mut csprng));
         assert!(
             keypair2.public.vrf_verify(ctx.bytes(msg), out1, &proof1).is_err(),
             "VRF verification with incorrect signer passed!"

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::adapters::RngCore08Adapter;
+use randomness::adapters::Rng08Adapter;
 
 use super::{traits::SignableTranscript, with_rng::VRFTranscriptWithRng};
 
@@ -80,7 +80,7 @@ impl schnorrkel::context::SigningTranscript for VRFTranscript {
             label,
             dest,
             nonce_seeds,
-            RngCore08Adapter(randomness::make_true_rng()),
+            Rng08Adapter(randomness::make_true_rng()),
         )
     }
 }
@@ -110,11 +110,11 @@ mod tests {
         // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript
             .build_rng()
-            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
         let mut g2 = assembled_transcript
             .0
             .build_rng()
-            .finalize(&mut RngCore08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
 
         for _ in 0..100 {
             assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());

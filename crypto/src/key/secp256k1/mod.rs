@@ -18,7 +18,7 @@ pub mod extended_keys;
 use secp256k1;
 use zeroize::Zeroize;
 
-use randomness::{adapters::RngCore09Adapter, CryptoRng};
+use randomness::{adapters::Rng09Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -63,7 +63,7 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 impl Secp256k1PrivateKey {
     pub fn new<R: CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secp = secp256k1::Secp256k1::new();
-        let (secret, public) = secp.generate_keypair(&mut RngCore09Adapter(rng));
+        let (secret, public) = secp.generate_keypair(&mut Rng09Adapter(rng));
         (
             Secp256k1PrivateKey::from_native(secret),
             Secp256k1PublicKey::from_native(public),

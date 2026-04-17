@@ -17,7 +17,7 @@ pub mod error;
 
 use zeroize::Zeroize;
 
-use randomness::{adapters::RngCore08Adapter, CryptoRng};
+use randomness::{adapters::Rng08Adapter, CryptoRng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::symkey;
@@ -48,7 +48,7 @@ pub struct EndToEndPrivateKey {
 impl EndToEndPrivateKey {
     pub fn new_from_rng<R: CryptoRng>(rng: &mut R) -> EndToEndPrivateKey {
         EndToEndPrivateKey {
-            key: x25519_dalek::ReusableSecret::random_from_rng(&mut RngCore08Adapter(rng)),
+            key: x25519_dalek::ReusableSecret::random_from_rng(Rng08Adapter(rng)),
         }
     }
 
