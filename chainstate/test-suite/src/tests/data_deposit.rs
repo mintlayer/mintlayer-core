@@ -23,7 +23,7 @@ use common::chain::{
     TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
-use randomness::Rng;
+use randomness::RngExt as _;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::CheckTransactionError;

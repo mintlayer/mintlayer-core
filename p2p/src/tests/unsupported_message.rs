@@ -22,7 +22,7 @@ use networking::{
     transport::{new_message_stream, TransportSocket as _},
 };
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use serialization::{Decode, Encode};
 use test_utils::{
     assert_matches, assert_matches_return_val,

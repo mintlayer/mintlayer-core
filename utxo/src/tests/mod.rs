@@ -37,7 +37,7 @@ use common::{
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
 use crypto::vrf::VRFKeyKind;
-use randomness::{seq, CryptoRng, Rng};
+use randomness::{seq, CryptoRng, Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,

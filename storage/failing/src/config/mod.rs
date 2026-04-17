@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use storage_core::{error::Recoverable as StorageError, DbMapId};
-use test_utils::random::{IteratorRandom, Rng};
+use test_utils::random::{IteratorRandom, Rng, RngExt as _};
 use utils::ensure;
 
 pub mod builder;

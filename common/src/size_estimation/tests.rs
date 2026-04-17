@@ -21,7 +21,7 @@ use rstest::rstest;
 
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 

@@ -17,16 +17,12 @@ pub mod adapters;
 
 use std::sync::Mutex;
 
-// FIXME use new names
 pub use rand::prelude::{IndexedMutRandom, IndexedRandom, SliceRandom};
-pub use rand::{
-    seq, CryptoRng, Rng as RngCore, RngExt as Rng, SeedableRng, TryCryptoRng, TryRng as TryRngCore,
-};
+pub use rand::{seq, CryptoRng, Rng, RngExt, SeedableRng, TryCryptoRng, TryRng};
 
 pub mod distributions {
     pub use rand::distr::{
-        weighted::WeightedIndex, Alphanumeric, Distribution, SampleString as DistString,
-        StandardUniform as Standard,
+        weighted::WeightedIndex, Alphanumeric, Distribution, SampleString, StandardUniform,
     };
     pub mod uniform {
         pub use rand::distr::uniform::SampleRange;
@@ -34,7 +30,7 @@ pub mod distributions {
 }
 
 pub mod rngs {
-    pub use rand::rngs::SysRng as OsRng;
+    pub use rand::rngs::SysRng;
 }
 
 pub mod rand_core_utils {
@@ -58,9 +54,7 @@ pub fn make_pseudo_rng() -> impl Rng {
     rand::rngs::ThreadRng::default()
 }
 
-// FIXME update docs for BoxedRngMutexWrapper; perhaps make it generic over error.
-
-/// A wrapper over `Mutex<Box<R>>` that implements `RngCore` and `CryptoRng` if `R` does the same.
+/// A wrapper over `Mutex<Box<R>>` that implements `Rng` and `CryptoRng` if `R` does the same.
 ///
 /// This can be passed to a function that accept `impl Rng`, to avoid the need to lock the mutex
 /// for the entire duration of the function call.
@@ -102,11 +96,11 @@ mod tests {
 
     use super::*;
 
-    // `DumbRng` implements `RngCore` but not `CryptoRng`.
+    // `DumbRng` implements `Rng` but not `CryptoRng`.
     #[allow(dead_code)]
     struct DumbRng;
 
-    impl TryRngCore for DumbRng {
+    impl TryRng for DumbRng {
         type Error = std::convert::Infallible;
 
         fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -123,9 +117,9 @@ mod tests {
         }
     }
 
-    assert_impl_all!(BoxedRngMutexWrapper<'static, DumbRng>: RngCore);
+    assert_impl_all!(BoxedRngMutexWrapper<'static, DumbRng>: Rng);
     assert_not_impl_any!(BoxedRngMutexWrapper<'static, DumbRng>: CryptoRng);
 
     // Note: `ThreadRng` actually implements `CryptoRng`, even though we use it in `make_pseudo_rng`.
-    assert_impl_all!(BoxedRngMutexWrapper<'static, rand::rngs::ThreadRng>: RngCore, CryptoRng);
+    assert_impl_all!(BoxedRngMutexWrapper<'static, rand::rngs::ThreadRng>: Rng, CryptoRng);
 }

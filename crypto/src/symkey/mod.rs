@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 mod chacha20poly1305;
 

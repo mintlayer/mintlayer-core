@@ -44,7 +44,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use test_utils::random::{CryptoRng, IteratorRandom, Rng};
+use test_utils::random::{CryptoRng, IteratorRandom, RngExt as _};
 
 pub fn make_random_destination_for_tag(
     rng: &mut impl CryptoRng,

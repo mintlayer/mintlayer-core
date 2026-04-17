@@ -27,7 +27,7 @@ use networking::{
     types::ConnectionDirection,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,

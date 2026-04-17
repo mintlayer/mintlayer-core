@@ -138,7 +138,7 @@ impl fmt::Display for DerivationPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use randomness::RngCore;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
     use test_utils::{assert_encoded_eq, decode_from_hex};

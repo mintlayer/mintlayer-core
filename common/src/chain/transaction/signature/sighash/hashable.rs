@@ -136,7 +136,7 @@ mod tests {
     use rstest::rstest;
 
     use crypto::hash::StreamHasher;
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, Rng, RngExt as _};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::{

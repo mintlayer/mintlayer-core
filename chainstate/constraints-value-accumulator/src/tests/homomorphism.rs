@@ -22,7 +22,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Fee, Id, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},

@@ -828,7 +828,7 @@ mod tests {
         address::pubkeyhash::PublicKeyHash,
         chain::{self, tokens::TokenId, Destination},
     };
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::{
         assert_matches, assert_matches_return_val,
         random::{make_seedable_rng, Seed},

@@ -49,7 +49,7 @@ use crypto::{
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 

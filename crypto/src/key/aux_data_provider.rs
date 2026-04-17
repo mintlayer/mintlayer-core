@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 pub trait Secp256k1SchnorrAuxDataProvider {
     /// Return BIP-340's "auxiliary random data" that will eventually be passed as the `data` parameter

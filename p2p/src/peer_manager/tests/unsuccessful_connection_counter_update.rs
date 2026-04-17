@@ -32,7 +32,7 @@ use logging::log;
 use networking::test_helpers::{TestAddressMaker, TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv};
 use p2p_types::socket_address::SocketAddress;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     assert_matches, assert_matches_return_val,
     random::{make_seedable_rng, Seed},

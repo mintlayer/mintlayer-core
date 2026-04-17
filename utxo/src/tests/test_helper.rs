@@ -15,10 +15,8 @@
 
 use std::convert::Infallible;
 
-use crate::{
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    Utxo, UtxosCache, UtxosView,
-};
+use itertools::Itertools;
+
 use common::{
     chain::{
         output_value::OutputValue, Destination, GenBlock, OutPointSourceId, Transaction, TxInput,
@@ -27,9 +25,12 @@ use common::{
     primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use itertools::Itertools;
-use randomness::{seq, CryptoRng, Rng};
+use randomness::{seq, CryptoRng, Rng, RngExt as _};
 
+use crate::{
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
+    Utxo, UtxosCache, UtxosView,
+};
 struct EmptyUtxosView {
     best_block_hash: Id<GenBlock>,
 }

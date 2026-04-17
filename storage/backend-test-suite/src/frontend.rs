@@ -18,7 +18,7 @@
 
 use crate::prelude::*;
 
-use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng};
+use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _};
 
 mod iter_sort_preserving_numbers {
     use serialization::{Decode, Encode};

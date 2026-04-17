@@ -52,7 +52,7 @@ use crypto::{
     vrf::VRFPrivateKey,
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     random::{gen_random_bytes, make_seedable_rng},

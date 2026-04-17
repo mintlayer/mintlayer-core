@@ -328,7 +328,7 @@ pub enum MpscChannelTransportError {
 mod tests {
     use std::net::SocketAddrV4;
 
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::{gen_random_bytes, Seed};
 
     use crate::transport::new_message_stream;

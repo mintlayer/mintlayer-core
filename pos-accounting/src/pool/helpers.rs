@@ -17,7 +17,7 @@ use common::{
     chain::DelegationId,
     primitives::{Amount, H256},
 };
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
 

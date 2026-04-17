@@ -34,7 +34,7 @@ use common::{
     primitives_converters::TryConvertInto as _,
 };
 use crypto::{key::KeyKind, vrf::VRFKeyKind};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 

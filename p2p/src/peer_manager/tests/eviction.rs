@@ -25,7 +25,7 @@ use common::{
 use logging::log;
 use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,

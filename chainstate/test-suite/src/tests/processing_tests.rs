@@ -55,7 +55,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::{
     assert_matches, assert_matches_return_val,

@@ -56,7 +56,7 @@ use crypto::{
 };
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use utxo::UtxosView;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {

@@ -15,7 +15,8 @@
 
 use std::time::Duration;
 
-use super::*;
+use rstest::rstest;
+
 use common::{
     chain::{
         signature::inputsig::InputWitness, AccountNonce, AccountSpending, DelegationId,
@@ -23,8 +24,9 @@ use common::{
     },
     primitives::{Amount, H256},
 };
-use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Rng, Seed};
+use test_utils::random::{make_seedable_rng, Rng, RngExt as _, Seed};
+
+use super::*;
 
 fn check_integrity(orphans: &TxOrphanPool) {
     let len = orphans.len();

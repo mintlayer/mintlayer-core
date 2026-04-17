@@ -35,7 +35,7 @@ use common::{
     primitives::{id, Amount, BlockHeight, Id, Idable},
 };
 use crypto::hash::StreamHasher;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     random::{make_seedable_rng, Seed},

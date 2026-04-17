@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 /// Returns a value sampled from an exponential distribution with a mean of 1.0.
 ///

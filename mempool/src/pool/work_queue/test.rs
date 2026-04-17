@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use logging::log;
 use rstest::rstest;
+
+use logging::log;
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
+
+use super::*;
 
 impl<W: Ord> WorkQueue<W> {
     fn check_integrity(&self) {

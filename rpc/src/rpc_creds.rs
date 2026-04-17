@@ -19,7 +19,7 @@ use std::{
 };
 
 use logging::log;
-use randomness::{distributions::DistString, make_true_rng, CryptoRng};
+use randomness::{distributions::SampleString, make_true_rng, CryptoRng};
 use utils::cookie::COOKIE_FILENAME;
 
 const COOKIE_PASSWORD_LEN: usize = 32;

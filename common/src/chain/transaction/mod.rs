@@ -201,7 +201,7 @@ impl rpc_description::HasValueHint for Id<Transaction> {
 
 #[cfg(test)]
 mod test {
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use serialization::{Decode, DecodeAll, Encode};
 
     use super::*;

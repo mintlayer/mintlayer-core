@@ -49,7 +49,7 @@ use pos_accounting::{
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
-use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _, SliceRandom};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::*};
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,

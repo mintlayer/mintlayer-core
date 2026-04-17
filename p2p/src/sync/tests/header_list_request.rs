@@ -24,7 +24,7 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},

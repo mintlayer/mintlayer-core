@@ -19,7 +19,7 @@
 use hex::FromHex as _;
 
 use crypto::hash::{self, hash};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{Decode, Encode};
 
 use super::{timelock::OutputTimeLock, Destination};

@@ -26,7 +26,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use logging::log;
 use networking::transport::TransportSocket;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
-use randomness::RngCore;
+use randomness::Rng;
 use test_utils::BasicTestTimeGetter;
 
 use crate::{
@@ -240,7 +240,7 @@ impl TestDnsSeed {
 
 #[async_trait]
 impl DnsSeed for TestDnsSeed {
-    async fn obtain_addresses(&self, _rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress> {
+    async fn obtain_addresses(&self, _rng: &mut (dyn Rng + Send)) -> Vec<SocketAddress> {
         self.addresses.lock().unwrap().clone()
     }
 }

@@ -28,7 +28,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::{id::Idable, BlockHeight, Id},
 };
-use randomness::Rng;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

@@ -31,7 +31,7 @@ use common::{
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use itertools::Itertools;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};

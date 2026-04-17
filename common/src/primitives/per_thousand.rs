@@ -15,7 +15,7 @@
 
 use std::fmt::Display;
 
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use rpc_description::HasValueHint;
 use serialization::{Decode, Encode, Error, Input};
 use thiserror::Error;
@@ -165,7 +165,7 @@ impl HasValueHint for PerThousand {
 mod tests {
     use super::*;
 
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::Seed;
 

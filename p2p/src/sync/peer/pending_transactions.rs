@@ -59,7 +59,7 @@ mod tests {
 
     use common::primitives::H256;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     #[rstest]
     #[trace]

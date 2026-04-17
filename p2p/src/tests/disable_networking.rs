@@ -21,7 +21,7 @@ use chainstate::ChainstateConfig;
 use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,

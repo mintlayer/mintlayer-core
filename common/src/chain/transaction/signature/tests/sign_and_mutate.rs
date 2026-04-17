@@ -33,7 +33,7 @@ use crate::{
     primitives::{Amount, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::gen_different_value;
 
 use super::{add_value, utils::*};

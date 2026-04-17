@@ -20,7 +20,7 @@ use logging::log;
 use randomness::{
     distributions::{Distribution, WeightedIndex},
     seq::IteratorRandom as _,
-    Rng,
+    RngExt as _,
 };
 use test_utils::random::{make_seedable_rng, Seed, StepRng};
 

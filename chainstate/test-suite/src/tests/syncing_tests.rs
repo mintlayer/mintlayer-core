@@ -34,7 +34,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

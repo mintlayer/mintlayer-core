@@ -36,7 +36,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use node_comm::{mock::ClonableMockNodeInterface, node_traits::MockNodeInterface};
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     assert_matches_return_val,
     random::{gen_random_alnum_string, make_seedable_rng, Seed},

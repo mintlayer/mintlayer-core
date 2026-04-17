@@ -148,17 +148,16 @@ pub enum SigsVerifyResult {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::num::NonZeroU8;
+    use std::{collections::BTreeMap, num::NonZeroU8};
 
-    use crypto::key::{KeyKind, PrivateKey, Signature};
-    use randomness::{CryptoRng, IndexedMutRandom as _, Rng, SliceRandom};
     use rstest::rstest;
 
-    use crate::chain::config::create_mainnet;
-    use crate::primitives::H256;
+    use crypto::key::{KeyKind, PrivateKey, Signature};
+    use randomness::{CryptoRng, IndexedMutRandom as _, Rng, RngExt as _, SliceRandom};
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::{chain::config::create_mainnet, primitives::H256};
 
     use super::*;
 

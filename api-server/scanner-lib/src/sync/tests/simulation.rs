@@ -52,7 +52,7 @@ use crypto::{
 };
 use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::PoSAccountingView;
-use randomness::Rng;
+use randomness::RngExt as _;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;

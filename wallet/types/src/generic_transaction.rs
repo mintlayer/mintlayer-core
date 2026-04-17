@@ -68,7 +68,7 @@ mod tests {
         primitives::{Amount, Id},
     };
     use serialization::Encode;
-    use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng, Seed};
+    use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _, Seed};
 
     use super::*;
 

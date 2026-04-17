@@ -28,7 +28,7 @@ use std::{
 };
 
 use crate::random::Seed;
-use randomness::Rng;
+use randomness::RngExt;
 
 fn backoff_delays(seed: Seed) -> impl Iterator<Item = Duration> {
     // Random exponential backoff starting at 1ms with max 10 attempts

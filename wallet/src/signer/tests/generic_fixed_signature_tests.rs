@@ -60,7 +60,7 @@ use crypto::{
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
 use test_utils::{assert_matches_return_val, random_ascii_alphanumeric_string};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};

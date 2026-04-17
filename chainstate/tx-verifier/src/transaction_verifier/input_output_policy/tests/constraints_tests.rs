@@ -15,6 +15,8 @@
 
 use std::{collections::BTreeMap, ops::Range};
 
+use rstest::rstest;
+
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
@@ -26,8 +28,7 @@ use common::{
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::DelegationData;
-use randomness::{CryptoRng, Rng, SliceRandom};
-use rstest::rstest;
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     split_value,

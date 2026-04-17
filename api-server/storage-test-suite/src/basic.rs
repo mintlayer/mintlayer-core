@@ -34,7 +34,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{

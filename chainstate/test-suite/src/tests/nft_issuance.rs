@@ -30,7 +30,7 @@ use common::{
     },
     primitives::{BlockHeight, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,

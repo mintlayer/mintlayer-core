@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use strum::EnumCount;
+
 use accounting::DataDeltaUndo;
 use common::{
     chain::{
@@ -21,9 +23,8 @@ use common::{
     },
     primitives::{Amount, H256},
 };
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use serialization::{Decode, Encode};
-use strum::EnumCount;
 
 use crate::{data::TokenData, error::Result};
 

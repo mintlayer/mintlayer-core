@@ -22,7 +22,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng, RngExt as _};
 use script::Script;
 use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
 

@@ -32,7 +32,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use strum::EnumCount;
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;

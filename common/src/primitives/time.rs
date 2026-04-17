@@ -192,7 +192,7 @@ mod tests {
     use rstest::rstest;
 
     use logging::log;
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;

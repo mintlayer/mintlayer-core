@@ -46,7 +46,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use node_comm::node_traits::MockNodeInterface;
-use randomness::{Rng, SliceRandom as _};
+use randomness::{Rng, RngExt as _, SliceRandom as _};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes, make_seedable_rng, Seed};
 use wallet::{
     wallet::test_helpers::{create_wallet_with_mnemonic, scan_wallet},

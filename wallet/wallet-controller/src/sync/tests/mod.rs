@@ -45,7 +45,7 @@ use node_comm::{
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;

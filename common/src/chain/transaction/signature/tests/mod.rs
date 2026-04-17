@@ -20,7 +20,7 @@ use rstest::rstest;
 use strum::IntoEnumIterator as _;
 
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use serialization::{DecodeAll, Encode};
 use test_utils::random::Seed;
 

@@ -15,13 +15,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rstest::rstest;
+
 use accounting::GetDataResult;
 use common::{
     chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
     primitives::Amount,
 };
-use randomness::Rng;
-use rstest::rstest;
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{

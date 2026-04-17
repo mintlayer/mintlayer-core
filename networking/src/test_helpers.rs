@@ -27,7 +27,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use crate::transport::{
     MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,

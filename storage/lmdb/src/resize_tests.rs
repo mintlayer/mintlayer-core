@@ -19,7 +19,7 @@ use rstest::rstest;
 
 use memsize::MemSize;
 use storage_core::backend::{Backend, BackendImpl, ReadOps, SharedBackendImpl, TxRw, WriteOps};
-use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
+use test_utils::random::{make_seedable_rng, CryptoRng, RngExt as _, Seed};
 
 use super::*;
 

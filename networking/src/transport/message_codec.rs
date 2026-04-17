@@ -110,7 +110,7 @@ impl<Msg: Encode> Encoder<Msg> for MessageCodec<Msg> {
 
 #[cfg(test)]
 mod tests {
-    use randomness::Rng;
+    use randomness::RngExt;
     use serialization::{Decode, Encode};
     use test_utils::random::Seed;
 

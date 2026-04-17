@@ -18,7 +18,7 @@ mod cli_test_framework;
 use rstest::rstest;
 
 use common::{address::Address, chain::PoolId, primitives::H256};
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::app_version_with_git_info;
 

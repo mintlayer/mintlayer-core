@@ -27,7 +27,7 @@ use common::{
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use mempool::error::MempoolPolicyError;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::tokio_spawn_in_current_tracing_span;
 

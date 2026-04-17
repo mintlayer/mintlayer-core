@@ -21,7 +21,7 @@ use crate::{
 
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::vrf::ExtendedVRFPrivateKey;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::keys::RootKeys;

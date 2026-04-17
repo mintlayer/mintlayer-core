@@ -17,9 +17,9 @@ use std::{convert::Infallible, num::ParseIntError, str::FromStr};
 
 use rand_chacha::ChaChaRng;
 
-use randomness::{IndexedRandom as _, TryCryptoRng, TryRngCore, rand_core_utils};
+use randomness::{rand_core_utils, IndexedRandom as _, TryCryptoRng, TryRng};
 
-pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngCore, SeedableRng};
+pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngExt, SeedableRng};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Seed(pub u64);
@@ -63,7 +63,7 @@ impl From<u64> for Seed {
     }
 }
 
-impl randomness::distributions::Distribution<Seed> for randomness::distributions::Standard {
+impl randomness::distributions::Distribution<Seed> for randomness::distributions::StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Seed {
         let new_seed = rng.random::<u64>();
         Seed::from_u64(new_seed)
@@ -87,7 +87,7 @@ impl TestRng {
     }
 }
 
-impl TryRngCore for TestRng {
+impl TryRng for TestRng {
     type Error = Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -166,7 +166,7 @@ pub fn gen_random_alnum_string(
 ) -> String {
     let len = rng.random_range(min_len..=max_len);
 
-    rng.sample_iter::<char, _>(randomness::distributions::Standard)
+    rng.sample_iter::<char, _>(randomness::distributions::StandardUniform)
         .filter(|ch| ch.is_alphanumeric())
         .take(len)
         .collect()
@@ -223,7 +223,7 @@ impl StepRng {
     }
 }
 
-impl TryRngCore for StepRng {
+impl TryRng for StepRng {
     type Error = std::convert::Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -240,7 +240,6 @@ impl TryRngCore for StepRng {
         rand_core_utils::fill_bytes_via_next_word(dest, || self.try_next_u64())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

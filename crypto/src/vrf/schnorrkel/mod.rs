@@ -216,7 +216,7 @@ impl Decode for SchnorrkelPrivateKey {
 mod tests {
     use super::*;
     use hex::FromHex;
-    use randomness::{make_true_rng, RngCore};
+    use randomness::{make_true_rng, Rng};
     use schnorrkel::{signing_context, Keypair};
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};

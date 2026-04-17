@@ -43,7 +43,7 @@ use crypto::{
     },
     vrf::transcript::no_rng::VRFTranscript,
 };
-use randomness::{CryptoRng, Rng, SliceRandom};
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
 use serialization::{extras::non_empty_vec::DataOrNoVec, hex::HexEncode, Encode};
 use storage::raw::DbMapId;
 use test_utils::{

@@ -48,7 +48,7 @@ use logging::log;
 use mempool::{FeeRate, MempoolConfig};
 use orders_accounting::OrdersAccountingDB;
 use p2p_types::PeerId;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{gen_random_bytes, Seed},

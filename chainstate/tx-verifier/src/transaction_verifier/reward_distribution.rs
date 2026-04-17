@@ -332,7 +332,7 @@ mod tests {
         DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
         PoolData,
     };
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use std::collections::BTreeMap;
     use test_utils::random::{make_seedable_rng, Seed};

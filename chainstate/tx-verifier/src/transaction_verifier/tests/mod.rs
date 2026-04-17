@@ -29,7 +29,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use utxo::Utxo;
 
 pub fn create_utxo(rng: &mut impl CryptoRng, value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {

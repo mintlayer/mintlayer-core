@@ -241,7 +241,7 @@ mod tests {
     };
     use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
     use itertools::Itertools;
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, RngExt as _};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
