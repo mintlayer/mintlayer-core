@@ -964,7 +964,8 @@ impl ApiServerInMemoryStorage {
             // TODO:
             .union(self.address_locked_utxos.get(address).unwrap_or(&BTreeSet::new()))
             .filter_map(|outpoint| {
-                if let Some(utxo) = self.get_utxo_mempool_with_fallback(outpoint).expect("no error") {
+                if let Some(utxo) = self.get_utxo_mempool_with_fallback(outpoint).expect("no error")
+                {
                     (!utxo.spent())
                         .then_some((outpoint.clone(), utxo.utxo_with_extra_info().clone()))
                 } else {
@@ -1579,7 +1580,10 @@ impl ApiServerInMemoryStorage {
         self.get_token_num_decimals(token_id)
     }
 
-    fn get_mempool_order_with_fallback(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+    fn get_mempool_order_with_fallback(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
         let order_result = self.mempool_orders_table.get(&order_id).cloned();
         if order_result.is_some() {
             return Ok(order_result);

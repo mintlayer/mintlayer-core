@@ -45,8 +45,8 @@ use common::{
         tokens::{get_referenced_token_ids_ignore_issuance, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        Genesis, IdCreationError, OrderAccountCommand, OrderId, PoolId, SignedTransaction,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
@@ -74,6 +74,8 @@ pub enum BlockchainStateError {
     PoolNotFound,
     #[error("Order not found in DB")]
     OrderNotFound,
+    #[error("Id creation error: {0}")]
+    IdCreationError(#[from] IdCreationError),
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
@@ -387,7 +389,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                             let pool_data = db_tx
                                 .get_mempool_pool_data_with_fallback(pool_id)
                                 .await?
-                                .ok_or(BlockchainStateError::PoolNotFound)
+                                .ok_or(BlockchainStateError::PoolNotFound)?
                                 .decommission_pool();
 
                             let address = Address::<Destination>::new(
@@ -420,8 +422,9 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         }
                         AccountCommand::ConcludeOrder(order_id)
                         | AccountCommand::FillOrder(order_id, _, _) => {
-                            let order =
-                                db_tx.get_mempool_order_with_fallback(*order_id).await?
+                            let order = db_tx
+                                .get_mempool_order_with_fallback(*order_id)
+                                .await?
                                 .ok_or(BlockchainStateError::OrderNotFound)?;
                             if let Some(id) = order.ask_currency.token_id() {
                                 transaction_tokens.insert(id);
@@ -666,7 +669,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         Address::<Destination>::new(&self.chain_config, pool_data.staker().clone())
                             .expect("Unable to encode destination");
                     address_transactions.entry(address.clone()).or_default().insert(tx_id);
-                    db_tx.set_mempool_pool_data(*id, pool_data).await
+                    let pool_data = PoolDataWithExtraInfo::new(pool_data.as_ref().clone().into());
+                    db_tx
+                        .set_mempool_pool_data(*id, &pool_data)
+                        .await
                         .map_err(BlockchainStateError::StorageError)?;
                 }
                 TxOutput::ProduceBlockFromStake(_, _) => {}
@@ -1024,7 +1030,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     tx: &Transaction,
     block_height: BlockHeight,
-) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
+) -> Result<(AccumulatedFee, TxAdditionalInfo), BlockchainStateError> {
     let new_tokens = tx
         .outputs()
         .iter()
@@ -1166,11 +1172,15 @@ async fn mempool_token_decimals<T: ApiServerStorageRead>(
     token_id: TokenId,
     new_tokens: &BTreeMap<TokenId, u8>,
     db_tx: &T,
-) -> Result<(TokenId, u8), ApiServerStorageError> {
+) -> Result<(TokenId, u8), BlockchainStateError> {
     let decimals = if let Some(decimals) = new_tokens.get(&token_id) {
         *decimals
     } else {
-        db_tx.get_mempool_token_num_decimals(token_id).await?.expect("must be present")
+        db_tx
+            .get_mempool_token_num_decimals_with_fallback(token_id)
+            .await
+            .map_err(BlockchainStateError::StorageError)?
+            .ok_or(BlockchainStateError::TokenDecimalsNotFound(token_id))?
     };
     Ok((token_id, decimals))
 }
@@ -1259,8 +1269,10 @@ async fn tx_fees<T: ApiServerStorageRead>(
     block_height: BlockHeight,
     tx: &Transaction,
     db_tx: &T,
-) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
+) -> Result<AccumulatedFee, BlockchainStateError> {
+    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs())
+        .await
+        .map_err(BlockchainStateError::StorageError)?;
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
@@ -1290,19 +1302,40 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
     inputs_utxos: &Vec<Option<TxOutput>>,
     db_tx: &T,
 ) -> Result<BTreeMap<PoolId, PoolData>, BlockchainStateError> {
-    prefetch_pool_data_impl(inputs_utxos, |pool_id| db_tx.get_pool_data(pool_id))
+    let mut pools = BTreeMap::new();
+    for output in inputs_utxos {
+        match output {
+            Some(
+                TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
+            ) => {
+                let data = db_tx
+                    .get_pool_data(*pool_id)
+                    .await?
+                    .ok_or(BlockchainStateError::PoolNotFound)?
+                    .pool_data;
+                pools.insert(*pool_id, data);
+            }
+            Some(
+                TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_),
+            ) => {}
+            None => {}
+        }
+    }
+    Ok(pools)
 }
 
 async fn prefetch_mempool_pool_data<T: ApiServerStorageRead>(
     inputs_utxos: &Vec<Option<TxOutput>>,
     db_tx: &T,
-) -> Result<BTreeMap<PoolId, PoolData>, BlockchainStateError> {
-    prefetch_pool_data_impl(inputs_utxos, |pool_id| db_tx.get_mempool_pool_data_with_fallback(pool_id))
-}
-
-async fn prefetch_pool_data_impl<T: ApiServerStorageRead>(
-    inputs_utxos: &Vec<Option<TxOutput>>,
-    pool_data_fetcher: impl AsyncFn(PoolId) -> Result<Option<PoolData>, ApiServerStorageError>,
 ) -> Result<BTreeMap<PoolId, PoolData>, BlockchainStateError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
@@ -1310,7 +1343,11 @@ async fn prefetch_pool_data_impl<T: ApiServerStorageRead>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let data = pool_data_fetcher(*pool_id).await?.ok_or(BlockchainStateError::PoolNotFound).pool_data;
+                let data = db_tx
+                    .get_mempool_pool_data_with_fallback(*pool_id)
+                    .await?
+                    .ok_or(BlockchainStateError::PoolNotFound)?
+                    .pool_data;
                 pools.insert(*pool_id, data);
             }
             Some(
@@ -1334,21 +1371,7 @@ async fn prefetch_pool_data_impl<T: ApiServerStorageRead>(
 async fn prefetch_orders<T: ApiServerStorageRead>(
     inputs: &[TxInput],
     db_tx: &T,
-) -> Result<orders_accounting::InMemoryOrdersAccounting, ApiServerStorageError> {
-    prefetch_orders_impl(inputs, |order_id| db_tx.get_order(order_id))
-}
-
-async fn prefetch_mempool_orders<T: ApiServerStorageRead>(
-    inputs: &[TxInput],
-    db_tx: &T,
-) -> Result<orders_accounting::InMemoryOrdersAccounting, ApiServerStorageError> {
-    prefetch_orders_impl(inputs, |order_id| db_tx.get_mempool_order_with_fallback(order_id))
-}
-
-async fn prefetch_orders_impl<T: ApiServerStorageRead>(
-    inputs: &[TxInput],
-    order_data_fetcher: impl AsyncFn(OrderId) -> Result<Option<OrderData>, ApiServerStorageError>,
-) -> Result<orders_accounting::InMemoryOrdersAccounting, ApiServerStorageError> {
+) -> Result<orders_accounting::InMemoryOrdersAccounting, BlockchainStateError> {
     let mut orders_data = BTreeMap::<OrderId, OrderData>::new();
     let mut ask_balances = BTreeMap::<OrderId, Amount>::new();
     let mut give_balances = BTreeMap::<OrderId, Amount>::new();
@@ -1366,7 +1389,10 @@ async fn prefetch_orders_impl<T: ApiServerStorageRead>(
                 OrderAccountCommand::FillOrder(order_id, _)
                 | OrderAccountCommand::FreezeOrder(order_id)
                 | OrderAccountCommand::ConcludeOrder(order_id) => {
-                    let order = order_data_fetcher(*order_id).await?.ok_or(BlockchainStateError::OrderNotFound)?;
+                    let order = db_tx
+                        .get_order(*order_id)
+                        .await?
+                        .ok_or(BlockchainStateError::OrderNotFound)?;
                     let order_data = to_order_data(&order);
 
                     ask_balances.insert(*order_id, order.ask_balance);
@@ -1384,7 +1410,72 @@ async fn prefetch_orders_impl<T: ApiServerStorageRead>(
                 | AccountCommand::ChangeTokenMetadataUri(_, _) => {}
                 AccountCommand::FillOrder(order_id, _, _)
                 | AccountCommand::ConcludeOrder(order_id) => {
-                    let order = order_data_fetcher(*order_id).await?.ok_or(BlockchainStateError::OrderNotFound)?;
+                    let order = db_tx
+                        .get_order(*order_id)
+                        .await?
+                        .ok_or(BlockchainStateError::OrderNotFound)?;
+                    let order_data = to_order_data(&order);
+
+                    ask_balances.insert(*order_id, order.ask_balance);
+                    give_balances.insert(*order_id, order.give_balance);
+                    orders_data.insert(*order_id, order_data);
+                }
+            },
+        }
+    }
+    Ok(orders_accounting::InMemoryOrdersAccounting::from_values(
+        orders_data,
+        ask_balances,
+        give_balances,
+    ))
+}
+
+async fn prefetch_mempool_orders<T: ApiServerStorageRead>(
+    inputs: &[TxInput],
+    db_tx: &T,
+) -> Result<orders_accounting::InMemoryOrdersAccounting, BlockchainStateError> {
+    let mut orders_data = BTreeMap::<OrderId, OrderData>::new();
+    let mut ask_balances = BTreeMap::<OrderId, Amount>::new();
+    let mut give_balances = BTreeMap::<OrderId, Amount>::new();
+
+    let to_order_data = |order: &Order| {
+        let ask = order.ask_currency.to_output_value(order.initially_asked);
+        let give = order.give_currency.to_output_value(order.initially_given);
+        OrderData::new(order.conclude_destination.clone(), ask, give)
+    };
+
+    for input in inputs {
+        match input {
+            TxInput::Utxo(_) | TxInput::Account(_) => {}
+            TxInput::OrderAccountCommand(cmd) => match cmd {
+                OrderAccountCommand::FillOrder(order_id, _)
+                | OrderAccountCommand::FreezeOrder(order_id)
+                | OrderAccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx
+                        .get_mempool_order_with_fallback(*order_id)
+                        .await?
+                        .ok_or(BlockchainStateError::OrderNotFound)?;
+                    let order_data = to_order_data(&order);
+
+                    ask_balances.insert(*order_id, order.ask_balance);
+                    give_balances.insert(*order_id, order.give_balance);
+                    orders_data.insert(*order_id, order_data);
+                }
+            },
+            TxInput::AccountCommand(_, account_command) => match account_command {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ChangeTokenMetadataUri(_, _) => {}
+                AccountCommand::FillOrder(order_id, _, _)
+                | AccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx
+                        .get_mempool_order_with_fallback(*order_id)
+                        .await?
+                        .ok_or(BlockchainStateError::OrderNotFound)?;
                     let order_data = to_order_data(&order);
 
                     ask_balances.insert(*order_id, order.ask_balance);
@@ -2738,7 +2829,7 @@ async fn calculate_mempool_tx_fee_and_collect_token_info<
     db_tx: &mut T,
     tx: &Transaction,
     block_height: BlockHeight,
-) -> Result<TxAdditionalInfo, ApiServerStorageError> {
+) -> Result<TxAdditionalInfo, BlockchainStateError> {
     let fee = mempool_tx_fees(chain_config, block_height, tx, db_tx).await?;
 
     let new_tokens = tx
@@ -2842,8 +2933,7 @@ async fn fetch_mempool_utxo<T: ApiServerStorageRead>(
 ) -> Result<Option<Utxo>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            // Uses your DB's new fallback logic
-            let utxo = db_tx.get_utxo_mempool_fallback(outpoint).await?;
+            let utxo = db_tx.get_utxo_mempool_with_fallback(outpoint).await?;
             Ok(utxo)
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
@@ -2857,10 +2947,15 @@ async fn mempool_tx_fees<T: ApiServerStorageRead>(
     block_height: BlockHeight,
     tx: &Transaction,
     db_tx: &T,
-) -> Result<AccumulatedFee, ApiServerStorageError> {
+) -> Result<AccumulatedFee, BlockchainStateError> {
     let mut inputs_utxos = Vec::with_capacity(tx.inputs().len());
     for input in tx.inputs() {
-        inputs_utxos.push(fetch_mempool_utxo(input, db_tx).await?.map(|utxo| utxo.into_output()));
+        inputs_utxos.push(
+            fetch_mempool_utxo(input, db_tx)
+                .await
+                .map_err(BlockchainStateError::StorageError)?
+                .map(|utxo| utxo.into_output()),
+        );
     }
 
     let pools = prefetch_mempool_pool_data(&inputs_utxos, db_tx).await?;
@@ -2898,14 +2993,16 @@ async fn increase_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
     decimals: u8,
 ) -> Result<(), BlockchainStateError> {
     let balance = db_tx
-        .get_mempool_address_balance(address, coin_or_token_id)
-        .await?
+        .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+        .await
+        .map_err(BlockchainStateError::StorageError)?
         .unwrap_or(Amount::ZERO);
 
     let new_balance = (balance + *amount).expect("Balance should not overflow");
     db_tx
         .set_mempool_address_balance(address, coin_or_token_id, new_balance, decimals)
         .await
+        .map_err(BlockchainStateError::StorageError)
 }
 
 async fn increase_mempool_locked_address_balance<
@@ -2918,14 +3015,16 @@ async fn increase_mempool_locked_address_balance<
     decimals: u8,
 ) -> Result<(), BlockchainStateError> {
     let balance = db_tx
-        .get_mempool_locked_address_balance(address, coin_or_token_id)
-        .await?
+        .get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+        .await
+        .map_err(BlockchainStateError::StorageError)?
         .unwrap_or(Amount::ZERO);
 
     let new_balance = (balance + *amount).expect("Balance should not overflow");
     db_tx
         .set_mempool_locked_address_balance(address, coin_or_token_id, new_balance, decimals)
         .await
+        .map_err(BlockchainStateError::StorageError)
 }
 
 async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRead>(
@@ -2936,8 +3035,9 @@ async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
     decimals: u8,
 ) -> Result<(), BlockchainStateError> {
     let current_balance = db_tx
-        .get_mempool_address_balance(address, coin_or_token_id)
-        .await?
+        .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+        .await
+        .map_err(BlockchainStateError::StorageError)?
         .unwrap_or(Amount::ZERO);
 
     let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
@@ -2950,4 +3050,5 @@ async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
     db_tx
         .set_mempool_address_balance(address, coin_or_token_id, new_amount, decimals)
         .await
+        .map_err(BlockchainStateError::StorageError)
 }

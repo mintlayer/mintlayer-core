@@ -20,8 +20,10 @@ use common::{
 
 pub mod local_state;
 mod remote_node;
+mod tx_dependency_ordering;
 
 use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
+use tx_dependency_ordering::order_transactions_by_dependency;
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
@@ -78,7 +80,11 @@ pub async fn sync_once(
                 .await
                 .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
 
-            for tx in all_mempool_txs {
+            let ordered_txs =
+                order_transactions_by_dependency(all_mempool_txs, chain_config, best_block_height)
+                    .map_err(|e| SyncError::LocalNode(e.to_string()))?;
+
+            for tx in ordered_txs {
                 local_state
                     .add_mempool_tx(&tx)
                     .await

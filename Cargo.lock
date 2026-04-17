@@ -265,6 +265,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum 0.26.3",
  "test-utils",
  "thiserror 1.0.69",
  "tokens-accounting",
