@@ -36,6 +36,7 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
+        htlc::HashedTimelockContract,
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::{
@@ -74,6 +75,8 @@ pub enum BlockchainStateError {
     PoolNotFound,
     #[error("Order not found in DB")]
     OrderNotFound,
+    #[error("Invalid HTLC signature in TX")]
+    InvalidHtlcSignature,
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
 }
@@ -348,24 +351,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                             transaction_tokens.insert(token_id);
                         }
                         TxOutput::Htlc(output_value, htlc) => {
-                            let address = if let InputWitness::Standard(sig) = sig {
-                                let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
-                                    &mut sig.raw_signature(),
-                                )
-                                .expect("proper signature");
-                                let dest = match htlc_sig {
-                                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
-                                        htlc.spend_key
-                                    }
-                                    AuthorizedHashedTimelockContractSpend::Refund(_) => {
-                                        htlc.refund_key
-                                    }
-                                };
-                                Address::<Destination>::new(&self.chain_config, dest)
-                                    .expect("Unable to encode destination")
-                            } else {
-                                panic!("Empty signature for htlc")
-                            };
+                            let address =
+                                htlc_destination(sig, *htlc, &self.chain_config).expect("valid tx");
                             address_transactions.entry(address.clone()).or_default().insert(tx_id);
 
                             if let OutputValue::TokenV1(token_id, _) = output_value {
@@ -2098,25 +2085,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             transaction_tokens.insert(token_id);
                         }
                         TxOutput::Htlc(output_value, htlc) => {
-                            let address = if let InputWitness::Standard(sig) = sig {
-                                let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
-                                    &mut sig.raw_signature(),
-                                )
-                                .expect("proper signature");
-
-                                let dest = match htlc_sig {
-                                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
-                                        htlc.spend_key
-                                    }
-                                    AuthorizedHashedTimelockContractSpend::Refund(_) => {
-                                        htlc.refund_key
-                                    }
-                                };
-                                Address::<Destination>::new(&chain_config, dest)
-                                    .expect("Unable to encode destination")
-                            } else {
-                                panic!("Empty signature for htlc")
-                            };
+                            let address =
+                                htlc_destination(sig, *htlc, &chain_config).expect("valid tx");
 
                             address_transactions
                                 .entry(address.clone())
@@ -3101,4 +3071,23 @@ async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
     }
     .await
     .map_err(BlockchainStateError::StorageError)
+}
+
+fn htlc_destination(
+    sig: &InputWitness,
+    htlc: HashedTimelockContract,
+    chain_config: &ChainConfig,
+) -> Result<Address<Destination>, BlockchainStateError> {
+    if let InputWitness::Standard(sig) = sig {
+        let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(&mut sig.raw_signature())
+            .expect("proper signature");
+
+        let dest = match htlc_sig {
+            AuthorizedHashedTimelockContractSpend::Spend(_, _) => htlc.spend_key,
+            AuthorizedHashedTimelockContractSpend::Refund(_) => htlc.refund_key,
+        };
+        Ok(Address::<Destination>::new(chain_config, dest).expect("Unable to encode destination"))
+    } else {
+        Err(BlockchainStateError::InvalidHtlcSignature)
+    }
 }

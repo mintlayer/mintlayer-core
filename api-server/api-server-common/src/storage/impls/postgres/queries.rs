@@ -3342,7 +3342,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             return Ok(Some(Utxo::new_with_info(output, spent)));
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     pub async fn set_mempool_utxo(

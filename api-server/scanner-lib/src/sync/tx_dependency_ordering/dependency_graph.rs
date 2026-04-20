@@ -243,11 +243,8 @@ fn tx_priority_order(tx: &SignedTransaction) -> TxPriorityOrder {
     }
 
     for out in tx.transaction().outputs() {
-        match out {
-            TxOutput::DelegateStaking(_, _) => {
-                priority = std::cmp::min(priority, TxPriorityOrder::DelegationStake);
-            }
-            _ => {}
+        if let TxOutput::DelegateStaking(_, _) = out {
+            priority = std::cmp::min(priority, TxPriorityOrder::DelegationStake);
         }
     }
 

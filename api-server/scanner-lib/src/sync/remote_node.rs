@@ -15,7 +15,7 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 use mempool::FeeRate;
@@ -42,10 +42,6 @@ pub trait RemoteNode {
     ) -> Result<Vec<Block>, Self::Error>;
 
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
-    async fn mempool_get_transaction(
-        &self,
-        tx_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, Self::Error>;
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error>;
 }
 
@@ -74,13 +70,6 @@ impl RemoteNode for NodeRpcClient {
 
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         self.mempool_get_fee_rate_points().await
-    }
-
-    async fn mempool_get_transaction(
-        &self,
-        tx_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, Self::Error> {
-        NodeInterface::mempool_get_transaction(self, tx_id).await
     }
 
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {

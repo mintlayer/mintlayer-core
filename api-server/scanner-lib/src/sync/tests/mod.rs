@@ -210,13 +210,6 @@ impl RemoteNode for MockRemoteNode {
         )])
     }
 
-    async fn mempool_get_transaction(
-        &self,
-        _tx_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, Self::Error> {
-        Ok(None)
-    }
-
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         Ok(vec![])
     }

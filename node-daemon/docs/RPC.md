@@ -866,7 +866,6 @@ EITHER OF
 Get all mempool transactions in a Vec/List, with hex-encoding.
 
 Notice that this call may be expensive. Use it with caution.
-This function is mostly used for testing purposes.
 
 
 Parameters:

@@ -889,7 +889,7 @@ impl ApiServerInMemoryStorage {
 
         Ok(self
             .locked_utxo_table
-            .get(&outpoint)
+            .get(outpoint)
             .and_then(|by_height| by_height.values().last())
             .map(|locked_utxo| {
                 Utxo::new_with_info(locked_utxo.utxo_with_extra_info().clone(), None)
