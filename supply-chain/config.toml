@@ -713,11 +713,11 @@ version = "0.10.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.ledger-lib]]
-version = "0.1.0@git:035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+version = "0.1.0@git:c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 criteria = "safe-to-deploy"
 
 [[exemptions.ledger-proto]]
-version = "0.1.0@git:035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+version = "0.1.0@git:c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 criteria = "safe-to-deploy"
 
 [[exemptions.libdbus-sys]]

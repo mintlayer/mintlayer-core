@@ -4606,7 +4606,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 [[package]]
 name = "ledger-lib"
 version = "0.1.0"
-source = "git+https://github.com/ImplOfAnImpl/rust-ledger.git?rev=035789ec436d47b938e8a3d2085ffb2fbf6f0559#035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+source = "git+https://github.com/ledger-community/rust-ledger.git?rev=c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89#c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 dependencies = [
  "async-trait",
  "btleplug",
@@ -4628,7 +4628,7 @@ dependencies = [
 [[package]]
 name = "ledger-proto"
 version = "0.1.0"
-source = "git+https://github.com/ImplOfAnImpl/rust-ledger.git?rev=035789ec436d47b938e8a3d2085ffb2fbf6f0559#035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+source = "git+https://github.com/ledger-community/rust-ledger.git?rev=c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89#c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 dependencies = [
  "bitflags 2.10.0",
  "displaydoc",
@@ -5024,7 +5024,7 @@ dependencies = [
 [[package]]
 name = "messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=dbc41342564b2198037ed4ad41b4cf0c34617870#dbc41342564b2198037ed4ad41b4cf0c34617870"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=a544449d0c649c7c6b27ec0bd8e03f43861f60a7#a544449d0c649c7c6b27ec0bd8e03f43861f60a7"
 dependencies = [
  "derive_more 2.1.1",
  "mintlayer-core-primitives",
@@ -5091,7 +5091,7 @@ dependencies = [
 [[package]]
 name = "mintlayer-core-primitives"
 version = "1.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b#13b10dbc88efdf3b5aa31ece8e34278bc69a5a9b"
+source = "git+https://github.com/mintlayer/mintlayer-core-primitives?rev=8644bfe06d932d687075939d2d175183ba1c369d#8644bfe06d932d687075939d2d175183ba1c369d"
 dependencies = [
  "derive_more 2.1.1",
  "fixed-hash",
@@ -5102,7 +5102,7 @@ dependencies = [
 [[package]]
 name = "mintlayer-firmware-deps"
 version = "0.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=0e6c4d46ff75a94164f07c9bf0bd95cdba81fea3#0e6c4d46ff75a94164f07c9bf0bd95cdba81fea3"
 dependencies = [
  "mintlayer-core-primitives",
 ]
@@ -7596,9 +7596,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -9363,7 +9363,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.5"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=a2e67f6cf804dd905791ec36bff1981871f5321c#a2e67f6cf804dd905791ec36bff1981871f5321c"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?rev=0e6c4d46ff75a94164f07c9bf0bd95cdba81fea3#0e6c4d46ff75a94164f07c9bf0bd95cdba81fea3"
 dependencies = [
  "bitcoin",
  "byteorder",

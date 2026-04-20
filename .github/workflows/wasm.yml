@@ -54,7 +54,7 @@ jobs:
         run: npm install typescript knip
 
       - name: Install wasm-pack
-        run: cargo install wasm-pack
+        run: cargo install wasm-pack --locked
 
       - name: Build the wasm module
         working-directory: ./wasm-wrappers
@@ -92,7 +92,7 @@ jobs:
             --default-toolchain $(python ./build-tools/cargo-info-extractor/extract.py --rust-version)
 
       - name: Install wasm-pack
-        run: cargo install wasm-pack
+        run: cargo install wasm-pack  --locked
 
       - name: Build the wasm module for nodejs - release
         working-directory: ./wasm-wrappers
