@@ -325,6 +325,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_utxo_mempool_with_fallback(outpoint)
     }
 
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_mempool_locked_utxo_with_fallback(outpoint)
+    }
+
     async fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,

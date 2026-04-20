@@ -42,14 +42,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
           database during initial block download or bootstrapping, which significantly increases
           its speed at the cost of a potential db corruption if the system crashes in the meantime.
 
-  - API Server:
-    - new endpoints for addresses and transactions from the mempool:
-      - `/mempool/transaction`
-      - `/mempool/transaction/:id`
-      - `/mempool/transaction/:id/output/:idx`
-      - `/mempool/address/:address`
-      - `/mempool/address/:address/all-utxos`
-
 ### Changed
   - Wallet RPC:
     - `wallet_info`: the structure of the returned field `extra_info` was changed.

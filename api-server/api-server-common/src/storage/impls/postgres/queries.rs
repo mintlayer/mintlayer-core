@@ -1066,6 +1066,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml.mempool_locked_utxo (
+                    outpoint bytea PRIMARY KEY,
+                    utxo bytea NOT NULL,
+                    spent BOOLEAN NOT NULL DEFAULT FALSE
+                );",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml.mempool_utxo_addresses (
                 outpoint bytea NOT NULL,
                 address TEXT NOT NULL,
@@ -3299,6 +3308,43 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.get_utxo(outpoint.clone()).await
     }
 
+    pub async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let mempool_row = self
+            .tx
+            .query_opt(
+                r#"
+                (SELECT utxo, spent FROM ml.mempool_locked_utxo WHERE outpoint = $1 LIMIT 1)
+                UNION ALL
+                (SELECT utxo, false as spent FROM ml.locked_utxo WHERE outpoint = $1 LIMIT 1)
+                LIMIT 1
+                "#,
+                &[&outpoint.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = mempool_row {
+            let serialized_data: Vec<u8> = row.get(0);
+            let spent: bool = row.get(1);
+
+            let output =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Mempool Utxo deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            let spent = spent.then_some(UtxoSpent::InMempool);
+            return Ok(Some(Utxo::new_with_info(output, spent)));
+        }
+
+        return Ok(None);
+    }
+
     pub async fn set_mempool_utxo(
         &mut self,
         outpoint: UtxoOutPoint,
@@ -3309,6 +3355,37 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "INSERT INTO ml.mempool_utxo (outpoint, utxo, spent)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (outpoint) DO UPDATE SET spent = EXCLUDED.spent, utxo = EXCLUDED.utxo;",
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.mempool_utxo_addresses (outpoint, address) VALUES ($1, $2)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_locked_utxo (outpoint, utxo, spent)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (outpoint) DO UPDATE SET spent = EXCLUDED.spent, utxo = EXCLUDED.utxo;",
                 &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent],
@@ -3790,6 +3867,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "TRUNCATE TABLE
                 ml.mempool_transactions,
                 ml.mempool_utxo,
+                ml.mempool_locked_utxo,
                 ml.mempool_utxo_addresses,
                 ml.mempool_address_balance,
                 ml.mempool_locked_address_balance,

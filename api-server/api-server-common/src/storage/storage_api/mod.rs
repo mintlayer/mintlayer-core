@@ -468,6 +468,10 @@ impl Utxo {
         self.spent.is_some()
     }
 
+    pub fn spent_in_mempool(&self) -> bool {
+        matches!(self.spent, Some(UtxoSpent::InMempool))
+    }
+
     pub fn into_spent_in_mempool(mut self) -> Self {
         self.spent = Some(UtxoSpent::InMempool);
         self
@@ -822,6 +826,13 @@ pub trait ApiServerStorageRead: Sync {
         outpoint: &UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError>;
 
+    // Returns the UTXO from the mempool if it exists,
+    // otherwise fallbacks to getting it from the confirmed UTXOs.
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError>;
+
     // Returns the balance of a coin or token for a given address from the mempool
     // if it exists, otherwise fallbacks to getting it from the confirmed address balances.
     async fn get_mempool_address_balance_with_fallback(
@@ -1082,6 +1093,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_mempool_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_mempool_locked_utxo(
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,

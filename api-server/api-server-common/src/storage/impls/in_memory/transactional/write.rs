@@ -329,6 +329,15 @@ impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.set_mempool_utxo(outpoint, utxo, addresses)
     }
 
+    async fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_mempool_locked_utxo(outpoint, utxo, addresses)
+    }
+
     async fn set_mempool_address_balance(
         &mut self,
         address: &str,
@@ -700,6 +709,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         outpoint: &UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
         self.transaction.get_utxo_mempool_with_fallback(outpoint)
+    }
+
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_mempool_locked_utxo_with_fallback(outpoint)
     }
 
     async fn get_mempool_address_balance_with_fallback(

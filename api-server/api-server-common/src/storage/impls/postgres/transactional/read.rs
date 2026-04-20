@@ -459,6 +459,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_locked_utxo_with_fallback(outpoint).await?;
+
+        Ok(res)
+    }
+
     async fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,

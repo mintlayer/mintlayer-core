@@ -18,41 +18,6 @@ use common::chain::UtxoOutPoint;
 
 use super::*;
 
-#[tokio::test]
-async fn invalid_transaction_id() {
-    let (task, response) =
-        spawn_webserver("/api/v2/mempool/transaction/invalid-transaction-id/output/1").await;
-
-    assert_eq!(response.status(), 400);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
-
-    task.abort();
-}
-
-#[tokio::test]
-async fn transaction_not_found() {
-    let (task, response) = spawn_webserver(
-        "/api/v2/mempool/transaction/0000000000000000000000000000000000000000000000000000000000000001/output/1",
-    )
-    .await;
-
-    assert_eq!(response.status(), 404);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(
-        body["error"].as_str().unwrap(),
-        "Transaction output not found"
-    );
-
-    task.abort();
-}
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -134,7 +99,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let transaction_id = rx.await.unwrap();
-    let url = format!("/api/v2/mempool/transaction/{transaction_id}/output/0");
+    let url = format!("/api/v2/transaction/{transaction_id}/output/0?with_mempool=true");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -152,10 +117,11 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
-    assert!(body.get("spent").unwrap().as_bool().unwrap());
+    assert!(body.get("spent_in_mempool").unwrap().as_bool().unwrap());
+    assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     // Test the second output is not spent
-    let url = format!("/api/v2/mempool/transaction/{transaction_id}/output/1");
+    let url = format!("/api/v2/transaction/{transaction_id}/output/1?with_mempool=true");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -173,7 +139,8 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
-    assert!(!body.get("spent").unwrap().as_bool().unwrap(),);
+    assert!(!body.get("spent_in_mempool").unwrap().as_bool().unwrap(),);
+    assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     task.abort();
 }

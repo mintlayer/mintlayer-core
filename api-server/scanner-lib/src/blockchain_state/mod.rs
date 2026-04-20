@@ -260,6 +260,9 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     async fn add_mempool_tx(&mut self, transaction: &SignedTransaction) -> Result<(), Self::Error> {
         let (best_block_height, _, best_block_timestamp) = self.best_block().await?;
         let next_block_height = best_block_height.next_height();
+        let future_tolerance_block_height = (best_block_height
+            + mempool::FUTURE_TIMELOCK_TOLERANCE_BLOCKS)
+            .expect("Block height overflow");
 
         let mut db_tx = self.storage.transaction_rw().await?;
         let (_previous_median_time, new_median_time) =
@@ -271,7 +274,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             &self.chain_config,
             &mut db_tx,
             transaction.transaction(),
-            next_block_height,
+            future_tolerance_block_height,
         )
         .await?;
 
@@ -296,16 +299,32 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         {
             match input {
                 TxInput::Utxo(outpoint) => {
-                    let utxo = fetch_mempool_utxo(input, &db_tx)
-                        .await?
-                        .ok_or(BlockchainStateError::UtxoNotFound)?
-                        .into_spent_in_mempool();
+                    let (utxo, is_utxo_locked) =
+                        if let Some(utxo) = db_tx.get_utxo_mempool_with_fallback(outpoint).await? {
+                            (utxo.into_spent_in_mempool(), false)
+                        } else {
+                            (
+                                db_tx
+                                    .get_mempool_locked_utxo_with_fallback(outpoint)
+                                    .await?
+                                    .ok_or(BlockchainStateError::UtxoNotFound)?
+                                    .into_spent_in_mempool(),
+                                true,
+                            )
+                        };
 
                     // Mark UTXO as spent in mempool
-                    db_tx
-                        .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[])
-                        .await
-                        .map_err(BlockchainStateError::StorageError)?;
+                    if is_utxo_locked {
+                        db_tx
+                            .set_mempool_locked_utxo(outpoint.clone(), utxo.clone(), &[])
+                            .await
+                            .map_err(BlockchainStateError::StorageError)?;
+                    } else {
+                        db_tx
+                            .set_mempool_utxo(outpoint.clone(), utxo.clone(), &[])
+                            .await
+                            .map_err(BlockchainStateError::StorageError)?;
+                    }
 
                     let decimals = utxo
                         .utxo_with_extra_info()
@@ -323,6 +342,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                                 &Amount::from_atoms(1),
                                 CoinOrTokenId::TokenId(token_id),
                                 decimals,
+                                is_utxo_locked,
                             )
                             .await?;
                             transaction_tokens.insert(token_id);
@@ -367,6 +387,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                                         &amount,
                                         CoinOrTokenId::Coin,
                                         decimals,
+                                        is_utxo_locked,
                                     )
                                     .await?;
                                 }
@@ -378,6 +399,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                                         &amount,
                                         CoinOrTokenId::TokenId(token_id),
                                         decimals,
+                                        is_utxo_locked,
                                     )
                                     .await?;
                                     transaction_tokens.insert(token_id);
@@ -443,6 +465,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         for (idx, output) in transaction.transaction().outputs().iter().enumerate() {
             let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
             let mut token_decimals_opt = None;
+            let mut is_utxo_locked = false;
 
             match output {
                 TxOutput::Burn(value) => {
@@ -516,6 +539,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         &outpoint,
                     )
                     .is_ok();
+
+                    is_utxo_locked = !already_unlocked;
 
                     token_decimals_opt = match output_value {
                         OutputValue::Coin(amount) => {
@@ -683,7 +708,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             // Save new UTXO as unspent in mempool
             let utxo = Utxo::new(output.clone(), token_decimals_opt, None);
-            let addresses = get_tx_output_destination(output)
+            let addresses = get_tx_output_destinations(output)
                 .into_iter()
                 .map(|d| {
                     Address::<Destination>::new(&self.chain_config, d.clone())
@@ -692,10 +717,17 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .collect::<Vec<_>>();
             let addresses_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
 
-            db_tx
-                .set_mempool_utxo(outpoint, utxo, &addresses_refs)
-                .await
-                .map_err(BlockchainStateError::StorageError)?;
+            if is_utxo_locked {
+                db_tx
+                    .set_mempool_locked_utxo(outpoint, utxo, &addresses_refs)
+                    .await
+                    .map_err(BlockchainStateError::StorageError)?;
+            } else {
+                db_tx
+                    .set_mempool_utxo(outpoint, utxo, &addresses_refs)
+                    .await
+                    .map_err(BlockchainStateError::StorageError)?;
+            }
         }
 
         for (address, transactions) in address_transactions {
@@ -713,7 +745,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .map_err(BlockchainStateError::StorageError)?;
         }
 
-        db_tx.commit().await.expect("Unable to commit transaction");
+        db_tx.commit().await.map_err(BlockchainStateError::StorageError)?;
         Ok(())
     }
 }
@@ -778,7 +810,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
             _ => panic!("locked utxo not lock then transfer output"),
         }
 
-        let addresses = get_tx_output_destination(&locked_utxo.output)
+        let addresses = get_tx_output_destinations(&locked_utxo.output)
             .into_iter()
             .map(|d| {
                 Address::<Destination>::new(chain_config, d.clone())
@@ -2791,7 +2823,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         token_decimals,
         spent.then_some(UtxoSpent::AtBlockHeight(block_height)),
     );
-    let addresses = get_tx_output_destination(output)
+    let addresses = get_tx_output_destinations(output)
         .into_iter()
         .map(|d| {
             Address::<Destination>::new(chain_config, d.clone())
@@ -2805,7 +2837,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         .expect("Unable to set utxo");
 }
 
-fn get_tx_output_destination(txo: &TxOutput) -> Vec<&Destination> {
+fn get_tx_output_destinations(txo: &TxOutput) -> Vec<&Destination> {
     match txo {
         TxOutput::Transfer(_, d)
         | TxOutput::LockThenTransfer(_, d, _)
@@ -2862,7 +2894,7 @@ async fn calculate_mempool_tx_fee_and_collect_token_info<
             match inp {
                 TxInput::Utxo(_) => {
                     token_ids.extend(get_referenced_token_ids_ignore_issuance(
-                        utxo.as_ref().expect("must be present"),
+                        utxo.as_ref().ok_or(BlockchainStateError::UtxoNotFound)?,
                     ));
                 }
                 TxInput::Account(_) => {}
@@ -2878,7 +2910,10 @@ async fn calculate_mempool_tx_fee_and_collect_token_info<
                     }
                     AccountCommand::ConcludeOrder(order_id)
                     | AccountCommand::FillOrder(order_id, _, _) => {
-                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        let order = db_tx
+                            .get_order(*order_id)
+                            .await?
+                            .ok_or(BlockchainStateError::OrderNotFound)?;
                         if let Some(id) = order.ask_currency.token_id() {
                             token_ids.insert(id);
                         }
@@ -2891,7 +2926,10 @@ async fn calculate_mempool_tx_fee_and_collect_token_info<
                     OrderAccountCommand::FillOrder(order_id, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
-                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        let order = db_tx
+                            .get_order(*order_id)
+                            .await?
+                            .ok_or(BlockchainStateError::OrderNotFound)?;
                         if let Some(id) = order.ask_currency.token_id() {
                             token_ids.insert(id);
                         }
@@ -2934,7 +2972,12 @@ async fn fetch_mempool_utxo<T: ApiServerStorageRead>(
     match input {
         TxInput::Utxo(outpoint) => {
             let utxo = db_tx.get_utxo_mempool_with_fallback(outpoint).await?;
-            Ok(utxo)
+            if utxo.is_some() {
+                Ok(utxo)
+            } else {
+                let utxo = db_tx.get_mempool_locked_utxo_with_fallback(outpoint).await?;
+                Ok(utxo)
+            }
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
             Ok(None)
@@ -3033,12 +3076,16 @@ async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
     amount: &Amount,
     coin_or_token_id: CoinOrTokenId,
     decimals: u8,
+    is_utxo_locked: bool,
 ) -> Result<(), BlockchainStateError> {
-    let current_balance = db_tx
-        .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
-        .await
-        .map_err(BlockchainStateError::StorageError)?
-        .unwrap_or(Amount::ZERO);
+    let current_balance = if is_utxo_locked {
+        db_tx.get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+    } else {
+        db_tx.get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+    }
+    .await
+    .map_err(BlockchainStateError::StorageError)?
+    .unwrap_or(Amount::ZERO);
 
     let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
         panic!(
@@ -3047,8 +3094,11 @@ async fn decrease_mempool_balance<T: ApiServerStorageWrite + ApiServerStorageRea
         )
     });
 
-    db_tx
-        .set_mempool_address_balance(address, coin_or_token_id, new_amount, decimals)
-        .await
-        .map_err(BlockchainStateError::StorageError)
+    if is_utxo_locked {
+        db_tx.set_mempool_locked_address_balance(address, coin_or_token_id, new_amount, decimals)
+    } else {
+        db_tx.set_mempool_address_balance(address, coin_or_token_id, new_amount, decimals)
+    }
+    .await
+    .map_err(BlockchainStateError::StorageError)
 }

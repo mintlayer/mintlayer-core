@@ -427,6 +427,18 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         Ok(())
     }
 
+    async fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_mempool_locked_utxo(outpoint, utxo, addresses).await?;
+
+        Ok(())
+    }
+
     async fn set_mempool_address_balance(
         &mut self,
         address: &str,
@@ -944,6 +956,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_utxo_mempool_with_fallback(outpoint).await?;
+
+        Ok(res)
+    }
+
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_mempool_locked_utxo_with_fallback(outpoint).await?;
 
         Ok(res)
     }

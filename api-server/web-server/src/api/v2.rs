@@ -103,11 +103,7 @@ pub fn routes<
 
     let router = router
         .route("/mempool/transaction", get(mempool_transactions))
-        .route("/mempool/transaction/:id", get(mempool_transaction))
-        .route(
-            "/mempool/transaction/:id/output/:idx",
-            get(mempool_transaction_output),
-        );
+        .route("/mempool/transaction/:id", get(mempool_transaction));
 
     let router = router
         .route("/address/:address", get(address))
@@ -576,9 +572,15 @@ pub async fn transaction<T: ApiServerStorage>(
     Ok(Json(json))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WithMempool {
+    with_mempool: Option<bool>,
+}
+
 pub async fn transaction_output<T: ApiServerStorage>(
     Path((transaction_id, output_idx)): Path<(String, u32)>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+    Query(params): Query<WithMempool>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
         .map_err(|_| {
@@ -595,16 +597,20 @@ pub async fn transaction_output<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let utxo = db_tx
-        .get_utxo(outpoint)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .ok_or(ApiServerWebServerError::NotFound(
-            ApiServerWebServerNotFoundError::TransactionOutputNotFound,
-        ))?;
+    let with_mempool = params.with_mempool.unwrap_or(false);
+    let utxo = if with_mempool {
+        db_tx.get_utxo_mempool_with_fallback(&outpoint)
+    } else {
+        db_tx.get_utxo(outpoint)
+    }
+    .await
+    .map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?
+    .ok_or(ApiServerWebServerError::NotFound(
+        ApiServerWebServerNotFoundError::TransactionOutputNotFound,
+    ))?;
 
     let mut json = txoutput_to_json(
         utxo.output(),
@@ -617,6 +623,9 @@ pub async fn transaction_output<T: ApiServerStorage>(
         "spent_at_block_height".into(),
         utxo.spent_at_block_height().map(BlockHeight::into_int).into(),
     );
+    if with_mempool {
+        obj.insert("spent_in_mempool".into(), utxo.spent_in_mempool().into());
+    }
 
     Ok(Json(json))
 }
@@ -744,50 +753,6 @@ pub async fn mempool_transaction<T: ApiServerStorage>(
         ))?;
 
     let json = tx_to_json(&tx_info.tx, &tx_info.additional_info, &state.chain_config);
-
-    Ok(Json(json))
-}
-
-pub async fn mempool_transaction_output<T: ApiServerStorage>(
-    Path((transaction_id, output_idx)): Path<(String, u32)>,
-    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
-) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(
-                ApiServerWebServerClientError::InvalidTransactionId,
-            )
-        })?
-        .into();
-
-    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), output_idx);
-
-    let utxo = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_utxo_mempool_with_fallback(&outpoint)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .ok_or(ApiServerWebServerError::NotFound(
-            ApiServerWebServerNotFoundError::TransactionOutputNotFound,
-        ))?;
-
-    let mut json = txoutput_to_json(
-        utxo.output(),
-        &state.chain_config,
-        &TokenDecimals::Single(utxo.utxo_with_extra_info().token_decimals),
-    );
-    let obj = json.as_object_mut().expect("object");
-
-    obj.insert("spent".into(), utxo.spent().into());
 
     Ok(Json(json))
 }

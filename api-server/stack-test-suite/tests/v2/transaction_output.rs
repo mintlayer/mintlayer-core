@@ -158,6 +158,7 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
+    assert!(body.get("spent_in_mempool").unwrap().is_null());
     assert_eq!(
         body.get("spent_at_block_height").unwrap().as_number().unwrap(),
         &(2.into())
@@ -182,6 +183,7 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
+    assert!(body.get("spent_in_mempool").unwrap().is_null());
     assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     task.abort();

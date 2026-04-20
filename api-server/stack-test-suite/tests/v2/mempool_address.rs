@@ -92,7 +92,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let mut alice_balance = Amount::from_atoms(1_000_000);
                 let mut alice_transaction_history: Vec<Id<Transaction>> = vec![];
 
-                let (_bob_sk, bob_pk) =
+                let (bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
@@ -139,15 +139,18 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let random_coin_amount1 = rng.gen_range(1..10);
                 let random_coin_amount2 = rng.gen_range(1..10);
                 let random_coin_amount3 = rng.gen_range(1..10);
+                let random_coin_amount4 = rng.gen_range(1..10);
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount3)).unwrap();
+                alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount4)).unwrap();
 
                 bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount1)).unwrap();
                 bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount2)).unwrap();
                 bob_locked_balance =
                     (bob_locked_balance + Amount::from_atoms(random_coin_amount3)).unwrap();
+                // random_coin_amount4 will be added and spent in the locked balance so it will not change it
 
                 let alice_tx_out =
                     TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
@@ -167,6 +170,15 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     bob_destination.clone(),
                     OutputTimeLock::ForBlockCount(10),
                 );
+                let bob_tx_out4 =
+                    TxOutput::LockThenTransfer(
+                        OutputValue::Coin(Amount::from_atoms(random_coin_amount4)),
+                        bob_destination.clone(),
+                        // lock for less than FUTURE_TIMELOCK_TOLERANCE blocks, so we can spend it in the mempool
+                        OutputTimeLock::ForBlockCount(rng.gen_range(
+                            1..=mempool::FUTURE_TIMELOCK_TOLERANCE_BLOCKS.to_int() as u64,
+                        )),
+                    );
 
                 let transaction2 = TransactionBuilder::new()
                     .add_input(
@@ -180,6 +192,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .add_output(bob_tx_out1.clone())
                     .add_output(bob_tx_out2.clone())
                     .add_output(bob_tx_out3.clone())
+                    .add_output(bob_tx_out4.clone())
                     .build();
 
                 alice_transaction_history.push(transaction2.transaction().get_id());
@@ -203,6 +216,38 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     vec![previous_witness.clone()],
                 )
                 .unwrap();
+
+                let tx2_id = transaction2.transaction().get_id();
+
+                let transaction3 = TransactionBuilder::new()
+                    // spend the locked transfer within the future timelock tolerance
+                    .add_input(
+                        TxInput::from_utxo(OutPointSourceId::Transaction(tx2_id), 4),
+                        previous_witness.clone(),
+                    )
+                    .add_anyone_can_spend_output(1)
+                    .build();
+
+                let previous_witness = InputWitness::Standard(
+                    StandardInputSignature::produce_uniparty_signature_for_input(
+                        &bob_sk,
+                        SigHashType::all(),
+                        bob_destination.clone(),
+                        &transaction3,
+                        &[SighashInputCommitment::Utxo(Cow::Borrowed(&bob_tx_out4))],
+                        0,
+                        &mut rng,
+                    )
+                    .unwrap(),
+                );
+
+                let signed_transaction3 = SignedTransaction::new(
+                    transaction3.transaction().clone(),
+                    vec![previous_witness],
+                )
+                .unwrap();
+
+                bob_transaction_history.push(transaction3.transaction().get_id());
 
                 alice_transaction_history.sort();
                 bob_transaction_history.sort();
@@ -228,7 +273,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     ),
                 ]);
 
-                [transaction, signed_transaction2]
+                [transaction, signed_transaction2, signed_transaction3]
             };
 
             let storage = {
@@ -246,6 +291,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
             local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             for tx in transactions {
+                eprintln!("Adding transaction {:?}", tx.transaction().get_id());
                 local_node.add_mempool_tx(&tx).await.unwrap();
             }
 

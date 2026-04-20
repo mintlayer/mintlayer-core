@@ -84,6 +84,7 @@ struct ApiServerInMemoryStorage {
     orders_table: BTreeMap<OrderId, BTreeMap<BlockHeight, Order>>,
     mempool_transaction_table: BTreeMap<Id<Transaction>, TransactionInfo>,
     mempool_utxo_table: BTreeMap<UtxoOutPoint, (Utxo, bool)>,
+    mempool_locked_utxo_table: BTreeMap<UtxoOutPoint, (Utxo, bool)>,
     mempool_address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     mempool_address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, AmountWithDecimals>>,
     mempool_locked_address_balance_table:
@@ -123,6 +124,7 @@ impl ApiServerInMemoryStorage {
             orders_table: BTreeMap::new(),
             mempool_transaction_table: BTreeMap::new(),
             mempool_utxo_table: BTreeMap::new(),
+            mempool_locked_utxo_table: BTreeMap::new(),
             mempool_address_utxos: BTreeMap::new(),
             mempool_address_balance_table: BTreeMap::new(),
             mempool_locked_address_balance_table: BTreeMap::new(),
@@ -875,6 +877,25 @@ impl ApiServerInMemoryStorage {
         self.get_utxo(outpoint.clone())
     }
 
+    fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        if let Some(res) =
+            self.mempool_locked_utxo_table.get(outpoint).map(|(utxo, _)| utxo.clone())
+        {
+            return Ok(Some(res));
+        }
+
+        Ok(self
+            .locked_utxo_table
+            .get(&outpoint)
+            .and_then(|by_height| by_height.values().last())
+            .map(|locked_utxo| {
+                Utxo::new_with_info(locked_utxo.utxo_with_extra_info().clone(), None)
+            }))
+    }
+
     fn get_mempool_address_balance_with_fallback(
         &self,
         address: &str,
@@ -969,17 +990,11 @@ impl ApiServerInMemoryStorage {
                     (!utxo.spent())
                         .then_some((outpoint.clone(), utxo.utxo_with_extra_info().clone()))
                 } else {
-                    Some((
-                        outpoint.clone(),
-                        self.locked_utxo_table
-                            .get(outpoint)
-                            .expect("must exit")
-                            .values()
-                            .last()
-                            .expect("not empty")
-                            .utxo_with_extra_info()
-                            .clone(),
-                    ))
+                    self.get_mempool_locked_utxo_with_fallback(outpoint).expect("no error").map(
+                        |locked_utxo| {
+                            (outpoint.clone(), locked_utxo.utxo_with_extra_info().clone())
+                        },
+                    )
                 }
             })
             .collect();
@@ -1468,6 +1483,23 @@ impl ApiServerInMemoryStorage {
     ) -> Result<(), ApiServerStorageError> {
         let spent = utxo.spent();
         self.mempool_utxo_table.insert(outpoint.clone(), (utxo, spent));
+        for address in addresses {
+            self.mempool_address_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
+        Ok(())
+    }
+
+    fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.mempool_locked_utxo_table.insert(outpoint.clone(), (utxo, spent));
         for address in addresses {
             self.mempool_address_utxos
                 .entry((*address).into())
