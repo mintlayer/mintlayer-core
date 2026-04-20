@@ -65,7 +65,8 @@ impl Decode for Signature {
         match sig_kind {
             SignatureKind::Secp256k1Schnorr => {
                 let data = <[u8; secp256k1::constants::SCHNORR_SIGNATURE_SIZE]>::decode(input)?;
-                let sig = secp256k1::schnorr::Signature::from_byte_array(data);
+                let sig = secp256k1::schnorr::Signature::from_slice(&data)
+                    .map_err(|_| serialization::Error::from("Signature deserialization failed"))?;
                 Ok(Signature::Secp256k1Schnorr(sig))
             }
         }
@@ -84,9 +85,8 @@ impl Signature {
     ) -> Result<Self, SignatureError> {
         match kind {
             SignatureKind::Secp256k1Schnorr => {
-                let decoded_sig = secp256k1::schnorr::Signature::from_byte_array(
-                    data.as_ref().try_into().map_err(|_| SignatureError::WrongSignatureSize)?,
-                );
+                let decoded_sig = secp256k1::schnorr::Signature::from_slice(data.as_ref())
+                    .map_err(|_| SignatureError::SignatureConstructionError)?;
                 Ok(Self::Secp256k1Schnorr(decoded_sig))
             }
         }

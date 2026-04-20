@@ -135,8 +135,4 @@ mod tests {
     assert_impl_all!(Rng08Adapter<NonCryptoRngType>: rand_0_8::RngCore);
     assert_not_impl_any!(Rng08Adapter<NonCryptoRngType>: rand_0_8::CryptoRng);
     assert_impl_all!(Rng08Adapter<CryptoRngType>: rand_0_8::Rng, rand_0_8::CryptoRng);
-
-    assert_impl_all!(Rng09Adapter<NonCryptoRngType>: rand_0_9::RngCore);
-    assert_not_impl_any!(Rng09Adapter<NonCryptoRngType>: rand_0_9::CryptoRng);
-    assert_impl_all!(Rng09Adapter<CryptoRngType>: rand_0_9::Rng, rand_0_9::CryptoRng);
 }

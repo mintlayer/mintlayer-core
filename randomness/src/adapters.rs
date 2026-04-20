@@ -37,23 +37,3 @@ impl<R: crate::Rng> rand_0_8::RngCore for Rng08Adapter<R> {
 }
 
 impl<R: crate::CryptoRng> rand_0_8::CryptoRng for Rng08Adapter<R> {}
-
-/// An adapter that implements `rand` v0.9's `RngCore` and `CryptoRng` if the wrapped type implements
-/// `Rng` and `CryptoRng` respectively.
-pub struct Rng09Adapter<R>(pub R);
-
-impl<R: crate::Rng> rand_0_9::RngCore for Rng09Adapter<R> {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-}
-
-impl<R: crate::CryptoRng> rand_0_9::CryptoRng for Rng09Adapter<R> {}

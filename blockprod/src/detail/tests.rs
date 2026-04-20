@@ -1951,7 +1951,7 @@ mod process_block_with_custom_id {
 
         let mut rng = make_seedable_rng(seed);
 
-        let jobs_to_create = rng.random_range(1..=20);
+        let jobs_to_create = 10 + rng.random_range(1..=20);
 
         let block_production = BlockProduction::new(
             chain_config,

@@ -18,7 +18,7 @@ pub mod extended_keys;
 use secp256k1;
 use zeroize::Zeroize;
 
-use randomness::{adapters::Rng09Adapter, CryptoRng};
+use randomness::{adapters::Rng08Adapter, CryptoRng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -46,7 +46,7 @@ impl Encode for Secp256k1PrivateKey {
 impl Decode for Secp256k1PrivateKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let mut v = <[u8; secp256k1::constants::SECRET_KEY_SIZE]>::decode(input)?;
-        let result = secp256k1::SecretKey::from_byte_array(v)
+        let result = secp256k1::SecretKey::from_slice(&v)
             .map(|r| Secp256k1PrivateKey { data: r })
             .map_err(|_| serialization::Error::from("Private Key deserialization failed"));
         v.zeroize();
@@ -63,7 +63,7 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 impl Secp256k1PrivateKey {
     pub fn new<R: CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secp = secp256k1::Secp256k1::new();
-        let (secret, public) = secp.generate_keypair(&mut Rng09Adapter(rng));
+        let (secret, public) = secp.generate_keypair(&mut Rng08Adapter(rng));
         (
             Secp256k1PrivateKey::from_native(secret),
             Secp256k1PublicKey::from_native(public),
@@ -75,9 +75,7 @@ impl Secp256k1PrivateKey {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Secp256k1KeyError> {
-        let bytes_arr: [u8; secp256k1::constants::SECRET_KEY_SIZE] =
-            bytes.try_into().map_err(|_| Secp256k1KeyError::InvalidData)?;
-        secp256k1::SecretKey::from_byte_array(bytes_arr)
+        secp256k1::SecretKey::from_slice(bytes)
             .map(|r| Secp256k1PrivateKey { data: r })
             .map_err(|_| Secp256k1KeyError::InvalidData)
     }
@@ -98,14 +96,15 @@ impl Secp256k1PrivateKey {
         let secp = secp256k1::Secp256k1::new();
         // Hash the message
         let e = Blake2b32Stream::new().write(msg).finalize();
-        let msg_hash = secp256k1::Message::from_digest(e.into());
+        let msg_hash =
+            secp256k1::Message::from_digest_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
         // Sign the hash
         // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
 
         let aux_data = aux_data_provider.get_secp256k1_schnorr_aux_data();
 
-        secp.sign_schnorr_with_aux_rand(msg_hash.as_ref(), &keypair, &aux_data)
+        secp.sign_schnorr_with_aux_rand(&msg_hash, &keypair, &aux_data)
     }
 }
 
@@ -191,7 +190,7 @@ impl Secp256k1PublicKey {
         VERIFIER
             .verify_schnorr(
                 signature,
-                msg_hashed.as_ref(),
+                msg_hashed,
                 &self.pubkey_data.x_only_public_key().0,
             )
             .is_ok()
@@ -371,11 +370,9 @@ mod test {
         #[case] is_valid: bool,
     ) {
         let pk = Secp256k1PublicKey::from_bytes(&hex::decode(pk).unwrap()).unwrap();
-        let sig = secp256k1::schnorr::Signature::from_byte_array(
-            hex::decode(sig).unwrap().try_into().unwrap(),
-        );
+        let sig = secp256k1::schnorr::Signature::from_slice(&hex::decode(sig).unwrap()).unwrap();
         let msg_hash =
-            secp256k1::Message::from_digest(hex::decode(msg_hash).unwrap().try_into().unwrap());
+            secp256k1::Message::from_digest_slice(&hex::decode(msg_hash).unwrap()).unwrap();
         assert_eq!(pk.verify_message_hashed(&sig, &msg_hash), is_valid);
     }
 
@@ -396,7 +393,7 @@ mod test {
         assert!(pk.verify_message(&sig1, &msg));
         assert!(pk.verify_message(&sig2, &msg));
         assert_eq!(sig1, sig2);
-        assert_eq!(sig1.to_byte_array(), sig2.to_byte_array());
+        assert_eq!(sig1.serialize(), sig2.serialize());
     }
 
     #[rstest]

@@ -37,8 +37,8 @@ pub use signature::Signature;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
-    #[error("Wrong signature size")]
-    WrongSignatureSize,
+    #[error("Failed to construct a valid signature")]
+    SignatureConstructionError,
 }
 
 #[must_use]

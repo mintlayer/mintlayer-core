@@ -1478,23 +1478,9 @@ user-id = 1588
 user-login = "apoelstra"
 user-name = "Andrew Poelstra"
 
-[[publisher.secp256k1]]
-version = "0.31.1"
-when = "2025-06-23"
-user-id = 1588
-user-login = "apoelstra"
-user-name = "Andrew Poelstra"
-
 [[publisher.secp256k1-sys]]
 version = "0.10.1"
 when = "2024-09-11"
-user-id = 1588
-user-login = "apoelstra"
-user-name = "Andrew Poelstra"
-
-[[publisher.secp256k1-sys]]
-version = "0.11.0"
-when = "2025-04-26"
 user-id = 1588
 user-login = "apoelstra"
 user-name = "Andrew Poelstra"
