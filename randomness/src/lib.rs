@@ -68,7 +68,7 @@ impl<'a, R: ?Sized> BoxedRngMutexWrapper<'a, R> {
     }
 }
 
-impl<'a, R: rand::Rng + ?Sized> rand::TryRng for BoxedRngMutexWrapper<'a, R> {
+impl<'a, R: Rng + ?Sized> TryRng for BoxedRngMutexWrapper<'a, R> {
     type Error = std::convert::Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -86,7 +86,7 @@ impl<'a, R: rand::Rng + ?Sized> rand::TryRng for BoxedRngMutexWrapper<'a, R> {
 }
 
 // Note: `CryptoRng` is implemented automatically for all `R: TryCryptoRng<Error = Infallible>`.
-impl<'a, R: rand::TryCryptoRng<Error = std::convert::Infallible>> rand::TryCryptoRng
+impl<'a, R: TryCryptoRng<Error = std::convert::Infallible>> TryCryptoRng
     for BoxedRngMutexWrapper<'a, R>
 {
 }
@@ -120,6 +120,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     type CryptoRngType = rand::rngs::StdRng;
 
     // Sanity checks

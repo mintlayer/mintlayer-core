@@ -15,7 +15,7 @@
 
 pub use fixed_hash::construct_fixed_hash as construct_fixed_hash_orig;
 
-/// A macro that wraps the namesake one from `fixed_hash`(which is compiled with its `rand` feature
+/// A macro that wraps the namesake one from `fixed_hash` (which is compiled with its `rand` feature
 /// disabled) and adds custom RNG-related methods to the generated type.
 ///
 /// It's a temporary workaround to avoid creating an RNG adapter every time `random_using` is
@@ -33,8 +33,8 @@ macro_rules! construct_fixed_hash {
 }
 
 // This is basically a copy of the similar macro in the fixed_hash src, except that here we use
-// rng primitives from `randomness` and omit the `randomize` and `random` methods that would create
-// a new rng on the fly (mainly because the RNG that they were creating originally is no longer
+// RNG primitives from `randomness` and omit the `randomize` and `random` methods that would create
+// a new RNG on the fly (mainly because the RNG that they were creating originally is no longer
 // infallible).
 #[macro_export]
 #[doc(hidden)]

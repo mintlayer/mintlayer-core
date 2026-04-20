@@ -255,7 +255,7 @@ mod tests {
 
     // Note: rustc_hex::FromHexError's Display implementation differs a bit depending on whether
     // the crate's 'std' feature is enabled, so the expected values here may have to be changed
-    // whenever rustc_hex's configuration changes (which is controller by fixed_hash).
+    // whenever rustc_hex's configuration changes (which is controller by fixed_hash in this case).
     #[rstest]
     #[case(
         "00000000000000000000000000000000000000000000000000000000000000",

@@ -8125,6 +8125,8 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.10.1",
  "randomness",
+ "rstest",
+ "test-utils",
 ]
 
 [[package]]

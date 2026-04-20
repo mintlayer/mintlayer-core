@@ -15,7 +15,7 @@
 
 pub use bip39::{Error, Language, Mnemonic};
 
-use randomness::RngExt;
+use randomness::RngExt as _;
 use wallet_types::seed_phrase::MNEMONIC_24_WORDS_ENTROPY_SIZE;
 use zeroize::Zeroize;
 
