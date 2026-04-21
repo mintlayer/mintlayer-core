@@ -470,6 +470,7 @@ where
                 WalletCreation::Wallet(_) => false,
                 // Wallet was not created successfully. The caller will need to handle this result
                 // and either fail or try again.
+                #[cfg(feature = "trezor")]
                 WalletCreation::MultipleAvailableTrezorDevices(_) => true,
             },
         };
