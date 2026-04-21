@@ -13,7 +13,7 @@ serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
 storage-sqlite = { path = "../../storage/sqlite" }
 utxo = { path = "../../utxo" }
-wallet-types = { path = "../types" }
+wallet-types = { path = "../types", default-features = false }
 utils = { path = "../../utils" }
 
 thiserror.workspace = true

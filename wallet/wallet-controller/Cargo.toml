@@ -14,16 +14,16 @@ crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool-types = { path = "../../mempool/types" }
 mempool = { path = "../../mempool" }
-node-comm = { path = "../wallet-node-client" }
+node-comm = { path = "../wallet-node-client", default-features = false }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet = { path = ".." }
-wallet-storage = { path = "../storage" }
-wallet-types = { path = "../types" }
+wallet = { path = "..", default-features = false }
+wallet-storage = { path = "../storage", default-features = false }
+wallet-types = { path = "../types", default-features = false }
 
 async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = [
@@ -58,6 +58,6 @@ anyhow.workspace = true
 rstest.workspace = true
 
 [features]
-trezor = ["wallet-types/trezor"]
-ledger = ["wallet-types/ledger"]
+trezor = ["wallet/trezor", "wallet-storage/trezor", "wallet-types/trezor"]
+ledger = ["wallet/ledger", "wallet-storage/ledger", "wallet-types/ledger"]
 default = ["trezor", "ledger"]
