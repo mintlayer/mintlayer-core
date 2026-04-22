@@ -428,7 +428,7 @@ async fn wallet_creation_in_memory() {
     let initialized_db = wallet.db;
 
     // successfully load a wallet from initialized db
-    let mut wallet = Wallet::load_wallet(
+    let _wallet = Wallet::load_wallet(
         chain_config.clone(),
         initialized_db,
         None,
@@ -444,6 +444,7 @@ async fn wallet_creation_in_memory() {
 
     #[cfg(any(feature = "trezor", feature = "ledger"))]
     {
+        let mut wallet = _wallet;
         let mut db_tx = wallet.db.transaction_rw(None).unwrap();
 
         #[cfg(feature = "trezor")]

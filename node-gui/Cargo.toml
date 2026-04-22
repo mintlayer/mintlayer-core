@@ -10,18 +10,18 @@ rust-version.workspace = true
 chainstate = { path = "../chainstate" }
 common = { path = "../common" }
 logging = { path = "../logging" }
-node-gui-backend = { path = "./backend" }
+node-comm = { path = "../wallet/wallet-node-client", default-features = false }
+node-gui-backend = { path = "./backend", default-features = false }
 node-lib = { path = "../node-lib" }
-node-comm = { path = "../wallet/wallet-node-client" }
 p2p = { path = "../p2p" }
 storage = { path = "../storage" }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
-wallet = { path = "../wallet" }
-wallet-controller = { path = "../wallet/wallet-controller" }
-wallet-types = { path = "../wallet/types" }
-wallet-cli-commands = { path = "../wallet/wallet-cli-commands" }
-wallet-storage = { path = "../wallet/storage" }
+wallet = { path = "../wallet", default-features = false }
+wallet-cli-commands = { path = "../wallet/wallet-cli-commands", default-features = false }
+wallet-controller = { path = "../wallet/wallet-controller", default-features = false }
+wallet-types = { path = "../wallet/types", default-features = false }
+wallet-storage = { path = "../wallet/storage", default-features = false }
 
 anyhow.workspace = true
 chrono.workspace = true
@@ -41,15 +41,21 @@ winres = "0.1"
 [features]
 tokio-console = ["utils/tokio-console"]
 trezor = [
+  "node-comm/trezor",
+  "node-gui-backend/trezor",
+  "wallet/trezor",
+  "wallet-cli-commands/trezor",
   "wallet-controller/trezor",
   "wallet-types/trezor",
-  "wallet-cli-commands/trezor",
-  "node-gui-backend/trezor",
+  "wallet-storage/trezor",
 ]
 ledger = [
+  "node-comm/ledger",
+  "node-gui-backend/ledger",
+  "wallet/ledger",
+  "wallet-cli-commands/ledger",
   "wallet-controller/ledger",
   "wallet-types/ledger",
-  "wallet-cli-commands/ledger",
-  "node-gui-backend/ledger",
+  "wallet-storage/ledger",
 ]
 default = ["trezor", "ledger"]

@@ -13,20 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use iced::Element;
 #[cfg(any(feature = "trezor", feature = "ledger"))]
-use iced::widget::{rich_text, span};
 use iced::{
     font,
-    widget::{container, row, Container},
-    Alignment, Element, Font, Length, Padding, Theme,
+    widget::{container, rich_text, row, span, Container, Row},
+    Alignment, Font, Length, Padding, Theme,
 };
 
 use wallet_controller::types::WalletExtraInfo;
 
 use super::WalletMessage;
 
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 const TEXT_SIZE: f32 = 16.;
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 const VERTICAL_PADDING: f32 = 5.;
+#[cfg(any(feature = "trezor", feature = "ledger"))]
 const HORIZONTAL_PADDING: f32 = 10.;
 
 #[allow(clippy::float_arithmetic)]
@@ -46,22 +49,44 @@ pub fn estimate_status_bar_height(wallet_info: &WalletExtraInfo) -> f32 {
 }
 
 pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static, WalletMessage>> {
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
+    let make_status_bar = |row: Row<'static, WalletMessage>| {
+        Container::new(
+            row.width(Length::Fill)
+                .padding(Padding {
+                    top: VERTICAL_PADDING,
+                    right: HORIZONTAL_PADDING,
+                    bottom: VERTICAL_PADDING,
+                    left: HORIZONTAL_PADDING,
+                })
+                .spacing(HORIZONTAL_PADDING)
+                .align_y(Alignment::Center),
+        )
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                ..container::Style::default()
+            }
+        })
+    };
+
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
     let bold_font = Font {
         weight: font::Weight::Bold,
         ..Font::default()
     };
 
-    let row = match wallet_info {
-        WalletExtraInfo::SoftwareWallet => {
-            return None;
-        }
+    match wallet_info {
+        WalletExtraInfo::SoftwareWallet => None,
         #[cfg(feature = "trezor")]
         WalletExtraInfo::TrezorWallet {
             device_id: _,
             device_name,
             firmware_version,
         } => {
-            row![
+            let row = row![
                 rich_text([span("Device name: ").font(bold_font), span(device_name.clone())])
                     .size(TEXT_SIZE),
                 rich_text([
@@ -69,39 +94,20 @@ pub fn view_status_bar(wallet_info: &WalletExtraInfo) -> Option<Element<'static,
                     span(firmware_version.clone())
                 ])
                 .size(TEXT_SIZE),
-            ]
+            ];
+
+            Some(make_status_bar(row).into())
         }
         #[cfg(feature = "ledger")]
         WalletExtraInfo::LedgerWallet { app_version, model } => {
-            row![
+            let row = row![
                 rich_text([span("Model name: ").font(bold_font), span(model.clone())])
                     .size(TEXT_SIZE),
                 rich_text([span("App version: ").font(bold_font), span(app_version.clone())])
                     .size(TEXT_SIZE),
-            ]
+            ];
+
+            Some(make_status_bar(row).into())
         }
-    };
-
-    let status_bar = Container::new(
-        row.width(Length::Fill)
-            .padding(Padding {
-                top: VERTICAL_PADDING,
-                right: HORIZONTAL_PADDING,
-                bottom: VERTICAL_PADDING,
-                left: HORIZONTAL_PADDING,
-            })
-            .spacing(HORIZONTAL_PADDING)
-            .align_y(Alignment::Center),
-    )
-    .style(|theme: &Theme| {
-        let palette = theme.extended_palette();
-
-        container::Style {
-            background: Some(palette.background.weak.color.into()),
-            ..container::Style::default()
-        }
-    })
-    .into();
-
-    Some(status_bar)
+    }
 }

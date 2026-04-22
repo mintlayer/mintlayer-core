@@ -387,8 +387,12 @@ where
     ) -> WalletResult<WalletCreation<Self>> {
         let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider).await?;
 
-        if let WalletCreation::Wallet(ref mut w) = wallet {
-            w.set_best_block(best_block.0, best_block.1)?;
+        match &mut wallet {
+            WalletCreation::Wallet(w) => {
+                w.set_best_block(best_block.0, best_block.1)?;
+            }
+            #[cfg(feature = "trezor")]
+            WalletCreation::MultipleAvailableTrezorDevices(_) => {}
         }
 
         Ok(wallet)

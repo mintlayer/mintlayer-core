@@ -127,6 +127,7 @@ pub fn view_left_panel(
         wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
     };
 
+    #[cfg(any(feature = "trezor", feature = "ledger"))]
     let hardware_wallet_panels = || {
         column![
             panel_button(

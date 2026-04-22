@@ -7,13 +7,12 @@ rust-version.workspace = true
 
 [dependencies]
 common = { path = "../../common" }
-utils = { path = "../../utils" }
-wallet-controller = { path = "../wallet-controller" }
-wallet-address-generator-lib = { path = "../wallet-address-generator-lib" }
-wallet-types = { path = "../types" }
-wallet = { path = "../../wallet" }
 crypto = { path = "../../crypto" }
+utils = { path = "../../utils" }
+wallet = { path = "../../wallet", default-features = false }
+wallet-address-generator-lib = { path = "../wallet-address-generator-lib", default-features = false }
+wallet-controller = { path = "../wallet-controller", default-features = false }
+wallet-types = { path = "../types", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
-
 thiserror.workspace = true
