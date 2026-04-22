@@ -48,7 +48,6 @@ rpc = { path = "../../rpc", features = ["test-support"] }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
-wallet-types = { path = "../types" }
 
 rstest.workspace = true
 
