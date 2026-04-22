@@ -43,21 +43,25 @@ use utils::{
 };
 use wallet_controller::types::WalletExtraInfo;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use wallet_rpc_lib::types::HardwareWalletType;
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, HardwareWalletType, MnemonicInfo,
-    NewOrderTransaction, NewSubmittedTransaction, NftMetadata, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStats,
-    RpcSignatureStatus, RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
+    Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewOrderTransaction,
+    NewSubmittedTransaction, NftMetadata, RpcHashedTimelockContract, RpcInspectTransaction,
+    RpcNewTransaction, RpcPreparedTransaction, RpcSignatureStats, RpcSignatureStatus,
+    RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
 };
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+
+#[cfg(feature = "trezor")]
+use crate::{CreateWalletDeviceSelectMenu, OpenWalletDeviceSelectMenu};
 
 use crate::{
     errors::WalletCliCommandError,
     helper_types::{
         active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info, CliCurrency,
     },
-    CreateWalletDeviceSelectMenu, ManageableWalletCommand, OpenWalletDeviceSelectMenu,
-    OpenWalletSubCommand, WalletManagementCommand,
+    ManageableWalletCommand, OpenWalletSubCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -211,6 +215,7 @@ where
 
                 if let Some(devices) = response.multiple_devices_available {
                     match devices {
+                        #[cfg(feature = "trezor")]
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
                             let choices =
                                 CreateWalletDeviceSelectMenu::new(devices, wallet_path, false);
@@ -250,6 +255,7 @@ where
 
                 if let Some(devices) = response.multiple_devices_available {
                     match devices {
+                        #[cfg(feature = "trezor")]
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
                             let choices =
                                 CreateWalletDeviceSelectMenu::new(devices, wallet_path, true);
@@ -323,6 +329,7 @@ where
                     response
                 {
                     match available {
+                        #[cfg(feature = "trezor")]
                         wallet_rpc_lib::types::MultipleDevicesAvailable::Trezor { devices } => {
                             let choices = OpenWalletDeviceSelectMenu::new(
                                 devices,

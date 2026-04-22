@@ -13,18 +13,18 @@ crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 p2p-types = { path = "../../p2p/types" }
-node-comm = { path = "../wallet-node-client" }
+node-comm = { path = "../wallet-node-client", default-features = false }
 rpc = { path = "../../rpc" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet = { path = ".." }
-wallet-storage = { path = "../storage" }
-wallet-types = { path = "../types" }
-wallet-rpc-lib = { path = "../wallet-rpc-lib" }
-wallet-rpc-client = { path = "../wallet-rpc-client" }
-wallet-cli-commands = { path = "../wallet-cli-commands" }
+wallet = { path = "..", default-features = false }
+wallet-cli-commands = { path = "../wallet-cli-commands", default-features = false }
+wallet-rpc-client = { path = "../wallet-rpc-client", default-features = false }
+wallet-rpc-lib = { path = "../wallet-rpc-lib", default-features = false }
+wallet-storage = { path = "../storage", default-features = false }
+wallet-types = { path = "../types", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
@@ -68,17 +68,21 @@ build_utils = { path = "../../utils/build_utils" }
 
 [features]
 trezor = [
+  "node-comm/trezor",
   "wallet/trezor",
   "wallet-cli-commands/trezor",
-  "wallet-types/trezor",
-  "wallet-rpc-lib/trezor",
   "wallet-rpc-client/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-storage/trezor",
+  "wallet-types/trezor",
 ]
 ledger = [
+  "node-comm/ledger",
   "wallet/ledger",
   "wallet-cli-commands/ledger",
-  "wallet-types/ledger",
-  "wallet-rpc-lib/ledger",
   "wallet-rpc-client/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-storage/ledger",
+  "wallet-types/ledger",
 ]
 default = ["trezor", "ledger"]

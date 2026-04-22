@@ -12,18 +12,18 @@ common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
+node-comm = { path = "../../wallet/wallet-node-client", default-features = false }
 node-lib = { path = "../../node-lib" }
-node-comm = { path = "../../wallet/wallet-node-client" }
 p2p = { path = "../../p2p" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
-wallet = { path = "../../wallet" }
-wallet-controller = { path = "../../wallet/wallet-controller" }
-wallet-types = { path = "../../wallet/types" }
-wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib" }
-wallet-rpc-client = { path = "../../wallet/wallet-rpc-client" }
-wallet-cli-commands = { path = "../../wallet/wallet-cli-commands" }
+wallet = { path = "../../wallet", default-features = false }
+wallet-cli-commands = { path = "../../wallet/wallet-cli-commands", default-features = false }
+wallet-controller = { path = "../../wallet/wallet-controller", default-features = false }
+wallet-rpc-client = { path = "../../wallet/wallet-rpc-client", default-features = false }
+wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib", default-features = false }
+wallet-types = { path = "../../wallet/types", default-features = false }
 
 anyhow.workspace = true
 chrono.workspace = true
@@ -43,19 +43,21 @@ rstest.workspace = true
 
 [features]
 trezor = [
+  "node-comm/trezor",
   "wallet/trezor",
-  "wallet-controller/trezor",
-  "wallet-types/trezor",
-  "wallet-rpc-lib/trezor",
-  "wallet-rpc-client/trezor",
   "wallet-cli-commands/trezor",
+  "wallet-controller/trezor",
+  "wallet-rpc-client/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-types/trezor",
 ]
 ledger = [
+  "node-comm/ledger",
   "wallet/ledger",
-  "wallet-controller/ledger",
-  "wallet-types/ledger",
-  "wallet-rpc-lib/ledger",
-  "wallet-rpc-client/ledger",
   "wallet-cli-commands/ledger",
+  "wallet-controller/ledger",
+  "wallet-rpc-client/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-types/ledger",
 ]
 default = ["trezor", "ledger"]

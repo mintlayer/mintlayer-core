@@ -58,6 +58,6 @@ anyhow.workspace = true
 rstest.workspace = true
 
 [features]
-trezor = ["wallet/trezor", "wallet-storage/trezor", "wallet-types/trezor"]
-ledger = ["wallet/ledger", "wallet-storage/ledger", "wallet-types/ledger"]
+trezor = ["node-comm/trezor", "wallet/trezor", "wallet-storage/trezor", "wallet-types/trezor"]
+ledger = ["node-comm/ledger", "wallet/ledger", "wallet-storage/ledger", "wallet-types/ledger"]
 default = ["trezor", "ledger"]

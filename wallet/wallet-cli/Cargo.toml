@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 utils = { path = "../../utils" }
-wallet-cli-lib = { path = "../wallet-cli-lib" }
+wallet-cli-lib = { path = "../wallet-cli-lib", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, default-features = false, features = [
