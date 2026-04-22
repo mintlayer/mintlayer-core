@@ -10,7 +10,7 @@ api-server-common = { path = "../api-server-common" }
 api-blockchain-scanner-lib = { path = "../scanner-lib" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
-node-comm = { path = "../../wallet/wallet-node-client" }
+node-comm = { path = "../../wallet/wallet-node-client", default-features = false }
 node-lib = { path = "../../node-lib" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils" }
