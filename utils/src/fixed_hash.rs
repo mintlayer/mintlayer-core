@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use fixed_hash::construct_fixed_hash as construct_fixed_hash_orig;
+pub mod orig {
+    pub use fixed_hash::*;
+}
 
 /// A macro that wraps the namesake one from `fixed_hash` (which is compiled with its `rand` feature
 /// disabled) and adds custom RNG-related methods to the generated type.
@@ -23,7 +25,7 @@ pub use fixed_hash::construct_fixed_hash as construct_fixed_hash_orig;
 #[macro_export]
 macro_rules! construct_fixed_hash {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ( $n_bytes:expr ); ) => {
-        $crate::fixed_hash::construct_fixed_hash_orig! {
+        $crate::fixed_hash::orig::construct_fixed_hash! {
             $(#[$attr])*
             $visibility struct $name($n_bytes);
         }
