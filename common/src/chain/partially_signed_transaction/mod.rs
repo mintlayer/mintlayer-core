@@ -64,7 +64,7 @@ pub enum PartiallySignedTransactionConsistencyCheck {
 /// Note: currently PartiallySignedTransaction's consistency checks require that the additional info
 /// is present even if the inputs that need it are already signed.
 ///
-/// Thought PartiallySignedTransaction is not part of the blockchain, it is still part of
+/// Though PartiallySignedTransaction is not part of the blockchain, it is still part of
 /// the core's public interface:
 /// 1) It is returned and consumed by the wallet CLI and RPC (in its encoded form).
 /// 2) Through the wallet RPC, it is used by the bridge, whose e2m master agent puts
