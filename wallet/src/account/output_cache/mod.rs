@@ -2103,8 +2103,8 @@ fn uses_conflicting_nonce(
 
 fn uses_conflicting_order_command(
     unconfirmed_tx: &WalletTx,
-    cmd_tag: OrderAccountCommandTag,
-    order_id: OrderId,
+    confirmed_cmd_tag: OrderAccountCommandTag,
+    confirmed_order_id: OrderId,
 ) -> bool {
     unconfirmed_tx.inputs().iter().any(|input| match input {
         TxInput::OrderAccountCommand(cmd) => {
@@ -2114,12 +2114,12 @@ fn uses_conflicting_order_command(
                 | OrderAccountCommand::ConcludeOrder(id) => *id,
             };
             // It is only a conflict if it is the same order id
-            if unconfirmed_order_id != order_id {
+            if unconfirmed_order_id != confirmed_order_id {
                 return false;
             }
 
             let unconfirmed_cmd_tag: OrderAccountCommandTag = cmd.into();
-            match cmd_tag {
+            match confirmed_cmd_tag {
                 // Confirmed fill orders do not conflict with anything
                 OrderAccountCommandTag::FillOrder => false,
                 // Confirmed conclude order conflict with any other unconfirmed operation on the
