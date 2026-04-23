@@ -136,7 +136,7 @@ mod tests {
     use rstest::rstest;
 
     use crypto::hash::StreamHasher;
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, Rng, RngExt as _};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::{
@@ -165,7 +165,7 @@ mod tests {
     fn do_test_hashable_inputs(
         inputs_count: usize,
         input_commitments_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) {
         let inputs = (0..inputs_count).map(|_| generate_random_input(rng)).collect::<Vec<_>>();
 

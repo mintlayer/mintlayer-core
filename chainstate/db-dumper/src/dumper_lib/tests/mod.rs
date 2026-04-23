@@ -36,7 +36,8 @@ use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFReturn};
 use mocks::MockChainstateInterface;
 use test_utils::{
     random::{
-        make_seedable_rng, randomness::SliceRandom, CryptoRng, IteratorRandom as _, Rng, Seed,
+        make_seedable_rng, randomness::SliceRandom, CryptoRng, IteratorRandom as _, RngExt as _,
+        Seed,
     },
     random_ascii_alphanumeric_string,
 };
@@ -380,7 +381,7 @@ impl TestBlockInputInfo {
     fn from_rng(
         height: BlockHeight,
         is_mainchain: bool,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> TestBlockInputInfo {
         Self {
             height,
@@ -499,7 +500,7 @@ fn make_consensus_data(pool_id: PoolId, compact_target: Compact) -> ConsensusDat
     )))
 }
 
-fn bogus_vrf_return(rng: &mut (impl Rng + CryptoRng)) -> VRFReturn {
+fn bogus_vrf_return(rng: &mut impl CryptoRng) -> VRFReturn {
     let (vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let vrf_transcript = construct_transcript(
         rng.random(),
@@ -511,12 +512,12 @@ fn bogus_vrf_return(rng: &mut (impl Rng + CryptoRng)) -> VRFReturn {
     vrf_sk.produce_vrf_data(vrf_transcript)
 }
 
-fn gen_compact_target(rng: &mut (impl Rng + CryptoRng)) -> Compact {
+fn gen_compact_target(rng: &mut impl CryptoRng) -> Compact {
     let target = Uint256::from_bytes(rng.random());
     target.into()
 }
 
-fn gen_target(rng: &mut (impl Rng + CryptoRng)) -> Uint256 {
+fn gen_target(rng: &mut impl CryptoRng) -> Uint256 {
     gen_compact_target(rng).try_into().unwrap()
 }
 

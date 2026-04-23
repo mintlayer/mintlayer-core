@@ -15,25 +15,21 @@
 
 use std::sync::{Arc, Mutex};
 
-use randomness::{CryptoRng, RngCore};
+use randomness::{adapters::Rng08Adapter, CryptoRng};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
-
-pub trait RngCoreAndCrypto: RngCore + CryptoRng {}
-
-impl<R> RngCoreAndCrypto for R where R: RngCore + CryptoRng {}
 
 /// A transcript that produces deterministic vrf signatures based on the provided rng
 #[must_use]
 #[derive(Clone)]
-pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn RngCoreAndCrypto + 'a>>);
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn CryptoRng + 'a>>);
 
 impl<'a> VRFTranscriptWithRng<'a> {
-    pub fn new<R: RngCoreAndCrypto + 'a>(label: &'static [u8], rng: R) -> Self {
+    pub fn new<R: CryptoRng + 'a>(label: &'static [u8], rng: R) -> Self {
         Self(merlin::Transcript::new(label), Arc::new(Mutex::new(rng)))
     }
 
-    pub(crate) fn from_no_rng<R: RngCoreAndCrypto + 'a>(transcript: VRFTranscript, rng: R) -> Self {
+    pub(crate) fn from_no_rng<R: CryptoRng + 'a>(transcript: VRFTranscript, rng: R) -> Self {
         VRFTranscriptWithRng(transcript.take(), Arc::new(Mutex::new(rng)))
     }
 
@@ -75,24 +71,23 @@ impl schnorrkel::context::SigningTranscript for VRFTranscriptWithRng<'_> {
         nonce_seeds: &[&[u8]],
         rng: R,
     ) where
-        R: randomness::RngCore + randomness::CryptoRng,
+        R: rand_0_8::RngCore + rand_0_8::CryptoRng,
     {
         self.0.witness_bytes_rng(label, dest, nonce_seeds, rng)
     }
 
     fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
         let mut r = self.1.lock().expect("Poisoned mutex");
-        self.witness_bytes_rng(label, dest, nonce_seeds, &mut *r)
+        self.witness_bytes_rng(label, dest, nonce_seeds, Rng08Adapter(&mut *r))
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use rand_chacha::ChaChaRng;
-
-    use randomness::{Rng, SeedableRng};
     use rstest::rstest;
+
+    use randomness::SeedableRng;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -101,6 +96,8 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn manual_vs_assembled(#[case] seed: Seed) {
+        use rand_0_8::Rng as _;
+
         let mut rng = make_seedable_rng(seed);
 
         // build first transcript by manually filling values
@@ -114,14 +111,16 @@ mod tests {
             .attach_u64(b"rx42", 424242);
 
         // build a random number generator using each transcript and ensure they both arrive to the same values
-        let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+        let mut g1 = manual_transcript
+            .build_rng()
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
         let mut g2 = assembled_transcript
             .0
             .build_rng()
-            .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+            .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
 
         for _ in 0..100 {
-            assert_eq!(g1.random::<u64>(), g2.random::<u64>());
+            assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
         }
     }
 

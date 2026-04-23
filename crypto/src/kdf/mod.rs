@@ -16,7 +16,7 @@
 use std::num::NonZeroUsize;
 
 use crate::util::eq::SliceEqualityCheckMethod;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{Decode, Encode};
 
 use self::argon2::Argon2Config;
@@ -89,7 +89,7 @@ pub enum KdfChallenge {
     },
 }
 
-fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Vec<u8> {
+fn make_salt<R: CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Vec<u8> {
     let len = len.get();
     (0..len).map(|_| rng.random::<u8>()).collect()
 }
@@ -129,7 +129,7 @@ pub fn hash_from_challenge(
 /// client/server applications. To use this for encryption,
 /// convert the result into a challenge using into_challenge(),
 /// which removes the hashed password.
-pub fn hash_password<R: Rng + CryptoRng>(
+pub fn hash_password<R: CryptoRng>(
     rng: &mut R,
     kdf_config: KdfConfig,
     password: &[u8],

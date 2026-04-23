@@ -241,14 +241,14 @@ mod tests {
     };
     use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
     use itertools::Itertools;
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, RngExt as _};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
 
     fn make_block(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         prev_block: Id<GenBlock>,
         timestamp: BlockTimestamp,
         target: Uint256,
@@ -285,7 +285,7 @@ mod tests {
         }
 
         pub fn new_with_blocks(
-            rng: &mut (impl Rng + CryptoRng),
+            rng: &mut impl CryptoRng,
             chain_config: &'a ChainConfig,
             timestamps: &[u64],
         ) -> Self {

@@ -33,7 +33,7 @@ use crate::{
     primitives::{Amount, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::gen_different_value;
 
 use super::{add_value, utils::*};
@@ -944,7 +944,7 @@ fn mutate_first_input(
 }
 
 fn mutate_first_input_commitment(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
     let mut input_commitments = tx.input_commitments.clone();

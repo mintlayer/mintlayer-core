@@ -19,11 +19,10 @@ use strum::IntoEnumIterator as _;
 use logging::log;
 use randomness::{
     distributions::{Distribution, WeightedIndex},
-    rngs::StepRng,
     seq::IteratorRandom as _,
-    Rng,
+    RngExt as _,
 };
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{make_seedable_rng, Seed, StepRng};
 
 use super::*;
 

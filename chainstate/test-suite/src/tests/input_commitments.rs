@@ -48,10 +48,10 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    vrf::{transcript::with_rng::RngCoreAndCrypto, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
+    vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},
@@ -162,7 +162,7 @@ fn pool_decommissioning(#[case] seed: Seed) {
 
     let make_another_pool_decommission_txs =
         |tf: &TestFramework,
-         mut rng: &mut dyn RngCoreAndCrypto,
+         mut rng: &mut dyn CryptoRng,
          current_commitment_version: SighashInputCommitmentVersion| {
             let produce_block_utxo = tf.utxo(&produce_block_outpoint).take_output();
 
@@ -410,7 +410,7 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     // Here we'll create FillOrder txs that actually require signing.
     let make_fill_order_txs =
         |tf: &TestFramework,
-         mut rng: &mut dyn RngCoreAndCrypto,
+         mut rng: &mut dyn CryptoRng,
          current_commitment_version: SighashInputCommitmentVersion| {
             let fill_amount =
                 Amount::from_atoms(rng.random_range(1..left_to_fill.into_atoms() / 2));
@@ -694,8 +694,7 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         .unwrap();
 
     let make_conclude_order_txs =
-        |mut rng: &mut dyn RngCoreAndCrypto,
-         current_commitment_version: SighashInputCommitmentVersion| {
+        |mut rng: &mut dyn CryptoRng, current_commitment_version: SighashInputCommitmentVersion| {
             let conclude_order_input =
                 make_conclude_order_input(orders_version, AccountNonce::new(1), &order_id);
 
@@ -872,7 +871,7 @@ fn make_conclude_order_input(
     }
 }
 
-fn amount_variation(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> Amount {
+fn amount_variation(rng: &mut impl CryptoRng, amount: Amount) -> Amount {
     if rng.random_bool(0.5) {
         (amount - Amount::from_atoms(1)).unwrap()
     } else {
@@ -884,7 +883,7 @@ fn amount_variation(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> Amount 
 fn check_txs_pos(
     pool_info: &PoolInfoForStaking,
     tf: &mut TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     good_tx: SignedTransaction,
     bad_txs: Vec<SignedTransaction>,
 ) {
@@ -919,7 +918,7 @@ fn check_txs_pos(
 
 fn check_txs_non_pos(
     tf: &mut TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     good_tx: SignedTransaction,
     bad_txs: Vec<SignedTransaction>,
 ) {
@@ -964,7 +963,7 @@ struct PoolInfoForStaking {
 }
 
 impl PoolInfoForStaking {
-    fn new_random(rng: &mut (impl Rng + CryptoRng), id: PoolId) -> Self {
+    fn new_random(rng: &mut impl CryptoRng, id: PoolId) -> Self {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let (staking_sk, staking_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         let staking_dest = Destination::PublicKey(staking_pk);

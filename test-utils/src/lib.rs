@@ -25,8 +25,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 use hex::ToHex;
 use itertools::Itertools;
 
-use randomness::distributions::uniform::SampleRange;
-use randomness::Rng;
+use randomness::{distributions::uniform::SampleRange, Rng, RngExt as _};
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
 
@@ -95,7 +94,7 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     rng: &mut impl Rng,
     range_len: R,
 ) -> String {
-    use randomness::distributions::{Alphanumeric, DistString};
+    use randomness::distributions::{Alphanumeric, SampleString};
     if range_len.is_empty() {
         return String::new();
     }
@@ -105,8 +104,8 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
 
 pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
     assert!(!c.is_ascii_alphanumeric());
-    let text_len = 1 + rng.random::<usize>() % max_len;
-    let random_index_to_replace = rng.random::<usize>() % text_len;
+    let text_len = rng.random_range(1..=max_len);
+    let random_index_to_replace = rng.random_range(0..text_len);
     let token_ticker: Vec<u8> = (0..text_len)
         .map(|idx| {
             if idx != random_index_to_replace {

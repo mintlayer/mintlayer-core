@@ -35,7 +35,7 @@ use common::{
     primitives::{id, Amount, BlockHeight, Id, Idable},
 };
 use crypto::hash::StreamHasher;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     random::{make_seedable_rng, Seed},
@@ -44,7 +44,7 @@ use test_utils::{
 };
 use tx_verifier::CheckTransactionError;
 
-fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
+fn make_test_framework_with_v0(rng: &mut impl CryptoRng) -> TestFramework {
     TestFramework::builder(rng)
         .with_chain_config(
             common::chain::config::Builder::test_chain()

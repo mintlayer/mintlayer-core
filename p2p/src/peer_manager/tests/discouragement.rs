@@ -20,7 +20,7 @@ use rstest::rstest;
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use networking::test_helpers::{TestAddressMaker, TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,

@@ -18,7 +18,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use logging::{init_logging, log};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use crate::{detail::timestamp_searcher::SearchDataForHeight, TimestampSearchData};
 
@@ -370,7 +370,7 @@ mod collect_search_data {
 
     fn make_test_framework(
         consensus_version: PoSConsensusVersion,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> TestFramework {
         let (staking_sk, staking_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -418,7 +418,7 @@ mod collect_search_data {
 
     fn create_pool(
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         utxo_for_spending: &mut UtxoForSpending,
     ) -> (PoolId, Amount) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -442,7 +442,7 @@ mod collect_search_data {
 
     fn delegate(
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         utxo_for_spending: &mut UtxoForSpending,
     ) -> Amount {

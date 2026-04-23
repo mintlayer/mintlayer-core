@@ -20,7 +20,7 @@ use common::chain::{Block, Destination, OutPointSourceId, TxOutput, UtxoOutPoint
 use common::primitives::Id;
 use common::primitives::{Amount, BlockHeight, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -298,7 +298,7 @@ fn test_storage_transactions_with_result_check(#[case] seed: Seed) {
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
-fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
+fn create_rand_utxo(rng: &mut impl CryptoRng, block_height: u64) -> (Utxo, UtxoOutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.random_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -323,7 +323,7 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utx
 /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
 /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
 pub fn create_rand_block_undo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     max_lim_of_utxos: u8,
     max_lim_of_tx_undos: u8,
 ) -> UtxosBlockUndo {

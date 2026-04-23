@@ -107,7 +107,7 @@ impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
 #[cfg(test)]
 mod tests {
     use crypto::symkey::SymmetricKeyKind;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

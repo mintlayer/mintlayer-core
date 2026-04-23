@@ -37,7 +37,7 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use pos_accounting::{PoSAccountingDB, PoSAccountingData};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use utils::atomics::SeqCstAtomicU64;
 use utxo::{Utxo, UtxosDB};
 
@@ -80,7 +80,7 @@ pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
 
 impl TestFramework {
     /// Creates a new test framework instance using a builder api.
-    pub fn builder(rng: &mut (impl Rng + CryptoRng)) -> TestFrameworkBuilder {
+    pub fn builder(rng: &mut impl CryptoRng) -> TestFrameworkBuilder {
         TestFrameworkBuilder::new(rng)
     }
 
@@ -230,7 +230,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         self.create_chain_return_ids_impl(parent_block, blocks_count, false, rng)
     }
@@ -243,7 +243,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         self.create_chain_return_ids_impl(parent_block, blocks_count, true, rng)
     }
@@ -253,7 +253,7 @@ impl TestFramework {
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
         advance_time: bool,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let target_block_time = self.chain_config().target_block_spacing();
 
@@ -288,7 +288,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
@@ -301,7 +301,7 @@ impl TestFramework {
     /// will be identical.
     pub fn create_chain_pos(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -325,7 +325,7 @@ impl TestFramework {
     /// based on "target_block_spacing".
     pub fn create_chain_pos_randomizing_time(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -346,7 +346,7 @@ impl TestFramework {
     #[allow(clippy::too_many_arguments)]
     fn create_chain_pos_impl(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -382,7 +382,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {

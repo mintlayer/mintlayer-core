@@ -22,7 +22,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use randomness::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, Rng, RngExt as _};
 use script::Script;
 use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
 
@@ -53,7 +53,7 @@ use crate::{
     primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, Id, H256},
 };
 
-fn make_random_output_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
+fn make_random_output_value(rng: &mut impl CryptoRng) -> OutputValue {
     if rng.random::<bool>() {
         OutputValue::Coin(Amount::from_atoms(rng.random()))
     } else {
@@ -61,19 +61,19 @@ fn make_random_output_value(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
     }
 }
 
-fn make_random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+fn make_random_destination(rng: &mut impl CryptoRng) -> Destination {
     Destination::PublicKey(make_random_pub_key(rng))
 }
 
-fn make_random_pub_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
+fn make_random_pub_key(rng: &mut impl CryptoRng) -> PublicKey {
     PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1
 }
 
-fn make_random_vrf_pub_key(rng: &mut (impl Rng + CryptoRng)) -> VRFPublicKey {
+fn make_random_vrf_pub_key(rng: &mut impl CryptoRng) -> VRFPublicKey {
     VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1
 }
 
-pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutputTag) -> TxOutput {
+pub fn generate_input_utxo_for_tag(rng: &mut impl CryptoRng, tag: TxOutputTag) -> TxOutput {
     match tag {
         TxOutputTag::Transfer => {
             TxOutput::Transfer(make_random_output_value(rng), make_random_destination(rng))
@@ -157,13 +157,13 @@ pub fn generate_input_utxo_for_tag(rng: &mut (impl Rng + CryptoRng), tag: TxOutp
     }
 }
 
-pub fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+pub fn generate_input_utxo(rng: &mut impl CryptoRng) -> TxOutput {
     let tag = TxOutputTag::iter().choose(rng).unwrap();
     generate_input_utxo_for_tag(rng, tag)
 }
 
 pub fn generate_input_commitment_for_tag(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tag: SighashInputCommitmentTag,
 ) -> SighashInputCommitment<'static> {
     match tag {
@@ -205,22 +205,20 @@ pub fn generate_input_commitment_for_tag(
     }
 }
 
-pub fn generate_input_commitment(
-    rng: &mut (impl Rng + CryptoRng),
-) -> SighashInputCommitment<'static> {
+pub fn generate_input_commitment(rng: &mut impl CryptoRng) -> SighashInputCommitment<'static> {
     let tag = SighashInputCommitmentTag::iter().choose(rng).unwrap();
     generate_input_commitment_for_tag(rng, tag)
 }
 
 pub fn generate_input_commitments(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_count: usize,
 ) -> Vec<SighashInputCommitment<'static>> {
     (0..input_count).map(|_| generate_input_commitment(rng)).collect()
 }
 
 pub fn generate_inputs_utxos(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_count: usize,
 ) -> Vec<Option<TxOutput>> {
     (0..input_count)
@@ -269,7 +267,7 @@ pub struct SignedTransactionWithInputCommitments {
 }
 
 pub fn generate_unsigned_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     destination: &Destination,
     inputs_count: usize,
     outputs_count: usize,
@@ -307,7 +305,7 @@ pub fn generate_unsigned_tx(
 }
 
 pub fn sign_whole_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx: Transaction,
     input_commitments: &[SighashInputCommitment],
     private_key: &PrivateKey,
@@ -337,7 +335,7 @@ pub fn sign_whole_tx(
 
 pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     destination: &Destination,
     input_commitments: &[SighashInputCommitment],
     outputs_count: usize,
@@ -364,7 +362,7 @@ pub fn generate_and_sign_tx(
 
 pub fn generate_signed_tx_with_input_commitments(
     chain_config: &ChainConfig,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     destination: &Destination,
     inputs_count: usize,
     outputs_count: usize,
@@ -390,7 +388,7 @@ pub fn generate_signed_tx_with_input_commitments(
 }
 
 pub fn make_signature(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx: &Transaction,
     input_commitments: &[SighashInputCommitment],
     input_num: usize,

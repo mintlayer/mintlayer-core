@@ -30,7 +30,7 @@ use common::{
     },
     primitives::{BlockHeight, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
@@ -1357,7 +1357,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
 }
 
 fn new_block_with_media_hash(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     input_source_id: &OutPointSourceId,
     media_hash: Vec<u8>,

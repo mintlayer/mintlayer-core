@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+use strum::EnumCount as _;
+
 use common::{
     chain::{DelegationId, Destination, PoolId},
     primitives::Amount,
 };
-use randomness::{CryptoRng, Rng};
-use rstest::rstest;
-use strum::EnumCount as _;
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::create_pool_data;
@@ -98,7 +99,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
 }
 
 fn perform_random_operation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
     undos: &mut Vec<PoSAccountingUndo>,
     random_pool: Option<PoolId>,

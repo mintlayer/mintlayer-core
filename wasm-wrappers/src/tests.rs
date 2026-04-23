@@ -15,7 +15,7 @@
 
 use rstest::rstest;
 
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;
@@ -31,7 +31,7 @@ fn sign_and_verify(#[case] seed: Seed) {
 
     let public_key = public_key_from_private_key(&key).unwrap();
 
-    let message_size = 1 + rng.random::<usize>() % 10000;
+    let message_size = rng.random_range(1..=10000);
     let message: Vec<u8> = (0..message_size).map(|_| rng.random::<u8>()).collect();
 
     let signature = sign_message_for_spending(&key, &message).unwrap();
@@ -45,7 +45,7 @@ fn sign_and_verify(#[case] seed: Seed) {
     {
         // Tamper with the message
         let mut tampered_message = message.clone();
-        let tamper_bit_index = rng.random::<usize>() % message_size;
+        let tamper_bit_index = rng.random_range(0..message_size);
         tampered_message[tamper_bit_index] = tampered_message[tamper_bit_index].wrapping_add(1);
         let verification_result =
             verify_signature_for_spending(&public_key, &signature, &tampered_message).unwrap();
@@ -55,7 +55,7 @@ fn sign_and_verify(#[case] seed: Seed) {
         // Tamper with the signature
         let mut tampered_signature = signature.clone();
         // Ignore the first byte because the it is the key kind
-        let tamper_bit_index = 1 + rng.random::<usize>() % (signature.len() - 1);
+        let tamper_bit_index = rng.random_range(1..signature.len());
         tampered_signature[tamper_bit_index] = tampered_signature[tamper_bit_index].wrapping_add(1);
         let verification_result =
             verify_signature_for_spending(&public_key, &tampered_signature, &message).unwrap();

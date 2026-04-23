@@ -32,7 +32,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use rand::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, RngExt as _};
 use serialization::Encode as _;
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 
@@ -77,7 +77,7 @@ fn append_block_data_for_v0(dest: &mut Vec<u8>, encoded_block_data: &[u8]) {
 fn gen_blocks(
     chain_config: ChainConfig,
     blocks_count: usize,
-    mut rng: impl Rng + CryptoRng,
+    mut rng: impl CryptoRng,
 ) -> Vec<Block> {
     if blocks_count > 0 {
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();

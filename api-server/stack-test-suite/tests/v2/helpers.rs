@@ -30,11 +30,11 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 pub fn prepare_stake_pool(
     stake_pool_outpoint: UtxoOutPoint,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     available_amount: &mut Amount,
     tf: &mut TestFramework,
 ) -> (UtxoOutPoint, StakePoolData, PoolId, Block) {
@@ -83,7 +83,7 @@ pub fn prepare_stake_pool(
 
 pub fn prepare_delegation(
     transfer_outpoint: UtxoOutPoint,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     pool_id: PoolId,
     available_amount: Amount,
     destination: Option<Destination>,
@@ -113,7 +113,7 @@ pub fn prepare_delegation(
 }
 
 pub fn stake_delegation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     available_amount: Amount,
     transfer_outpoint: UtxoOutPoint,
     delegation_id: DelegationId,
@@ -154,7 +154,7 @@ pub struct IssueAndMintTokensResult {
 
 pub fn issue_and_mint_tokens_from_genesis(
     min_mint_amount: Amount,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> IssueAndMintTokensResult {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();

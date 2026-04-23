@@ -32,7 +32,7 @@ use crate::Uint256;
 
 pub use with_id::WithId;
 
-fixed_hash::construct_fixed_hash! {
+utils::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
 }
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn hashes_stream_and_msg_identical() {
-        use randomness::{make_pseudo_rng, Rng};
+        use randomness::{make_pseudo_rng, RngExt as _};
         let random_bytes = make_pseudo_rng().random::<[u8; H256::len_bytes()]>();
 
         let h1 = default_hash(random_bytes);

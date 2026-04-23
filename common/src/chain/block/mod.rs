@@ -267,7 +267,7 @@ mod tests {
     };
 
     use super::*;
-    use randomness::{make_pseudo_rng, Rng};
+    use randomness::{make_pseudo_rng, RngExt as _};
     use rstest::rstest;
     use serialization::Encode;
     use test_utils::random::Seed;

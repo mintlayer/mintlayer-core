@@ -82,7 +82,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use test_utils::random::{make_seedable_rng, Rng, Seed};
+use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
 #[ctor::ctor]
 fn init() {

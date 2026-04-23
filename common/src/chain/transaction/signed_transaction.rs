@@ -150,7 +150,7 @@ impl OutputValuesHolder for SignedTransaction {
 mod tests {
     use crate::primitives::Amount;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     use super::*;
 
@@ -222,7 +222,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         // The only reason a manual decode is done is to enforce witness rules, hence we double check that round-trip encoding works
-        let input_count = 1 + rng.random::<usize>() % 10;
+        let input_count = rng.random_range(1..=10);
         let inputs = (0..input_count)
             .map(|_| {
                 TxInput::from_utxo(
@@ -232,7 +232,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let output_count = 1 + rng.random::<usize>() % 10;
+        let output_count = rng.random_range(1..=10);
         let outputs = (0..output_count)
             .map(|_| {
                 TxOutput::Transfer(
@@ -244,7 +244,7 @@ mod tests {
 
         let witnesses = (0..input_count)
             .map(|_| {
-                let witness_size = 1 + rng.random::<usize>() % 100;
+                let witness_size = rng.random_range(1..=100);
                 let witness = (0..witness_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
                 InputWitness::NoSignature(Some(witness))
             })
@@ -252,7 +252,7 @@ mod tests {
 
         // Witness count that isn't equal to the input count
         let invalid_witness_count = loop {
-            let invalid_witness_count = rng.random::<usize>() % input_count;
+            let invalid_witness_count = rng.random_range(0..input_count);
             if invalid_witness_count != witnesses.len() {
                 break invalid_witness_count;
             }
@@ -260,7 +260,7 @@ mod tests {
 
         let invalid_witnesses = (0..invalid_witness_count)
             .map(|_| {
-                let witness_size = 1 + rng.random::<usize>() % 100;
+                let witness_size = rng.random_range(1..=100);
                 let witness = (0..witness_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
                 InputWitness::NoSignature(Some(witness))
             })

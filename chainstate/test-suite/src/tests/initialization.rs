@@ -26,7 +26,7 @@ use common::{
 use randomness::CryptoRng;
 
 #[cfg(not(loom))]
-fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
+fn genesis_check_ok(num_blocks: u64, rng: &mut impl CryptoRng) {
     // Get initial storage from the test framework.
 
     let storage = {
@@ -54,7 +54,7 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
 }
 
 #[cfg(not(loom))]
-fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
+fn genesis_check_err(num_blocks: u64, rng: &mut impl CryptoRng) {
     // Two different configs with separate genesis IDs.
 
     let conf0 = ChainConfigBuilder::new(ChainType::Regtest)

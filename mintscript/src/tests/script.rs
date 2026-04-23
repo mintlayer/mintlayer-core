@@ -16,6 +16,7 @@
 use std::ops::RangeInclusive;
 
 use common::chain::signature::EvaluatedInputWitness;
+use test_utils::random::Rng;
 
 use super::*;
 

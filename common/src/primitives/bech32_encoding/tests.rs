@@ -15,7 +15,7 @@
 
 use bitcoin_bech32::WitnessProgram;
 use hex::FromHex;
-use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -228,7 +228,7 @@ fn check_bech32m_convertion_to_arbitraty_chosen_data(
 }
 
 fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
-    let hrp_length = 1 + rng.random::<usize>() % 10;
+    let hrp_length = rng.random_range(1..=10);
     let test_hrp = make_pseudo_rng()
         .sample_iter(&Alphanumeric)
         .take(hrp_length)
@@ -248,7 +248,7 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
 #[case(Seed::from_entropy())]
 fn bech32m_check_random_data_convertion_back_and_forth(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let data_length = rng.random::<usize>() % 100;
+    let data_length = rng.random_range(0..100);
     bech32m_test_random_data(&mut rng, data_length);
 }
 
@@ -257,7 +257,7 @@ fn bech32m_check_random_data_convertion_back_and_forth(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn bech32m_hrp_is_empty(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let data_length = 10 + rng.random::<usize>() % 100;
+    let data_length = 10 + rng.random_range(0..100);
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.random::<u8>()).collect();
 
     assert_eq!(

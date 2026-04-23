@@ -21,7 +21,7 @@ use common::{
     chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
@@ -91,7 +91,7 @@ fn cache_simulation_with_undo(
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
 fn simulation_step<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     all_outputs: &mut ResultWithUndo,
     parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
@@ -133,7 +133,7 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
 }
 
 fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
     prev_result: &mut ResultWithUndo,

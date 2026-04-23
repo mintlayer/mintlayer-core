@@ -21,7 +21,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crypto::{key::PublicKey, vrf::VRFPublicKey};
 use hex::FromHex;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
 use chainstate::{

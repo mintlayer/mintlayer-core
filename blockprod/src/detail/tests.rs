@@ -55,7 +55,7 @@ use mempool::{
     TxOptions,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
-use randomness::Rng;
+use randomness::RngExt as _;
 use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
@@ -1854,7 +1854,7 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let mut rng = make_seedable_rng(seed);
-                let jobs_to_create = rng.random::<usize>() % 20 + 1;
+                let jobs_to_create = rng.random_range(1..=20);
 
                 for _ in 0..jobs_to_create {
                     let (_block, job) = block_production
@@ -1891,7 +1891,7 @@ mod process_block_with_custom_id {
 
         let mut rng = make_seedable_rng(seed);
 
-        let jobs_to_create = rng.random::<usize>() % 20 + 1;
+        let jobs_to_create = rng.random_range(1..=20);
 
         let block_production = BlockProduction::new(
             chain_config,
@@ -1951,7 +1951,7 @@ mod process_block_with_custom_id {
 
         let mut rng = make_seedable_rng(seed);
 
-        let jobs_to_create = 10 + rng.random::<usize>() % 20 + 1;
+        let jobs_to_create = 10 + rng.random_range(1..=20);
 
         let block_production = BlockProduction::new(
             chain_config,
@@ -2104,7 +2104,7 @@ mod stop_all_jobs {
         .expect("Error initializing blockprod");
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
-        let return_value = make_seedable_rng(seed).random();
+        let return_value = make_seedable_rng(seed).random_range(0..=usize::MAX);
         let expected_value = return_value;
 
         mock_job_manager
@@ -2226,7 +2226,7 @@ mod stop_job {
         .expect("Error initializing blockprod");
 
         let mut job_keys = Vec::new();
-        let jobs_to_create = rng.random::<usize>() % 20 + 1;
+        let jobs_to_create = rng.random_range(1..=20);
 
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =

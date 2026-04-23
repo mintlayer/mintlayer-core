@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use logging::log;
 use rstest::rstest;
+
+use logging::log;
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
+
+use super::*;
 
 impl<W: Ord> WorkQueue<W> {
     fn check_integrity(&self) {
@@ -94,7 +97,7 @@ impl PeerIdSupply {
         Self { active, next }
     }
 
-    fn gen(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
+    fn random(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
         self.active
             .get(rng.random_range(0..(self.active.len() + extra)))
             .copied()

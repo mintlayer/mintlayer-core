@@ -19,7 +19,7 @@ use std::{
 };
 
 use logging::log;
-use randomness::{distributions::DistString, make_true_rng, CryptoRng, Rng};
+use randomness::{distributions::SampleString, make_true_rng, CryptoRng};
 use utils::cookie::COOKIE_FILENAME;
 
 const COOKIE_PASSWORD_LEN: usize = 32;
@@ -33,7 +33,7 @@ pub struct RpcCreds {
     cookie_file: Option<PathBuf>,
 }
 
-fn gen_password(rng: &mut (impl Rng + CryptoRng), len: usize) -> String {
+fn gen_password(rng: &mut impl CryptoRng, len: usize) -> String {
     randomness::distributions::Alphanumeric.sample_string(rng, len)
 }
 

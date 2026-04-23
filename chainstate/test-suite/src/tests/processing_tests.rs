@@ -55,7 +55,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::{
     assert_matches, assert_matches_return_val,
@@ -973,7 +973,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         .get_proof_of_work_config()
         .reward_maturity_distance();
 
-    let block_reward_output_count = rng.random::<usize>() % 20;
+    let block_reward_output_count = rng.random_range(0..20);
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
             let amount = Amount::from_atoms(rng.random::<u128>() % 50);

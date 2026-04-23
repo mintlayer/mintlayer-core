@@ -46,7 +46,7 @@ use consensus::{
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
 use p2p::P2pHandle;
-use randomness::{make_true_rng, Rng};
+use randomness::{make_true_rng, Rng, RngExt as _};
 use serialization::{Decode, Encode};
 
 use ::utils::{

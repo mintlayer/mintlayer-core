@@ -28,7 +28,7 @@ use crypto::{
     hash::StreamHasher,
     key::{KeyKind, PrivateKey, PublicKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::DecodeAll;
 use test_utils::{
     assert_matches,

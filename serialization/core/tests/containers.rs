@@ -15,9 +15,13 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use rstest::rstest;
+
+use randomness::RngExt as _;
+use serialization_core::{DecodeAll, Encode};
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::SimpleWrapper;
 
 #[test]
@@ -91,9 +95,11 @@ fn test_scale_vectors() {
     assert_eq!(dec, Some(SimpleWrapper(vector)));
 }
 
-#[test]
-fn test_scale_btree_map() {
-    let mut rng = rand::thread_rng();
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn test_scale_btree_map(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
         btree_map.insert(

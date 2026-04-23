@@ -38,7 +38,7 @@ use common::{
     },
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 #[derive(Clone)]
 struct Multisig {
@@ -78,7 +78,7 @@ impl KeyManager {
     pub fn new_destination(
         &mut self,
         chain_config: &ChainConfig,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Destination {
         match rng.random_range(0..5) {
             0 => {
@@ -123,7 +123,7 @@ impl KeyManager {
     pub fn new_2_of_2_multisig_destination(
         &mut self,
         chain_config: &ChainConfig,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Destination {
         let min_required_signatures = 2;
         let num_pub_keys = 2;
@@ -148,7 +148,7 @@ impl KeyManager {
     #[allow(clippy::too_many_arguments)]
     pub fn get_signature(
         &self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         destination: &Destination,
         chain_config: &ChainConfig,
         tx: &Transaction,

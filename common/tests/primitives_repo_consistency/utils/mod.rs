@@ -16,7 +16,7 @@
 use itertools::Itertools as _;
 use rstest::rstest;
 
-use randomness::{CryptoRng, Rng, SliceRandom};
+use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::sorted::Sorted;
@@ -30,7 +30,7 @@ struct CompactEncodedU128(#[codec(compact)] pub u128);
 /// will be created for each size.
 /// T is supposed to be u128 or smaller.
 pub fn make_test_values_for_compact_encoding<T>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     values_count: usize,
 ) -> Vec<T>
 where

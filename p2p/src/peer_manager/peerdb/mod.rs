@@ -41,7 +41,7 @@ use std::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, Rng, SliceRandom};
+use randomness::{seq::IteratorRandom, Rng, RngExt as _, SliceRandom};
 
 use crate::{config::P2pConfig, net::types::OutboundPeerRole};
 
@@ -248,10 +248,10 @@ impl<S: PeerDbStorage> PeerDb<S> {
         // To do so, we first select "count" addresses of each kind, shuffle the results and then
         // iteratively choose addresses from one of the vectors based on a randomly generated value.
         let mut selected_new =
-            self.address_tables.new_addresses().filter(filter).choose_multiple(rng, count);
+            self.address_tables.new_addresses().filter(filter).sample(rng, count);
         selected_new.shuffle(rng);
         let mut selected_tried =
-            self.address_tables.tried_addresses().filter(filter).choose_multiple(rng, count);
+            self.address_tables.tried_addresses().filter(filter).sample(rng, count);
         selected_tried.shuffle(rng);
 
         let mut selected_new_iter = selected_new.into_iter().peekable();

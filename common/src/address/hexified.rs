@@ -207,15 +207,17 @@ impl<A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'_, A> 
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use serde::de::value::Error as SerdeErr;
+    use strum::EnumCount as _;
+
     use crypto::{
         key::{KeyKind, PrivateKey},
         vrf::VRFPublicKey,
     };
-    use rstest::rstest;
-    use serde::de::value::Error as SerdeErr;
+    use randomness::Rng;
     use serialization::{Decode, DecodeAll, Encode};
-    use strum::EnumCount as _;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     use crate::{
         address::{
@@ -291,13 +293,13 @@ mod tests {
 
         let strings = (0..100)
             .map(|_| {
-                let size = rng.random::<usize>() % 50;
+                let size = rng.random_range(0..50);
                 random_string(size, &mut rng)
             })
             .collect::<Vec<String>>();
 
         let keys = (0..strings.len())
-            .map(|_| match rng.random::<usize>() % Destination::COUNT {
+            .map(|_| match rng.random_range(0..Destination::COUNT) {
                 0 => Destination::AnyoneCanSpend,
                 1 => {
                     let (_private_key, public_key) =

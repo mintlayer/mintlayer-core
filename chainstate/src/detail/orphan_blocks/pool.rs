@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 
-use common::chain::{Block, GenBlock};
-use common::primitives::id::WithId;
-use common::primitives::{Id, Idable};
-use randomness::SliceRandom;
+use common::{
+    chain::{Block, GenBlock},
+    primitives::{id::WithId, Id, Idable},
+};
+use randomness::IndexedRandom as _;
 
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
@@ -152,12 +152,16 @@ impl OrphanBlocksPool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use checkers::*;
-    use common::{chain::block::Block, primitives::Id};
-    use helpers::*;
     use rstest::rstest;
+
+    use common::{chain::block::Block, primitives::Id};
+    use randomness::{Rng, RngExt as _};
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
+
+    use checkers::*;
+    use helpers::*;
 
     const MAX_ORPHAN_BLOCKS: usize = 512;
 
@@ -168,7 +172,6 @@ mod tests {
         use common::chain::signed_transaction::SignedTransaction;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
-        use randomness::Rng;
 
         pub fn gen_random_blocks(rng: &mut impl Rng, count: u32) -> Vec<Block> {
             (0..count).map(|_| gen_random_block(rng)).collect::<Vec<_>>()

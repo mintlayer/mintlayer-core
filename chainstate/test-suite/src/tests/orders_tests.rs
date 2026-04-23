@@ -49,7 +49,7 @@ use common::{
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use orders_accounting::OrdersAccountingStorageRead as _;
-use randomness::{CryptoRng, Rng, SliceRandom};
+use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 use tx_verifier::{
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},
@@ -58,7 +58,7 @@ use tx_verifier::{
 };
 
 fn create_test_framework_with_orders(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     orders_version: OrdersVersion,
 ) -> TestFramework {
     TestFramework::builder(rng)
@@ -77,7 +77,7 @@ fn create_test_framework_with_orders(
 }
 
 fn issue_and_mint_token_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (
     TokenId,
@@ -89,7 +89,7 @@ fn issue_and_mint_token_from_genesis(
 }
 
 fn issue_and_mint_token_amount_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     to_mint: Amount,
 ) -> (
@@ -111,7 +111,7 @@ fn issue_and_mint_token_amount_from_genesis(
 }
 
 fn issue_and_mint_token_amount_from_best_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     utxo_to_pay_fee: UtxoOutPoint,
     to_mint: Amount,
@@ -140,7 +140,7 @@ struct ExpectedOrderData {
 
 fn assert_order_exists(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     order_id: &OrderId,
     expected_data: &ExpectedOrderData,
     no_other_orders_present: bool,
@@ -514,7 +514,7 @@ fn create_two_different_orders_same_tx(#[case] seed: Seed) {
         );
 
         let order_data_2 = OrderData::new(
-            Destination::PublicKeyHash(PublicKeyHash::random()),
+            Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             OutputValue::Coin(amount2),
             OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );

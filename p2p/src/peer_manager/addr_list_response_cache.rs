@@ -20,7 +20,7 @@ use std::{
 };
 
 use common::primitives::time::Time;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use super::{peer_context::PeerContext, peerdb::salt::Salt};
 

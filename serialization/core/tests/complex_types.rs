@@ -15,9 +15,13 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{Decode, DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use rstest::rstest;
+
+use randomness::RngExt as _;
+use serialization_core::{Decode, DecodeAll, Encode};
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
@@ -61,9 +65,11 @@ fn test_enum_codec_index() {
     }
 }
 
-#[test]
-fn test_scale_structures() {
-    let mut rng = rand::thread_rng();
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn test_scale_structures(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
 
     #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
     enum TestEnum {

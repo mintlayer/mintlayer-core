@@ -15,14 +15,16 @@
 
 pub mod extended_keys;
 
+use secp256k1;
+use zeroize::Zeroize;
+
+use randomness::{adapters::Rng08Adapter, CryptoRng};
+use serialization::{Decode, Encode};
+
 use crate::{
     hash::{Blake2b32Stream, StreamHasher},
     key::Secp256k1SchnorrAuxDataProvider,
 };
-use randomness::{CryptoRng, Rng};
-use secp256k1;
-use serialization::{Decode, Encode};
-use zeroize::Zeroize;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Secp256k1KeyError {
@@ -59,9 +61,9 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 }
 
 impl Secp256k1PrivateKey {
-    pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
+    pub fn new<R: CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secp = secp256k1::Secp256k1::new();
-        let (secret, public) = secp.generate_keypair(rng);
+        let (secret, public) = secp.generate_keypair(&mut Rng08Adapter(rng));
         (
             Secp256k1PrivateKey::from_native(secret),
             Secp256k1PublicKey::from_native(public),
@@ -168,8 +170,7 @@ impl Secp256k1PublicKey {
     ) -> bool {
         // Hash the message
         let e = Blake2b32Stream::new().write(msg).finalize();
-        let msg_hashed =
-            secp256k1::Message::from_digest_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
+        let msg_hashed = secp256k1::Message::from_digest(e.into());
         // Verify the signature
         self.verify_message_hashed(signature, &msg_hashed)
     }
@@ -204,12 +205,14 @@ lazy_static::lazy_static! {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use hex::ToHex;
     use rstest::rstest;
-    use serialization::DecodeAll;
-    use serialization::Encode;
+
+    use randomness::RngExt as _;
+    use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     #[rstest]
     #[trace]
@@ -316,7 +319,7 @@ mod test {
     #[case(Seed::from_entropy())]
     fn sign_and_verify(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg = (0..msg_size).map(|_| rng.random::<u8>()).collect::<Vec<u8>>();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let sig = sk.sign_message(&msg, &mut rng);
@@ -378,7 +381,7 @@ mod test {
     #[case(Seed::from_entropy())]
     fn deterministic(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg = (0..msg_size).map(|_| rng.random::<u8>()).collect::<Vec<u8>>();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
 
@@ -398,14 +401,14 @@ mod test {
     #[case(Seed::from_entropy())]
     fn mutate_message(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg = (0..msg_size).map(|_| rng.random::<u8>()).collect::<Vec<u8>>();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let sig = sk.sign_message(&msg, &mut rng);
         assert!(pk.verify_message(&sig, &msg));
         let mutated_message = {
             let mut m = msg;
-            let index = rng.random::<usize>() % m.len();
+            let index = rng.random_range(0..m.len());
             m[index] = m[index].wrapping_add(1);
             m
         };
@@ -417,7 +420,7 @@ mod test {
     #[case(Seed::from_entropy())]
     fn different_public_key(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let msg_size = 1 + rng.random::<usize>() % 10000;
+        let msg_size = rng.random_range(1..=10000);
         let msg = (0..msg_size).map(|_| rng.random::<u8>()).collect::<Vec<u8>>();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let (_new_sk, new_pk) = Secp256k1PrivateKey::new(&mut rng);

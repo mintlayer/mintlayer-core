@@ -77,9 +77,12 @@ impl OutputValuesHolder for BlockBody {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rstest::rstest;
 
-    use crate::primitives::id::Idable;
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::{CryptoRng, Rng, RngExt as _};
+    use test_utils::random::{make_seedable_rng, Seed};
+
     use crate::{
         chain::{
             block::BlockReward,
@@ -90,13 +93,10 @@ mod tests {
             },
             Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
         },
-        primitives::{Amount, Id, H256},
+        primitives::{id::Idable, Amount, Id, H256},
     };
-    use crypto::key::{KeyKind, PrivateKey};
-    use proptest::prelude::Rng;
-    use randomness::CryptoRng;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     fn generate_random_h256(rng: &mut impl Rng) -> H256 {
         let mut bytes = [0u8; 32];
@@ -131,7 +131,7 @@ mod tests {
         TxInput::from_utxo(outpoint, rng.next_u32())
     }
 
-    fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+    fn generate_random_invalid_output(rng: &mut impl CryptoRng) -> TxOutput {
         let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
@@ -139,7 +139,7 @@ mod tests {
         )
     }
 
-    fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> SignedTransaction {
+    fn generate_random_invalid_transaction(rng: &mut impl CryptoRng) -> SignedTransaction {
         let inputs = {
             let input_count = 1 + (rng.next_u32() as usize) % 10;
             (0..input_count).map(|_| generate_random_invalid_input(rng)).collect::<Vec<_>>()
@@ -159,7 +159,7 @@ mod tests {
         SignedTransaction::new(tx, generate_random_invalid_witness(inputs.len(), rng)).unwrap()
     }
 
-    fn generate_random_invalid_block_reward(rng: &mut (impl Rng + CryptoRng)) -> BlockReward {
+    fn generate_random_invalid_block_reward(rng: &mut impl CryptoRng) -> BlockReward {
         let output_count = (rng.next_u32() as usize) % 10;
         let outputs = (0..output_count)
             .map(|_| generate_random_invalid_output(rng))

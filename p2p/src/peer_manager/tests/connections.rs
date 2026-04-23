@@ -38,7 +38,7 @@ use networking::test_helpers::{
 use networking::transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket};
 use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,

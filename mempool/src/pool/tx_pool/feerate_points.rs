@@ -93,7 +93,7 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    pub use test_utils::random::{make_seedable_rng, Rng, Seed};
+    pub use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     use crate::pool::tx_pool::DescendantScore;
 
@@ -159,7 +159,7 @@ mod tests {
         let mut map = BTreeMap::new();
         for _ in 0..rng.random_range(1..10) {
             map.insert(
-                rng.random::<usize>(),
+                rng.random_range(0..=usize::MAX),
                 DescendantScore::new(FeeRate::from_atoms_per_kb(rng.random_range(0..1_000_000))),
             );
         }

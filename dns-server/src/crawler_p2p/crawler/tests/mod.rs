@@ -37,8 +37,8 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use randomness::{
-    seq::{IteratorRandom, SliceRandom},
-    Rng,
+    seq::{IndexedRandom as _, IteratorRandom},
+    RngExt as _,
 };
 
 use mock_crawler::test_crawler;
@@ -266,11 +266,11 @@ fn randomized(#[case] seed: Seed) {
         .collect::<Vec<_>>();
 
     let reserved_count = rng.random_range(0..5);
-    let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
+    let reserved_nodes = nodes.sample(&mut rng, reserved_count).cloned().collect();
 
     let loaded_count = rng.random_range(0..10);
     let loaded_nodes = nodes
-        .choose_multiple(&mut rng, loaded_count)
+        .sample(&mut rng, loaded_count)
         .cloned()
         .map(|addr| {
             (

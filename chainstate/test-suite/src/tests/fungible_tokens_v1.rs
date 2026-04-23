@@ -50,7 +50,7 @@ use common::{
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val, gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
@@ -67,7 +67,7 @@ use crate::tests::helpers::token_checks::{
 };
 
 fn unmint_tokens_in_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     token_id: TokenId,

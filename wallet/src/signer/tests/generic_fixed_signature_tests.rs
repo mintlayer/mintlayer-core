@@ -60,7 +60,7 @@ use crypto::{
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
 use test_utils::{assert_matches_return_val, random_ascii_alphanumeric_string};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
@@ -125,10 +125,8 @@ lazy_static::lazy_static! {
     };
 }
 
-pub async fn test_fixed_signatures_generic<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
-    make_signer: MkS,
-) where
+pub async fn test_fixed_signatures_generic<MkS, S>(rng: &mut impl CryptoRng, make_signer: MkS)
+where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
@@ -438,7 +436,7 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
 /// 3) htlc inputs;
 /// 4) v1 input commitments.
 pub async fn test_fixed_signatures_generic2<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
 ) where
@@ -1147,7 +1145,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
 /// Another fixed signature test. The main difference from test_fixed_signatures_generic2 is that
 /// we have removed the input commitments V0 and orders V0
 pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     make_signer: MkS,
 ) where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
@@ -1680,7 +1678,7 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
 // We also add one non-htlc input (pool decommissioning), so that signatures differ for different
 // input commitment versions.
 pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
 ) where

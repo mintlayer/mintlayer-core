@@ -703,7 +703,7 @@ mod tests {
 
     use super::*;
     use crate::uint::BitArray;
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::{make_seedable_rng, Seed};
 
     #[test]

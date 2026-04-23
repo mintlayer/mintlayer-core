@@ -29,7 +29,7 @@ use networking::{
 };
 use p2p_test_utils::{run_with_timeout, MEDIUM_TIMEOUT, SHORT_TIMEOUT};
 use p2p_types::peer_address::PeerAddress;
-use randomness::{seq::IteratorRandom as _, Rng};
+use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{gen_random_alnum_string, make_seedable_rng, Seed},

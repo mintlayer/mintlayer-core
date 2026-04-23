@@ -29,7 +29,7 @@ use common::{
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
-use randomness::Rng;
+use randomness::RngExt as _;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{ConstrainedValueAccumulator, Error};

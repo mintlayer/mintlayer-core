@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use rstest::rstest;
 
 use common::chain::UtxoOutPoint;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
@@ -74,7 +74,7 @@ fn cache_simulation_test(
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
 fn simulation_step<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     all_outputs: &mut Vec<UtxoOutPoint>,
     parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
@@ -114,7 +114,7 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
 
 // Perform random modification on a cache (add new, spend existing, uncache), tracking the coverage
 fn populate_cache<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
     prev_result: &[UtxoOutPoint],

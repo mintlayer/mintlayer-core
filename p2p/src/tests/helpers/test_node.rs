@@ -37,7 +37,7 @@ use mempool::MempoolConfig;
 use networking::transport::{TransportListener, TransportSocket};
 use p2p_test_utils::SHORT_TIMEOUT;
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress, PeerId};
-use randomness::RngCore;
+use randomness::Rng;
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
@@ -121,7 +121,7 @@ where
         bind_address: SocketAddress,
         protocol_version: ProtocolVersion,
         node_name: Option<&str>,
-        rng: impl RngCore + Send + 'static,
+        rng: impl Rng + Send + 'static,
     ) -> Self {
         let socket = transport.bind(vec![bind_address.socket_addr()]).await.unwrap();
         let local_address = socket.local_addresses().unwrap()[0];

@@ -25,7 +25,7 @@ use common::{
     chain::{Block, GenBlock, Transaction, UtxoOutPoint},
     primitives::{id::Idable, BlockHeight, Id},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use test_utils::random::{make_seedable_rng, Seed};
 
 // TODO use EventList from helpers instead.
@@ -108,7 +108,7 @@ fn test_very_long_reorgs(#[case] seed: Seed) {
 fn check_spend_tx_in_failed_block(
     tf: &mut TestFramework,
     events: &EventList,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) {
     // Check spending of a transaction in a block which failed to connect
     //
@@ -143,7 +143,7 @@ fn check_spend_tx_in_failed_block(
     ));
 }
 
-fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut (impl Rng + CryptoRng)) {
+fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl CryptoRng) {
     // # Attempt to spend a transaction created on a different fork
     //
     // +-- 0x4273…c93c (H:7,M,B:9)
@@ -176,7 +176,7 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut (impl Rng + Cr
     ));
 }
 
-fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut (impl Rng + CryptoRng)) {
+fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl CryptoRng) {
     // # Try to create a fork that double-spends
     // This is similar to check_spend_tx_in_other_fork, but double spending happens in the
     // same branch.
@@ -216,7 +216,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut (impl Rng + C
 fn check_reorg_to_first_chain(
     tf: &mut TestFramework,
     events: &EventList,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) {
     //  ... and back to the first chain.
     //
@@ -278,7 +278,7 @@ fn check_reorg_to_first_chain(
 fn check_make_alternative_chain_longer(
     tf: &mut TestFramework,
     events: &EventList,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) {
     //  Now we add another block to make the alternative chain longer.
     //
@@ -320,7 +320,7 @@ fn check_make_alternative_chain_longer(
     assert!(tf.is_block_in_main_chain(tf.index_at(4).block_id()));
 }
 
-fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut (impl Rng + CryptoRng)) {
+fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl CryptoRng) {
     //  Fork like this:
     //
     //  +-- 0x6e45…e8e8 (H:0,B:0) = genesis

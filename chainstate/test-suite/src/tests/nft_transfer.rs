@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     token_utils::random_nft_issuance,

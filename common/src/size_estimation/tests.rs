@@ -21,7 +21,7 @@ use rstest::rstest;
 
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -213,7 +213,7 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
                     .unwrap();
 
                     let keys_with_indices =
-                        keys.iter().enumerate().choose_multiple(&mut rng, min_sig_count as usize);
+                        keys.iter().enumerate().sample(&mut rng, min_sig_count as usize);
 
                     let mut spending =
                         AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());

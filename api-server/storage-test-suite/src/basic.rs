@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::CryptoRng;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -35,7 +34,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::{CryptoRng, RngExt as _};
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
@@ -1944,10 +1943,7 @@ where
     Ok(())
 }
 
-async fn orders<'a, S: for<'b> Transactional<'b>>(
-    rng: &mut (impl Rng + CryptoRng),
-    storage: &'a mut S,
-) {
+async fn orders<'a, S: for<'b> Transactional<'b>>(rng: &mut impl CryptoRng, storage: &'a mut S) {
     let chain_config = common::chain::config::create_regtest();
     {
         let db_tx = storage.transaction_ro().await.unwrap();
@@ -2157,7 +2153,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
 }
 
 fn random_order(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     creation_height: BlockHeight,
     ask_currency: CoinOrTokenId,
     give_currency: CoinOrTokenId,

@@ -34,7 +34,7 @@ use common::{
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoolData};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},
@@ -43,7 +43,7 @@ use test_utils::{
 
 use crate::{ConstrainedValueAccumulator, Error};
 
-fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128) -> StakePoolData {
+fn create_stake_pool_data(rng: &mut impl CryptoRng, atoms_to_stake: u128) -> StakePoolData {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     StakePoolData::new(
         Amount::from_atoms(atoms_to_stake),

@@ -19,8 +19,6 @@ use std::{
     time::Duration,
 };
 
-use logging::log;
-use randomness::Rng;
 use rstest::rstest;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 
@@ -28,6 +26,7 @@ use common::{
     chain::{self, config, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
+use logging::log;
 use networking::test_helpers::{
     TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportTcp,
 };
@@ -39,6 +38,7 @@ use p2p_test_utils::{expect_future_val, expect_no_recv};
 use p2p_types::{
     peer_address::PeerAddress, socket_addr_ext::SocketAddrExt, socket_address::SocketAddress,
 };
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},

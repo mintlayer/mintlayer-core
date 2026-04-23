@@ -25,7 +25,7 @@ pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, CryptoRng, Rng, Seed},
+    random::{make_seedable_rng, CryptoRng, RngExt as _, Seed},
 };
 
 pub use memory_usage_estimator::StoreMemoryUsageEstimator;
@@ -219,7 +219,7 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
 }
 
 pub fn make_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     ins: &[(OutPointSourceId, u32)],
     outs: &[u128],
 ) -> SignedTransaction {
@@ -241,7 +241,7 @@ pub fn make_tx(
 /// * The transaction fees may drop below minimum threshold.
 /// * In extreme, 0-value outputs may be generated.
 pub fn generate_transaction_graph(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     time: Time,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
     let tf = TestFramework::builder(rng).build();

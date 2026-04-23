@@ -31,13 +31,13 @@ use common::{
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use itertools::Itertools;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
 
 fn create_transactions(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
@@ -67,7 +67,7 @@ fn create_transactions(
 }
 
 fn create_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     prev_block_id: Id<GenBlock>,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
@@ -87,7 +87,7 @@ fn create_block(
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
 fn initialize_db(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx_outputs_size: u32,
 ) -> (UtxosDBInMemoryImpl, Vec<UtxoOutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(rng));
@@ -113,7 +113,7 @@ fn initialize_db(
 }
 
 fn create_utxo_entries(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     num_of_utxos: u8,
 ) -> BTreeMap<UtxoOutPoint, UtxoEntry> {
     let mut map = BTreeMap::new();

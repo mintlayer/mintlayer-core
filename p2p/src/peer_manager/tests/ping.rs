@@ -23,7 +23,7 @@ use networking::{
     transport::TcpTransportSocket,
 };
 use p2p_test_utils::expect_recv;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches, assert_matches_return_val,
     random::{make_seedable_rng, Seed},

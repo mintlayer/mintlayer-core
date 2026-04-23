@@ -42,13 +42,13 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    vrf::{transcript::with_rng::RngCoreAndCrypto, VRFKeyKind, VRFPrivateKey},
+    vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use logging::log;
 use mempool::{FeeRate, MempoolConfig};
 use orders_accounting::OrdersAccountingDB;
 use p2p_types::PeerId;
-use randomness::Rng;
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{gen_random_bytes, Seed},
@@ -401,7 +401,7 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
 }
 
 struct TestFixture {
-    rng: Box<dyn RngCoreAndCrypto>,
+    rng: Box<dyn CryptoRng>,
     tfrm: TestFramework,
     last_used_genesis_output_idx: u32,
 }

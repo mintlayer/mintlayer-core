@@ -167,7 +167,7 @@ pub enum IdCreationError {
 mod tests {
     use rstest::rstest;
 
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::Seed;
 
     use crate::{

@@ -19,7 +19,7 @@ use std::{
 };
 
 use storage_core::{backend, Data, DbMapId};
-use test_utils::random::{Rng, Seed, TestRng};
+use test_utils::random::{RngExt as _, Seed, TestRng};
 use utils::{atomics::AcqRelAtomicU32, shallow_clone::ShallowClone};
 
 use crate::{ErrorGeneration, FailureConfig};

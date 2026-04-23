@@ -77,7 +77,7 @@ mod tests {
     use test_utils::random::{
         make_seedable_rng,
         randomness::{self, distributions::Distribution},
-        Rng, Seed,
+        Rng, RngExt as _, Seed,
     };
 
     use super::*;
@@ -86,7 +86,7 @@ mod tests {
     where
         T: Ord + Debug + Wrappable,
         OrderPreservingValue<T>: Encode + Decode,
-        randomness::distributions::Standard: Distribution<T>,
+        randomness::distributions::StandardUniform: Distribution<T>,
     {
         let val16_1 = OrderPreservingValue::new(rng.random::<T>());
         let val16_2 = OrderPreservingValue::new(rng.random::<T>());

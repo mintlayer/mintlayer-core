@@ -21,12 +21,12 @@ use crate::{
 
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::vrf::ExtendedVRFPrivateKey;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::keys::RootKeys;
 
-fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
+fn gen_random_password(rng: &mut impl CryptoRng) -> String {
     (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect()
 }
 
