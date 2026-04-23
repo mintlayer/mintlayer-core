@@ -1379,7 +1379,7 @@ fn update_conflicting_txs_order_v1_conclude(#[case] seed: Seed) {
     assert!(output_cache.orders[&order_id].is_concluded);
 
     // A *different* confirmed conclude tx for the same order arrives.
-    // update_conflicting_txs must mark the unconfirmed one as Conflicted.
+    // update_conflicting_txs must mark the unconfirmed ones as Conflicted.
     let confirmed_conclude_tx = TransactionBuilder::new()
         .add_input(
             TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
@@ -1446,6 +1446,7 @@ fn update_conflicting_txs_order_v1_conclude(#[case] seed: Seed) {
         .unwrap();
 
     assert!(output_cache.orders[&order_id].is_concluded);
+    assert!(!output_cache.orders[&order_id].is_frozen);
 }
 
 // Regression test: same as above but for FreezeOrder.
@@ -1531,6 +1532,8 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
         .unwrap();
 
     assert!(output_cache.orders[&order_id].is_frozen);
+    // concluded is still false
+    assert!(!output_cache.orders[&order_id].is_concluded);
 
     // A *different* confirmed freeze tx for the same order arrives.
     // update_conflicting_txs must mark the unconfirmed one as Conflicted.
@@ -1577,6 +1580,7 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
 
     // is_frozen must be rolled back after the conflict.
     assert!(!output_cache.orders[&order_id].is_frozen);
+    assert!(!output_cache.orders[&order_id].is_concluded);
 
     // The confirmed freeze tx must now be addable without error.
     output_cache
@@ -1592,6 +1596,7 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
         .unwrap();
 
     assert!(output_cache.orders[&order_id].is_frozen);
+    assert!(!output_cache.orders[&order_id].is_concluded);
 }
 
 fn add_random_transfer_tx(
