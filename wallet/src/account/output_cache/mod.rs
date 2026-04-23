@@ -783,9 +783,11 @@ impl OutputCache {
         confirmed_tx: &Transaction,
         block_id: Id<GenBlock>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
+        // TODO: maybe make it an enum
         struct ConflictCheck {
             frozen_token_id: Option<TokenId>,
             confirmed_account_nonce: Option<(AccountType, AccountNonce)>,
+            conflicting_order_command: Option<(OrderAccountCommandTag, OrderId)>,
         }
 
         let conflict_checks = confirmed_tx
@@ -804,6 +806,7 @@ impl OutputCache {
                             outpoint.account().into(),
                             outpoint.nonce(),
                         )),
+                        conflicting_order_command: None,
                     }),
                     TxInput::AccountCommand(nonce, cmd) => match cmd {
                         AccountCommand::MintTokens(_, _)
@@ -816,13 +819,34 @@ impl OutputCache {
                         | AccountCommand::FillOrder(_, _, _) => Some(ConflictCheck {
                             frozen_token_id: None,
                             confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                            conflicting_order_command: None,
                         }),
                         | AccountCommand::FreezeToken(token_id, _) => Some(ConflictCheck {
                             frozen_token_id: Some(*token_id),
                             confirmed_account_nonce: Some((cmd.into(), *nonce)),
+                            conflicting_order_command: None,
                         }),
                     },
-                    TxInput::OrderAccountCommand(_) => None,
+                    TxInput::OrderAccountCommand(cmd) => {
+                        let order_id = match cmd {
+                            OrderAccountCommand::FillOrder(order_id, _)
+                            | OrderAccountCommand::FreezeOrder(order_id)
+                            | OrderAccountCommand::ConcludeOrder(order_id) => *order_id,
+                        };
+                        let cmd_tag: OrderAccountCommandTag = cmd.into();
+                        match cmd_tag {
+                            // ConcludeOrder and FreezeOrder are exclusive: only one tx can win.
+                            // Any unconfirmed tx with the same command for the same order conflicts.
+                            OrderAccountCommandTag::ConcludeOrder
+                            | OrderAccountCommandTag::FreezeOrder => Some(ConflictCheck {
+                                frozen_token_id: None,
+                                confirmed_account_nonce: None,
+                                conflicting_order_command: Some((cmd_tag, order_id)),
+                            }),
+                            // Multiple fills for the same order can coexist.
+                            OrderAccountCommandTag::FillOrder => None,
+                        }
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -851,6 +875,21 @@ impl OutputCache {
                                     unconfirmed_tx,
                                     confirmed_account,
                                     confirmed_account_nonce,
+                                )
+                            {
+                                conflicting_txs.insert(tx.get_transaction().get_id());
+                                continue;
+                            }
+                        }
+
+                        if let Some((confirmed_cmd_tag, confirmed_order_id)) =
+                            conflict_check.conflicting_order_command
+                        {
+                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
+                                && uses_conflicting_order_command(
+                                    unconfirmed_tx,
+                                    confirmed_cmd_tag,
+                                    confirmed_order_id,
                                 )
                             {
                                 conflicting_txs.insert(tx.get_transaction().get_id());
@@ -2059,6 +2098,41 @@ fn uses_conflicting_nonce(
             confirmed_account_type == outpoint.account().into()
                 && outpoint.nonce() <= confirmed_nonce
         }
+    })
+}
+
+fn uses_conflicting_order_command(
+    unconfirmed_tx: &WalletTx,
+    cmd_tag: OrderAccountCommandTag,
+    order_id: OrderId,
+) -> bool {
+    unconfirmed_tx.inputs().iter().any(|input| match input {
+        TxInput::OrderAccountCommand(cmd) => {
+            let unconfirmed_order_id = match cmd {
+                OrderAccountCommand::FillOrder(id, _)
+                | OrderAccountCommand::FreezeOrder(id)
+                | OrderAccountCommand::ConcludeOrder(id) => *id,
+            };
+            // It is only a conflict if it is the same order id
+            if unconfirmed_order_id != order_id {
+                return false;
+            }
+
+            let unconfirmed_cmd_tag: OrderAccountCommandTag = cmd.into();
+            match cmd_tag {
+                // Confirmed fill orders do not conflict with anything
+                OrderAccountCommandTag::FillOrder => false,
+                // Confirmed conclude order conflict with any other unconfirmed operation on the
+                // order
+                OrderAccountCommandTag::ConcludeOrder => true,
+                // Confirmed Freeze order conflicts with any unconfirmed Fill or Freeze order
+                OrderAccountCommandTag::FreezeOrder => match unconfirmed_cmd_tag {
+                    OrderAccountCommandTag::FillOrder | OrderAccountCommandTag::FreezeOrder => true,
+                    OrderAccountCommandTag::ConcludeOrder => false,
+                },
+            }
+        }
+        TxInput::Utxo(_) | TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
     })
 }
 
