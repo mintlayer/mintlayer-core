@@ -11,7 +11,7 @@ common = { path = "../../common" }
 logging = { path = "../../logging" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils" }
-wallet-rpc-lib = { path = "../wallet-rpc-lib" }
+wallet-rpc-lib = { path = "../wallet-rpc-lib", default-features = false }
 
 clap.workspace = true
 thiserror.workspace = true

@@ -19,7 +19,7 @@ serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
 pos-accounting = { path = "../../pos-accounting" }
-node-comm = { path = "../../wallet/wallet-node-client" }
+node-comm = { path = "../../wallet/wallet-node-client", default-features = false }
 mempool = { path = "../../mempool" }
 
 async-trait.workspace = true

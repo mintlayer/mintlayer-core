@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools as _;
-
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer;
 
@@ -61,7 +59,10 @@ pub enum BackendError {
     MultipleTrezorDevicesFound(Vec<trezor_signer::FoundDevice>),
 }
 
+#[cfg(feature = "trezor")]
 fn format_multiple_trezor_devices_err(devices: &[trezor_signer::FoundDevice]) -> String {
+    use itertools::Itertools as _;
+
     devices
         .iter()
         .map(|device| format!("{} (device id = {})", device.device_name, device.device_id))

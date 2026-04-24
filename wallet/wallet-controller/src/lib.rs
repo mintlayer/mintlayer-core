@@ -112,8 +112,10 @@ pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
+
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::{
-    hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
         make_sighash_input_commitments, PartiallySignedTransaction,
         PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _,
@@ -470,6 +472,7 @@ where
                 WalletCreation::Wallet(_) => false,
                 // Wallet was not created successfully. The caller will need to handle this result
                 // and either fail or try again.
+                #[cfg(feature = "trezor")]
                 WalletCreation::MultipleAvailableTrezorDevices(_) => true,
             },
         };
@@ -513,7 +516,7 @@ where
         current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
-        device_id: Option<String>,
+        #[cfg_attr(not(feature = "trezor"), allow(unused_variables))] device_id: Option<String>,
     ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>> {
         utils::ensure!(
             file_path.as_ref().exists(),

@@ -35,10 +35,9 @@ use rpc::description::{Described, Module};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet_controller::types::WalletTypeArgs;
-use wallet_rpc_lib::{
-    types::{FoundDevice, NodeInterface},
-    ColdWalletRpcDescription, WalletRpcDescription,
-};
+#[cfg(feature = "trezor")]
+use wallet_rpc_lib::types::FoundDevice;
+use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
 
 use crate::helper_types::{
     CliCurrency, CliOutputTimeLock, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer,
@@ -1312,6 +1311,7 @@ pub trait ChoiceMenu: DynClone + Debug {
 dyn_clone::clone_trait_object!(ChoiceMenu);
 
 // TODO: this is Trezor-specific, so it should be either renamed or generalized.
+#[cfg(feature = "trezor")]
 #[derive(Debug, Clone)]
 pub struct CreateWalletDeviceSelectMenu {
     available_devices: Vec<FoundDevice>,
@@ -1320,6 +1320,7 @@ pub struct CreateWalletDeviceSelectMenu {
     recover: bool,
 }
 
+#[cfg(feature = "trezor")]
 impl CreateWalletDeviceSelectMenu {
     pub fn new(available_devices: Vec<FoundDevice>, wallet_path: PathBuf, recover: bool) -> Self {
         Self {
@@ -1330,6 +1331,7 @@ impl CreateWalletDeviceSelectMenu {
     }
 }
 
+#[cfg(feature = "trezor")]
 impl ChoiceMenu for CreateWalletDeviceSelectMenu {
     fn header(&self) -> &str {
         "Please choose one of the available Trezor devices:"
@@ -1366,6 +1368,7 @@ impl ChoiceMenu for CreateWalletDeviceSelectMenu {
 }
 
 // TODO: this is Trezor-specific, so it should be either renamed or generalized.
+#[cfg(feature = "trezor")]
 #[derive(Debug, Clone)]
 pub struct OpenWalletDeviceSelectMenu {
     available_devices: Vec<FoundDevice>,
@@ -1374,6 +1377,7 @@ pub struct OpenWalletDeviceSelectMenu {
     encryption_password: Option<String>,
 }
 
+#[cfg(feature = "trezor")]
 impl OpenWalletDeviceSelectMenu {
     pub fn new(
         available_devices: Vec<FoundDevice>,
@@ -1388,6 +1392,7 @@ impl OpenWalletDeviceSelectMenu {
     }
 }
 
+#[cfg(feature = "trezor")]
 impl ChoiceMenu for OpenWalletDeviceSelectMenu {
     fn header(&self) -> &str {
         "Please choose one of the available Trezor devices:"

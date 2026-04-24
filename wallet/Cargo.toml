@@ -22,8 +22,8 @@ tx-verifier = { path = "../chainstate/tx-verifier" }
 utils = { path = "../utils" }
 utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo" }
-wallet-storage = { path = "./storage" }
-wallet-types = { path = "./types" }
+wallet-storage = { path = "./storage", default-features = false }
+wallet-types = { path = "./types", default-features = false }
 
 async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = [
@@ -75,12 +75,17 @@ tokio = { workspace = true, default-features = false, features = [
 tracing = { workspace = true }
 
 [features]
-trezor = ["dep:trezor-client", "wallet-types/trezor"]
+trezor = [
+  "dep:trezor-client",
+  "wallet-storage/trezor",
+  "wallet-types/trezor"
+]
 enable-trezor-device-tests = ["trezor"]
 
 ledger = [
   "dep:ledger-lib",
   "dep:mintlayer-ledger-messages",
+  "wallet-storage/ledger",
   "wallet-types/ledger",
 ]
 enable-ledger-device-tests = ["ledger"]

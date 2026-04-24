@@ -34,6 +34,7 @@ use common::{
     primitives::{amount::decimal::DecimalAmountWithIsSameComparison, DecimalAmount, H256},
 };
 use utils::ensure;
+#[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::FoundDevice;
 use wallet_types::{
     scan_blockchain::ScanBlockchain,

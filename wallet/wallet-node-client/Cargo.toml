@@ -20,7 +20,7 @@ serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet-types = { path = "../types" }
+wallet-types = { path = "../types", default-features = false }
 
 anyhow.workspace = true
 async-trait.workspace = true
