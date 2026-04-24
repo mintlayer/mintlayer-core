@@ -1322,7 +1322,7 @@ fn update_conflicting_txs_order_v1_conclude(#[case] seed: Seed) {
         .add_input(
             TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                 order_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             )),
             InputWitness::NoSignature(None),
         )
@@ -1500,7 +1500,7 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
         .add_input(
             TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                 order_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             )),
             InputWitness::NoSignature(None),
         )
