@@ -22,6 +22,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
+### Fixed
+  - Wallet:
+    - Fixed handling of confirmed and unconfirmed conflicting order transactions in the wallet.
+
 ## [1.3.0] - 2026-04-09
 
 ### Added
