@@ -29,7 +29,7 @@ use networking::{
     transport::{new_message_stream, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::Encode as _;
 use test_utils::{
     assert_matches, assert_matches_return_val,
@@ -141,7 +141,7 @@ async fn no_connection_lockup_when_socket_not_read(#[case] seed: Seed) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -343,7 +343,7 @@ async fn timeout_when_socket_not_read(
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

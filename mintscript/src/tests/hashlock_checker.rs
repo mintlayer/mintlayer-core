@@ -88,8 +88,8 @@ fn check_hashlock_160_ok(#[case] preimage: &str, #[case] hash: &str) {
 fn check_hashlock_160_random_values_mismatch(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let preimage: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
-    let hash: [u8; 20] = std::array::from_fn(|_| rng.gen::<u8>());
+    let preimage: [u8; 32] = std::array::from_fn(|_| rng.random::<u8>());
+    let hash: [u8; 20] = std::array::from_fn(|_| rng.random::<u8>());
 
     let script = WitnessScript::hashlock(HashChallenge::Hash160(hash), preimage);
 

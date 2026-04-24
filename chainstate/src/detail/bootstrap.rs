@@ -261,7 +261,7 @@ where
 mod tests {
     use rstest::rstest;
 
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -276,10 +276,10 @@ mod tests {
 
             {
                 let header = BootstrapFileHeader {
-                    file_magic_bytes: rng.gen(),
-                    chain_magic_bytes: MagicBytes::new(rng.gen()),
-                    file_format_version: rng.gen(),
-                    blocks_count: rng.gen(),
+                    file_magic_bytes: rng.random(),
+                    chain_magic_bytes: MagicBytes::new(rng.random()),
+                    file_format_version: rng.random(),
+                    blocks_count: rng.random(),
                 };
 
                 let encoded_size = header.encoded_size();

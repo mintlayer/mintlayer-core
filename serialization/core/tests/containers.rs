@@ -15,9 +15,13 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use rstest::rstest;
+
+use randomness::RngExt as _;
+use serialization_core::{DecodeAll, Encode};
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::SimpleWrapper;
 
 #[test]
@@ -91,25 +95,27 @@ fn test_scale_vectors() {
     assert_eq!(dec, Some(SimpleWrapper(vector)));
 }
 
-#[test]
-fn test_scale_btree_map() {
-    let mut rng = rand::thread_rng();
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn test_scale_btree_map(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
         btree_map.insert(
-            format!("Office Space {}", rng.gen::<u64>()),
+            format!("Office Space {}", rng.random::<u64>()),
             "Deals with real issues in the workplace.".to_string(),
         );
         btree_map.insert(
-            format!("Pulp Fiction {}", rng.gen::<u64>()),
+            format!("Pulp Fiction {}", rng.random::<u64>()),
             "Masterpiece.".to_string(),
         );
         btree_map.insert(
-            format!("The Godfather {}", rng.gen::<u64>()),
+            format!("The Godfather {}", rng.random::<u64>()),
             "Very enjoyable.".to_string(),
         );
         btree_map.insert(
-            format!("The Blues Brothers {}", rng.gen::<u64>()),
+            format!("The Blues Brothers {}", rng.random::<u64>()),
             "Eye lyked it a lot.".to_string(),
         );
     }

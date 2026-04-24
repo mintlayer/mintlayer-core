@@ -591,7 +591,7 @@ impl Crawler {
                 address_data.connect_now(self.now)
                     && !self.banned_addresses.contains_key(&address.as_bannable())
             })
-            .choose_multiple(rng, MAX_CONNECTS_PER_HEARTBEAT);
+            .sample(rng, MAX_CONNECTS_PER_HEARTBEAT);
 
         for (address, address_data) in connecting_addresses {
             Self::change_address_state(

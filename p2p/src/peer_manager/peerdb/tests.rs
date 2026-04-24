@@ -31,7 +31,7 @@ use ::test_utils::{
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
 use networking::test_helpers::TestAddressMaker;
 use p2p_types::socket_addr_ext::SocketAddrExt;
-use randomness::{seq::IteratorRandom as _, Rng};
+use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
 
 use crate::{
     ban_config::BanConfig,
@@ -954,7 +954,7 @@ fn new_tried_addr_selection_frequency() {
             let mut total_selected_new_addrs = 0;
             let mut total_selected_tried_addrs = 0;
             for _ in 0..100 {
-                let count_to_select = rng.gen_range(count_to_select_range.clone());
+                let count_to_select = rng.random_range(count_to_select_range.clone());
                 let selected_addrs = peerdb.select_non_reserved_outbound_addresses(
                     &empty_addr_groups_set,
                     &|_| true,
@@ -1023,7 +1023,7 @@ where
 
     for (idx, item) in items.iter().enumerate() {
         let is_last = idx == items.len() - 1;
-        if rng.gen::<u32>() % 2 == 0 || (is_last && first.is_empty()) {
+        if rng.random::<u32>() % 2 == 0 || (is_last && first.is_empty()) {
             first.insert(item.clone());
         } else {
             second.insert(item.clone());

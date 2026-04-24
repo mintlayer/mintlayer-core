@@ -116,8 +116,8 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
 
                 // Generate two outputs for a single transaction
 
-                let random_coin_amount1 = rng.gen_range(1..10);
-                let random_coin_amount2 = rng.gen_range(1..10);
+                let random_coin_amount1 = rng.random_range(1..10);
+                let random_coin_amount2 = rng.random_range(1..10);
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
@@ -302,8 +302,8 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(2..50);
-            let n_blocks = rng.gen_range(block_height..100);
+            let block_height = rng.random_range(2..50);
+            let n_blocks = rng.random_range(block_height..100);
 
             let chain_config = create_unit_test_config();
 
@@ -323,7 +323,7 @@ async fn ok(#[case] seed: Seed) {
                     tf.block(tf.to_chain_block_id(&chainstate_block_ids[block_height - 2]));
                 let prev_tx = &prev_block.transactions()[0];
 
-                let transaction_index = rng.gen_range(0..block.transactions().len());
+                let transaction_index = rng.random_range(0..block.transactions().len());
                 let transaction = block.transactions()[transaction_index].transaction();
                 let transaction_id = transaction.get_id();
 
@@ -474,10 +474,10 @@ async fn mint_tokens(#[case] seed: Seed) {
                 );
                 let amount_to_mint = match issuance.total_supply {
                     TokenTotalSupply::Fixed(limit) => {
-                        Amount::from_atoms(rng.gen_range(1..=limit.into_atoms()))
+                        Amount::from_atoms(rng.random_range(1..=limit.into_atoms()))
                     }
                     TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
-                        Amount::from_atoms(rng.gen_range(100..1000))
+                        Amount::from_atoms(rng.random_range(100..1000))
                     }
                 };
                 let mint_amount_decimal =

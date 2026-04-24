@@ -60,7 +60,7 @@ use crypto::{
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -77,7 +77,7 @@ const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
 
 fn add_block_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     stake_pool_data: StakePoolData,
 ) -> (UtxoOutPoint, PoolId) {
@@ -106,7 +106,7 @@ fn add_block_with_stake_pool(
 }
 
 fn add_block_with_2_stake_pools(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     stake_pool_data1: StakePoolData,
     stake_pool_data2: StakePoolData,
@@ -169,7 +169,7 @@ fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<Con
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
 fn setup_test_chain_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
     let net_upgrades = consensus_upgrades_with_pos_at_height(BlockHeight::new(2));
@@ -194,7 +194,7 @@ fn setup_test_chain_with_stake_pool(
 // Create a chain genesis <- block_1
 // block_1 has txs with 2 StakePool output
 fn setup_test_chain_with_2_stake_pools(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
 ) -> (
@@ -221,7 +221,7 @@ fn setup_test_chain_with_2_stake_pools(
 }
 
 fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
     upgrades: Vec<(BlockHeight, ConsensusUpgrade)>,
@@ -268,7 +268,7 @@ fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
 }
 
 fn produce_kernel_signature(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &TestFramework,
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
@@ -1814,7 +1814,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         staker_reward_per_block,
     );
 
-    let amount_to_delegate = Amount::from_atoms(rng.gen_range(100..100_000));
+    let amount_to_delegate = Amount::from_atoms(rng.random_range(100..100_000));
     // mint amount == amount to delegate to avoid dealing with fees
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         &mut rng,
@@ -1872,7 +1872,8 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .unwrap();
 
     // Process block_3: spend part of the share including reward
-    let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
+    let amount_to_withdraw =
+        Amount::from_atoms(rng.random_range(1..amount_to_delegate.into_atoms()));
     let tx_input_spend_from_delegation = TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(0),
         AccountSpending::DelegationBalance(delegation_id, amount_to_withdraw),
@@ -2204,7 +2205,7 @@ fn staker_destination_change(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let pos_height = BlockHeight::new(2);
-    let block_count_before_fork = rng.gen_range(0..(TEST_EPOCH_LENGTH.get() * 3));
+    let block_count_before_fork = rng.random_range(0..(TEST_EPOCH_LENGTH.get() * 3));
     let fork_height = BlockHeight::new(pos_height.into_int() + block_count_before_fork);
     let chain_config = ConfigBuilder::test_chain()
         .consensus_upgrades(consensus_upgrades_with_pos_at_height(pos_height))
@@ -2292,7 +2293,7 @@ fn staker_destination_change(#[case] seed: Seed) {
                 UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
             pool_balance = new_pool_balance;
 
-            tf.progress_time_seconds_since_epoch(rng.gen_range(1..10));
+            tf.progress_time_seconds_since_epoch(rng.random_range(1..10));
         }
 
         (staking_destination, staking_sk)
@@ -2336,7 +2337,7 @@ fn staker_destination_change(#[case] seed: Seed) {
     }
 
     // Produce a few blocks without changing the staking destination.
-    let block_count_after_fork = rng.gen_range(0..(TEST_EPOCH_LENGTH.get() * 3));
+    let block_count_after_fork = rng.random_range(0..(TEST_EPOCH_LENGTH.get() * 3));
     for _ in 0..block_count_after_fork {
         let (pos_data, block_timestamp, reward_outputs) = pos_mine(
             &tf,
@@ -2371,7 +2372,7 @@ fn staker_destination_change(#[case] seed: Seed) {
         stake_pool_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
         pool_balance = new_pool_balance;
 
-        tf.progress_time_seconds_since_epoch(rng.gen_range(1..10));
+        tf.progress_time_seconds_since_epoch(rng.random_range(1..10));
     }
 
     // Attempt to change the destination again - it still fails.
@@ -2420,7 +2421,7 @@ mod staker_destination_change_test_utils {
         next_staking_destination: Destination,
         vrf_sk: &VRFPrivateKey,
         kernel_outpoint: UtxoOutPoint,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (PoSData, BlockTimestamp, Vec<TxOutput>) {
         let reward_outputs =
             vec![TxOutput::ProduceBlockFromStake(next_staking_destination, pool_id)];

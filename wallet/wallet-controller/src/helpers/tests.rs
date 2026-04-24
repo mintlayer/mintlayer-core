@@ -46,7 +46,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use node_comm::node_traits::MockNodeInterface;
-use randomness::{Rng, SliceRandom as _};
+use randomness::{Rng, RngExt as _, SliceRandom as _};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes, make_seedable_rng, Seed};
 use wallet::{
     wallet::test_helpers::{create_wallet_with_mnemonic, scan_wallet},
@@ -98,7 +98,7 @@ mod tx_to_partially_signed_tx_general_test {
         // Transfer to a destination belonging to the wallet.
         let token0_transfer_utxo_dest = wallet_new_dest(&mut wallet);
         let token0_transfer_utxo = TxOutput::Transfer(
-            OutputValue::TokenV1(random_token_ids[0], Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[0], Amount::from_atoms(rng.random())),
             token0_transfer_utxo_dest.clone(),
         );
         let tx_with_token0_transfer = tx_with_outputs(vec![token0_transfer_utxo.clone()]);
@@ -109,21 +109,25 @@ mod tx_to_partially_signed_tx_general_test {
         let token1_transfer_utxo_dest =
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let token1_transfer_utxo = TxOutput::Transfer(
-            OutputValue::TokenV1(random_token_ids[1], Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[1], Amount::from_atoms(rng.random())),
             token1_transfer_utxo_dest.clone(),
         );
-        let token1_transfer_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        let token1_transfer_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let lock_then_transfer_utxo_dest =
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let lock_then_transfer_utxo = TxOutput::LockThenTransfer(
-            OutputValue::TokenV1(random_token_ids[2], Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[2], Amount::from_atoms(rng.random())),
             lock_then_transfer_utxo_dest.clone(),
-            OutputTimeLock::ForBlockCount(rng.gen()),
+            OutputTimeLock::ForBlockCount(rng.random()),
         );
-        let lock_then_transfer_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        let lock_then_transfer_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let delegation_dest = wallet_new_dest(&mut wallet);
         let tx_with_delegation = SignedTransaction::new(
@@ -131,7 +135,7 @@ mod tx_to_partially_signed_tx_general_test {
                 0,
                 vec![TxInput::Utxo(UtxoOutPoint::new(
                     Id::<Transaction>::random_using(&mut rng).into(),
-                    rng.r#gen(),
+                    rng.random(),
                 ))],
                 vec![TxOutput::CreateDelegationId(
                     delegation_dest.clone(),
@@ -147,17 +151,17 @@ mod tx_to_partially_signed_tx_general_test {
         // This pool's info will be cached inside the wallet because the decommission destination
         // belongs to it.
         let known_pool_id = PoolId::random_using(&mut rng);
-        let known_pool_staker_balance = Amount::from_atoms(rng.gen());
+        let known_pool_staker_balance = Amount::from_atoms(rng.random());
         let known_pool_decommission_dest = wallet_new_dest(&mut wallet);
         let tx_with_pool_creation = tx_with_outputs(vec![TxOutput::CreateStakePool(
             known_pool_id,
             Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.r#gen()),
+                Amount::from_atoms(rng.random()),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 known_pool_decommission_dest.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
-                Amount::from_atoms(rng.r#gen()),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
+                Amount::from_atoms(rng.random()),
             )),
         )]);
 
@@ -202,19 +206,19 @@ mod tx_to_partially_signed_tx_general_test {
             known_pool_id,
         );
         let pool_id_for_known_create_pool_utxo = PoolId::random_using(&mut rng);
-        let pool_staker_balance_for_known_create_pool_utxo = Amount::from_atoms(rng.gen());
+        let pool_staker_balance_for_known_create_pool_utxo = Amount::from_atoms(rng.random());
         let pool_decommission_dest_for_known_create_pool_utxo = wallet_new_dest(&mut wallet);
         // This utxo will be cached inside the wallet because the decommission destination
         // belongs to it.
         let known_create_pool_utxo = TxOutput::CreateStakePool(
             pool_id_for_known_create_pool_utxo,
             Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.r#gen()),
+                Amount::from_atoms(rng.random()),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 pool_decommission_dest_for_known_create_pool_utxo.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
-                Amount::from_atoms(rng.r#gen()),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
+                Amount::from_atoms(rng.random()),
             )),
         );
         blocks.push(
@@ -242,24 +246,28 @@ mod tx_to_partially_signed_tx_general_test {
         // Note: the wallet doesn't check that the secret and the secret hash are consistent.
         let htlc_secret = HtlcSecret::new_from_rng(&mut rng);
         let create_htlc_utxo = TxOutput::Htlc(
-            OutputValue::TokenV1(random_token_ids[8], Amount::from_atoms(rng.gen())),
+            OutputValue::TokenV1(random_token_ids[8], Amount::from_atoms(rng.random())),
             Box::new(HashedTimelockContract {
                 secret_hash: HtlcSecretHash::random_using(&mut rng),
                 spend_key: htlc_spend_key.clone(),
-                refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+                refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
                 refund_key: htlc_refund_key.clone(),
             }),
         );
-        let create_htlc_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        let create_htlc_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let coins_utxo_dest = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
         let coins_utxo = TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
             coins_utxo_dest.clone(),
         );
-        let coins_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        let coins_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
 
         let pool_id_for_unknown_create_pool_utxo = PoolId::random_using(&mut rng);
         let pool_decommission_dest_for_unknown_create_pool_utxo =
@@ -267,17 +275,19 @@ mod tx_to_partially_signed_tx_general_test {
         let unknown_create_pool_utxo = TxOutput::CreateStakePool(
             pool_id_for_unknown_create_pool_utxo,
             Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.r#gen()),
+                Amount::from_atoms(rng.random()),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 random_vrf_pub_key(&mut rng),
                 pool_decommission_dest_for_unknown_create_pool_utxo.clone(),
-                PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
-                Amount::from_atoms(rng.r#gen()),
+                PerThousand::new(rng.random_range(0..=1000)).unwrap(),
+                Amount::from_atoms(rng.random()),
             )),
         );
-        let unknown_create_pool_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
-        let staker_balance_for_pool_for_unknown_create_pool_utxo = Amount::from_atoms(rng.gen());
+        let unknown_create_pool_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
+        let staker_balance_for_pool_for_unknown_create_pool_utxo = Amount::from_atoms(rng.random());
 
         let pool_id_for_unknown_produce_block_from_stake_utxo = PoolId::random_using(&mut rng);
         let pool_decommission_dest_for_unknown_produce_block_from_stake_utxo =
@@ -286,12 +296,14 @@ mod tx_to_partially_signed_tx_general_test {
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             pool_id_for_unknown_produce_block_from_stake_utxo,
         );
-        let unknown_produce_block_from_stake_outpoint =
-            UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+        let unknown_produce_block_from_stake_outpoint = UtxoOutPoint::new(
+            Id::<Transaction>::random_using(&mut rng).into(),
+            rng.random(),
+        );
         let staker_balance_for_pool_for_unknown_produce_block_from_stake_utxo =
-            Amount::from_atoms(rng.gen());
+            Amount::from_atoms(rng.random());
 
-        let use_htlc_secret = rng.gen_bool(0.5);
+        let use_htlc_secret = rng.random_bool(0.5);
         let expected_htlc_dest = if use_htlc_secret {
             htlc_spend_key
         } else {
@@ -355,10 +367,10 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::Account(AccountOutPoint::new(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountSpending::DelegationBalance(
                         delegation_id,
-                        Amount::from_atoms(rng.r#gen()),
+                        Amount::from_atoms(rng.random()),
                     ),
                 )),
                 None,
@@ -367,10 +379,10 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::MintTokens(
                         wallet_tokens[0].id,
-                        Amount::from_atoms(rng.r#gen()),
+                        Amount::from_atoms(rng.random()),
                     ),
                 ),
                 None,
@@ -379,7 +391,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::UnmintTokens(wallet_tokens[1].id),
                 ),
                 None,
@@ -388,7 +400,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::LockTokenSupply(wallet_tokens[2].id),
                 ),
                 None,
@@ -397,7 +409,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::FreezeToken(
                         wallet_tokens[3].id,
                         random_is_token_unfreezable(&mut rng),
@@ -409,7 +421,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::UnfreezeToken(wallet_tokens[4].id),
                 ),
                 None,
@@ -418,7 +430,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::ChangeTokenAuthority(
                         wallet_tokens[5].id,
                         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
@@ -430,7 +442,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::ChangeTokenMetadataUri(
                         wallet_tokens[6].id,
                         gen_random_alnum_string(&mut rng, 10, 20).into_bytes(),
@@ -442,7 +454,7 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::ConcludeOrder(wallet_orders[0].id),
                 ),
                 None,
@@ -451,10 +463,10 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             (
                 TxInput::AccountCommand(
-                    AccountNonce::new(rng.r#gen()),
+                    AccountNonce::new(rng.random()),
                     AccountCommand::FillOrder(
                         wallet_orders[1].id,
-                        Amount::from_atoms(rng.r#gen()),
+                        Amount::from_atoms(rng.random()),
                         fill_order_v0_dest.clone(),
                     ),
                 ),
@@ -473,7 +485,7 @@ mod tx_to_partially_signed_tx_general_test {
             (
                 TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
                     wallet_orders[3].id,
-                    Amount::from_atoms(rng.r#gen()),
+                    Amount::from_atoms(rng.random()),
                 )),
                 None,
                 Some(Destination::AnyoneCanSpend),
@@ -505,27 +517,27 @@ mod tx_to_partially_signed_tx_general_test {
 
         let outputs = vec![
             TxOutput::Transfer(
-                OutputValue::TokenV1(random_token_ids[9], Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[9], Amount::from_atoms(rng.random())),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
             ),
             TxOutput::LockThenTransfer(
-                OutputValue::TokenV1(random_token_ids[10], Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[10], Amount::from_atoms(rng.random())),
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                OutputTimeLock::ForBlockCount(rng.r#gen()),
+                OutputTimeLock::ForBlockCount(rng.random()),
             ),
             TxOutput::Burn(OutputValue::TokenV1(
                 random_token_ids[11],
-                Amount::from_atoms(rng.r#gen()),
+                Amount::from_atoms(rng.random()),
             )),
             TxOutput::CreateStakePool(
                 PoolId::random_using(&mut rng),
                 Box::new(StakePoolData::new(
-                    Amount::from_atoms(rng.r#gen()),
+                    Amount::from_atoms(rng.random()),
                     Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                     random_vrf_pub_key(&mut rng),
                     Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                    PerThousand::new(rng.gen_range(0..=1000)).unwrap(),
-                    Amount::from_atoms(rng.r#gen()),
+                    PerThousand::new(rng.random_range(0..=1000)).unwrap(),
+                    Amount::from_atoms(rng.random()),
                 )),
             ),
             TxOutput::CreateDelegationId(
@@ -533,12 +545,12 @@ mod tx_to_partially_signed_tx_general_test {
                 PoolId::random_using(&mut rng),
             ),
             TxOutput::DelegateStaking(
-                Amount::from_atoms(rng.r#gen()),
+                Amount::from_atoms(rng.random()),
                 DelegationId::random_using(&mut rng),
             ),
             TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: gen_random_alnum_string(&mut rng, 10, 20).into_bytes(),
-                number_of_decimals: rng.r#gen(),
+                number_of_decimals: rng.random(),
                 metadata_uri: gen_random_alnum_string(&mut rng, 10, 20).into_bytes(),
                 total_supply: TokenTotalSupply::Unlimited,
                 authority: Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
@@ -551,18 +563,18 @@ mod tx_to_partially_signed_tx_general_test {
             ),
             TxOutput::DataDeposit(gen_random_bytes(&mut rng, 10, 20)),
             TxOutput::Htlc(
-                OutputValue::TokenV1(random_token_ids[12], Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[12], Amount::from_atoms(rng.random())),
                 Box::new(HashedTimelockContract {
                     secret_hash: HtlcSecretHash::random_using(&mut rng),
                     spend_key: Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                    refund_timelock: OutputTimeLock::ForBlockCount(rng.r#gen()),
+                    refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
                     refund_key: Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
                 }),
             ),
             TxOutput::CreateOrder(Box::new(OrderData::new(
                 Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-                OutputValue::TokenV1(random_token_ids[13], Amount::from_atoms(rng.r#gen())),
-                OutputValue::TokenV1(random_token_ids[14], Amount::from_atoms(rng.r#gen())),
+                OutputValue::TokenV1(random_token_ids[13], Amount::from_atoms(rng.random())),
+                OutputValue::TokenV1(random_token_ids[14], Amount::from_atoms(rng.random())),
             ))),
         ];
 
@@ -625,7 +637,7 @@ mod tx_to_partially_signed_tx_general_test {
                 best_block_height: BlockHeight::new(last_height),
                 best_block_id: last_block_id.into(),
                 best_block_timestamp: block_timestamp,
-                median_time: BlockTimestamp::from_int_seconds(rng.gen()),
+                median_time: BlockTimestamp::from_int_seconds(rng.random()),
                 is_initial_block_download: false,
             };
 
@@ -722,7 +734,7 @@ mod tx_to_partially_signed_tx_general_test {
         for _ in 0..tokens_count {
             let tx_inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
                 Id::<Transaction>::random_using(rng).into(),
-                rng.r#gen(),
+                rng.random(),
             ))];
             let id = make_token_id(chain_config, BlockHeight::new(0), &tx_inputs).unwrap();
             let authority = wallet_new_dest(wallet);
@@ -778,13 +790,14 @@ mod tx_to_partially_signed_tx_general_test {
         for curencies in curencies {
             let tx_inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
                 Id::<Transaction>::random_using(rng).into(),
-                rng.r#gen(),
+                rng.random(),
             ))];
             let id = make_order_id(&tx_inputs).unwrap();
-            let initially_asked = curencies.ask.into_output_value(Amount::from_atoms(rng.gen()));
-            let initially_given = curencies.give.into_output_value(Amount::from_atoms(rng.gen()));
-            let ask_balance = Amount::from_atoms(rng.gen());
-            let give_balance = Amount::from_atoms(rng.gen());
+            let initially_asked = curencies.ask.into_output_value(Amount::from_atoms(rng.random()));
+            let initially_given =
+                curencies.give.into_output_value(Amount::from_atoms(rng.random()));
+            let ask_balance = Amount::from_atoms(rng.random());
+            let give_balance = Amount::from_atoms(rng.random());
             let conclude_key = wallet_new_dest(wallet);
 
             result.push(TestOrderData {
@@ -833,7 +846,7 @@ mod tx_to_partially_signed_tx_general_test {
             initially_given: RpcOutputValue::from_output_value(&data.initially_given).unwrap(),
             give_balance: data.give_balance,
             ask_balance: data.ask_balance,
-            nonce: Some(AccountNonce::new(rng.gen())),
+            nonce: Some(AccountNonce::new(rng.random())),
             is_frozen: false,
         }
     }
@@ -880,11 +893,11 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
     // Note: the wallet doesn't check that the secret and the secret hash are consistent.
     let htlc_secret = HtlcSecret::new_from_rng(&mut rng);
     let create_htlc_output = TxOutput::Htlc(
-        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen())),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random())),
         Box::new(HashedTimelockContract {
             secret_hash: HtlcSecretHash::random_using(&mut rng),
             spend_key: htlc_spend_key.clone(),
-            refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+            refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
             refund_key: htlc_refund_key.clone(),
         }),
     );
@@ -901,7 +914,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
         } else {
             vec![]
         },
-        Amount::from_atoms(rng.gen()),
+        Amount::from_atoms(rng.random()),
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
         0,
     )
@@ -926,7 +939,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
             best_block_height: BlockHeight::new(last_height),
             best_block_id: last_block.get_id().into(),
             best_block_timestamp: last_block.timestamp(),
-            median_time: BlockTimestamp::from_int_seconds(rng.gen()),
+            median_time: BlockTimestamp::from_int_seconds(rng.random()),
             is_initial_block_download: false,
         };
 
@@ -989,7 +1002,7 @@ async fn tx_to_partially_signed_tx_htlc_input_with_known_utxo_test(
 async fn fetch_token_infos_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let tokens_count = rng.gen_range(10..20);
+    let tokens_count = rng.random_range(10..20);
     let tokens_data = (0..tokens_count)
         .map(|_| {
             use crate::tests::test_utils::random_token_data_with_id_and_authority;
@@ -1039,9 +1052,9 @@ fn make_rpc_token_info(data: &TestTokenData, rng: &mut impl Rng) -> RPCTokenInfo
         token_ticker: data.ticker.clone().into(),
         number_of_decimals: data.num_decimals,
         metadata_uri: data.metadata_uri.clone().into(),
-        circulating_supply: Amount::from_atoms(rng.gen()),
+        circulating_supply: Amount::from_atoms(rng.random()),
         total_supply: data.total_supply.into(),
-        is_locked: rng.gen(),
+        is_locked: rng.random(),
         frozen: random_rpc_is_token_frozen(rng),
         authority: data.authority.clone(),
     })

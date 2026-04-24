@@ -22,7 +22,7 @@ use networking::{
     transport::{new_message_stream, TransportSocket as _},
 };
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use serialization::{Decode, Encode};
 use test_utils::{
     assert_matches, assert_matches_return_val,
@@ -85,7 +85,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 

@@ -37,8 +37,8 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use randomness::{
-    seq::{IteratorRandom, SliceRandom},
-    Rng,
+    seq::{IndexedRandom as _, IteratorRandom},
+    RngExt as _,
 };
 
 use mock_crawler::test_crawler;
@@ -237,24 +237,24 @@ fn randomized(#[case] seed: Seed) {
 
     let chain_config = common::chain::config::create_mainnet();
 
-    let nodes = (0..rng.gen_range(0..200))
+    let nodes = (0..rng.random_range(0..200))
         .map(|_| {
-            if rng.gen_bool(0.8) {
+            if rng.random_bool(0.8) {
                 SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+                    Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
                     chain_config.p2p_port(),
                 ))
             } else {
                 SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::new(
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
-                        rng.gen(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
                     ),
                     chain_config.p2p_port(),
                     0,
@@ -265,12 +265,12 @@ fn randomized(#[case] seed: Seed) {
         .map(SocketAddress::new)
         .collect::<Vec<_>>();
 
-    let reserved_count = rng.gen_range(0..5);
-    let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
+    let reserved_count = rng.random_range(0..5);
+    let reserved_nodes = nodes.sample(&mut rng, reserved_count).cloned().collect();
 
-    let loaded_count = rng.gen_range(0..10);
+    let loaded_count = rng.random_range(0..10);
     let loaded_nodes = nodes
-        .choose_multiple(&mut rng, loaded_count)
+        .sample(&mut rng, loaded_count)
         .cloned()
         .map(|addr| {
             (
@@ -291,11 +291,11 @@ fn randomized(#[case] seed: Seed) {
         Time::from_duration_since_epoch(Duration::ZERO),
     );
 
-    for _ in 0..rng.gen_range(0..100000) {
-        crawler.timer(Duration::from_secs(rng.gen_range(0..100)), &mut rng);
+    for _ in 0..rng.random_range(0..100000) {
+        crawler.timer(Duration::from_secs(rng.random_range(0..100)), &mut rng);
 
         // Randomly report a pending outbound connections as failed
-        if !crawler.pending_connects.is_empty() && rng.gen_bool(0.5) {
+        if !crawler.pending_connects.is_empty() && rng.random_bool(0.5) {
             let address = crawler.pending_connects.iter().choose(&mut rng).cloned().unwrap();
             crawler.step(
                 CrawlerEvent::ConnectionError {
@@ -307,7 +307,7 @@ fn randomized(#[case] seed: Seed) {
         }
 
         // Randomly report a pending outbound connection as successful
-        if !crawler.pending_connects.is_empty() && rng.gen_bool(0.01) {
+        if !crawler.pending_connects.is_empty() && rng.random_bool(0.01) {
             let address = crawler.pending_connects.iter().choose(&mut rng).cloned().unwrap();
             crawler.step(
                 CrawlerEvent::Connected {
@@ -319,7 +319,7 @@ fn randomized(#[case] seed: Seed) {
         }
 
         // Randomly report a pending outbound connection as successful to an incompatible node
-        if !crawler.pending_connects.is_empty() && rng.gen_bool(0.001) {
+        if !crawler.pending_connects.is_empty() && rng.random_bool(0.001) {
             let address = crawler.pending_connects.iter().choose(&mut rng).cloned().unwrap();
             crawler.step(
                 CrawlerEvent::Connected {
@@ -331,13 +331,13 @@ fn randomized(#[case] seed: Seed) {
         }
 
         // Randomly report a pending disconnect request as complete
-        if !crawler.pending_disconnects.is_empty() && rng.gen_bool(0.1) {
+        if !crawler.pending_disconnects.is_empty() && rng.random_bool(0.1) {
             let peer_id = crawler.pending_disconnects.iter().choose(&mut rng).cloned().unwrap();
             crawler.step(CrawlerEvent::Disconnected { peer_id }, &mut rng)
         }
 
         // Randomly send an address announcement request
-        if !crawler.peers.is_empty() && rng.gen_bool(0.01) {
+        if !crawler.peers.is_empty() && rng.random_bool(0.01) {
             let address = nodes.iter().choose(&mut rng).cloned().unwrap();
             let sender = crawler.peers.keys().choose(&mut rng).cloned().unwrap();
             crawler.step(
@@ -346,7 +346,7 @@ fn randomized(#[case] seed: Seed) {
             )
         }
 
-        if !crawler.peers.is_empty() && rng.gen_bool(0.001) {
+        if !crawler.peers.is_empty() && rng.random_bool(0.001) {
             let peer_id = crawler.peers.keys().choose(&mut rng).cloned().unwrap();
             crawler.step(CrawlerEvent::Disconnected { peer_id }, &mut rng)
         }

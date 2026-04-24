@@ -44,19 +44,19 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::{DelegationData, PoSAccountingStorageRead};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 fn prepare_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (PoolId, UtxoOutPoint, UtxoOutPoint) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let min_stake_pool_pledge =
         tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
     let amount_to_stake =
-        Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_staker(rng, amount_to_stake, vrf_pk);
 
@@ -91,7 +91,7 @@ fn prepare_stake_pool(
 }
 
 fn prepare_delegation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (
     PoolId,
@@ -238,8 +238,9 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -791,8 +792,9 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_stake =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let amount_to_stake = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
@@ -1021,7 +1023,7 @@ fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
 
         // try spending in an single input original balance and a part of newly delegated amount
         let amount_to_spend = (original_delegation_balance
-            + Amount::from_atoms(rng.gen_range(1..=change.into_atoms())))
+            + Amount::from_atoms(rng.random_range(1..=change.into_atoms())))
         .unwrap();
 
         let tx = TransactionBuilder::new()
@@ -1107,7 +1109,7 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(#[case] seed: Seed) {
 
         // try spending in an single input original balance and newly delegated amount
         let amount_to_spend_per_input = Amount::from_atoms(
-            rng.gen_range(
+            rng.random_range(
                 original_delegation_balance.into_atoms()
                     ..=(original_delegation_balance + change).unwrap().into_atoms(),
             ) / 2,
@@ -1201,7 +1203,7 @@ fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
         assert_eq!(amount_to_delegate, original_delegation_balance);
 
         // try spending more the original balance but including new delegation amount
-        let amount_to_spend = Amount::from_atoms(rng.gen_range(
+        let amount_to_spend = Amount::from_atoms(rng.random_range(
             original_delegation_balance.into_atoms()
                 ..=(original_delegation_balance + amount_to_delegate).unwrap().into_atoms(),
         ));
@@ -1285,8 +1287,8 @@ fn try_overspend_delegation_single_tx(#[case] seed: Seed) {
         assert_eq!(amount_to_delegate, Amount::from_atoms(delegation_balance));
 
         // try overspend delegation balance, but each spending individually must be valid
-        let to_spend_1 = rng.gen_range(1..=delegation_balance);
-        let to_spend_2 = rng.gen_range(delegation_balance - to_spend_1 + 1..=delegation_balance);
+        let to_spend_1 = rng.random_range(1..=delegation_balance);
+        let to_spend_2 = rng.random_range(delegation_balance - to_spend_1 + 1..=delegation_balance);
         assert!(
             (to_spend_1 <= delegation_balance)
                 && (to_spend_2 <= delegation_balance)
@@ -1499,7 +1501,7 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
 
         // try spending more from delegation_1 than the original balance but including new delegation amount
         let amount_to_spend_per_input = Amount::from_atoms(
-            rng.gen_range(
+            rng.random_range(
                 original_delegation_balance_1.into_atoms()
                     ..=(original_delegation_balance_1 + change).unwrap().into_atoms(),
             ) / 2,
@@ -1698,7 +1700,7 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
         Amount::ZERO,
     );
 
-    let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+    let mint_amount = Amount::from_atoms(rng.random_range(100..100_000));
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         &mut rng,
         mint_amount,

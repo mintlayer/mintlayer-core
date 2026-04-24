@@ -20,7 +20,11 @@ pub mod with_rng;
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+
+    use randomness::adapters::Rng08Adapter;
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::vrf::transcript::with_rng::VRFTranscriptWithRng;
 
     use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
@@ -28,9 +32,7 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn ensure_both_with_and_without_rng_are_equivalent(#[case] seed: Seed) {
-        use randomness::Rng;
-
-        use crate::vrf::transcript::with_rng::VRFTranscriptWithRng;
+        use rand_0_8::Rng as _;
 
         let no_rng_value = {
             let mut rng = make_seedable_rng(seed);
@@ -39,7 +41,8 @@ mod tests {
                 .attach_raw_data(b"abc", b"xyz")
                 .attach_u64(b"rx42", 424242);
 
-            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng);
+            let mut generator =
+                assembled_transcript.take().build_rng().finalize(&mut Rng08Adapter(&mut rng));
 
             (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
         };
@@ -52,7 +55,8 @@ mod tests {
                 .attach_raw_data(b"abc", b"xyz")
                 .attach_u64(b"rx42", 424242);
 
-            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng2);
+            let mut generator =
+                assembled_transcript.take().build_rng().finalize(&mut Rng08Adapter(&mut rng2));
 
             (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
         };

@@ -55,7 +55,7 @@ use mempool::{
     TxOptions,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
-use randomness::Rng;
+use randomness::RngExt as _;
 use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
@@ -1578,7 +1578,7 @@ mod produce_block {
             )
         };
 
-        let blocks_to_generate = rng.gen_range(100..=1000);
+        let blocks_to_generate = rng.random_range(100..=1000);
 
         let override_chain_config = {
             let genesis_block = Genesis::new(
@@ -1606,14 +1606,14 @@ mod produce_block {
             let mut next_height_consensus_change = 1;
 
             while next_height_consensus_change < blocks_to_generate {
-                let next_consensus_type = rng.gen_range(0..consensus_types.len());
+                let next_consensus_type = rng.random_range(0..consensus_types.len());
 
                 randomized_net_upgrades.push((
                     BlockHeight::new(next_height_consensus_change),
                     consensus_types[next_consensus_type].clone(),
                 ));
 
-                next_height_consensus_change += rng.gen_range(1..50);
+                next_height_consensus_change += rng.random_range(1..50);
             }
 
             let net_upgrades =
@@ -1854,7 +1854,7 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let mut rng = make_seedable_rng(seed);
-                let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+                let jobs_to_create = rng.random_range(1..=20);
 
                 for _ in 0..jobs_to_create {
                     let (_block, job) = block_production
@@ -1891,7 +1891,7 @@ mod process_block_with_custom_id {
 
         let mut rng = make_seedable_rng(seed);
 
-        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+        let jobs_to_create = rng.random_range(1..=20);
 
         let block_production = BlockProduction::new(
             chain_config,
@@ -1913,7 +1913,7 @@ mod process_block_with_custom_id {
                 });
 
                 let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
-                    let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
+                    let id: Vec<u8> = (0..1024).map(|_| rng.random::<u8>()).collect();
 
                     block_production.produce_block_with_custom_id(
                         GenerateBlockInputData::None,
@@ -1951,7 +1951,7 @@ mod process_block_with_custom_id {
 
         let mut rng = make_seedable_rng(seed);
 
-        let jobs_to_create = 10 + rng.gen::<usize>() % 20 + 1;
+        let jobs_to_create = 10 + rng.random_range(1..=20);
 
         let block_production = BlockProduction::new(
             chain_config,
@@ -1972,7 +1972,7 @@ mod process_block_with_custom_id {
                     shutdown_trigger.initiate();
                 });
 
-                let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
+                let id: Vec<u8> = (0..1024).map(|_| rng.random::<u8>()).collect();
 
                 // The following is a race between the successive
                 // calls to produce_block_with_custom_id() and the job
@@ -2104,7 +2104,7 @@ mod stop_all_jobs {
         .expect("Error initializing blockprod");
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
-        let return_value = make_seedable_rng(seed).gen();
+        let return_value = make_seedable_rng(seed).random_range(0..=usize::MAX);
         let expected_value = return_value;
 
         mock_job_manager
@@ -2226,7 +2226,7 @@ mod stop_job {
         .expect("Error initializing blockprod");
 
         let mut job_keys = Vec::new();
-        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+        let jobs_to_create = rng.random_range(1..=20);
 
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =

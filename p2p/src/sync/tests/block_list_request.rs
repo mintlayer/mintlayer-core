@@ -23,7 +23,7 @@ use common::{
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
@@ -143,7 +143,7 @@ async fn valid_request(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Import several blocks.
-        let num_blocks = rng.gen_range(2..10);
+        let num_blocks = rng.random_range(2..10);
         let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
         for block in blocks.clone() {
             tf.process_block(block, BlockSource::Local).unwrap().unwrap();

@@ -55,7 +55,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::{
     assert_matches, assert_matches_return_val,
@@ -446,7 +446,7 @@ fn straight_chain(#[case] seed: Seed) {
         let mut block_index = GenBlockIndex::genesis(chain_config_clone);
         let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
-        for _ in 0..rng.gen_range(100..200) {
+        for _ in 0..rng.random_range(100..200) {
             assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_blk_id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
@@ -973,10 +973,10 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         .get_proof_of_work_config()
         .reward_maturity_distance();
 
-    let block_reward_output_count = rng.gen::<usize>() % 20;
+    let block_reward_output_count = rng.random_range(0..20);
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
-            let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
+            let amount = Amount::from_atoms(rng.random::<u128>() % 50);
             let pub_key = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1;
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount),

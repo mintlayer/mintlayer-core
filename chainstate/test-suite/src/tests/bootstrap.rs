@@ -32,7 +32,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use rand::{seq::IteratorRandom as _, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom as _, CryptoRng, RngExt as _};
 use serialization::Encode as _;
 use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
 
@@ -77,7 +77,7 @@ fn append_block_data_for_v0(dest: &mut Vec<u8>, encoded_block_data: &[u8]) {
 fn gen_blocks(
     chain_config: ChainConfig,
     blocks_count: usize,
-    mut rng: impl Rng + CryptoRng,
+    mut rng: impl CryptoRng,
 ) -> Vec<Block> {
     if blocks_count > 0 {
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
@@ -338,7 +338,7 @@ fn exact_v0_format(#[case] seed: Seed) {
         let mut source_tf =
             TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
         let source_tf_genesis_id = source_tf.genesis().get_id();
-        let blocks_count = rng.gen_range(5..10);
+        let blocks_count = rng.random_range(5..10);
         source_tf
             .create_chain(&source_tf_genesis_id.into(), blocks_count, &mut rng)
             .unwrap();
@@ -470,10 +470,10 @@ fn file_too_small(#[case] seed: Seed) {
         tf.create_chain(&genesis_id.into(), 5, &mut rng).unwrap();
         let orig_block_ids = tf.chainstate.get_block_id_tree_as_list().unwrap();
 
-        let header_data = make_header_data(&chain_config, 0, rng.gen());
+        let header_data = make_header_data(&chain_config, 0, rng.random());
 
         let incomplete_header_data =
-            &header_data[0..rng.gen_range(EXPECTED_MAGIC_BYTES.len()..header_data.len() - 1)];
+            &header_data[0..rng.random_range(EXPECTED_MAGIC_BYTES.len()..header_data.len() - 1)];
 
         let err = import_from_slice(&mut tf, incomplete_header_data).unwrap_err();
         assert_eq!(
@@ -505,11 +505,11 @@ fn unsupported_version(#[case] seed: Seed) {
         tf.create_chain(&genesis_id.into(), 5, &mut rng).unwrap();
         let orig_block_ids = tf.chainstate.get_block_id_tree_as_list().unwrap();
 
-        let valid_blocks_count = rng.gen_range(1..5);
+        let valid_blocks_count = rng.random_range(1..5);
         let valid_blocks = gen_blocks(chain_config.clone(), valid_blocks_count, &mut rng);
 
         // Make a header with an unsupported version, followed by valid v0 data.
-        let format_version = rng.gen_range(1..10);
+        let format_version = rng.random_range(1..10);
         let mut data = make_header_data(&chain_config, format_version, valid_blocks_count as u64);
         for valid_block in &valid_blocks {
             let encoded_block = valid_block.encode();
@@ -559,13 +559,13 @@ fn wrong_format(#[case] seed: Seed) {
         tf.create_chain(&genesis_id.into(), 5, &mut rng).unwrap();
         let orig_block_ids = tf.chainstate.get_block_id_tree_as_list().unwrap();
 
-        let valid_blocks_count = rng.gen_range(1..5);
+        let valid_blocks_count = rng.random_range(1..5);
         let valid_blocks = gen_blocks(chain_config.clone(), valid_blocks_count, &mut rng);
 
         // Make a header with wrong format magic bytes, followed by valid v0 data.
         let mut data = make_header_data(&chain_config, 0, valid_blocks_count as u64);
-        let byte_idx_to_mutate = rng.gen_range(0..EXPECTED_MAGIC_BYTES.len());
-        data[byte_idx_to_mutate] = data[byte_idx_to_mutate].wrapping_add(rng.gen_range(1..255));
+        let byte_idx_to_mutate = rng.random_range(0..EXPECTED_MAGIC_BYTES.len());
+        data[byte_idx_to_mutate] = data[byte_idx_to_mutate].wrapping_add(rng.random_range(1..255));
         for valid_block in &valid_blocks {
             let encoded_block = valid_block.encode();
             append_block_data_for_v0(&mut data, &encoded_block);
@@ -614,7 +614,7 @@ fn bad_v0_file(#[case] seed: Seed) {
             BadBlockDataLen,
         }
 
-        let valid_blocks_count = rng.gen_range(1..5);
+        let valid_blocks_count = rng.random_range(1..5);
         let valid_blocks = gen_blocks(chain_config.clone(), valid_blocks_count, &mut rng);
 
         for kind in TestKind::iter() {
@@ -645,11 +645,11 @@ fn bad_v0_file(#[case] seed: Seed) {
                 TestKind::BadBlockLenLen => {
                     // Either the file ends right after the previously written valid_blocks_count-1 blocks,
                     // or some portion of the block length field is present.
-                    rng.gen_range(0..3)
+                    rng.random_range(0..3)
                 }
                 TestKind::BadBlockDataLen => {
                     // The block length is correct, but the data after it is incomplete.
-                    rng.gen_range(4..last_block_data.len() - 1)
+                    rng.random_range(4..last_block_data.len() - 1)
                 }
             };
             data.extend_from_slice(&last_block_data[0..last_block_cutoff_pos]);
@@ -683,7 +683,7 @@ fn block_size_too_big(#[case] seed: Seed) {
         let chain_type = ChainType::iter().choose(&mut rng).unwrap();
         let chain_config = make_chain_config(chain_type);
 
-        let valid_blocks_count = rng.gen_range(0..5);
+        let valid_blocks_count = rng.random_range(0..5);
         let valid_blocks = gen_blocks(chain_config.clone(), valid_blocks_count, &mut rng);
 
         let mut tf =
@@ -730,7 +730,7 @@ fn check_reckless_mode(
         let mut source_tf =
             TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
         let genesis_id = source_tf.genesis().get_id();
-        let blocks_count = rng.gen_range(5..10);
+        let blocks_count = rng.random_range(5..10);
         source_tf.create_chain(&genesis_id.into(), blocks_count, &mut rng).unwrap();
 
         let block_ids = source_tf.chainstate.get_mainchain_blocks_list().unwrap();

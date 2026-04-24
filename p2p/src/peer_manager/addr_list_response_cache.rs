@@ -20,7 +20,7 @@ use std::{
 };
 
 use common::primitives::time::Time;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use super::{peer_context::PeerContext, peerdb::salt::Salt};
 
@@ -110,7 +110,7 @@ impl AddrListResponseCache {
     fn new_expiration_time_from_now(now: Time, rng: &mut impl Rng) -> Time {
         let min_secs = EXPIRATION_INTERVAL_MIN.as_secs();
         let max_secs = EXPIRATION_INTERVAL_MAX.as_secs();
-        let secs = rng.gen_range(min_secs..=max_secs);
+        let secs = rng.random_range(min_secs..=max_secs);
         (now + Duration::from_secs(secs)).expect("Unexpected time overflow")
     }
 }

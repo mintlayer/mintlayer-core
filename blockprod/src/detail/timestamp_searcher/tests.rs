@@ -18,7 +18,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use logging::{init_logging, log};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use crate::{detail::timestamp_searcher::SearchDataForHeight, TimestampSearchData};
 
@@ -58,7 +58,7 @@ mod collect_search_data {
 
         let mut rng = make_seedable_rng(seed);
 
-        let consensus_version = if rng.gen_bool(0.5) {
+        let consensus_version = if rng.random_bool(0.5) {
             PoSConsensusVersion::V0
         } else {
             PoSConsensusVersion::V1
@@ -370,7 +370,7 @@ mod collect_search_data {
 
     fn make_test_framework(
         consensus_version: PoSConsensusVersion,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> TestFramework {
         let (staking_sk, staking_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -418,14 +418,15 @@ mod collect_search_data {
 
     fn create_pool(
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         utxo_for_spending: &mut UtxoForSpending,
     ) -> (PoolId, Amount) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let pledge =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let pledge = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
 
         let (pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
         let pool_id = PoolId::from_utxo(utxo_for_spending.outpoint());
@@ -441,14 +442,15 @@ mod collect_search_data {
 
     fn delegate(
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         utxo_for_spending: &mut UtxoForSpending,
     ) -> Amount {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_delegate =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
+        let amount_to_delegate = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2),
+        );
 
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
@@ -516,20 +518,20 @@ mod search {
 
         let mut rng = make_seedable_rng(seed);
 
-        let start_height = BlockHeight::new(rng.gen_range(0..10));
-        let items_count = rng.gen_range(10..20);
+        let start_height = BlockHeight::new(rng.random_range(0..10));
+        let items_count = rng.random_range(10..20);
 
         let mut data = Vec::with_capacity(items_count);
         for i in 0..items_count {
-            let min_timestamp = rng.gen::<u32>() as u64;
-            let max_timestamp = min_timestamp + rng.gen_range(1..10);
-            let staker_balance = rng.gen_range(1..u32::MAX) as u128;
-            let total_balance = staker_balance + rng.gen::<u32>() as u128;
+            let min_timestamp = rng.random::<u32>() as u64;
+            let max_timestamp = min_timestamp + rng.random_range(1..10);
+            let staker_balance = rng.random_range(1..u32::MAX) as u128;
+            let total_balance = staker_balance + rng.random::<u32>() as u128;
 
             data.push(SearchDataForHeight {
                 sealed_epoch_randomness: PoSRandomness::new(H256::random_using(&mut rng)),
                 epoch_index: i as u64,
-                target_required: Uint256::from_u64(rng.gen()).into(),
+                target_required: Uint256::from_u64(rng.random()).into(),
                 min_timestamp: BlockTimestamp::from_int_seconds(min_timestamp),
                 max_timestamp: BlockTimestamp::from_int_seconds(max_timestamp),
                 pool_balances: NonZeroPoolBalances::new(
@@ -537,7 +539,7 @@ mod search {
                     Amount::from_atoms(staker_balance),
                 )
                 .unwrap(),
-                consensus_version: if rng.gen_bool(0.5) {
+                consensus_version: if rng.random_bool(0.5) {
                     PoSConsensusVersion::V0
                 } else {
                     PoSConsensusVersion::V1
@@ -545,7 +547,7 @@ mod search {
             });
         }
 
-        let final_supply = Amount::from_atoms(rng.gen_range(u32::MAX as u64..u64::MAX) as u128);
+        let final_supply = Amount::from_atoms(rng.random_range(u32::MAX as u64..u64::MAX) as u128);
 
         let search_data1 = TimestampSearchData {
             start_height,

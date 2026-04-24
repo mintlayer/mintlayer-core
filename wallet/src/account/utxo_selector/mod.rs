@@ -22,7 +22,7 @@ use common::{
     chain::{TxInput, TxOutput},
     primitives::{amount::SignedAmount, Amount},
 };
-use randomness::{make_pseudo_rng, Rng, SliceRandom};
+use randomness::{make_pseudo_rng, Rng, RngExt as _, SliceRandom};
 use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;
@@ -446,7 +446,7 @@ fn approximate_best_subset(
                 //because there may be some privacy improvement by making
                 //the selection random.
                 let rand_bool = if n_pass == 0 {
-                    rng.gen::<bool>()
+                    rng.random::<bool>()
                 } else {
                     !current_solution_included[i]
                 };

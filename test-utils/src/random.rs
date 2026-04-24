@@ -13,23 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::ParseIntError, str::FromStr};
+use std::{convert::Infallible, num::ParseIntError, str::FromStr};
 
 use rand_chacha::ChaChaRng;
-use randomness::SliceRandom as _;
 
-pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngCore, SeedableRng};
+use randomness::{rand_core_utils, IndexedRandom as _, TryCryptoRng, TryRng};
+
+pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngExt, SeedableRng};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Seed(pub u64);
 
 impl Seed {
     pub fn from_entropy() -> Self {
-        Seed(randomness::make_true_rng().gen::<u64>())
+        Seed(randomness::make_true_rng().random::<u64>())
     }
 
     pub fn from_entropy_and_print(test_name: &str) -> Self {
-        let result = Seed(randomness::make_true_rng().gen::<u64>());
+        let result = Seed(randomness::make_true_rng().random::<u64>());
         result.print_with_decoration(test_name);
         result
     }
@@ -62,9 +63,9 @@ impl From<u64> for Seed {
     }
 }
 
-impl randomness::distributions::Distribution<Seed> for randomness::distributions::Standard {
+impl randomness::distributions::Distribution<Seed> for randomness::distributions::StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Seed {
-        let new_seed = rng.gen::<u64>();
+        let new_seed = rng.random::<u64>();
         Seed::from_u64(new_seed)
     }
 }
@@ -77,8 +78,8 @@ impl TestRng {
         Self(ChaChaRng::seed_from_u64(seed.as_u64()))
     }
 
-    pub fn random(rng: &mut (impl Rng + CryptoRng)) -> Self {
-        Self::new(Seed(rng.gen()))
+    pub fn random(rng: &mut impl CryptoRng) -> Self {
+        Self::new(Seed(rng.random()))
     }
 
     pub fn from_entropy() -> Self {
@@ -86,28 +87,26 @@ impl TestRng {
     }
 }
 
-impl RngCore for TestRng {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
+impl TryRng for TestRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.0.try_next_u32()
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        self.0.try_next_u64()
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_chacha::rand_core::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         self.0.try_fill_bytes(dest)
     }
 }
 
-impl CryptoRng for TestRng {}
+impl TryCryptoRng for TestRng {}
 
 #[must_use]
-pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
+pub fn make_seedable_rng(seed: Seed) -> impl CryptoRng {
     TestRng::new(seed)
 }
 
@@ -120,7 +119,7 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut (impl Rng + ?Sized)
         let mut swapped = false;
 
         for i in (1..slice.len()).rev() {
-            let other_idx = rng.gen_range(0..(i + 1));
+            let other_idx = rng.random_range(0..(i + 1));
             if other_idx != i {
                 slice.swap(i, other_idx);
                 swapped = true;
@@ -138,8 +137,8 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut (impl Rng + ?Sized)
 pub fn flip_random_bit(data: &mut [u8], rng: &mut (impl Rng + ?Sized)) {
     assert!(!data.is_empty());
 
-    let byte_idx = rng.gen_range(0..data.len());
-    let bit_idx = rng.gen_range(0..8);
+    let byte_idx = rng.random_range(0..data.len());
+    let bit_idx = rng.random_range(0..8);
     let bit_mask = (1 << bit_idx) as u8;
 
     let byte = &mut data[byte_idx];
@@ -153,7 +152,7 @@ pub fn with_random_bit_flipped(data: &[u8], rng: &mut (impl Rng + ?Sized)) -> Ve
 }
 
 pub fn gen_random_bytes(rng: &mut (impl Rng + ?Sized), min_len: usize, max_len: usize) -> Vec<u8> {
-    let data_length = rng.gen_range(min_len..=max_len);
+    let data_length = rng.random_range(min_len..=max_len);
     let mut bytes = vec![0; data_length];
     rng.fill_bytes(&mut bytes);
     bytes
@@ -165,9 +164,9 @@ pub fn gen_random_alnum_string(
     min_len: usize,
     max_len: usize,
 ) -> String {
-    let len = rng.gen_range(min_len..=max_len);
+    let len = rng.random_range(min_len..=max_len);
 
-    rng.sample_iter::<char, _>(randomness::distributions::Standard)
+    rng.sample_iter::<char, _>(randomness::distributions::StandardUniform)
         .filter(|ch| ch.is_alphanumeric())
         .take(len)
         .collect()
@@ -187,8 +186,8 @@ pub fn gen_random_spaces(
         '\u{2029}', // paragraph separator
         '\u{3000}', // ideographic space
     ];
-    let count = rng.gen_range(min_count..=max_count);
-    SPACES.choose_multiple(rng, count).copied()
+    let count = rng.random_range(min_count..=max_count);
+    SPACES.sample(rng, count).copied()
 }
 
 /// Collect the strings from the passed iterator into a single string, surrounding them with
@@ -208,6 +207,38 @@ pub fn collect_string_with_random_spaces<'a>(
     }
 
     result
+}
+
+// This is a replacement for `rand::rngs::mock::StepRng`, which was deprecated in rand 0.9.x and
+// removed in 0.10.x.
+#[derive(Debug, Clone)]
+pub struct StepRng {
+    initial: u64,
+    increment: u64,
+}
+
+impl StepRng {
+    pub fn new(initial: u64, increment: u64) -> Self {
+        StepRng { initial, increment }
+    }
+}
+
+impl TryRng for StepRng {
+    type Error = std::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.try_next_u64().map(|val| val as u32)
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        let result = self.initial;
+        self.initial = self.initial.wrapping_add(self.increment);
+        Ok(result)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        rand_core_utils::fill_bytes_via_next_word(dest, || self.try_next_u64())
+    }
 }
 
 #[cfg(test)]
@@ -240,7 +271,7 @@ mod tests {
     fn flip_random_bit_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let data: Vec<u8> = (1..20).map(|_| rng.gen()).collect();
+        let data: Vec<u8> = (1..20).map(|_| rng.random()).collect();
         let data_with_flipped_bit = with_random_bit_flipped(&data, &mut rng);
         assert_eq!(data.len(), data_with_flipped_bit.len());
         assert_ne!(data, data_with_flipped_bit);

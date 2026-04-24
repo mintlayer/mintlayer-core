@@ -30,7 +30,7 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use test_utils::random::{
-    make_seedable_rng, randomness::SliceRandom, CryptoRng, Rng, Seed, TestRng,
+    make_seedable_rng, randomness::SliceRandom, CryptoRng, RngExt as _, Seed, TestRng,
 };
 use utxo::{Utxo, UtxoSource};
 

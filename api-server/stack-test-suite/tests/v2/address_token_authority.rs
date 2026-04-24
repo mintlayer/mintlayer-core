@@ -68,7 +68,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut input_utxo = tf.genesis().utxos()[0].clone();
 
                 for _ in 0..10 {
-                    let (dest, token_ids) = if rng.gen_bool(0.5) {
+                    let (dest, token_ids) = if rng.random_bool(0.5) {
                         (alice_destination.clone(), &mut alice_token_ids)
                     } else {
                         (bob_destination.clone(), &mut bob_token_ids)
@@ -76,7 +76,7 @@ async fn ok(#[case] seed: Seed) {
 
                     let token_issuance = TokenIssuanceV1 {
                         token_ticker: "XXXX".as_bytes().to_vec(),
-                        number_of_decimals: rng.gen_range(1..18),
+                        number_of_decimals: rng.random_range(1..18),
                         metadata_uri: "http://uri".as_bytes().to_vec(),
                         total_supply: TokenTotalSupply::Unlimited,
                         authority: dest.clone(),
@@ -118,10 +118,10 @@ async fn ok(#[case] seed: Seed) {
                     // Select a random token_id and transfer authority to the other person
                     let (token_id, dest, dest2, priv_key, token_ids) = if !alice_token_ids
                         .is_empty()
-                        && (bob_token_ids.is_empty() || rng.gen_bool(0.5))
+                        && (bob_token_ids.is_empty() || rng.random_bool(0.5))
                     {
                         (
-                            alice_token_ids.remove(rng.gen_range(0..alice_token_ids.len())),
+                            alice_token_ids.remove(rng.random_range(0..alice_token_ids.len())),
                             alice_destination.clone(),
                             bob_destination.clone(),
                             &alice_sk,
@@ -129,7 +129,7 @@ async fn ok(#[case] seed: Seed) {
                         )
                     } else {
                         (
-                            bob_token_ids.remove(rng.gen_range(0..bob_token_ids.len())),
+                            bob_token_ids.remove(rng.random_range(0..bob_token_ids.len())),
                             bob_destination.clone(),
                             alice_destination.clone(),
                             &bob_sk,

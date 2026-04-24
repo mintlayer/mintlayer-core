@@ -55,10 +55,10 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         )];
         let consensus_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
 
-        let epoch_length = NonZeroU64::new(rng.gen_range(1..10)).unwrap();
-        let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
+        let epoch_length = NonZeroU64::new(rng.random_range(1..10)).unwrap();
+        let sealed_epoch_distance_from_tip = rng.random_range(1..10);
         let token_id_generation_v1_fork_height =
-            BlockHeight::new(rng.gen_range(1..=max_blocks + 1) as u64);
+            BlockHeight::new(rng.random_range(1..=max_blocks + 1) as u64);
         let chain_config = config_builder
             .consensus_upgrades(consensus_upgrades)
             .max_future_block_time_offset(Some(std::time::Duration::from_secs(1_000_000)))
@@ -130,12 +130,12 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
         // Generate a random chain
         let mut all_blocks = Vec::new();
-        let blocks_to_generate = rng.gen_range((max_blocks / 2)..max_blocks);
-        let reorg_at_height = rng.gen_range(0..blocks_to_generate);
+        let blocks_to_generate = rng.random_range((max_blocks / 2)..max_blocks);
+        let reorg_at_height = rng.random_range(0..blocks_to_generate);
         for i in 0..blocks_to_generate {
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
-            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+            for _ in 0..rng.random_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
@@ -172,7 +172,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         for _ in reorg_at_height..max_blocks {
             let mut block_builder = tf2.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
-            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+            for _ in 0..rng.random_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 

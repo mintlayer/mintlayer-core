@@ -38,7 +38,7 @@ use common::{
     },
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 #[derive(Clone)]
 struct Multisig {
@@ -78,9 +78,9 @@ impl KeyManager {
     pub fn new_destination(
         &mut self,
         chain_config: &ChainConfig,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Destination {
-        match rng.gen_range(0..5) {
+        match rng.random_range(0..5) {
             0 => {
                 let (private_key, public_key) =
                     PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -95,8 +95,8 @@ impl KeyManager {
                 Destination::PublicKey(public_key)
             }
             2 => {
-                let min_required_signatures = rng.gen_range(1..32);
-                let num_pub_keys = rng.gen_range(min_required_signatures..=32);
+                let min_required_signatures = rng.random_range(1..32);
+                let num_pub_keys = rng.random_range(min_required_signatures..=32);
                 let keys: Vec<_> = (0..num_pub_keys)
                     .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
                     .collect();
@@ -115,7 +115,7 @@ impl KeyManager {
                 );
                 Destination::ClassicMultisig(multisig_hash)
             }
-            // 3 => Destination::ScriptHash(Id::new(H256::from_slice(&rng.gen::<[u8; 32]>()))),
+            // 3 => Destination::ScriptHash(Id::new(H256::from_slice(&rng.random::<[u8; 32]>()))),
             _ => Destination::AnyoneCanSpend,
         }
     }
@@ -123,7 +123,7 @@ impl KeyManager {
     pub fn new_2_of_2_multisig_destination(
         &mut self,
         chain_config: &ChainConfig,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Destination {
         let min_required_signatures = 2;
         let num_pub_keys = 2;
@@ -148,7 +148,7 @@ impl KeyManager {
     #[allow(clippy::too_many_arguments)]
     pub fn get_signature(
         &self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         destination: &Destination,
         chain_config: &ChainConfig,
         tx: &Transaction,

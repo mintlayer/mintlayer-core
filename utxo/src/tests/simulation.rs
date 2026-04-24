@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use rstest::rstest;
 
 use common::chain::UtxoOutPoint;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
@@ -74,7 +74,7 @@ fn cache_simulation_test(
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
 fn simulation_step<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     all_outputs: &mut Vec<UtxoOutPoint>,
     parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
@@ -114,7 +114,7 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
 
 // Perform random modification on a cache (add new, spend existing, uncache), tracking the coverage
 fn populate_cache<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
     prev_result: &[UtxoOutPoint],
@@ -130,15 +130,15 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
 
     for i in 0..iterations_count {
         //select outpoint and utxo from existing or create new
-        let flip = rng.gen_range(0..3);
+        let flip = rng.random_range(0..3);
         let (outpoint, utxo) = if flip == 0 && prev_result.len() > 1 {
-            let outpoint_idx = rng.gen_range(0..prev_result.len());
+            let outpoint_idx = rng.random_range(0..prev_result.len());
             (prev_result[outpoint_idx].clone(), None)
         } else if flip == 1 && result.len() > 1 {
-            let outpoint_idx = rng.gen_range(0..result.len());
+            let outpoint_idx = rng.random_range(0..result.len());
             (result[outpoint_idx].clone(), None)
         } else {
-            let block_height = rng.gen_range(0..iterations_count);
+            let block_height = rng.random_range(0..iterations_count);
             let (utxo, outpoint) = create_utxo(rng, block_height.try_into().unwrap());
 
             result.push(outpoint.clone());
@@ -150,18 +150,18 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
             assert!(cache.spend_utxo(&outpoint).is_ok());
             spent_an_entry = true;
         } else if utxo.is_some() {
-            let possible_overwrite = rng.gen::<bool>();
+            let possible_overwrite = rng.random::<bool>();
             assert!(cache.add_utxo(&outpoint, utxo.unwrap(), possible_overwrite).is_ok());
             added_an_entry = true;
         }
 
         // every 10 iterations call uncache
         if i % 10 == 0 {
-            if rng.gen::<bool>() && prev_result.len() > 1 {
-                let idx = rng.gen_range(0..prev_result.len());
+            if rng.random::<bool>() && prev_result.len() > 1 {
+                let idx = rng.random_range(0..prev_result.len());
                 let _ = cache.uncache(&prev_result[idx]);
             } else if result.len() > 1 {
-                let idx = rng.gen_range(0..result.len());
+                let idx = rng.random_range(0..result.len());
                 let _ = cache.uncache(&result[idx]);
             }
             removed_an_entry = true;

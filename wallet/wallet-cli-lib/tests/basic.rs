@@ -18,7 +18,7 @@ mod cli_test_framework;
 use rstest::rstest;
 
 use common::{address::Address, chain::PoolId, primitives::H256};
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::app_version_with_git_info;
 
@@ -106,8 +106,8 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert!(test
         .exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
         .contains("The transaction was submitted successfully with ID"));
@@ -132,8 +132,8 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert!(test
         .exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
         .contains("The transaction was submitted successfully with ID"));

@@ -26,7 +26,7 @@ use networking::{
     transport::{new_message_stream, TransportListener, TransportSocket},
 };
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -88,7 +88,7 @@ where
             TTM::make_address().into(),
             protocol_version.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -224,7 +224,7 @@ where
             TTM::make_address().into(),
             protocol_version.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

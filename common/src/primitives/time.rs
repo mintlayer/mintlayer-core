@@ -192,7 +192,7 @@ mod tests {
     use rstest::rstest;
 
     use logging::log;
-    use randomness::Rng as _;
+    use randomness::RngExt as _;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -273,14 +273,14 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
-            let year = rng.gen_range(1970..=3000);
-            let month = rng.gen_range(1..=12);
+            let year = rng.random_range(1970..=3000);
+            let month = rng.random_range(1..=12);
             let days_in_month =
                 NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
-            let day = rng.gen_range(1..=days_in_month);
-            let hour = rng.gen_range(0..24);
-            let min = rng.gen_range(0..60);
-            let sec = rng.gen_range(0..60);
+            let day = rng.random_range(1..=days_in_month);
+            let hour = rng.random_range(0..24);
+            let min = rng.random_range(0..60);
+            let sec = rng.random_range(0..60);
             let abs_time = DateTime::from_naive_utc_and_offset(
                 NaiveDateTime::new(
                     NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
@@ -294,7 +294,7 @@ mod tests {
             assert_eq!(abs_time_from_conversion, abs_time);
 
             // Only a whole number of seconds should be allowed.
-            let millis = rng.gen_range(1..1000);
+            let millis = rng.random_range(1..1000);
             let abs_time_with_millis = abs_time + Duration::from_millis(millis);
             assert!(Time::from_absolute_time(&abs_time_with_millis).is_none());
         }

@@ -34,7 +34,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -74,7 +74,7 @@ fn get_locator_from_best_block(#[case] seed: Seed) {
         let mut blocks = 1;
         let mut last_block_id: Id<GenBlock> = btf.genesis().get_id().into();
         for _ in 0..8 {
-            let new_blocks = rng.gen_range(1..2000);
+            let new_blocks = rng.random_range(1..2000);
             last_block_id = btf.create_chain(&last_block_id, new_blocks, &mut rng).unwrap();
             blocks += new_blocks;
 
@@ -116,11 +116,11 @@ fn get_locator_from_height(#[case] seed: Seed) {
             .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
             .build();
 
-        let blocks = rng.gen_range(1001..2000);
+        let blocks = rng.random_range(1001..2000);
         btf.create_chain(&btf.genesis().get_id().into(), blocks, &mut rng).unwrap();
 
         for _ in 0..8 {
-            let height = rng.gen_range(1000..blocks) as u64;
+            let height = rng.random_range(1000..blocks) as u64;
 
             // Check the locator length.
             let locator = btf.chainstate.get_locator_from_height(height.into()).unwrap();
@@ -171,9 +171,9 @@ fn get_locator_from_block_id(#[case] seed: Seed) {
             )
             .build();
 
-        let mainchain_len: usize = rng.gen_range(1000..2000);
-        let stalechain_len = rng.gen_range(mainchain_len / 2..mainchain_len);
-        let fork_height = rng.gen_range(0..stalechain_len);
+        let mainchain_len: usize = rng.random_range(1000..2000);
+        let stalechain_len = rng.random_range(mainchain_len / 2..mainchain_len);
+        let fork_height = rng.random_range(0..stalechain_len);
 
         let mainchain_block_ids = tf1
             .create_chain_return_ids(&tf1.genesis().get_id().into(), mainchain_len, &mut rng)
@@ -211,7 +211,7 @@ fn get_locator_from_block_id(#[case] seed: Seed) {
         assert_eq!(tf2.best_block_id(), *stale_branch_block_ids.last().unwrap());
 
         for _ in 0..8 {
-            let stale_block_idx = rng.gen_range(0..stale_branch_block_ids.len());
+            let stale_block_idx = rng.random_range(0..stale_branch_block_ids.len());
             let height = (stale_block_idx + fork_height + 1) as u64;
 
             let stale_block_id = tf1.to_chain_block_id(&stale_branch_block_ids[stale_block_idx]);
@@ -233,9 +233,9 @@ fn get_locator_from_block_id(#[case] seed: Seed) {
 fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let header_limit = rng.gen_range(1500..=2000);
-        let headers_count = rng.gen_range(1000..header_limit);
-        let blocks_count = rng.gen_range(1000..2000);
+        let header_limit = rng.random_range(1500..=2000);
+        let headers_count = rng.random_range(1000..header_limit);
+        let blocks_count = rng.random_range(1000..2000);
 
         let mut tf = TestFramework::builder(&mut rng)
             // With the heavy checks enabled, this test takes a few minutes to complete in debug builds.
@@ -298,16 +298,16 @@ fn get_headers_genesis(#[case] seed: Seed) {
             .build();
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
 
-        btf.create_chain(&genesis_id, rng.gen_range(64..128), &mut rng).unwrap();
+        btf.create_chain(&genesis_id, rng.random_range(64..128), &mut rng).unwrap();
         let locator_1 = btf.chainstate.get_locator_from_best_block().unwrap();
 
-        let chain_length = rng.gen_range(1200..2000);
+        let chain_length = rng.random_range(1200..2000);
         btf.create_chain(&genesis_id, chain_length, &mut rng).unwrap();
         let locator_2 = btf.chainstate.get_locator_from_best_block().unwrap();
         assert_ne!(locator_1, locator_2);
         assert!(locator_1.len() < locator_2.len());
 
-        let header_count_limit = rng.gen_range(chain_length..chain_length * 2);
+        let header_count_limit = rng.random_range(chain_length..chain_length * 2);
         let headers = btf
             .chainstate
             .get_mainchain_headers_by_locator(&locator_1, header_count_limit)
@@ -325,7 +325,7 @@ fn get_headers_genesis(#[case] seed: Seed) {
 fn get_headers_branching_chains(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let common_height = rng.gen_range(100..1000);
+        let common_height = rng.random_range(100..1000);
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
@@ -341,9 +341,9 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let common_block_id =
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();
 
-        tf.create_chain(&common_block_id, rng.gen_range(100..250), &mut rng).unwrap();
+        tf.create_chain(&common_block_id, rng.random_range(100..250), &mut rng).unwrap();
         let locator = tf.chainstate.get_locator_from_best_block().unwrap();
-        tf.create_chain(&common_block_id, rng.gen_range(250..500), &mut rng).unwrap();
+        tf.create_chain(&common_block_id, rng.random_range(250..500), &mut rng).unwrap();
 
         let headers = tf.chainstate.get_mainchain_headers_by_locator(&locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
@@ -612,7 +612,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             tf2.outputs_from_genblock(tf2.genesis().get_id().into())
         );
         let mut prev_id = tf1.genesis().get_id().into();
-        for _ in 0..rng.gen_range(100..250) {
+        for _ in 0..rng.random_range(100..250) {
             let block = tf1
                 .make_block_builder()
                 .with_parent(prev_id)
@@ -624,10 +624,10 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
-        tf1.create_chain(&prev_id, rng.gen_range(32..256), &mut rng).unwrap();
-        tf2.create_chain(&prev_id, rng.gen_range(256..512), &mut rng).unwrap();
+        tf1.create_chain(&prev_id, rng.random_range(32..256), &mut rng).unwrap();
+        tf2.create_chain(&prev_id, rng.random_range(256..512), &mut rng).unwrap();
 
-        let header_count_limit = rng.gen_range(1000..3000);
+        let header_count_limit = rng.random_range(1000..3000);
         let locator = tf1.chainstate.get_locator_from_best_block().unwrap();
         let headers = tf2
             .chainstate
@@ -1077,7 +1077,7 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
 fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let max_reorg_limit: usize = rng.gen_range(10..20);
+        let max_reorg_limit: usize = rng.random_range(10..20);
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
@@ -1089,14 +1089,14 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id().into();
 
         // This will be the full chain length.
-        let chain_len = rng.gen_range(max_reorg_limit + 1..max_reorg_limit * 2);
+        let chain_len = rng.random_range(max_reorg_limit + 1..max_reorg_limit * 2);
         // This is the lowest-height parent block, whose children will still be considered
         // above the reorg limit after the full chain is constructed.
         let first_parent_height_above_reorg_limit = chain_len - max_reorg_limit;
         // The height of the parent block, whose children will be considered below the
         // reorg limit (after the full chain is constructed).
         let parent_height_below_reorg_limit =
-            rng.gen_range(0..first_parent_height_above_reorg_limit);
+            rng.random_range(0..first_parent_height_above_reorg_limit);
 
         // Create the first part of the chain - until height_below_reorg_limit.
         let parent_below_reorg_limit_id = if parent_height_below_reorg_limit != 0 {
@@ -1196,7 +1196,7 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
 
         // Note: the height is below the tip height, since we want to get a child of this block.
         let parent_height_above_reorg_limit =
-            rng.gen_range(first_parent_height_above_reorg_limit..chain_len);
+            rng.random_range(first_parent_height_above_reorg_limit..chain_len);
         let parent_above_reorg_limit_id = tf.block_id(parent_height_above_reorg_limit as u64);
 
         // Create a bad block at a height above the reorg limit.
@@ -1233,7 +1233,7 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
 
         // Currently our good blocks are at the CheckBlockOk validation stage.
         // Optionally, force set it to FullyChecked, the expected results remain the same.
-        if rng.gen_bool(0.5) {
+        if rng.random_bool(0.5) {
             log::debug!("Resetting good block statuses to fully checked");
 
             tf.set_block_status(

@@ -26,7 +26,7 @@ use common::{
 use randomness::CryptoRng;
 
 #[cfg(not(loom))]
-fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
+fn genesis_check_ok(num_blocks: u64, rng: &mut impl CryptoRng) {
     // Get initial storage from the test framework.
 
     let storage = {
@@ -54,7 +54,7 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
 }
 
 #[cfg(not(loom))]
-fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
+fn genesis_check_err(num_blocks: u64, rng: &mut impl CryptoRng) {
     // Two different configs with separate genesis IDs.
 
     let conf0 = ChainConfigBuilder::new(ChainType::Regtest)
@@ -118,7 +118,7 @@ fn genesis_check_ok_empty_chain(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn genesis_check_ok_nonempty_chain(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    genesis_check_ok(rng.gen_range(1..100), &mut rng);
+    genesis_check_ok(rng.random_range(1..100), &mut rng);
 }
 
 #[rstest]
@@ -142,5 +142,5 @@ fn genesis_check_err_height_1(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn genesis_check_err_nonempty_chain(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    genesis_check_err(rng.gen_range(2..100), &mut rng);
+    genesis_check_err(rng.random_range(2..100), &mut rng);
 }

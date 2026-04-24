@@ -23,7 +23,7 @@ use networking::{
     transport::TcpTransportSocket,
 };
 use p2p_test_utils::expect_recv;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches, assert_matches_return_val,
     random::{make_seedable_rng, Seed},
@@ -103,7 +103,7 @@ async fn ping_timeout(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 

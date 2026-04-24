@@ -33,7 +33,7 @@ use crate::{
     primitives::{Amount, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::gen_different_value;
 
 use super::{add_value, utils::*};
@@ -883,8 +883,8 @@ fn mutate_first_input(
 
     let mutated_input = match updater.inputs.first().unwrap() {
         TxInput::Utxo(outpoint) => {
-            if rng.gen::<bool>() {
-                TxInput::Utxo(UtxoOutPoint::new(outpoint.source_id(), rng.gen()))
+            if rng.random::<bool>() {
+                TxInput::Utxo(UtxoOutPoint::new(outpoint.source_id(), rng.random()))
             } else {
                 TxInput::Utxo(UtxoOutPoint::new(
                     OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
@@ -893,12 +893,12 @@ fn mutate_first_input(
             }
         }
         TxInput::Account(outpoint) => {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 TxInput::Account(AccountOutPoint::new(
                     outpoint.nonce(),
                     AccountSpending::DelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
-                        Amount::from_atoms(rng.gen()),
+                        Amount::from_atoms(rng.random()),
                     ),
                 ))
             } else {
@@ -910,7 +910,7 @@ fn mutate_first_input(
             }
         }
         TxInput::AccountCommand(nonce, op) => {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 TxInput::AccountCommand(
                     *nonce,
                     AccountCommand::ChangeTokenAuthority(
@@ -944,7 +944,7 @@ fn mutate_first_input(
 }
 
 fn mutate_first_input_commitment(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx: &SignedTransactionWithInputCommitments,
 ) -> SignedTransactionWithInputCommitments {
     let mut input_commitments = tx.input_commitments.clone();

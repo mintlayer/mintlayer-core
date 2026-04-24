@@ -20,7 +20,7 @@ mod key_holder;
 pub mod secp256k1;
 pub mod signature;
 
-use randomness::{make_true_rng, CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng};
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use crate::key::{
@@ -83,10 +83,7 @@ impl PrivateKey {
         Self::new_from_rng(&mut make_true_rng(), key_kind)
     }
 
-    pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
-        key_kind: KeyKind,
-    ) -> (PrivateKey, PublicKey) {
+    pub fn new_from_rng(rng: &mut impl CryptoRng, key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         match key_kind {
             KeyKind::Secp256k1Schnorr => {
                 let k = Secp256k1PrivateKey::new(rng);
@@ -178,10 +175,12 @@ impl TryFrom<PublicKey> for Secp256k1PublicKey {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use rstest::rstest;
-    use test_utils::random::make_seedable_rng;
-    use test_utils::random::Seed;
+
+    use randomness::RngExt as _;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
 
     #[rstest]
     #[trace]
@@ -190,8 +189,8 @@ mod test {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rng.gen::<usize>() % 10000;
-        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
+        let msg_size = rng.random_range(1..=10000);
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.random::<u8>()).collect();
         let sig = sk.sign_message(&msg, &mut rng).unwrap();
         assert!(pk.verify_message(&sig, &msg));
     }

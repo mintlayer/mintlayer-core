@@ -34,7 +34,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes};
 use wallet::{signer::SignerProvider, wallet::test_helpers::scan_wallet, DefaultWallet, Wallet};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
@@ -86,28 +86,28 @@ pub fn random_rpc_ft_info_with_id_ticker_decimals(
         token_ticker: ticker.into(),
         number_of_decimals: num_decimals,
         metadata_uri: gen_random_alnum_string(rng, 10, 20).into(),
-        circulating_supply: Amount::from_atoms(rng.gen()),
+        circulating_supply: Amount::from_atoms(rng.random()),
         total_supply: RPCTokenTotalSupply::Unlimited,
-        is_locked: rng.gen_bool(0.5),
+        is_locked: rng.random_bool(0.5),
         frozen: random_rpc_is_token_frozen(rng),
         authority: Destination::PublicKeyHash(PublicKeyHash::random_using(rng)),
     }
 }
 
 pub fn random_rpc_is_token_frozen(rng: &mut impl Rng) -> RPCIsTokenFrozen {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         RPCIsTokenFrozen::NotFrozen {
-            freezable: rng.gen(),
+            freezable: rng.random(),
         }
     } else {
         RPCIsTokenFrozen::Frozen {
-            unfreezable: rng.gen(),
+            unfreezable: rng.random(),
         }
     }
 }
 
 pub fn random_is_token_freezable(rng: &mut impl Rng) -> IsTokenFreezable {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         IsTokenFreezable::Yes
     } else {
         IsTokenFreezable::No
@@ -115,7 +115,7 @@ pub fn random_is_token_freezable(rng: &mut impl Rng) -> IsTokenFreezable {
 }
 
 pub fn random_is_token_unfreezable(rng: &mut impl Rng) -> IsTokenUnfreezable {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         IsTokenUnfreezable::Yes
     } else {
         IsTokenUnfreezable::No
@@ -123,14 +123,14 @@ pub fn random_is_token_unfreezable(rng: &mut impl Rng) -> IsTokenUnfreezable {
 }
 
 pub fn random_token_total_supply(rng: &mut impl Rng) -> TokenTotalSupply {
-    match rng.gen_range(0..3) {
-        0 => TokenTotalSupply::Fixed(Amount::from_atoms(rng.gen())),
+    match rng.random_range(0..3) {
+        0 => TokenTotalSupply::Fixed(Amount::from_atoms(rng.random())),
         1 => TokenTotalSupply::Lockable,
         _ => TokenTotalSupply::Unlimited,
     }
 }
 
-pub fn random_nft_issuance(rng: &mut (impl Rng + CryptoRng)) -> NftIssuance {
+pub fn random_nft_issuance(rng: &mut impl CryptoRng) -> NftIssuance {
     NftIssuance::V0(NftIssuanceV0 {
         metadata: Metadata {
             creator: Some(TokenCreator {
@@ -151,11 +151,11 @@ pub fn wallet_new_dest(wallet: &mut DefaultWallet) -> Destination {
     wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object()
 }
 
-pub fn random_pub_key(rng: &mut (impl Rng + CryptoRng)) -> PublicKey {
+pub fn random_pub_key(rng: &mut impl CryptoRng) -> PublicKey {
     PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1
 }
 
-pub fn random_vrf_pub_key(rng: &mut (impl Rng + CryptoRng)) -> VRFPublicKey {
+pub fn random_vrf_pub_key(rng: &mut impl CryptoRng) -> VRFPublicKey {
     VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1
 }
 
@@ -211,7 +211,7 @@ pub fn random_token_data_with_id_and_authority(
 ) -> TestTokenData {
     TestTokenData {
         id: token_id,
-        num_decimals: rng.gen_range(1..20),
+        num_decimals: rng.random_range(1..20),
         ticker: gen_random_alnum_string(rng, 5, 10),
         metadata_uri: gen_random_alnum_string(rng, 5, 10),
         total_supply: random_token_total_supply(rng),
@@ -238,7 +238,7 @@ pub fn random_order_currencies_with_token(
     rng: &mut impl Rng,
     token_id: TokenId,
 ) -> OrderCurrencies {
-    if rng.gen_bool(0.5) {
+    if rng.random_bool(0.5) {
         OrderCurrencies {
             ask: Currency::Coin,
             give: Currency::Token(token_id),

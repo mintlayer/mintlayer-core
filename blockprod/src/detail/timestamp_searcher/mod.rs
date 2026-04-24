@@ -36,7 +36,7 @@ use consensus::{
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use serialization::{Decode, Encode};
 use utils::{ensure, once_destructor::OnceDestructor, tokio_spawn_blocking};
 
@@ -427,7 +427,7 @@ fn find_timestamps(
     final_supply: Amount,
     vrf_pub_key: &VRFPublicKey,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     precomputed_hashes: Option<&PrecomputedHashes>,
 ) -> Result<Vec<BlockTimestamp>, ConsensusPoSError> {
     let target = compact_target_to_target(search_data.target_required)?;

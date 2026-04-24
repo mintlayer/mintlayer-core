@@ -28,7 +28,7 @@ use crypto::{
     hash::StreamHasher,
     key::{KeyKind, PrivateKey, PublicKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::DecodeAll;
 use test_utils::{
     assert_matches,
@@ -53,7 +53,7 @@ fn sign_verify_supported_destinations(#[case] seed: Seed) {
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
     let message_challenge = produce_message_challenge(&message);
 
     let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
@@ -85,12 +85,12 @@ fn produce_uniparty_signature_as_pub_key_hash_spending_matches_produce_uniparty_
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
     let message_challenge = produce_message_challenge(&message);
 
     let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
     // Use the identical rng for both of the signer calls to be able to compare the signatures.
-    let signer_rng_seed = rng.gen();
+    let signer_rng_seed = rng.random();
 
     let sig1 = ArbitraryMessageSignature::produce_uniparty_signature(
         &private_key,
@@ -123,10 +123,10 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
     let message_challenge = produce_message_challenge(&message);
 
-    let random_raw_sig: Vec<u8> = (1..100).map(|_| rng.gen()).collect();
+    let random_raw_sig: Vec<u8> = (1..100).map(|_| rng.random()).collect();
     let random_sig = ArbitraryMessageSignature {
         raw_signature: random_raw_sig,
     };
@@ -194,7 +194,7 @@ fn verify_wrong_destination(#[case] seed: Seed) {
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (_, public_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
     let message_challenge = produce_message_challenge(&message);
 
     let dest_multisig = Destination::ClassicMultisig(PublicKeyHash::from(&public_key));
@@ -290,7 +290,7 @@ fn verify_corrupted_message(#[case] seed: Seed) {
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
 
     let corrupted_message = with_random_bit_flipped(&message, &mut rng);
     let corrupted_message_challenge = produce_message_challenge(&corrupted_message);
@@ -325,7 +325,7 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
     let chain_config = chain::config::create_testnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message: Vec<u8> = (20..40).map(|_| rng.random()).collect();
     let message_challenge = produce_message_challenge(&message);
 
     let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));

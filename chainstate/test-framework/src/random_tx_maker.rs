@@ -49,7 +49,7 @@ use pos_accounting::{
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
-use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _, SliceRandom};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::*};
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
@@ -133,18 +133,18 @@ fn get_random_timelock(
 ) -> OutputTimeLock {
     const MAX_LOCK_FOR_NUM_BLOCKS: u64 = 5;
     let target_block_spacing_sec = chainstate.get_chain_config().target_block_spacing().as_secs();
-    match rng.gen_range(0..4) {
-        0 => OutputTimeLock::ForBlockCount(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)),
+    match rng.random_range(0..4) {
+        0 => OutputTimeLock::ForBlockCount(rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)),
         1 => OutputTimeLock::UntilHeight(
             chainstate
                 .get_best_block_height()
                 .unwrap()
-                .checked_add(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
+                .checked_add(rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
                 .unwrap(),
         ),
         2 => OutputTimeLock::ForSeconds(
-            target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                + rng.gen_range(0..=target_block_spacing_sec),
+            target_block_spacing_sec * rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                + rng.random_range(0..=target_block_spacing_sec),
         ),
         3 => OutputTimeLock::UntilTime(
             chainstate
@@ -152,8 +152,8 @@ fn get_random_timelock(
                 .unwrap()
                 .block_timestamp()
                 .add_int_seconds(
-                    target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                        + rng.gen_range(0..=target_block_spacing_sec),
+                    target_block_spacing_sec * rng.random_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                        + rng.random_range(0..=target_block_spacing_sec),
                 )
                 .unwrap(),
         ),
@@ -237,7 +237,7 @@ impl<'a> RandomTxMaker<'a> {
 
     pub fn make(
         mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         staking_pools_observer: &mut impl StakingPoolsObserver,
         key_manager: &mut KeyManager,
     ) -> (
@@ -363,11 +363,11 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(TxInput, TxOutput)> {
-        let number_of_inputs = rng.gen_range(1..5);
+        let number_of_inputs = rng.random_range(1..5);
         self.utxo_set
             .utxos()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .filter_map(|(outpoint, utxo)| {
                 let input = TxInput::Utxo((*outpoint).clone());
@@ -396,13 +396,13 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn select_accounts(&self, rng: &mut impl Rng) -> Vec<AccountType> {
-        let number_of_inputs = rng.gen_range(1..5);
+        let number_of_inputs = rng.random_range(1..5);
 
         let tokens = self
             .tokens_store
             .tokens_data()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(token_id, _)| AccountType::Token(**token_id))
             .collect::<Vec<_>>();
@@ -411,7 +411,7 @@ impl<'a> RandomTxMaker<'a> {
             .orders_store
             .orders_data()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(id, _)| AccountType::Order(**id))
             .collect::<Vec<_>>();
@@ -420,7 +420,7 @@ impl<'a> RandomTxMaker<'a> {
             .pos_accounting_store
             .all_delegation_balances()
             .iter()
-            .choose_multiple(rng, number_of_inputs)
+            .sample(rng, number_of_inputs)
             .iter()
             .map(|(id, _)| AccountType::Delegation(**id))
             .collect::<Vec<_>>();
@@ -453,7 +453,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn create_account_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_before_tx: &impl PoSAccountingView,
         pos_accounting_latest: &mut (impl PoSAccountingView
@@ -471,7 +471,8 @@ impl<'a> RandomTxMaker<'a> {
                     let balance =
                         pos_accounting_before_tx.get_delegation_balance(delegation_id).unwrap();
                     if balance > Amount::ZERO {
-                        let to_spend = Amount::from_atoms(rng.gen_range(1..=balance.into_atoms()));
+                        let to_spend =
+                            Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
                         let new_nonce = self.get_next_nonce(AccountType::Delegation(delegation_id));
 
                         result_inputs.push(TxInput::Account(AccountOutPoint::new(
@@ -508,7 +509,7 @@ impl<'a> RandomTxMaker<'a> {
                     result_outputs.extend(outputs);
                 }
                 AccountType::Order(order_id) => {
-                    let switch = rng.gen_range(0..3);
+                    let switch = rng.random_range(0..3);
 
                     if !self.account_command_used && switch != 0 {
                         // conclude an order
@@ -569,7 +570,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn create_token_account_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         token_id: TokenId,
         key_manager: &mut KeyManager,
@@ -605,11 +606,11 @@ impl<'a> RandomTxMaker<'a> {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             if token_data.can_be_frozen() {
                 // Freeze
                 let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                let unfreezable = if rng.gen::<bool>() {
+                let unfreezable = if rng.random::<bool>() {
                     IsTokenUnfreezable::Yes
                 } else {
                     IsTokenUnfreezable::No
@@ -634,7 +635,7 @@ impl<'a> RandomTxMaker<'a> {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             // Change token authority
             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
             let new_authority =
@@ -658,7 +659,7 @@ impl<'a> RandomTxMaker<'a> {
             );
 
             (vec![account_input, fee_input], vec![fee_change_output])
-        } else if rng.gen_bool(0.1) {
+        } else if rng.random_bool(0.1) {
             // Change token metadata uri
             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
             let max_len = self.chainstate.get_chain_config().token_max_uri_len();
@@ -681,7 +682,7 @@ impl<'a> RandomTxMaker<'a> {
 
             (vec![account_input, fee_input], vec![fee_change_output])
         } else if !token_data.is_locked() {
-            if rng.gen_bool(0.9) {
+            if rng.random_bool(0.9) {
                 let circulating_supply = tokens_cache.get_circulating_supply(&token_id).unwrap();
 
                 // mint
@@ -698,7 +699,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
 
                 let mint_limit = std::cmp::min(100_000, supply_left.into_atoms());
-                let to_mint = Amount::from_atoms(rng.gen_range(1..=mint_limit));
+                let to_mint = Amount::from_atoms(rng.random_range(1..=mint_limit));
 
                 let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                 let account_input = TxInput::AccountCommand(
@@ -767,7 +768,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn create_utxo_spending(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         staking_pools_observer: &mut impl StakingPoolsObserver,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
@@ -808,7 +809,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::CreateStakePool(pool_id, _)
                 | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    if self.staking_pool.is_none_or(|id| id != *pool_id) && rng.gen_bool(0.1) {
+                    if self.staking_pool.is_none_or(|id| id != *pool_id) && rng.random_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
                             .unwrap()
@@ -891,7 +892,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn spend_coins(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         coins: Amount,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
@@ -911,7 +912,7 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for atoms_to_spend in atoms_vec {
-            let switch = rng.gen_range(0..6);
+            let switch = rng.random_range(0..6);
             let amount_to_spend = Amount::from_atoms(atoms_to_spend);
             if switch == 0 && self.token_can_be_issued {
                 // issue token v1
@@ -982,8 +983,9 @@ impl<'a> RandomTxMaker<'a> {
                 {
                     if token_supply > Amount::ZERO {
                         let ask_amount =
-                            Amount::from_atoms(rng.gen_range(1u128..=token_supply.into_atoms()));
-                        let give_amount = Amount::from_atoms(rng.gen_range(1u128..=atoms_to_spend));
+                            Amount::from_atoms(rng.random_range(1u128..=token_supply.into_atoms()));
+                        let give_amount =
+                            Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
                         let order_data = OrderData::new(
                             Destination::AnyoneCanSpend,
                             OutputValue::TokenV1(token_id, ask_amount),
@@ -1052,9 +1054,9 @@ impl<'a> RandomTxMaker<'a> {
                         .chainstate
                         .get_chain_config()
                         .data_deposit_max_size(BlockHeight::zero());
-                    let deposited_data_len = rng.gen_range(0..deposited_data_len);
+                    let deposited_data_len = rng.random_range(0..deposited_data_len);
                     let deposited_data =
-                        (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                        (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
                     let outputs = vec![
                         TxOutput::DataDeposit(deposited_data),
@@ -1082,12 +1084,12 @@ impl<'a> RandomTxMaker<'a> {
                         VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel).1,
                         Destination::AnyoneCanSpend,
                         PerThousand::new_from_rng(rng),
-                        Amount::from_atoms(rng.gen_range(0..1000)),
+                        Amount::from_atoms(rng.random_range(0..1000)),
                     );
 
                     TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
                 } else {
-                    if rng.gen_bool(0.3) {
+                    if rng.random_bool(0.3) {
                         // Send coins to random delegation
                         if let Some((delegation_id, _)) = get_random_delegation_data(
                             rng,
@@ -1106,7 +1108,7 @@ impl<'a> RandomTxMaker<'a> {
                     let destination =
                         key_manager.new_destination(self.chainstate.get_chain_config(), rng);
                     let timelock = get_random_timelock(rng, self.chainstate);
-                    match rng.gen_range(0..5) {
+                    match rng.random_range(0..5) {
                         0 => TxOutput::LockThenTransfer(
                             OutputValue::Coin(amount_to_spend),
                             destination,
@@ -1134,7 +1136,7 @@ impl<'a> RandomTxMaker<'a> {
                 result_outputs.push(output);
 
                 // Occasionally create new delegation id
-                if rng.gen::<bool>() && self.delegation_can_be_created {
+                if rng.random::<bool>() && self.delegation_can_be_created {
                     if let Some((pool_id, _)) =
                         get_random_pool_data(rng, self.pos_accounting_store, &pos_accounting_cache)
                     {
@@ -1154,7 +1156,7 @@ impl<'a> RandomTxMaker<'a> {
     #[allow(clippy::too_many_arguments)]
     fn spend_output_value(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
@@ -1206,7 +1208,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn spend_tokens_v1(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
         token_id: TokenId,
@@ -1222,9 +1224,9 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for atoms in atoms_vec {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 let output_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
-                if rng.gen::<bool>() {
+                if rng.random::<bool>() {
                     // transfer
                     result_outputs.push(TxOutput::Transfer(
                         output_value,
@@ -1271,7 +1273,7 @@ impl<'a> RandomTxMaker<'a> {
                         }
                     }
                 }
-            } else if rng.gen_bool(0.4) && !self.account_command_used {
+            } else if rng.random_bool(0.4) && !self.account_command_used {
                 // unmint
                 let token_data = tokens_cache.get_token_data(&token_id).unwrap();
 
@@ -1317,16 +1319,16 @@ impl<'a> RandomTxMaker<'a> {
                         self.account_command_used = true;
                     }
                 }
-            } else if rng.gen_bool(0.4) && self.order_can_be_created && atoms > 0 {
+            } else if rng.random_bool(0.4) && self.order_can_be_created && atoms > 0 {
                 // create order to exchange part of available tokens for coins or other tokens
                 let random_token = get_random_token(rng, self.tokens_store, tokens_cache);
-                let ask_value = if rng.gen::<bool>()
+                let ask_value = if rng.random::<bool>()
                     && random_token
                         .is_some_and(|(id, amount)| id != token_id && amount > Amount::ZERO)
                 {
                     OutputValue::TokenV1(random_token.unwrap().0, random_token.unwrap().1)
                 } else {
-                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..10000)))
+                    OutputValue::Coin(Amount::from_atoms(rng.random_range(100..10000)))
                 };
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
@@ -1352,7 +1354,7 @@ impl<'a> RandomTxMaker<'a> {
 
     fn tx_outputs_post_process(
         &self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),

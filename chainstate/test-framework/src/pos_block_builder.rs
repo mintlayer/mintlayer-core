@@ -49,7 +49,7 @@ use crypto::{
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 
@@ -230,7 +230,7 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut impl CryptoRng) -> (Block, &'f mut TestFramework) {
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
             None => {
@@ -271,7 +271,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
         let time_advancement = if self.randomize_timediffs {
-            rng.gen_range(1..target_block_time.as_secs() * 2)
+            rng.random_range(1..target_block_time.as_secs() * 2)
         } else {
             target_block_time.as_secs()
         };
@@ -288,21 +288,21 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+    pub fn build(self, rng: &mut impl CryptoRng) -> Block {
         self.build_impl(&mut *rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(
         self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let (block, framework) = self.build_impl(&mut *rng);
         let res = framework.process_block(block, BlockSource::Local)?;
         Ok(res)
     }
 
-    fn mine_pos_block(&self, rng: &mut (impl Rng + CryptoRng)) -> (PoSData, BlockTimestamp) {
+    fn mine_pos_block(&self, rng: &mut impl CryptoRng) -> (PoSData, BlockTimestamp) {
         let parent_block_index = self.framework.gen_block_index(&self.prev_block_hash);
 
         let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
@@ -375,7 +375,7 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos and accounts
-    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn add_test_transaction(mut self, rng: &mut impl CryptoRng) -> Self {
         let utxo_set = self
             .framework
             .storage

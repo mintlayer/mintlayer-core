@@ -16,7 +16,7 @@
 use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
 use common::primitives::time::Time;
-use randomness::{seq::IteratorRandom, Rng};
+use randomness::{seq::IteratorRandom, Rng, RngExt as _};
 use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
@@ -76,7 +76,7 @@ pub struct RandomState(u64, u64);
 
 impl RandomState {
     pub fn new<R: Rng>(rng: &mut R) -> Self {
-        Self(rng.gen(), rng.gen())
+        Self(rng.random(), rng.random())
     }
 
     fn get_hash<A: std::hash::Hash>(&self, value: &A) -> u64 {

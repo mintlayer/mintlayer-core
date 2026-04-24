@@ -271,7 +271,7 @@ mod tests {
     use rstest::rstest;
 
     use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::{
         assert_matches,
         random::{make_seedable_rng, Seed},
@@ -310,7 +310,7 @@ mod tests {
         let chain_config = config::create_unit_test_config();
 
         for _ in 0..10 {
-            let inputs_count = rng.gen_range(1..=10);
+            let inputs_count = rng.random_range(1..=10);
             let mut prv_keys = BTreeMap::new();
 
             let (input_destinations, flipped_input_destinations): (Vec<_>, Vec<_>) = (0
@@ -324,7 +324,7 @@ mod tests {
                     prv_keys.insert(pub_key_dest.clone(), prv_key.clone());
                     prv_keys.insert(pub_key_hash_dest.clone(), prv_key);
 
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         (pub_key_dest, pub_key_hash_dest)
                     } else {
                         (pub_key_hash_dest, pub_key_dest)
@@ -335,7 +335,7 @@ mod tests {
                 let (prv_key, pub_key) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-                let dest = if rng.gen_bool(0.5) {
+                let dest = if rng.random_bool(0.5) {
                     Destination::PublicKey(pub_key)
                 } else {
                     Destination::PublicKeyHash((&pub_key).into())
@@ -348,7 +348,7 @@ mod tests {
             let tx_inputs = (0..inputs_count)
                 .map(|_| {
                     let tx_id = Id::new(H256::random_using(&mut rng));
-                    let idx = rng.gen_range(0..10);
+                    let idx = rng.random_range(0..10);
                     TxInput::from_utxo(OutPointSourceId::Transaction(tx_id), idx)
                 })
                 .collect_vec();
@@ -359,7 +359,7 @@ mod tests {
             let expected_signed_message =
                 SignedTransactionIntent::get_message_to_sign(&intent_str, &tx_id);
             // Use the same state of rng for all "produce_" calls to be able to compare the signatures.
-            let signer_rng_seed = rng.gen();
+            let signer_rng_seed = rng.random();
 
             let signed_intent1 = SignedTransactionIntent::produce_from_transaction(
                 &tx,
@@ -424,7 +424,7 @@ mod tests {
                 }
             );
 
-            let input_index_to_replace = rng.gen_range(0..input_destinations.len());
+            let input_index_to_replace = rng.random_range(0..input_destinations.len());
 
             let input_destinations_replaced = {
                 let mut destinations = input_destinations.clone();
@@ -455,7 +455,7 @@ mod tests {
     fn invalid_destinations_count_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let total_destinations_count = rng.gen_range(2..=10);
+        let total_destinations_count = rng.random_range(2..=10);
 
         let input_destinations = (0..total_destinations_count)
             .map(|_| {
@@ -468,7 +468,7 @@ mod tests {
         let tx_inputs = (0..total_destinations_count - 1)
             .map(|_| {
                 let tx_id = Id::new(H256::random_using(&mut rng));
-                let idx = rng.gen_range(0..10);
+                let idx = rng.random_range(0..10);
                 TxInput::from_utxo(OutPointSourceId::Transaction(tx_id), idx)
             })
             .collect_vec();
@@ -515,7 +515,7 @@ mod tests {
     fn unsupported_destination_when_signing_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let destinations_count = rng.gen_range(2..=10);
+        let destinations_count = rng.random_range(2..=10);
         let mut prv_keys = BTreeMap::new();
 
         let orig_destinations = (0..destinations_count)
@@ -531,7 +531,7 @@ mod tests {
         let tx_inputs = (0..destinations_count)
             .map(|_| {
                 let tx_id = Id::new(H256::random_using(&mut rng));
-                let idx = rng.gen_range(0..10);
+                let idx = rng.random_range(0..10);
                 TxInput::from_utxo(OutPointSourceId::Transaction(tx_id), idx)
             })
             .collect_vec();
@@ -545,7 +545,7 @@ mod tests {
             Destination::ScriptHash(Id::new(H256::random_using(&mut rng))),
             Destination::ClassicMultisig(PublicKeyHash::random_using(&mut rng)),
         ];
-        let dest_index_to_replace = rng.gen_range(0..destinations_count);
+        let dest_index_to_replace = rng.random_range(0..destinations_count);
 
         for unsupported_destination in unsupported_destinations {
             let mut destinations = orig_destinations.clone();

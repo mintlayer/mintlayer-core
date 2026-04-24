@@ -34,7 +34,7 @@ use tx_verifier::{
     transaction_verifier::{TransactionSource, TransactionSourceForConnect, TransactionVerifier},
 };
 
-fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
+fn setup(rng: &mut impl CryptoRng) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
     let tf = TestFramework::builder(rng).with_storage(storage.clone()).build();
 

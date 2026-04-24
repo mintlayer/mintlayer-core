@@ -46,7 +46,7 @@ use consensus::{
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
 use p2p::P2pHandle;
-use randomness::{make_true_rng, Rng};
+use randomness::{make_true_rng, Rng, RngExt as _};
 use serialization::{Decode, Encode};
 
 use ::utils::{
@@ -97,7 +97,7 @@ impl CustomId {
 
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
         Self {
-            data: rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
+            data: rng.random::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
         }
     }
 

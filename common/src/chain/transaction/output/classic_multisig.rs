@@ -114,7 +114,7 @@ impl ClassicMultisigChallenge {
 #[cfg(test)]
 mod tests {
     use crypto::key::{KeyKind, PrivateKey};
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -165,7 +165,7 @@ mod tests {
 
         let chain_config = create_mainnet();
 
-        let pub_key_count = 1 + rng.gen::<u8>() % 10;
+        let pub_key_count = 1 + rng.random::<u8>() % 10;
 
         let min_required_signatures = pub_key_count + 1;
 
@@ -198,7 +198,7 @@ mod tests {
 
         let pub_key_count = 1 + chain_config.max_classic_multisig_public_keys_count() as u8;
 
-        let min_required_signatures = 1 + rng.gen::<u8>() % pub_key_count;
+        let min_required_signatures = 1 + rng.random::<u8>() % pub_key_count;
 
         let public_keys = (0..pub_key_count)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1)

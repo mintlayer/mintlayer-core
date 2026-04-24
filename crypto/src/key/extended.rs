@@ -23,7 +23,7 @@ use crate::key::secp256k1::extended_keys::{
     Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey,
 };
 use crate::key::{PrivateKey, PublicKey};
-use randomness::{make_true_rng, CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng};
 
 use super::hdkd::chain_code::ChainCode;
 
@@ -62,7 +62,7 @@ impl ExtendedPrivateKey {
     }
 
     pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         key_kind: ExtendedKeyKind,
     ) -> (ExtendedPrivateKey, ExtendedPublicKey) {
         match key_kind {
@@ -185,14 +185,18 @@ impl Derivable for ExtendedPublicKey {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::key::hdkd::derivation_path::DerivationPath;
+    use std::str::FromStr;
+
     use bip39::Mnemonic;
     use hex::ToHex;
     use rstest::rstest;
-    use std::str::FromStr;
-    use test_utils::random::make_seedable_rng;
-    use test_utils::random::Seed;
+
+    use randomness::RngExt as _;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::key::hdkd::derivation_path::DerivationPath;
+
+    use super::*;
 
     #[rstest]
     #[trace]
@@ -202,8 +206,8 @@ mod test {
         let (sk, pk) =
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), ExtendedKeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rng.gen::<usize>() % 10000;
-        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
+        let msg_size = rng.random_range(1..=10000);
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.random::<u8>()).collect();
         let sig = sk.private_key().sign_message(&msg, &mut rng).unwrap();
         assert!(pk.into_public_key().verify_message(&sig, &msg));
     }

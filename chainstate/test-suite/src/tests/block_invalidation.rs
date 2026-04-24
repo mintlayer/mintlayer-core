@@ -31,7 +31,7 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     mock_time_getter::mocked_time_getter_seconds,
@@ -77,7 +77,7 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
-            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .with_storage(sb.clone().build(Seed(rng.random())))
             .build();
         let genesis_id = tf.genesis().get_id();
 
@@ -133,7 +133,7 @@ fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
-            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .with_storage(sb.clone().build(Seed(rng.random())))
             .build();
         let genesis_id = tf.genesis().get_id();
 
@@ -189,7 +189,7 @@ fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
-            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .with_storage(sb.clone().build(Seed(rng.random())))
             .build();
         let genesis_id = tf.genesis().get_id();
 
@@ -256,7 +256,7 @@ struct TestChainBlockIds {
 //      |      |------d0----d1----d2
 //      |      |      /----?e0----e1----e2
 // G----m0----(m1)----m2----m3----m4----m5----m6
-fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestChainBlockIds) {
+fn make_complex_chain(rng: &mut impl CryptoRng) -> (TestFramework, TestChainBlockIds) {
     let mut tf = TestFramework::builder(rng)
         .with_chain_config(
             chain::config::create_unit_test_config_builder()
@@ -741,7 +741,7 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] s
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
-            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .with_storage(sb.clone().build(Seed(rng.random())))
             .build();
         let genesis_id = tf.genesis().get_id();
 
@@ -1077,7 +1077,7 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
-            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .with_storage(sb.clone().build(Seed(rng.random())))
             .build();
         let genesis_id = tf.genesis().get_id();
 

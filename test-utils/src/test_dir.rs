@@ -28,14 +28,14 @@ use std::{
 };
 
 use crate::random::Seed;
-use randomness::Rng;
+use randomness::RngExt;
 
 fn backoff_delays(seed: Seed) -> impl Iterator<Item = Duration> {
     // Random exponential backoff starting at 1ms with max 10 attempts
     let mut rng = crate::random::make_seedable_rng(seed);
     let mut delay = Duration::from_millis(1);
     std::iter::from_fn(move || {
-        let item = rng.gen_range(Duration::ZERO..delay);
+        let item = rng.random_range(Duration::ZERO..delay);
         delay *= 2;
         Some(item)
     })
@@ -87,8 +87,8 @@ impl TestRoot {
         // Create the top-level directory if it does not exist already
         fs::create_dir_all(top_path.as_ref())?;
 
-        for delay in backoff_delays(Seed::from_u64(rng.gen())) {
-            let path = top_path.as_ref().join(format!("run_{:08x}", rng.gen::<u32>()));
+        for delay in backoff_delays(Seed::from_u64(rng.random())) {
+            let path = top_path.as_ref().join(format!("run_{:08x}", rng.random::<u32>()));
 
             // Attempt to create the candidate directory
             match try_create_dir(&path)? {

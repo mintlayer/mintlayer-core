@@ -73,8 +73,8 @@ fn test_knapsack_solver_not_enough(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    for _ in 0..rng.gen_range(1..100) {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+    for _ in 0..rng.random_range(1..100) {
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
         target_value = (target_value + value).expect("can't overflow");
     }
@@ -105,9 +105,9 @@ fn test_knapsack_solver_max_weight(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    let num_inputs = rng.gen_range(1..100);
+    let num_inputs = rng.random_range(1..100);
     for _ in 0..num_inputs {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
         target_value = (target_value + value).expect("can't overflow");
     }
@@ -134,13 +134,13 @@ fn test_knapsack_solver_max_weight(#[case] seed: Seed) {
 fn test_knapsack_solver_exact_solution(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let target_value = Amount::from_atoms(rng.gen_range(1..100));
+    let target_value = Amount::from_atoms(rng.random_range(1..100));
     let mut groups = vec![];
-    for _ in 0..rng.gen_range(0..100) {
+    for _ in 0..rng.random_range(0..100) {
         // add values different from the target_value
-        let mut value = Amount::from_atoms(rng.gen_range(1..100));
+        let mut value = Amount::from_atoms(rng.random_range(1..100));
         while value == target_value {
-            value = Amount::from_atoms(rng.gen_range(1..100));
+            value = Amount::from_atoms(rng.random_range(1..100));
         }
         add_output(value, &mut groups);
     }
@@ -173,13 +173,13 @@ fn test_knapsack_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    for _ in 0..rng.gen_range(1..100) {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+    for _ in 0..rng.random_range(1..100) {
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
 
         // randomly add to the target_value so we know there is an exact match from a subset of the
         // groups
-        if rng.gen::<bool>() || target_value == Amount::ZERO {
+        if rng.random::<bool>() || target_value == Amount::ZERO {
             target_value = (target_value + value).expect("can't overflow");
         }
     }
@@ -230,7 +230,7 @@ fn test_knapsack_solver_not_exact_solution(#[case] seed: Seed) {
 
     // cannot make 9 from [1,2,5] will use lowest larger value which is 10
     let target_value = Amount::from_atoms(9);
-    let pay_fees = if rng.gen::<bool>() {
+    let pay_fees = if rng.random::<bool>() {
         PayFee::PayFeeWithThisCurrency
     } else {
         PayFee::DoNotPayFeeWithThisCurrency
@@ -267,13 +267,13 @@ fn test_knapsack_solver_not_exact_solution(#[case] seed: Seed) {
 fn test_bnb_solver_exact_solution(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let target_value = Amount::from_atoms(rng.gen_range(1..100));
+    let target_value = Amount::from_atoms(rng.random_range(1..100));
     let mut groups = vec![];
-    for _ in 0..rng.gen_range(0..100) {
+    for _ in 0..rng.random_range(0..100) {
         // add values different from the target_value
-        let mut value = Amount::from_atoms(rng.gen_range(1..100));
+        let mut value = Amount::from_atoms(rng.random_range(1..100));
         while value == target_value {
-            value = Amount::from_atoms(rng.gen_range(1..100));
+            value = Amount::from_atoms(rng.random_range(1..100));
         }
         add_output(value, &mut groups);
     }
@@ -304,9 +304,9 @@ fn test_bnb_solver_max_weight(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    let num_inputs = rng.gen_range(1..100);
+    let num_inputs = rng.random_range(1..100);
     for _ in 0..num_inputs {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
         target_value = (target_value + value).expect("can't overflow");
     }
@@ -334,13 +334,13 @@ fn test_bnb_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    for _ in 0..rng.gen_range(1..100) {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+    for _ in 0..rng.random_range(1..100) {
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
 
         // randomly add to the target_value so we know there is an exact match from a subset of the
         // groups
-        if rng.gen::<bool>() || target_value == Amount::ZERO {
+        if rng.random::<bool>() || target_value == Amount::ZERO {
             target_value = (target_value + value).expect("can't overflow");
         }
     }
@@ -391,13 +391,13 @@ fn test_bnb_solver_not_exact_solution_fail() {
 fn test_srd_solver_find_solution(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let target_value = Amount::from_atoms(rng.gen_range(1..100));
+    let target_value = Amount::from_atoms(rng.random_range(1..100));
     let mut groups = vec![];
-    for _ in 0..rng.gen_range(0..100) {
+    for _ in 0..rng.random_range(0..100) {
         // add values different from the target_value
-        let mut value = Amount::from_atoms(rng.gen_range(1..100));
+        let mut value = Amount::from_atoms(rng.random_range(1..100));
         while value == target_value {
-            value = Amount::from_atoms(rng.gen_range(1..100));
+            value = Amount::from_atoms(rng.random_range(1..100));
         }
         add_output(value, &mut groups);
     }
@@ -428,9 +428,9 @@ fn test_srd_solver_max_weight(#[case] seed: Seed) {
 
     let mut groups = vec![];
     let mut target_value = Amount::ZERO;
-    let num_inputs = rng.gen_range(1..100);
+    let num_inputs = rng.random_range(1..100);
     for _ in 0..num_inputs {
-        let value = Amount::from_atoms(rng.gen_range(1..100));
+        let value = Amount::from_atoms(rng.random_range(1..100));
         add_output(value, &mut groups);
         target_value = (target_value + value).expect("can't overflow");
     }

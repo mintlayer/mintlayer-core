@@ -21,7 +21,7 @@ use common::{
     chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
@@ -91,7 +91,7 @@ fn cache_simulation_with_undo(
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
 fn simulation_step<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     all_outputs: &mut ResultWithUndo,
     parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
@@ -133,7 +133,7 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
 }
 
 fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
     prev_result: &mut ResultWithUndo,
@@ -142,13 +142,13 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
     let mut result: ResultWithUndo = Default::default();
 
     for _ in 0..iterations_count {
-        let i = rng.gen_range(0..usize::MAX);
+        let i = rng.random_range(0..usize::MAX);
         // create new utxo
         if i % 20 < 19 {
             //create utxo from block reward
             if i % 20 < 10 {
                 let reward = BlockReward::new(create_tx_outputs(rng, 1));
-                let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
+                let block_height = BlockHeight::new(rng.random_range(0..iterations_count as u64));
                 let block_id = Id::new(H256::random_using(rng));
                 cache
                     .add_utxos_from_block_reward(
@@ -165,12 +165,12 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 //spend random utxo in a transaction
 
                 //get random outpoint from existing outpoints
-                let outpoint = if rng.gen::<bool>() && !prev_result.utxo_outpoints.is_empty() {
-                    let outpoint_idx = rng.gen_range(0..prev_result.utxo_outpoints.len());
+                let outpoint = if rng.random::<bool>() && !prev_result.utxo_outpoints.is_empty() {
+                    let outpoint_idx = rng.random_range(0..prev_result.utxo_outpoints.len());
                     //this outpoint will be spent so remove strait away
                     prev_result.utxo_outpoints.remove(outpoint_idx)
                 } else if !result.utxo_outpoints.is_empty() {
-                    let outpoint_idx = rng.gen_range(0..result.utxo_outpoints.len());
+                    let outpoint_idx = rng.random_range(0..result.utxo_outpoints.len());
                     //this outpoint will be spent so remove strait away
                     result.utxo_outpoints.remove(outpoint_idx)
                 } else {
@@ -182,7 +182,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 let tx = Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1)).unwrap();
 
                 //spent the transaction
-                let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
+                let block_height = BlockHeight::new(rng.random_range(0..iterations_count as u64));
                 let undo =
                     cache.connect_transaction(&tx, UtxoSource::Blockchain(block_height)).unwrap();
 
@@ -200,7 +200,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
         } else if !result.outpoints_with_undo.is_empty() {
             //undo random transaction spending from current utxo set
 
-            let idx = rng.gen_range(0..result.utxo_outpoints.len());
+            let idx = rng.random_range(0..result.utxo_outpoints.len());
             let outpoint = result.utxo_outpoints.remove(idx);
 
             //spend new utxo

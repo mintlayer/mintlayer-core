@@ -148,17 +148,16 @@ pub enum SigsVerifyResult {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::num::NonZeroU8;
+    use std::{collections::BTreeMap, num::NonZeroU8};
 
-    use crypto::key::{KeyKind, PrivateKey, Signature};
-    use randomness::{CryptoRng, Rng, SliceRandom};
     use rstest::rstest;
 
-    use crate::chain::config::create_mainnet;
-    use crate::primitives::H256;
+    use crypto::key::{KeyKind, PrivateKey, Signature};
+    use randomness::{CryptoRng, IndexedMutRandom as _, Rng, RngExt as _, SliceRandom};
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::{chain::config::create_mainnet, primitives::H256};
 
     use super::*;
 
@@ -171,12 +170,12 @@ mod tests {
     }
 
     impl TestChallengeData {
-        fn new_random(rng: &mut (impl Rng + CryptoRng)) -> Self {
+        fn new_random(rng: &mut impl CryptoRng) -> Self {
             let chain_config = create_mainnet();
 
-            let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+            let min_required_signatures = (rng.random::<u8>() % 10) + 1;
             let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-            let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+            let total_parties = (rng.random::<u8>() % 5) + min_required_signatures.get();
             let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
                 .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
                 .unzip();
@@ -350,7 +349,7 @@ mod tests {
         }
     }
 
-    fn check_wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
+    fn check_wrong_key(rng: &mut impl CryptoRng, data: &TestChallengeData) {
         let TestChallengeData {
             chain_config,
             challenge,

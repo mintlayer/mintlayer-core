@@ -93,7 +93,7 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    pub use test_utils::random::{make_seedable_rng, Rng, Seed};
+    pub use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     use crate::pool::tx_pool::DescendantScore;
 
@@ -106,9 +106,9 @@ mod tests {
     fn test_generate_equidistant_span(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let first = rng.gen_range(0..100);
-        let last = rng.gen_range(100..200);
-        let n = rng.gen_range(0..10);
+        let first = rng.random_range(0..100);
+        let last = rng.random_range(100..200);
+        let n = rng.random_range(0..10);
 
         eprintln!("testing {first} {last} {n}");
         let result = generate_equidistant_span(first, last, n);
@@ -157,10 +157,10 @@ mod tests {
     fn test_find_interpolated_value_exact_key(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut map = BTreeMap::new();
-        for _ in 0..rng.gen_range(1..10) {
+        for _ in 0..rng.random_range(1..10) {
             map.insert(
-                rng.gen::<usize>(),
-                DescendantScore::new(FeeRate::from_atoms_per_kb(rng.gen_range(0..1_000_000))),
+                rng.random_range(0..=usize::MAX),
+                DescendantScore::new(FeeRate::from_atoms_per_kb(rng.random_range(0..1_000_000))),
             );
         }
 
@@ -181,8 +181,8 @@ mod tests {
     fn test_find_interpolated_value_interpolation(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut map = BTreeMap::new();
-        let min = rng.gen_range(0..1_000_000);
-        let max = rng.gen_range(min..2_000_000);
+        let min = rng.random_range(0..1_000_000);
+        let max = rng.random_range(min..2_000_000);
 
         map.insert(0, DescendantScore::new(FeeRate::from_atoms_per_kb(min)));
         map.insert(10, DescendantScore::new(FeeRate::from_atoms_per_kb(max)));

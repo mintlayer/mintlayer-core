@@ -88,7 +88,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
 };
-use randomness::{make_pseudo_rng, make_true_rng, Rng};
+use randomness::{make_pseudo_rng, make_true_rng, RngExt as _};
 #[cfg(feature = "ledger")]
 use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
@@ -1558,7 +1558,7 @@ where
             }
 
             // Reset the timer with a new random interval between 2 and 5 minutes
-            let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
+            let sleep_interval_sec = make_pseudo_rng().random_range(120..=300);
             *rebroadcast_txs_again_at = (get_time() + Duration::from_secs(sleep_interval_sec))
                 .expect("Sleep intervals cannot be this large");
         }

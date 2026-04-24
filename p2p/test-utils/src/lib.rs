@@ -36,7 +36,7 @@ use common::{
 use logging::log;
 use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::random::{CryptoRng, Rng};
+use test_utils::random::CryptoRng;
 
 use crate::panic_handling::get_panic_notification;
 
@@ -104,11 +104,7 @@ pub fn start_subsystems_generic(
 
 // TODO: unify block creation utilities in p2p tests (others are in p2p/src/sync/tests/helpers,
 // may be in some other places too).
-pub fn create_n_blocks(
-    rng: &mut (impl Rng + CryptoRng),
-    tf: &mut TestFramework,
-    n: usize,
-) -> Vec<Block> {
+pub fn create_n_blocks(rng: &mut impl CryptoRng, tf: &mut TestFramework, n: usize) -> Vec<Block> {
     assert!(n > 0);
 
     let mut blocks = Vec::with_capacity(n);

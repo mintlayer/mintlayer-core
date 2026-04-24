@@ -15,6 +15,8 @@
 
 use std::{collections::BTreeMap, ops::Range};
 
+use rstest::rstest;
+
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
@@ -26,8 +28,7 @@ use common::{
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::DelegationData;
-use randomness::{CryptoRng, Rng, SliceRandom};
-use rstest::rstest;
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     split_value,
@@ -44,13 +45,13 @@ fn random_input_utxos(
     split_value(rng, total_input_atoms)
         .into_iter()
         .map(|v| {
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(v)),
                     Destination::AnyoneCanSpend,
                 )
             } else {
-                let lock = rng.gen_range(timelock_range.clone());
+                let lock = rng.random_range(timelock_range.clone());
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(v)),
                     Destination::AnyoneCanSpend,
@@ -61,7 +62,7 @@ fn random_input_utxos(
         .collect()
 }
 
-fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128) -> StakePoolData {
+fn create_stake_pool_data(rng: &mut impl CryptoRng, atoms_to_stake: u128) -> StakePoolData {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     StakePoolData::new(
         Amount::from_atoms(atoms_to_stake),
@@ -87,11 +88,11 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(1));
 
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(0..10);
-    let number_of_outputs = rng.gen_range(0..10);
+    let number_of_inputs = rng.random_range(0..10);
+    let number_of_outputs = rng.random_range(0..10);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(100..1000);
+    let staked_atoms = rng.random_range(100..1000);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
@@ -109,13 +110,13 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
-    let decommission_pool_utxo = if rng.gen::<bool>() {
+    let decommission_pool_utxo = if rng.random::<bool>() {
         TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
     } else {
         produce_block()
     };
 
-    let transferred_atoms = rng.gen_range(0..1000);
+    let transferred_atoms = rng.random_range(0..1000);
 
     let input_utxos = {
         let mut outputs = random_input_utxos(
@@ -132,11 +133,11 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
     // try to unlock random value
     {
-        let random_additional_value = rng.gen_range(1..100);
+        let random_additional_value = rng.random_range(1..100);
         let timelocked_outputs = split_value(&mut rng, staked_atoms - random_additional_value)
             .iter()
             .map(|atoms| {
-                let random_additional_value = rng.gen_range(0..10u64);
+                let random_additional_value = rng.random_range(0..10u64);
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
@@ -192,7 +193,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         let timelocked_outputs = split_value(&mut rng, staked_atoms)
             .iter()
             .map(|atoms| {
-                let random_additional_distance = rng.gen_range(0..10);
+                let random_additional_distance = rng.random_range(0..10);
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
@@ -242,13 +243,13 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .to_int();
 
     let mut rng = make_seedable_rng(seed);
-    let number_of_outputs = rng.gen_range(0..10);
+    let number_of_outputs = rng.random_range(0..10);
 
     let delegation_id = DelegationId::new(H256::zero());
     let delegation_data =
         DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
-    let delegated_atoms = rng.gen_range(1..1000);
-    let atoms_to_spend = rng.gen_range(1..=delegated_atoms);
+    let delegated_atoms = rng.random_range(1..1000);
+    let atoms_to_spend = rng.random_range(1..=delegated_atoms);
 
     let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
         BTreeMap::new(),
@@ -268,11 +269,11 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
     // make timelock outputs but total atoms that locked is less than required
     {
-        let random_additional_value = rng.gen_range(1..=atoms_to_spend);
+        let random_additional_value = rng.random_range(1..=atoms_to_spend);
         let timelocked_outputs = split_value(&mut rng, atoms_to_spend - random_additional_value)
             .iter()
             .map(|atoms| {
-                let random_additional_distance = rng.gen_range(0..10);
+                let random_additional_distance = rng.random_range(0..10);
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
@@ -330,7 +331,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         let timelocked_outputs = split_value(&mut rng, atoms_to_spend)
             .iter()
             .map(|atoms| {
-                let random_additional_distance = rng.gen_range(0..10);
+                let random_additional_distance = rng.random_range(0..10);
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,

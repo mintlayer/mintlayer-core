@@ -60,7 +60,7 @@ use crypto::{
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
 use test_utils::{assert_matches_return_val, random_ascii_alphanumeric_string};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
@@ -125,17 +125,17 @@ lazy_static::lazy_static! {
     };
 }
 
-pub async fn test_fixed_signatures_generic<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
-    make_signer: MkS,
-) where
+pub async fn test_fixed_signatures_generic<MkS, S>(rng: &mut impl CryptoRng, make_signer: MkS)
+where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
-    let sighash_input_commitment_version_fork_height = BlockHeight::new(rng.gen_range(1..100_000));
+    let sighash_input_commitment_version_fork_height =
+        BlockHeight::new(rng.random_range(1..100_000));
     // The height shouldn't matter as long as it's below the fork
-    let tx_block_height =
-        BlockHeight::new(rng.gen_range(0..sighash_input_commitment_version_fork_height.into_int()));
+    let tx_block_height = BlockHeight::new(
+        rng.random_range(0..sighash_input_commitment_version_fork_height.into_int()),
+    );
 
     let chain_config = Arc::new(
         chain::config::Builder::new(ChainType::Regtest)
@@ -360,7 +360,7 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
             // currency matters.
             initially_given: OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             ),
         },
     );
@@ -368,7 +368,7 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
         token_id,
         // Note: this info doesn't influence the signature and can be random.
         TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
+            num_decimals: rng.random_range(1..10),
             ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
         },
     );
@@ -436,7 +436,7 @@ pub async fn test_fixed_signatures_generic<MkS, S>(
 /// 3) htlc inputs;
 /// 4) v1 input commitments.
 pub async fn test_fixed_signatures_generic2<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
 ) where
@@ -445,10 +445,10 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
 {
     // The actual heights don't matter as long as tx block height is at the correct side of the fork.
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
-        let fork_height = rng.gen_range(1000..2000);
+        let fork_height = rng.random_range(1000..2000);
         let tx_block_height = match input_commitments_version {
-            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
-            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+            SighashInputCommitmentVersion::V0 => rng.random_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.random_range(fork_height..fork_height * 2),
         };
         (
             BlockHeight::new(fork_height),
@@ -641,10 +641,10 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
             OrderAdditionalInfo {
                 // Note: the amounts in initially_asked and initially_given aren't used by the signers when handling
                 // v0 FillOrder, only the currencies matter.
-                initially_asked: OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+                initially_asked: OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
                 initially_given: OutputValue::TokenV1(
                     token_id,
-                    Amount::from_atoms(rng.gen_range(100..200)),
+                    Amount::from_atoms(rng.random_range(100..200)),
                 ),
                 ask_balance: Amount::from_atoms(50),
                 give_balance: Amount::from_atoms(100),
@@ -665,8 +665,8 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(300)),
         initially_given: OutputValue::Coin(Amount::from_atoms(150)),
         // Note: ask_balance/give_balance aren't used by the signers when handling v1 FillOrder.
-        ask_balance: Amount::from_atoms(rng.gen_range(100..200)),
-        give_balance: Amount::from_atoms(rng.gen_range(100..200)),
+        ask_balance: Amount::from_atoms(rng.random_range(100..200)),
+        give_balance: Amount::from_atoms(rng.random_range(100..200)),
     };
     let concluded_order_v0_info = match input_commitments_version {
         SighashInputCommitmentVersion::V0 => {
@@ -676,7 +676,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
                 // (both v0 and v1), only the currency matters.
                 initially_given: OutputValue::TokenV1(
                     token_id,
-                    Amount::from_atoms(rng.gen_range(100..200)),
+                    Amount::from_atoms(rng.random_range(100..200)),
                 ),
                 ask_balance: Amount::from_atoms(55),
                 give_balance: Amount::from_atoms(110),
@@ -699,7 +699,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
                 // (both v0 and v1), only the currency matters.
                 initially_given: OutputValue::TokenV1(
                     token_id,
-                    Amount::from_atoms(rng.gen_range(100..200)),
+                    Amount::from_atoms(rng.random_range(100..200)),
                 ),
                 ask_balance: Amount::from_atoms(110),
                 give_balance: Amount::from_atoms(55),
@@ -718,13 +718,13 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
     };
     let frozen_order_info = OrderAdditionalInfo {
         // Note: the amounts aren't used by the signers when handling FreezeOrder.
-        initially_asked: OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+        initially_asked: OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
         initially_given: OutputValue::TokenV1(
             token_id,
-            Amount::from_atoms(rng.gen_range(100..200)),
+            Amount::from_atoms(rng.random_range(100..200)),
         ),
-        ask_balance: Amount::from_atoms(rng.gen_range(100..200)),
-        give_balance: Amount::from_atoms(rng.gen_range(100..200)),
+        ask_balance: Amount::from_atoms(rng.random_range(100..200)),
+        give_balance: Amount::from_atoms(rng.random_range(100..200)),
     };
 
     let delegation_id1 = DelegationId::new(hash_encoded(&"some delegation 1"));
@@ -905,7 +905,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         token_id,
         // Note: token info doesn't influence the signature and can be random.
         TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
+            num_decimals: rng.random_range(1..10),
             ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
         },
     );
@@ -1145,7 +1145,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
 /// Another fixed signature test. The main difference from test_fixed_signatures_generic2 is that
 /// we have removed the input commitments V0 and orders V0
 pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     make_signer: MkS,
 ) where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
@@ -1153,8 +1153,8 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
 {
     // The actual heights don't matter as long as tx block height is at the correct side of the fork.
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
-        let fork_height = rng.gen_range(1000..2000);
-        let tx_block_height = rng.gen_range(fork_height..fork_height * 2);
+        let fork_height = rng.random_range(1000..2000);
+        let tx_block_height = rng.random_range(fork_height..fork_height * 2);
 
         (
             BlockHeight::new(fork_height),
@@ -1344,8 +1344,8 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
         initially_asked: OutputValue::TokenV1(token_id, Amount::from_atoms(300)),
         initially_given: OutputValue::Coin(Amount::from_atoms(150)),
         // Note: ask_balance/give_balance aren't used by the signers when handling v1 FillOrder.
-        ask_balance: Amount::from_atoms(rng.gen_range(100..200)),
-        give_balance: Amount::from_atoms(rng.gen_range(100..200)),
+        ask_balance: Amount::from_atoms(rng.random_range(100..200)),
+        give_balance: Amount::from_atoms(rng.random_range(100..200)),
     };
     let concluded_order_v1_info = OrderAdditionalInfo {
         // Note: in commitments v1, we commit to all values for ConcludeOrder,
@@ -1357,13 +1357,13 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
     };
     let frozen_order_info = OrderAdditionalInfo {
         // Note: the amounts aren't used by the signers when handling FreezeOrder.
-        initially_asked: OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+        initially_asked: OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
         initially_given: OutputValue::TokenV1(
             token_id,
-            Amount::from_atoms(rng.gen_range(100..200)),
+            Amount::from_atoms(rng.random_range(100..200)),
         ),
-        ask_balance: Amount::from_atoms(rng.gen_range(100..200)),
-        give_balance: Amount::from_atoms(rng.gen_range(100..200)),
+        ask_balance: Amount::from_atoms(rng.random_range(100..200)),
+        give_balance: Amount::from_atoms(rng.random_range(100..200)),
     };
 
     let delegation_id1 = DelegationId::new(hash_encoded(&"some delegation 1"));
@@ -1530,7 +1530,7 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
         token_id,
         // Note: token info doesn't influence the signature and can be random.
         TokenAdditionalInfo {
-            num_decimals: rng.gen_range(1..10),
+            num_decimals: rng.random_range(1..10),
             ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
         },
     );
@@ -1678,7 +1678,7 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
 // We also add one non-htlc input (pool decommissioning), so that signatures differ for different
 // input commitment versions.
 pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
 ) where
@@ -1687,10 +1687,10 @@ pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
 {
     // The actual heights don't matter as long as tx block height is at the correct side of the fork.
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
-        let fork_height = rng.gen_range(1000..2000);
+        let fork_height = rng.random_range(1000..2000);
         let tx_block_height = match input_commitments_version {
-            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
-            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+            SighashInputCommitmentVersion::V0 => rng.random_range(1..fork_height),
+            SighashInputCommitmentVersion::V1 => rng.random_range(fork_height..fork_height * 2),
         };
         (
             BlockHeight::new(fork_height),

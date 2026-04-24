@@ -70,7 +70,7 @@ async fn invalid_num_items() {
 #[tokio::test]
 async fn invalid_num_items_max(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let more_than_max = rng.gen_range(101..1000);
+    let more_than_max = rng.random_range(101..1000);
     let (task, response) =
         spawn_webserver(&format!("/api/v2/transaction?items={more_than_max}")).await;
 
@@ -97,8 +97,8 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let n_blocks = rng.gen_range(3..100);
-            let num_tx = rng.gen_range(2..n_blocks);
+            let n_blocks = rng.random_range(3..100);
+            let num_tx = rng.random_range(2..n_blocks);
 
             let chain_config = create_unit_test_config();
 
@@ -130,7 +130,7 @@ async fn ok(#[case] seed: Seed) {
                         let prev_block = tf.block(tf.to_chain_block_id(&ids[0]));
                         let prev_tx = &prev_block.transactions()[0];
 
-                        let transaction_index = rng.gen_range(0..block.transactions().len());
+                        let transaction_index = rng.random_range(0..block.transactions().len());
                         let signed_transaction = &block.transactions()[transaction_index];
                         let transaction = signed_transaction.transaction();
 
@@ -231,7 +231,7 @@ async fn ok(#[case] seed: Seed) {
     }
 
     let mut rng = make_seedable_rng(seed);
-    let offset = rng.gen_range(1..num_tx);
+    let offset = rng.random_range(1..num_tx);
     let items = num_tx - offset;
     let url = format!("/api/v2/transaction?offset={offset}&items={items}");
 

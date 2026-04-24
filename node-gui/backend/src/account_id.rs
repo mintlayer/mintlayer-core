@@ -50,7 +50,7 @@ mod tests {
     use super::*;
 
     use rstest::rstest;
-    use test_utils::random::{Rng, Seed};
+    use test_utils::random::{RngExt as _, Seed};
 
     #[rstest]
     #[trace]
@@ -58,7 +58,7 @@ mod tests {
     fn test_json_valid(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let id = AccountId::new(U31::from_u32_with_msb(rng.gen::<u32>()).0);
+        let id = AccountId::new(U31::from_u32_with_msb(rng.random::<u32>()).0);
 
         let id_json = serde_json::to_string(&id).unwrap();
         let id_decoded = serde_json::from_str::<AccountId>(&id_json).unwrap();
@@ -73,7 +73,7 @@ mod tests {
 
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let str = rng.gen_range(MSB_BIT..u32::MAX).to_string();
+        let str = rng.random_range(MSB_BIT..u32::MAX).to_string();
 
         serde_json::from_str::<AccountId>(&str).unwrap_err();
     }

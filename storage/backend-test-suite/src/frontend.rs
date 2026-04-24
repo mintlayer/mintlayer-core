@@ -18,7 +18,7 @@
 
 use crate::prelude::*;
 
-use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng};
+use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _};
 
 mod iter_sort_preserving_numbers {
     use serialization::{Decode, Encode};
@@ -55,7 +55,7 @@ mod iter_sort_preserving_numbers {
 
             let test_values = (0..100)
                 .map(|_| CompoundKey1 {
-                    main_part: OrderPreservingValue::new(rng.gen::<u64>()),
+                    main_part: OrderPreservingValue::new(rng.random::<u64>()),
                     aux_part: gen_random_bytes(&mut rng, 1, 100),
                 })
                 .collect::<Vec<_>>();
@@ -72,7 +72,7 @@ mod iter_sort_preserving_numbers {
                 v1.main_part.inner().cmp(&v2.main_part.inner())
             });
 
-            let i = rng.gen_range(0..test_values.len() - 1);
+            let i = rng.random_range(0..test_values.len() - 1);
 
             let item = &sorted_test_values[i];
             let expected_ge_items = &sorted_test_values[i..];
@@ -122,7 +122,7 @@ mod iter_sort_preserving_numbers {
             let test_values = (0..100)
                 .map(|_| {
                     (
-                        OrderPreservingValue::new(rng.gen::<u64>()),
+                        OrderPreservingValue::new(rng.random::<u64>()),
                         gen_random_bytes(&mut rng, 1, 100),
                     )
                 })
@@ -140,7 +140,7 @@ mod iter_sort_preserving_numbers {
                 v1.0.inner().cmp(&v2.0.inner())
             });
 
-            let i = rng.gen_range(0..test_values.len() - 1);
+            let i = rng.random_range(0..test_values.len() - 1);
 
             let item = &sorted_test_values[i];
             let expected_ge_items = &sorted_test_values[i..];

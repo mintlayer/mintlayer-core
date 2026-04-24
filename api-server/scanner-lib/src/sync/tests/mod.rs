@@ -70,7 +70,7 @@ use crypto::{
 };
 use logging::log;
 use mempool::FeeRate;
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, RngExt as _};
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -150,7 +150,7 @@ struct MockRemoteNode {
 }
 
 impl MockRemoteNode {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let tf = Arc::new(Mutex::new(TestFramework::builder(rng).build()));
         Self { tf }
     }
@@ -199,12 +199,7 @@ impl RemoteNode for MockRemoteNode {
     }
 }
 
-fn create_chain(
-    node: &MockRemoteNode,
-    rng: &mut (impl Rng + CryptoRng),
-    parent: u64,
-    count: usize,
-) {
+fn create_chain(node: &MockRemoteNode, rng: &mut impl CryptoRng, parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
     let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
@@ -325,7 +320,7 @@ async fn randomized(#[case] seed: Seed) {
 async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+    let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.random_range(10000..100000);
     let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let staking_key = Destination::PublicKey(pk.clone());
@@ -335,7 +330,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
         vrf_pk,
         staking_key.clone(),
         PerThousand::new_from_rng(&mut rng),
-        Amount::from_atoms(rng.gen_range(0..100)),
+        Amount::from_atoms(rng.random_range(0..100)),
     );
     let pool_id = PoolId::new(H256::random_using(&mut rng));
 
@@ -394,7 +389,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_block_hash = block.get_id();
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
-    let remaining_coins = remaining_coins - rng.gen_range(0..10);
+    let remaining_coins = remaining_coins - rng.random_range(0..10);
     eprintln!("coins: {remaining_coins}");
     let transaction = TransactionBuilder::new()
         .add_input(
@@ -423,7 +418,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_block_hash = block.get_id();
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
-    let remaining_coins = remaining_coins - rng.gen_range(0..10);
+    let remaining_coins = remaining_coins - rng.random_range(0..10);
     eprintln!("coins: {remaining_coins}");
     let (_, deleg_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let transaction = TransactionBuilder::new()
@@ -443,8 +438,8 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let delegation_id = make_delegation_id(transaction.inputs()).unwrap();
     let prev_tx_id = transaction.transaction().get_id();
 
-    let amount_to_stake = rng.gen_range(100..1000);
-    let remaining_coins = remaining_coins - amount_to_stake - rng.gen_range(0..10);
+    let amount_to_stake = rng.random_range(100..1000);
+    let remaining_coins = remaining_coins - amount_to_stake - rng.random_range(0..10);
     eprintln!("coins: {remaining_coins} {amount_to_stake}");
     let stake_transaction = TransactionBuilder::new()
         .add_input(
@@ -477,7 +472,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_block_hash = block.get_id();
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
-    let remaining_coins = remaining_coins - rng.gen_range(0..10);
+    let remaining_coins = remaining_coins - rng.random_range(0..10);
     eprintln!("coins: {remaining_coins}");
     let transaction = TransactionBuilder::new()
         .add_input(
@@ -507,7 +502,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
     let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN
-        + rng.gen_range(
+        + rng.random_range(
             0..remaining_coins - chain_config.min_stake_pool_pledge().into_atoms() - 100,
         );
     let (new_staking_sk, new_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -519,7 +514,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
         vrf_pk,
         staking_key.clone(),
         PerThousand::new_from_rng(&mut rng),
-        Amount::from_atoms(rng.gen_range(0..100)),
+        Amount::from_atoms(rng.random_range(0..100)),
     );
     let new_pool_id = PoolId::from_utxo(&UtxoOutPoint::new(
         OutPointSourceId::Transaction(prev_tx_id),
@@ -527,7 +522,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     ));
 
     eprintln!("coins {remaining_coins}, {initial_pledge}");
-    let remaining_coins = remaining_coins - initial_pledge - rng.gen_range(0..10);
+    let remaining_coins = remaining_coins - initial_pledge - rng.random_range(0..10);
     let transaction = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0),
@@ -559,7 +554,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_block_hash = block.get_id();
     sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
 
-    let remaining_coins = remaining_coins - rng.gen_range(0..10);
+    let remaining_coins = remaining_coins - rng.random_range(0..10);
     let input1 = TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0);
     let input2 = TxInput::from_utxo(OutPointSourceId::BlockReward(prev_block_hash.into()), 0);
     let transaction = TransactionBuilder::new()
@@ -688,7 +683,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     let lock_for_sec = TxOutput::LockThenTransfer(
         OutputValue::Coin(Amount::from_atoms(3)),
         destination.clone(),
-        OutputTimeLock::ForSeconds(rng.gen_range(1..=target_block_time.as_secs())),
+        OutputTimeLock::ForSeconds(rng.random_range(1..=target_block_time.as_secs())),
     );
     let lock_until_time = TxOutput::LockThenTransfer(
         OutputValue::Coin(Amount::from_atoms(4)),
@@ -698,7 +693,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 .genesis_block()
                 .timestamp()
                 .add_int_seconds(
-                    target_block_time.as_secs() + rng.gen_range(1..=target_block_time.as_secs()),
+                    target_block_time.as_secs() + rng.random_range(1..=target_block_time.as_secs()),
                 )
                 .unwrap(),
         ),
@@ -1038,7 +1033,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
 #[allow(clippy::too_many_arguments)]
 fn create_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     target_block_time: Duration,
     prev_block_hash: Id<GenBlock>,
@@ -1159,7 +1154,7 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
     let public_key_dest = Destination::PublicKey(pub_key.clone());
     let public_key_hash_dest = Destination::PublicKeyHash((&pub_key).into());
     let classic_multisig_dest = Destination::ClassicMultisig((&pub_key).into());
-    let script_dest = Destination::ScriptHash(Id::new(H256::from_slice(&rng.gen::<[u8; 32]>())));
+    let script_dest = Destination::ScriptHash(Id::new(H256::from_slice(&rng.random::<[u8; 32]>())));
 
     let with_public_key = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1)),

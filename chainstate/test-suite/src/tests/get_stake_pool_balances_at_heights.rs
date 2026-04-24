@@ -38,7 +38,7 @@ use crypto::{
 };
 use logging::log;
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]
@@ -163,13 +163,13 @@ fn randomized_test(#[case] seed: Seed) {
         // anything explicitly.
         for _ in 0..100 {
             let mut did_something = false;
-            match rng.gen_range(0..5) {
+            match rng.random_range(0..5) {
                 0 => {
                     let _ = test_data.make_new_pool(&mut tf, &mut rng);
                     did_something = true;
                 }
                 1 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                             test_data.decommission_pool(&mut tf, &mut rng, &pool_id);
                             did_something = true;
@@ -177,7 +177,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 2 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                             let _ = test_data.create_delegation(&mut tf, &mut rng, &pool_id);
                             did_something = true;
@@ -185,7 +185,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 3 => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
                         {
@@ -200,7 +200,7 @@ fn randomized_test(#[case] seed: Seed) {
                     }
                 }
                 _ => {
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         if let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
                         {
@@ -216,7 +216,7 @@ fn randomized_test(#[case] seed: Seed) {
                 }
             }
 
-            if !did_something && rng.gen_bool(0.5) {
+            if !did_something && rng.random_bool(0.5) {
                 if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
                     test_data.produce_trivial_block_with_pool(&mut tf, &mut rng, &pool_id);
                     did_something = true;
@@ -230,7 +230,7 @@ fn randomized_test(#[case] seed: Seed) {
     });
 }
 
-fn make_test_framework(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
+fn make_test_framework(rng: &mut impl CryptoRng) -> TestFramework {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
 
@@ -400,13 +400,14 @@ impl TestData {
     fn make_new_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (PoolId, Amount) {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let pledge =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let pledge = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
         let (stake_pool_data, staker_key) =
             create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
         let pool_id = PoolId::from_utxo(self.utxo_for_spending.outpoint());
@@ -450,7 +451,7 @@ impl TestData {
     fn decommission_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) {
         let info = self.pools.remove(pool_id).unwrap();
@@ -492,13 +493,14 @@ impl TestData {
     fn create_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) -> (DelegationId, Amount) {
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let amount_to_delegate =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
+        let amount_to_delegate = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2),
+        );
 
         let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
@@ -553,11 +555,11 @@ impl TestData {
     fn withdraw_from_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
-        let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1000..10_000));
+        let amount_to_withdraw = Amount::from_atoms(rng.random_range(1000..10_000));
 
         let nonce = self.next_nonce(delegation_id);
 
@@ -601,11 +603,11 @@ impl TestData {
     fn add_to_delegation(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
         delegation_id: &DelegationId,
     ) -> Amount {
-        let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
+        let amount_to_add = Amount::from_atoms(rng.random_range(1000..10_000));
 
         let tx_builder = TransactionBuilder::new()
             .add_output(TxOutput::DelegateStaking(amount_to_add, *delegation_id));
@@ -641,7 +643,7 @@ impl TestData {
     fn produce_trivial_block_with_pool(
         &mut self,
         tf: &mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         pool_id: &PoolId,
     ) {
         make_block_builder_with_pool(tf, pool_id).build_and_process(rng).unwrap();

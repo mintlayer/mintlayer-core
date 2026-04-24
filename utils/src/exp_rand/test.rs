@@ -15,9 +15,8 @@
 
 use super::*;
 
-use randomness::rngs::StepRng;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{make_seedable_rng, Seed, StepRng};
 
 #[rstest]
 #[trace]

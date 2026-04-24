@@ -25,8 +25,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 use hex::ToHex;
 use itertools::Itertools;
 
-use randomness::distributions::uniform::SampleRange;
-use randomness::Rng;
+use randomness::{distributions::uniform::SampleRange, Rng, RngExt as _};
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
 
@@ -82,7 +81,7 @@ where
 
 pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
     for _ in 0..1000 {
-        let random_byte = rng.gen::<u8>();
+        let random_byte = rng.random::<u8>();
         if !random_byte.is_ascii_alphanumeric() {
             return random_byte;
         }
@@ -95,18 +94,18 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     rng: &mut impl Rng,
     range_len: R,
 ) -> String {
-    use randomness::distributions::{Alphanumeric, DistString};
+    use randomness::distributions::{Alphanumeric, SampleString};
     if range_len.is_empty() {
         return String::new();
     }
-    let len = rng.gen_range(range_len);
+    let len = rng.random_range(range_len);
     Alphanumeric.sample_string(rng, len)
 }
 
 pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
     assert!(!c.is_ascii_alphanumeric());
-    let text_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % text_len;
+    let text_len = rng.random_range(1..=max_len);
+    let random_index_to_replace = rng.random_range(0..text_len);
     let token_ticker: Vec<u8> = (0..text_len)
         .map(|idx| {
             if idx != random_index_to_replace {
@@ -138,10 +137,10 @@ where
 
 pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     let mut numbers = vec![0, value];
-    let n = rng.gen_range(0..10);
+    let n = rng.random_range(0..10);
 
     if value > 1 && n > 0 {
-        numbers.extend((0..=n).map(|_| rng.gen_range(1..value)).collect::<Vec<_>>());
+        numbers.extend((0..=n).map(|_| rng.random_range(1..value)).collect::<Vec<_>>());
         numbers.sort();
     }
 
@@ -239,7 +238,7 @@ mod tests {
         assert_eq!(vec![0], split_value(&mut rng, 0));
         assert_eq!(vec![1], split_value(&mut rng, 1));
 
-        let value = rng.gen::<u128>();
+        let value = rng.random::<u128>();
         let result = split_value(&mut rng, value);
         assert_eq!(value, result.iter().sum());
     }

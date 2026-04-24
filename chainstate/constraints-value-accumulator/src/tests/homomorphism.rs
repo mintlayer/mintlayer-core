@@ -22,7 +22,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Fee, Id, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},
@@ -31,7 +31,7 @@ use test_utils::{
 
 use crate::ConstrainedValueAccumulator;
 
-fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128) -> StakePoolData {
+fn create_stake_pool_data(rng: &mut impl CryptoRng, atoms_to_stake: u128) -> StakePoolData {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     StakePoolData::new(
         Amount::from_atoms(atoms_to_stake),
@@ -76,15 +76,15 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     let delegation_id = DelegationId::new(H256::random_using(&mut rng));
     let delegation_data = pos_accounting::DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
-    let transferred_atoms = rng.gen_range(0..1000);
-    let staked_atoms = rng.gen_range(100..1000);
+    let transferred_atoms = rng.random_range(0..1000);
+    let staked_atoms = rng.random_range(100..1000);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
-    let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
+    let delegation_balance = Amount::from_atoms(rng.random_range(100..1000));
 
     // total outputs is a part of total inputs because some random part goes as fees
-    let decommission_output_atoms = rng.gen_range(1..staked_atoms);
-    let share_to_spend_atoms = rng.gen_range(1..=delegation_balance.into_atoms());
-    let spend_share_output = rng.gen_range(1..=share_to_spend_atoms);
+    let decommission_output_atoms = rng.random_range(1..staked_atoms);
+    let share_to_spend_atoms = rng.random_range(1..=delegation_balance.into_atoms());
+    let spend_share_output = rng.random_range(1..=share_to_spend_atoms);
 
     let expected_fee = Fee(Amount::from_atoms(
         transferred_atoms + transferred_atoms + staked_atoms + share_to_spend_atoms
@@ -110,7 +110,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let (decommission_tx, decommission_tx_inputs_utxos) = {
-        let decommission_pool_utxo = if rng.gen::<bool>() {
+        let decommission_pool_utxo = if rng.random::<bool>() {
             TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
         } else {
             TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id)
@@ -146,7 +146,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
 
         let locked_outputs =
             split_value(&mut rng, decommission_output_atoms).into_iter().map(|atoms| {
-                let random_additional_distance = rng.gen_range(0..10);
+                let random_additional_distance = rng.random_range(0..10);
                 TxOutput::LockThenTransfer(
                     OutputValue::Coin(Amount::from_atoms(atoms)),
                     Destination::AnyoneCanSpend,
@@ -200,7 +200,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         });
 
         let locked_outputs = split_value(&mut rng, spend_share_output).into_iter().map(|atoms| {
-            let random_additional_distance = rng.gen_range(0..10);
+            let random_additional_distance = rng.random_range(0..10);
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(atoms)),
                 Destination::AnyoneCanSpend,

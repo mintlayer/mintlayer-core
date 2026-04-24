@@ -139,8 +139,8 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
             .add_output(TxOutput::Transfer(
                 TokenIssuanceV0 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
-                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                    number_of_decimals: rng.gen_range(1..18),
+                    amount_to_issue: Amount::from_atoms(rng.random_range(1..u128::MAX)),
+                    number_of_decimals: rng.random_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),

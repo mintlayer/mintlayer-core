@@ -24,7 +24,7 @@ use p2p_types::{
     services::{Service, Services},
     PeerId,
 };
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -94,7 +94,7 @@ fn validate_services(#[case] seed: Seed) {
             peer_mgr_event_receiver,
             time_getter.get_time_getter(),
             peerdb_inmemory_store(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .unwrap();
 

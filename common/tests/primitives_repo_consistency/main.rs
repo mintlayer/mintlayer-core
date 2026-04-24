@@ -34,7 +34,7 @@ use common::{
     primitives_converters::TryConvertInto as _,
 };
 use crypto::{key::KeyKind, vrf::VRFKeyKind};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -411,7 +411,7 @@ fn test_id_encoding(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     for _ in 0..100 {
-        let ref_obj: RefCustomId = H256(rng.gen()).into();
+        let ref_obj: RefCustomId = H256(rng.random()).into();
         let test_obj = TestCustomId::new(ref_obj.to_hash().try_convert_into().unwrap());
 
         let encoded_ref_obj = ref_obj.encode();

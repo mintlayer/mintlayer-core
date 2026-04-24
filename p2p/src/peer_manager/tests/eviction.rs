@@ -25,7 +25,7 @@ use common::{
 use logging::log;
 use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -159,7 +159,7 @@ mod dont_evict_if_blocks_in_flight {
             Arc::clone(&p2p_config),
             vec![bind_address],
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         );
 
         let addr_count = 3;

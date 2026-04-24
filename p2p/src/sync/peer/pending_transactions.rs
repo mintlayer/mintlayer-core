@@ -59,7 +59,7 @@ mod tests {
 
     use common::primitives::H256;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
 
     #[rstest]
     #[trace]
@@ -140,7 +140,7 @@ mod tests {
         tokio::time::pause();
 
         // Spawn a task with a timeout
-        let timeout_duration = Duration::from_secs(rng.gen_range(1..120));
+        let timeout_duration = Duration::from_secs(rng.random_range(1..120));
         let test_task = tokio::spawn(async move {
             let txs = PendingTransactions::new();
             tokio::time::timeout(timeout_duration, txs.due()).await

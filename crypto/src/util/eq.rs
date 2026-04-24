@@ -51,7 +51,7 @@ impl SliceEqualityCheckMethod {
 pub mod test {
     use rstest::rstest;
 
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -78,13 +78,13 @@ pub mod test {
         let normal = SliceEqualityCheckMethod::Normal;
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
-        let data1_len = rng.gen_range(1..256);
-        let data3_len = rng.gen_range(1..256);
+        let data1_len = rng.random_range(1..256);
+        let data3_len = rng.random_range(1..256);
 
-        let data1: Vec<u8> = (0..data1_len).map(|_| rng.gen::<u8>()).collect();
+        let data1: Vec<u8> = (0..data1_len).map(|_| rng.random::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
         let data3: Vec<u8> = loop {
-            let result = (0..data3_len).map(|_| rng.gen::<u8>()).collect();
+            let result = (0..data3_len).map(|_| rng.random::<u8>()).collect();
             if result != data1 {
                 break result;
             }
@@ -109,12 +109,12 @@ pub mod test {
         let normal = SliceEqualityCheckMethod::Normal;
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
-        let data_len = rng.gen_range(1..256);
+        let data_len = rng.random_range(1..256);
 
-        let data1: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+        let data1: Vec<u8> = (0..data_len).map(|_| rng.random::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
         let data3: Vec<u8> = loop {
-            let result = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+            let result = (0..data_len).map(|_| rng.random::<u8>()).collect();
             if result != data1 {
                 break result;
             }
@@ -140,9 +140,9 @@ pub mod test {
         let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
 
         let empty_slice = b"";
-        let data_len = rng.gen_range(1..256);
+        let data_len = rng.random_range(1..256);
 
-        let data: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+        let data: Vec<u8> = (0..data_len).map(|_| rng.random::<u8>()).collect();
         assert_eq!(data.len(), data_len);
 
         assert!(!normal.are_equal(empty_slice, &data));

@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+use strum::EnumCount as _;
+
 use common::{
     chain::{DelegationId, Destination, PoolId},
     primitives::Amount,
 };
-use randomness::{CryptoRng, Rng};
-use rstest::rstest;
-use strum::EnumCount as _;
+use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::create_pool_data;
@@ -34,7 +35,7 @@ use crate::{
 fn get_random_pool_id(rng: &mut impl Rng, storage: &InMemoryPoSAccounting) -> Option<PoolId> {
     let all_pool_data = storage.all_pool_data();
     (!all_pool_data.is_empty())
-        .then(|| *all_pool_data.iter().nth(rng.gen_range(0..all_pool_data.len())).unwrap().0)
+        .then(|| *all_pool_data.iter().nth(rng.random_range(0..all_pool_data.len())).unwrap().0)
 }
 
 fn get_random_delegation_data(
@@ -45,7 +46,7 @@ fn get_random_delegation_data(
     (!all_delegation_data.is_empty()).then(|| {
         all_delegation_data
             .iter()
-            .nth(rng.gen_range(0..all_delegation_data.len()))
+            .nth(rng.random_range(0..all_delegation_data.len()))
             .map(|(id, data)| (*id, data.clone()))
             .unwrap()
     })
@@ -59,7 +60,7 @@ fn get_random_delegation_balance(
     (!all_delegation_balances.is_empty()).then(|| {
         all_delegation_balances
             .iter()
-            .nth(rng.gen_range(0..all_delegation_balances.len()))
+            .nth(rng.random_range(0..all_delegation_balances.len()))
             .map(|(id, balance)| (*id, *balance))
             .unwrap()
     })
@@ -73,7 +74,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
     let mut undos = Vec::<PoSAccountingUndo>::new();
 
-    let iterations_count = rng.gen_range(100..1000);
+    let iterations_count = rng.random_range(100..1000);
 
     for _ in 0..iterations_count {
         // collecting following random items every time is not efficient, because only single one of them might be used;
@@ -98,7 +99,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
 }
 
 fn perform_random_operation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
     undos: &mut Vec<PoSAccountingUndo>,
     random_pool: Option<PoolId>,
@@ -109,10 +110,10 @@ fn perform_random_operation(
     // and the following match needs to be updated
     assert_eq!(PoSAccountingUndo::COUNT, 7);
 
-    match rng.gen_range(0..11) {
+    match rng.random_range(0..11) {
         // create new pool
         0..=1 => {
-            let pledge_amount = Amount::from_atoms(rng.gen_range(1000..10_000));
+            let pledge_amount = Amount::from_atoms(rng.random_range(1000..10_000));
             let pool_data = create_pool_data(rng, Destination::AnyoneCanSpend, pledge_amount);
             let pool_id = PoolId::random_using(rng);
 
@@ -142,7 +143,7 @@ fn perform_random_operation(
             if let Some((delegation_id, delegation_data)) = random_delegation {
                 // it's possible that after decommission pool the delegations are still there
                 if op.pool_exists(*delegation_data.source_pool()).unwrap() {
-                    let amount_to_delegate = Amount::from_atoms(rng.gen_range(1000..10_000));
+                    let amount_to_delegate = Amount::from_atoms(rng.random_range(1000..10_000));
 
                     let undo = op.delegate_staking(delegation_id, amount_to_delegate).unwrap();
                     undos.push(undo);
@@ -152,7 +153,8 @@ fn perform_random_operation(
         // spend share from delegation
         7 => {
             if let Some((delegation_id, balance)) = random_delegation_balance {
-                let amount_to_spent = Amount::from_atoms(rng.gen_range(1..=balance.into_atoms()));
+                let amount_to_spent =
+                    Amount::from_atoms(rng.random_range(1..=balance.into_atoms()));
 
                 let undo =
                     op.spend_share_from_delegation_id(delegation_id, amount_to_spent).unwrap();
@@ -162,7 +164,7 @@ fn perform_random_operation(
         // increase staker reward
         8..=9 => {
             if let Some(pool_id) = random_pool {
-                let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
+                let amount_to_add = Amount::from_atoms(rng.random_range(1000..10_000));
 
                 let undo = op.increase_staker_rewards(pool_id, amount_to_add).unwrap();
                 undos.push(undo);

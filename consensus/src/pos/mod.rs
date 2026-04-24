@@ -42,7 +42,7 @@ use common::{
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
 use logging::log;
 use pos_accounting::PoSAccountingView;
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use utils::ensure;
 use utxo::UtxosView;
 
@@ -276,7 +276,7 @@ pub fn calc_pos_hash_from_prv_key(
     block_timestamp: BlockTimestamp,
     vrf_pub_key: &VRFPublicKey,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Result<Uint256, ConsensusPoSError> {
     let vrf_data = produce_vrf_data(
         epoch_index,
@@ -304,7 +304,7 @@ pub fn produce_vrf_data(
     sealed_epoch_randomness: &PoSRandomness,
     timestamp: BlockTimestamp,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> VRFReturn {
     let transcript = construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp)
         .with_rng(&mut *rng);
@@ -324,7 +324,7 @@ pub fn find_timestamp_for_staking(
     pledge_amount: Amount,
     pool_balance: Amount,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
     let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
     let target = compact_target_to_target(target)?;

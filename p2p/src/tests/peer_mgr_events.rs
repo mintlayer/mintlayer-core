@@ -29,7 +29,7 @@ use networking::{
 };
 use p2p_test_utils::{run_with_timeout, MEDIUM_TIMEOUT, SHORT_TIMEOUT};
 use p2p_types::peer_address::PeerAddress;
-use randomness::{seq::IteratorRandom as _, Rng};
+use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{gen_random_alnum_string, make_seedable_rng, Seed},
@@ -98,7 +98,7 @@ async fn first_sync_message_received_must_be_sent(
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -186,17 +186,17 @@ async fn first_sync_message_received_must_be_sent(
                             address: random_peer_addr(&mut rng),
                         })
                     }
-                    PeerManagerMessageTag::PingRequest => {
-                        Message::PingRequest(PingRequest { nonce: rng.gen() })
-                    }
+                    PeerManagerMessageTag::PingRequest => Message::PingRequest(PingRequest {
+                        nonce: rng.random(),
+                    }),
                     PeerManagerMessageTag::AddrListResponse => {
                         Message::AddrListResponse(AddrListResponse {
                             addresses: vec![random_peer_addr(&mut rng)],
                         })
                     }
-                    PeerManagerMessageTag::PingResponse => {
-                        Message::PingResponse(PingResponse { nonce: rng.gen() })
-                    }
+                    PeerManagerMessageTag::PingResponse => Message::PingResponse(PingResponse {
+                        nonce: rng.random(),
+                    }),
                     PeerManagerMessageTag::WillDisconnect => {
                         Message::WillDisconnect(WillDisconnectMessage {
                             reason: gen_random_alnum_string(&mut rng, 10, 20),
@@ -260,7 +260,7 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -295,7 +295,7 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
         connect_result_receiver.await.unwrap().unwrap();
 
         for _ in 5..10 {
-            let msg = if rng.gen_bool(0.5) {
+            let msg = if rng.random_bool(0.5) {
                 Message::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![
                     Id::random_using(&mut rng),
                 ])))
@@ -327,8 +327,8 @@ async fn first_sync_message_received_must_be_sent_only_once(#[case] seed: Seed) 
 
 fn random_peer_addr(rng: &mut impl Rng) -> PeerAddress {
     SocketAddr::V4(SocketAddrV4::new(
-        Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
-        rng.gen(),
+        Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
+        rng.random(),
     ))
     .into()
 }

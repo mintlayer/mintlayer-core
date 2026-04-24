@@ -50,7 +50,7 @@ use common::{
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val, gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
@@ -67,7 +67,7 @@ use crate::tests::helpers::token_checks::{
 };
 
 fn unmint_tokens_in_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     token_id: TokenId,
@@ -150,7 +150,7 @@ fn unmint_tokens_in_block(
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
@@ -181,7 +181,7 @@ fn token_issue_test(#[case] seed: Seed) {
             )
             .as_bytes()
             .to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -205,7 +205,7 @@ fn token_issue_test(#[case] seed: Seed) {
         // Ticker doesn't exist
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -239,7 +239,7 @@ fn token_issue_test(#[case] seed: Seed) {
                 // Ticker contain non alpha-numeric char
                 let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                     token_ticker,
-                    number_of_decimals: rng.gen_range(1..18),
+                    number_of_decimals: rng.random_range(1..18),
                     metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024)
                         .as_bytes()
                         .to_vec(),
@@ -301,7 +301,7 @@ fn token_issue_test(#[case] seed: Seed) {
 
             let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
+                number_of_decimals: rng.random_range(1..18),
                 metadata_uri: random_ascii_alphanumeric_string(&mut rng, uri_len_range_to_use)
                     .as_bytes()
                     .to_vec(),
@@ -328,7 +328,7 @@ fn token_issue_test(#[case] seed: Seed) {
         // URI contain non alpha-numeric char
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -401,7 +401,7 @@ fn issue_twice_in_same_tx(#[case] seed: Seed) {
 
         let issuance1 = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -409,7 +409,7 @@ fn issue_twice_in_same_tx(#[case] seed: Seed) {
         });
         let issuance2 = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -578,7 +578,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
-        let total_supply = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let total_supply = Amount::from_atoms(rng.random_range(2..100_000_000));
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
                 &mut rng,
@@ -587,10 +587,10 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
                 IsTokenFreezable::No,
             );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms()));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..total_supply.into_atoms()));
         let amount_to_mint_over_limit = (total_supply + Amount::from_atoms(1)).unwrap();
 
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
         let amount_to_unmint_over_limit = (amount_to_mint + Amount::from_atoms(1)).unwrap();
 
         // Mint over the limit
@@ -767,7 +767,7 @@ fn mint_twice_in_same_tx(#[case] seed: Seed) {
             IsTokenFreezable::No,
         );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
 
         // Mint tokens
         let tx = TransactionBuilder::new()
@@ -829,7 +829,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
                 IsTokenFreezable::No,
             );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
             &mut rng,
@@ -903,7 +903,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
 fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token1_id, issuance1_block_id, issuance1_tx, issuance1, utxo_with_change) =
@@ -926,7 +926,7 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
                 issuance2.clone(),
             );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_1_id) = mint_tokens_in_block(
             &mut rng,
@@ -1046,7 +1046,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let total_supply = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let total_supply = Amount::from_atoms(rng.random_range(2..100_000_000));
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
                 &mut rng,
@@ -1156,7 +1156,8 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
 
         // Unmint n tokens
         // Note: -1 because 1 was unminted previously
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms() - 1));
+        let amount_to_unmint =
+            Amount::from_atoms(rng.random_range(1..total_supply.into_atoms() - 1));
         let best_block_id = tf.best_block_id();
         let (_, unmint_n_tokens_tx_id) = unmint_tokens_in_block(
             &mut rng,
@@ -1262,7 +1263,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..=i128::MAX as u128));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..=i128::MAX as u128));
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
                 &mut rng,
@@ -1460,7 +1461,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
 
         {
             // Try minting a random number of atoms
-            let amount = Amount::from_atoms(rng.gen_range(1..=i128::MAX as u128));
+            let amount = Amount::from_atoms(rng.random_range(1..=i128::MAX as u128));
             let mint_tx = make_mint_tx(amount);
             let mint_tx_id = mint_tx.transaction().get_id();
             let result =
@@ -1484,7 +1485,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         {
             // For completeness, try minting a random number of atoms bigger than i128::MAX.
             // A different error will be generated.
-            let amount = Amount::from_atoms(rng.gen_range((i128::MAX as u128) + 1..=u128::MAX));
+            let amount = Amount::from_atoms(rng.random_range((i128::MAX as u128) + 1..=u128::MAX));
             let mint_tx = make_mint_tx(amount);
             let mint_tx_id = mint_tx.transaction().get_id();
             let result =
@@ -1523,10 +1524,10 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
-        let total_supply_atoms = if rng.gen_bool(0.5) {
+        let total_supply_atoms = if rng.random_bool(0.5) {
             u128::MAX
         } else {
-            rng.gen_range((i128::MAX as u128) + 1..u128::MAX)
+            rng.random_range((i128::MAX as u128) + 1..u128::MAX)
         };
         let total_supply_atoms_above_i128_max = total_supply_atoms - i128::MAX as u128;
         assert!(total_supply_atoms_above_i128_max > 0);
@@ -1626,7 +1627,8 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
 
         {
             // Try minting a random number of atoms, so that the total is below the specified max supply.
-            let amount = Amount::from_atoms(rng.gen_range(1..=total_supply_atoms_above_i128_max));
+            let amount =
+                Amount::from_atoms(rng.random_range(1..=total_supply_atoms_above_i128_max));
             let mint_tx = make_mint_tx(amount);
             let mint_tx_id = mint_tx.transaction().get_id();
             let result =
@@ -1659,7 +1661,7 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
 
                 let amount = Amount::from_atoms(
                     total_supply_atoms_above_i128_max
-                        + rng.gen_range(1..=max_extra_amount_to_fit_into_u128),
+                        + rng.random_range(1..=max_extra_amount_to_fit_into_u128),
                 );
                 let mint_tx = make_mint_tx(amount);
                 let mint_tx_id = mint_tx.transaction().get_id();
@@ -1686,7 +1688,7 @@ fn mint_pseudo_unlimited_supply_max(#[case] seed: Seed) {
             {
                 // The total amount doesn't fit into u128.
 
-                let amount = Amount::from_atoms(rng.gen_range(
+                let amount = Amount::from_atoms(rng.random_range(
                     total_supply_atoms_above_i128_max + max_extra_amount_to_fit_into_u128 + 1
                         ..=u128::MAX,
                 ));
@@ -1724,7 +1726,7 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
             &mut tf,
@@ -1795,7 +1797,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
             &mut tf,
@@ -1876,8 +1878,8 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1_000_000));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..1_000_000));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
@@ -1957,8 +1959,8 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
@@ -2036,7 +2038,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
 
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
@@ -2115,8 +2117,8 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
-        let amount_to_burn = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
+        let amount_to_burn = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
@@ -2198,8 +2200,8 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -2298,8 +2300,8 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
@@ -2421,8 +2423,8 @@ fn check_lockable_supply(#[case] seed: Seed) {
                 IsTokenFreezable::No,
             );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
@@ -2759,7 +2761,7 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
 fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id_1, _, _, _, utxo_with_change) = issue_token_from_genesis(
@@ -2826,7 +2828,7 @@ fn mint_fee(#[case] seed: Seed) {
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
-        let some_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let some_amount = Amount::from_atoms(rng.random_range(100..100_000));
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
             &mut tf,
@@ -2921,7 +2923,7 @@ fn unmint_fee(#[case] seed: Seed) {
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
-        let some_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let some_amount = Amount::from_atoms(rng.random_range(100..100_000));
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
             &mut tf,
@@ -3118,7 +3120,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
                 IsTokenFreezable::No,
             );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
         let amount_to_overspend = (amount_to_mint + Amount::from_atoms(1)).unwrap();
 
         // Mint some tokens
@@ -3216,7 +3218,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
         let first_tx_input = TxInput::from_utxo(genesis_source_id.clone(), 0);
         let token_id = make_token_id(
             tf.chain_config().as_ref(),
@@ -3274,7 +3276,7 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
 
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
 
         let tx_issuance_inputs = vec![TxInput::from_utxo(genesis_source_id, 0)];
         let token_id = make_token_id(
@@ -3353,8 +3355,8 @@ fn mint_unmint_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1000..100_000));
-        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1000..100_000));
+        let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -3445,7 +3447,7 @@ fn reorg_test_simple(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_a_id);
 
         // Create block `b` with token minting
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
         let (block_b_id, _) = mint_tokens_in_block(
             &mut rng,
             &mut tf,
@@ -3497,12 +3499,12 @@ fn reorg_test_simple(#[case] seed: Seed) {
 fn reorg_test_2_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_block_id = tf.best_block_id();
 
-        let amount_to_mint_1 = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let amount_to_mint_2 = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint_1 = Amount::from_atoms(rng.random_range(2..100_000_000));
+        let amount_to_mint_2 = Amount::from_atoms(rng.random_range(2..100_000_000));
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
@@ -3621,7 +3623,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::PublicKey(controller_pk.clone()),
@@ -3636,7 +3638,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             issuance,
         );
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
 
         // Try to mint without signature
         let tx_no_signatures = TransactionBuilder::new()
@@ -3758,7 +3760,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::PublicKey(controller_pk.clone()),
@@ -3774,7 +3776,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         );
 
         // Mint some tokens
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
         let mint_tx = {
             let input_commitments = vec![
                 SighashInputCommitment::None,
@@ -3968,7 +3970,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
             authority: Destination::PublicKey(controller_pk.clone()),
@@ -4095,7 +4097,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let amount_to_mint =
-            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+            Amount::from_atoms(rng.random_range(2..SignedAmount::MAX.into_atoms() as u128));
         let (token_id, issuance_block_id, issuance_tx, issuance, utxo_with_change) =
             issue_token_from_genesis(
                 &mut rng,
@@ -4231,7 +4233,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let token_ticker = gen_text_with_non_ascii(c, &mut rng, max_ticker_len);
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker,
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -4268,7 +4270,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len)
                 .as_bytes()
                 .to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::AnyoneCanSpend,
@@ -4337,7 +4339,7 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
             .build_and_process(&mut rng)
             .unwrap();
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
 
         let issuance =
             make_token_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
@@ -4414,7 +4416,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
             );
 
         // Mint some tokens
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
             &mut rng,
@@ -4812,7 +4814,7 @@ fn fill_freeze_conclude_order_with_frozen_token(
             );
 
         // Mint some tokens
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(100..1000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(100..1000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
             &mut rng,
@@ -4869,7 +4871,7 @@ fn fill_freeze_conclude_order_with_frozen_token(
         // Create the orders
 
         let order1_token_give_amount = (amount_to_mint / 2).unwrap();
-        let order1_coin_ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+        let order1_coin_ask_amount = Amount::from_atoms(rng.random_range(100..1000));
 
         let token_remaining_amount = (amount_to_mint - order1_token_give_amount).unwrap();
         let order1_data = OrderData::new(
@@ -4898,7 +4900,7 @@ fn fill_freeze_conclude_order_with_frozen_token(
         let utxo_with_tokens_change = UtxoOutPoint::new(order1_creation_tx_id.into(), 1);
 
         let order2_token_ask_amount = token_remaining_amount;
-        let order2_coin_give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+        let order2_coin_give_amount = Amount::from_atoms(rng.random_range(100..1000));
 
         let order2_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -5172,7 +5174,7 @@ fn check_freeze_unfreeze_takes_effect_after_submit(#[case] seed: Seed) {
             );
 
         // Mint some tokens
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
             &mut rng,
@@ -5548,8 +5550,8 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
 fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
-        let mut rng3 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng2 = make_seedable_rng(rng.random::<Seed>());
+        let mut rng3 = make_seedable_rng(rng.random::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let token_freeze_fee =
             tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
@@ -5560,7 +5562,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             authority: Destination::PublicKey(controller_pk.clone()),
@@ -5759,7 +5761,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
             authority: Destination::PublicKey(original_pk.clone()),
@@ -6850,7 +6852,7 @@ fn reorg_metadata_uri_change(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_a_id);
 
         // Create block `b` with token minting
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.random_range(2..100_000_000));
         let (block_b_id, mint_tokens_tx_id) = mint_tokens_in_block(
             &mut rng,
             &mut tf,
@@ -7083,7 +7085,7 @@ fn only_authority_can_change_metadata_uri(#[case] seed: Seed) {
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            number_of_decimals: rng.random_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
             authority: Destination::PublicKey(original_pk.clone()),

@@ -25,7 +25,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{Rng, SliceRandom};
+use randomness::{RngExt as _, SliceRandom};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -49,8 +49,8 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
 
     let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
 
-    let number_of_valid_outputs = rng.gen_range(0..10);
-    let number_of_invalid_outputs = rng.gen_range(2..10);
+    let number_of_valid_outputs = rng.random_range(0..10);
+    let number_of_invalid_outputs = rng.random_range(2..10);
     let outputs =
         get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_valid_outputs)
             .into_iter()
@@ -84,8 +84,8 @@ fn tx_create_multiple_delegations(#[case] seed: Seed) {
 
     let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
 
-    let number_of_valid_outputs = rng.gen_range(0..10);
-    let number_of_invalid_outputs = rng.gen_range(2..10);
+    let number_of_valid_outputs = rng.random_range(0..10);
+    let number_of_invalid_outputs = rng.random_range(2..10);
     let outputs =
         get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_valid_outputs)
             .into_iter()
@@ -111,8 +111,8 @@ fn tx_create_multiple_delegations(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn tx_many_to_many_valid(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(1..10);
-    let number_of_outputs = rng.gen_range(1..10);
+    let number_of_inputs = rng.random_range(1..10);
+    let number_of_outputs = rng.random_range(1..10);
 
     let valid_inputs = valid_tx_inputs_utxos();
     // stake pool and create delegation are skipped to avoid dealing with uniqueness
@@ -144,8 +144,8 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn tx_many_to_many_valid_with_account_input(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(1..10);
-    let number_of_outputs = rng.gen_range(1..10);
+    let number_of_inputs = rng.random_range(1..10);
+    let number_of_outputs = rng.random_range(1..10);
 
     let account_inputs = all_account_inputs();
     // stake pool and create delegation are skipped to avoid dealing with uniqueness
@@ -193,8 +193,8 @@ fn tx_many_to_many_valid_with_account_input(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(1..10);
-    let number_of_outputs = rng.gen_range(1..10);
+    let number_of_inputs = rng.random_range(1..10);
+    let number_of_outputs = rng.random_range(1..10);
 
     let valid_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
@@ -230,8 +230,8 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn produce_block_in_tx_output(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(1..10);
-    let number_of_outputs = rng.gen_range(1..10);
+    let number_of_inputs = rng.random_range(1..10);
+    let number_of_outputs = rng.random_range(1..10);
 
     let valid_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
@@ -270,7 +270,7 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
     let outputs = [stake_pool(), create_delegation()];
 
     let mut rng = make_seedable_rng(seed);
-    let number_of_inputs = rng.gen_range(2..10);
+    let number_of_inputs = rng.random_range(2..10);
     let input_utxos = get_random_outputs_combination(&mut rng, &source_inputs, number_of_inputs);
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs.to_vec());
@@ -296,7 +296,7 @@ fn reward_one_to_one(#[case] seed: Seed) {
     );
 
     let block = make_block(vec![outpoint.into()], vec![output.clone()]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let result = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -335,7 +335,7 @@ fn reward_one_to_none(#[case] seed: Seed) {
     );
 
     let block = make_block(vec![outpoint.into()], vec![]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let res = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -360,13 +360,13 @@ fn reward_none_to_any(#[case] seed: Seed) {
     let chain_config = chain::config::Builder::test_chain().build();
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     {
         // valid cases
         let valid_purposes = [lock_then_transfer()];
 
-        let number_of_outputs = rng.gen_range(1..10);
+        let number_of_outputs = rng.random_range(1..10);
         let outputs = get_random_outputs_combination(&mut rng, &valid_purposes, number_of_outputs);
         let block = make_block_no_kernel(outputs);
 
@@ -384,7 +384,7 @@ fn reward_none_to_any(#[case] seed: Seed) {
         // invalid cases
         let invalid_purposes = invalid_block_reward_for_pow();
 
-        let number_of_outputs = rng.gen_range(1..10);
+        let number_of_outputs = rng.random_range(1..10);
         let outputs =
             get_random_outputs_combination(&mut rng, &invalid_purposes, number_of_outputs);
         let block = make_block_no_kernel(outputs);
@@ -416,7 +416,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
     let chain_config = chain::config::Builder::test_chain().build();
     let all_purposes = super::outputs_utils::all_outputs();
 
-    let number_of_outputs = rng.gen_range(2..10);
+    let number_of_outputs = rng.random_range(2..10);
     let kernel_outputs = get_random_outputs_combination(&mut rng, &all_purposes, number_of_outputs)
         .into_iter()
         .enumerate()
@@ -436,7 +436,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, kernel_outputs);
 
     let block = make_block(inputs, vec![]);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     let res = check_reward_inputs_outputs_purposes(
         &chain_config,
@@ -461,8 +461,8 @@ fn reward_accounts_in_inputs(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = chain::config::Builder::test_chain().build();
-    let number_of_inputs = rng.gen_range(1..10);
-    let number_of_outputs = rng.gen_range(1..10);
+    let number_of_inputs = rng.random_range(1..10);
+    let number_of_outputs = rng.random_range(1..10);
 
     let invalid_inputs = all_account_inputs();
     let valid_outputs = [lock_then_transfer()];
@@ -479,7 +479,7 @@ fn reward_accounts_in_inputs(#[case] seed: Seed) {
     let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
 
     let block = make_block(invalid_inputs, outputs);
-    let block_height = BlockHeight::new(rng.gen());
+    let block_height = BlockHeight::new(rng.random());
 
     assert_eq!(
         check_reward_inputs_outputs_purposes(
@@ -505,7 +505,7 @@ fn reward_accounts_in_inputs(#[case] seed: Seed) {
 fn staker_destination_change(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let fork_height = BlockHeight::new(rng.gen_range(1..1_000_000));
+    let fork_height = BlockHeight::new(rng.random_range(1..1_000_000));
 
     let chain_config = chain::config::Builder::test_chain()
         .chainstate_upgrades(
@@ -540,7 +540,7 @@ fn staker_destination_change(#[case] seed: Seed) {
         Amount::ZERO,
     );
 
-    let kernel_input_utxo = if rng.gen_bool(0.5) {
+    let kernel_input_utxo = if rng.random_bool(0.5) {
         TxOutput::CreateStakePool(stake_pool_id(), Box::new(stake_pool_data.clone()))
     } else {
         TxOutput::ProduceBlockFromStake(old_staker_dest, stake_pool_id())
@@ -564,10 +564,10 @@ fn staker_destination_change(#[case] seed: Seed) {
 
     // Case 1 - before the fork; the staker destination change is allowed.
     {
-        let block_height = if rng.gen_bool(0.5) {
+        let block_height = if rng.random_bool(0.5) {
             fork_height.prev_height().unwrap()
         } else {
-            BlockHeight::new(rng.gen_range(0..fork_height.into_int()))
+            BlockHeight::new(rng.random_range(0..fork_height.into_int()))
         };
 
         let result = check_reward_inputs_outputs_purposes(
@@ -583,10 +583,12 @@ fn staker_destination_change(#[case] seed: Seed) {
 
     // Case 2 - after the fork; the staker destination change is prohibited.
     {
-        let block_height = if rng.gen_bool(0.5) {
+        let block_height = if rng.random_bool(0.5) {
             fork_height
         } else {
-            BlockHeight::new(rng.gen_range(fork_height.into_int()..=BlockHeight::max().into_int()))
+            BlockHeight::new(
+                rng.random_range(fork_height.into_int()..=BlockHeight::max().into_int()),
+            )
         };
 
         let result = check_reward_inputs_outputs_purposes(

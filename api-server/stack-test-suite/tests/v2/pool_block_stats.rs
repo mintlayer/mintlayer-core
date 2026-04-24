@@ -86,7 +86,8 @@ async fn ok(#[case] seed: Seed) {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
 
-            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+            let initial_pledge =
+                40_000 * CoinUnit::ATOMS_PER_COIN + rng.random_range(10000..100000);
             let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let staking_key = Destination::PublicKey(pk.clone());
@@ -96,7 +97,7 @@ async fn ok(#[case] seed: Seed) {
                 vrf_pk,
                 staking_key.clone(),
                 PerThousand::new_from_rng(&mut rng),
-                Amount::from_atoms(rng.gen_range(0..100)),
+                Amount::from_atoms(rng.random_range(0..100)),
             );
             let pool_id = PoolId::new(H256::random_using(&mut rng));
 
@@ -113,7 +114,7 @@ async fn ok(#[case] seed: Seed) {
             let prev_block_hash = chain_config.genesis_block_id();
 
             let chainstate_blocks = {
-                let (_, blocks) = (0..rng.gen_range(1..100)).fold(
+                let (_, blocks) = (0..rng.random_range(1..100)).fold(
                     (prev_block_hash, vec![]),
                     |(prev_block_hash, mut blocks), _| {
                         tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
@@ -134,7 +135,7 @@ async fn ok(#[case] seed: Seed) {
                     },
                 );
 
-                let num_blocks = rng.gen_range(0..blocks.len());
+                let num_blocks = rng.random_range(0..blocks.len());
                 let time_range = (
                     blocks.first().unwrap().timestamp(),
                     blocks[num_blocks].timestamp(),

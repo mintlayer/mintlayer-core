@@ -86,7 +86,7 @@ pub fn prepare_data_dir<F: Fn() -> PathBuf>(
 mod test {
     use std::io::{Read, Write};
 
-    use randomness::{make_pseudo_rng, Rng};
+    use randomness::{make_pseudo_rng, RngExt as _};
     use tempfile::TempDir;
 
     use super::*;
@@ -128,7 +128,7 @@ mod test {
 
         // Now let's use the data directory
         let file_path = supposed_default_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().random::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
             file.write_all(&file_data).unwrap();
@@ -222,7 +222,7 @@ mod test {
 
         // Now let's use the data directory
         let file_path = supposed_custom_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().random::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
             file.write_all(&file_data).unwrap();

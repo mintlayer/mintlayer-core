@@ -50,8 +50,8 @@ async fn non_orphans(#[case] seed: Seed) {
     let tokens_src_id: OutPointSourceId = split_utxo(&mut rng, &mut tf, tokens_outpoint, 2).into();
     let coins_src_id: OutPointSourceId = split_utxo(&mut rng, &mut tf, coins_outpoint, 10).into();
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let initial_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let initial_ask_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let initial_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let order_id = {
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -70,8 +70,8 @@ async fn non_orphans(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
         order_id
     };
-    let another_order_initial_ask_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let another_order_initial_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let another_order_initial_ask_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let another_order_initial_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let another_order_id = {
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -95,7 +95,7 @@ async fn non_orphans(#[case] seed: Seed) {
         &mut tf,
         order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 0),
         None,
     );
@@ -103,7 +103,7 @@ async fn non_orphans(#[case] seed: Seed) {
         &mut tf,
         order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 1),
         None,
     );
@@ -111,7 +111,7 @@ async fn non_orphans(#[case] seed: Seed) {
         &mut tf,
         order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 2),
         None,
     );
@@ -143,7 +143,9 @@ async fn non_orphans(#[case] seed: Seed) {
         &mut tf,
         another_order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..another_order_initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(
+            rng.random_range(10..another_order_initial_ask_amount.into_atoms() / 10),
+        ),
         UtxoOutPoint::new(coins_src_id.clone(), 7),
         None,
     );
@@ -439,8 +441,8 @@ async fn orphans_with_missing_utxo(#[case] seed: Seed) {
 
     let coins_src_id: OutPointSourceId = split_utxo(&mut rng, &mut tf, coins_outpoint, 10).into();
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let initial_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let initial_ask_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let initial_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let order_id = {
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
@@ -472,7 +474,7 @@ async fn orphans_with_missing_utxo(#[case] seed: Seed) {
         &mut tf,
         order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 1),
         Some(UtxoOutPoint::new(missing_parent_tx_src_id.clone(), 0).into()),
     );
@@ -481,7 +483,7 @@ async fn orphans_with_missing_utxo(#[case] seed: Seed) {
         &mut tf,
         order_id,
         token_id,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 2),
         Some(UtxoOutPoint::new(missing_parent_tx_src_id.clone(), 1).into()),
     );
@@ -718,8 +720,8 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
 
     let coins_src_id: OutPointSourceId = split_utxo(&mut rng, &mut tf, coins_outpoint, 10).into();
 
-    let initial_ask_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let initial_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let initial_ask_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let initial_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let order_creation_tx = {
         let fee_input = UtxoOutPoint::new(coins_src_id.clone(), 0);
         let coins_amount = tf.coin_amount_from_utxo(&fee_input);
@@ -748,7 +750,7 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
         token_id,
         initial_ask_amount,
         initial_give_amount,
-        Amount::from_atoms(rng.gen_range(10..initial_ask_amount.into_atoms() / 10)),
+        Amount::from_atoms(rng.random_range(10..initial_ask_amount.into_atoms() / 10)),
         UtxoOutPoint::new(coins_src_id.clone(), 1),
         None,
     );
@@ -824,9 +826,7 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
     }
 }
 
-fn create_test_framework_builder_with_orders_v1(
-    rng: &mut (impl Rng + CryptoRng),
-) -> TestFrameworkBuilder {
+fn create_test_framework_builder_with_orders_v1(rng: &mut impl CryptoRng) -> TestFrameworkBuilder {
     TestFramework::builder(rng).with_chain_config(
         common::chain::config::Builder::test_chain()
             .chainstate_upgrades(
@@ -841,12 +841,12 @@ fn create_test_framework_builder_with_orders_v1(
 }
 
 fn issue_and_mint_token_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
     let genesis_block_id = tf.genesis().get_id();
     let utxo = UtxoOutPoint::new(genesis_block_id.into(), 0);
-    let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
+    let to_mint = Amount::from_atoms(rng.random_range(100..100_000_000));
 
     issue_and_mint_random_token_from_best_block(
         rng,

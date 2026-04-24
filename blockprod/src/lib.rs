@@ -182,7 +182,7 @@ mod tests {
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, test_helpers::test_p2p_config,
     };
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, Rng, RngExt as _};
     use storage_inmemory::InMemory;
     use subsystem::Manager;
 
@@ -323,7 +323,7 @@ mod tests {
             (time_getter.get_time()
                 - Duration::new(
                     // Genesis must be in the past: now - (1 day..2 weeks)
-                    rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
+                    rng.random_range(60 * 60 * 24..60 * 60 * 24 * 14),
                     0,
                 ))
             .expect("No time underflow")
@@ -359,7 +359,7 @@ mod tests {
     pub fn create_genesis_for_pos_tests(
         timestamp: BlockTimestamp,
         extra_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (
         Genesis,
         /*stake_private_key:*/ PrivateKey,
@@ -409,7 +409,7 @@ mod tests {
         time_getter: &TimeGetter,
         switch_to_pos_at: BlockHeight,
         extra_genesis_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
         let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
         setup_pos_with_genesis_timestamp(
@@ -424,7 +424,7 @@ mod tests {
         genesis_timestamp: BlockTimestamp,
         switch_to_pos_at: BlockHeight,
         extra_genesis_txs: &[TxOutput],
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
         let initial_target = pos_initial_difficulty(ChainType::Regtest);
 

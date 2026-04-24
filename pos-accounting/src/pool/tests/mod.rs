@@ -23,7 +23,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 use crate::{
     error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,
@@ -43,19 +43,19 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
-fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+fn new_pub_key_destination(rng: &mut impl CryptoRng) -> Destination {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
 }
 
 fn create_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     decommission_destination: Destination,
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
-    let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
+    let margin_ratio = PerThousand::new(rng.random_range(0..1000)).unwrap();
+    let cost_per_block = Amount::from_atoms(rng.random_range(0..1000));
     PoolData::new(
         decommission_destination,
         pledged_amount,
@@ -67,7 +67,7 @@ fn create_pool_data(
 }
 
 fn create_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     op: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
     pledged_amount: Amount,
 ) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
@@ -79,7 +79,7 @@ fn create_pool(
 }
 
 fn create_delegation_id(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     op: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
     target_pool: PoolId,
 ) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
@@ -90,7 +90,7 @@ fn create_delegation_id(
 }
 
 fn create_storage_with_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     pledged_amount: Amount,
 ) -> (PoolId, PoolData, InMemoryPoSAccounting) {
     let pool_id = new_pool_id(rng.next_u64());
@@ -108,7 +108,7 @@ fn create_storage_with_pool(
 }
 
 fn create_storage_with_pool_and_delegation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     pledged_amount: Amount,
     delegated_amount: Amount,
 ) -> (

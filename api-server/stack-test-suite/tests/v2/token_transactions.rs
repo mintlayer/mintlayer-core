@@ -78,7 +78,7 @@ async fn invalid_num_items() {
 #[tokio::test]
 async fn invalid_num_items_max(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let more_than_max = rng.gen_range(101..1000);
+    let more_than_max = rng.random_range(101..1000);
 
     let token_id = TokenId::new(H256::zero());
     let chain_config = create_unit_test_config();
@@ -292,7 +292,7 @@ async fn ok(#[case] seed: Seed) {
     }
 
     let mut rng = make_seedable_rng(seed);
-    let offset = rng.gen_range(1..num_tx);
+    let offset = rng.random_range(1..num_tx);
     let items = num_tx - offset;
 
     let tx_global_index = &arr_body[offset - 1].get("tx_global_index").unwrap();

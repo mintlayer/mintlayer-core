@@ -19,8 +19,6 @@ use std::{
     time::Duration,
 };
 
-use logging::log;
-use randomness::Rng;
 use rstest::rstest;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 
@@ -28,6 +26,7 @@ use common::{
     chain::{self, config, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
+use logging::log;
 use networking::test_helpers::{
     TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportTcp,
 };
@@ -39,6 +38,7 @@ use p2p_test_utils::{expect_future_val, expect_no_recv};
 use p2p_types::{
     peer_address::PeerAddress, socket_addr_ext::SocketAddrExt, socket_address::SocketAddress,
 };
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -101,7 +101,7 @@ where
             Arc::clone(&config),
             p2p_config,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -189,7 +189,7 @@ fn test_addr_list_handling_inbound(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -281,7 +281,7 @@ fn test_addr_list_handling_outbound(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -399,7 +399,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -515,7 +515,7 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
         peerdb_inmemory_store(),
         None,
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(Vec::new())))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -586,7 +586,7 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -660,7 +660,7 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -762,7 +762,7 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 

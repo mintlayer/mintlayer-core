@@ -21,7 +21,7 @@ use rstest::rstest;
 
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -74,17 +74,17 @@ fn estimate_tx_size_basic(
 ) {
     let mut rng = make_seedable_rng(seed);
 
-    let num_inputs = rng.gen_range(inputs_range);
+    let num_inputs = rng.random_range(inputs_range);
     let inputs = (0..num_inputs)
         .map(|_| {
             TxInput::from_utxo(
                 OutPointSourceId::Transaction(Id::random_using(&mut rng)),
-                rng.gen_range(0..100),
+                rng.random_range(0..100),
             )
         })
         .collect();
 
-    let num_outputs = rng.gen_range(outputs_range);
+    let num_outputs = rng.random_range(outputs_range);
     let outputs = (0..num_outputs)
         .map(|_| {
             let destination = Destination::PublicKey(
@@ -92,7 +92,7 @@ fn estimate_tx_size_basic(
             );
 
             TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..10000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..10000))),
                 destination,
             )
         })
@@ -137,17 +137,17 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
 
     let chain_config = create_unit_test_config();
 
-    let num_inputs = rng.gen_range(1..10);
+    let num_inputs = rng.random_range(1..10);
     let inputs = (0..num_inputs)
         .map(|_| {
             TxInput::from_utxo(
                 OutPointSourceId::Transaction(Id::random_using(&mut rng)),
-                rng.gen_range(0..100),
+                rng.random_range(0..100),
             )
         })
         .collect();
 
-    let num_outputs = rng.gen_range(1..10);
+    let num_outputs = rng.random_range(1..10);
     let outputs = (0..num_outputs)
         .map(|_| {
             let destination = Destination::PublicKey(
@@ -155,7 +155,7 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
             );
 
             TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..10000))),
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..10000))),
                 destination,
             )
         })
@@ -166,7 +166,7 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
     let tx = Transaction::new(0, inputs, outputs).unwrap();
     let signatures_with_dests = (0..num_inputs)
         .map(|_| {
-            let (raw_sig, destination) = match rng.gen_range(0..3) {
+            let (raw_sig, destination) = match rng.random_range(0..3) {
                 0 => {
                     let (prv_key, pub_key) =
                         PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
@@ -191,10 +191,10 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
                 }
                 _ => {
                     let max_sig_count: u8 = rng
-                        .gen_range(2..=chain_config.max_classic_multisig_public_keys_count())
+                        .random_range(2..=chain_config.max_classic_multisig_public_keys_count())
                         .try_into()
                         .unwrap();
-                    let min_sig_count = rng.gen_range(1..=max_sig_count);
+                    let min_sig_count = rng.random_range(1..=max_sig_count);
 
                     let keys = (0..max_sig_count)
                         .map(|_| {
@@ -213,7 +213,7 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
                     .unwrap();
 
                     let keys_with_indices =
-                        keys.iter().enumerate().choose_multiple(&mut rng, min_sig_count as usize);
+                        keys.iter().enumerate().sample(&mut rng, min_sig_count as usize);
 
                     let mut spending =
                         AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
@@ -252,10 +252,10 @@ fn estimate_tx_size_different_sigs(#[case] seed: Seed) {
                 }
             };
 
-            let (raw_sig, htlc_spend_tag) = match rng.gen_range(0..3) {
+            let (raw_sig, htlc_spend_tag) = match rng.random_range(0..3) {
                 0 => (raw_sig, None),
                 1 => {
-                    let secret = HtlcSecret::new(rng.gen());
+                    let secret = HtlcSecret::new(rng.random());
                     let raw_sig =
                         AuthorizedHashedTimelockContractSpend::Spend(secret, raw_sig).encode();
 

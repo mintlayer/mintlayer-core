@@ -27,7 +27,7 @@ use common::{
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use mempool::error::MempoolPolicyError;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::tokio_spawn_in_current_tracing_span;
 
@@ -129,7 +129,7 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
-                rng.gen_range(100_000..200_000),
+                rng.random_range(100_000..200_000),
             ))))
             .build();
         let valid_child_block = tf

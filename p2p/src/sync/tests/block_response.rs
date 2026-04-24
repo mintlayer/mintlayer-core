@@ -27,7 +27,7 @@ use common::{
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
     random::{shuffle_until_different, Seed},
     BasicTestTimeGetter,
@@ -98,7 +98,7 @@ async fn valid_response(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let num_blocks = rng.gen_range(2..10);
+        let num_blocks = rng.random_range(2..10);
         let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
 
         let mut node = TestNode::builder(protocol_version)
@@ -181,7 +181,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let num_blocks = rng.gen_range(2..10);
+        let num_blocks = rng.random_range(2..10);
         log::debug!("Generating {num_blocks} blocks");
         let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
 

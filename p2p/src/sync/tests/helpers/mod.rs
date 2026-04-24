@@ -49,7 +49,7 @@ use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle, Mempool
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::random::Seed;
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
@@ -949,7 +949,7 @@ pub async fn make_new_top_blocks_return_headers(
 ) -> Vec<SignedBlockHeader> {
     assert!(count > 0);
 
-    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.gen()));
+    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.random()));
 
     chainstate
         .call_mut(move |cs| {

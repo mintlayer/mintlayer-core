@@ -68,7 +68,7 @@ mod tests {
         primitives::{Amount, Id},
     };
     use serialization::Encode;
-    use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng, Seed};
+    use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _, Seed};
 
     use super::*;
 
@@ -79,12 +79,12 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let tx = Transaction::new(
-            rng.gen(),
+            rng.random(),
             vec![TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::Transaction(Id::random_using(&mut rng)),
-                rng.r#gen(),
+                rng.random(),
             ))],
-            vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(rng.r#gen())))],
+            vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(rng.random())))],
         )
         .unwrap();
 

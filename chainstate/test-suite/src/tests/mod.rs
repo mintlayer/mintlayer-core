@@ -19,7 +19,7 @@ use common::{
     chain::{signature::inputsig::InputWitness, GenBlock, Genesis},
     primitives::{BlockHeight, Id},
 };
-use randomness::Rng;
+use randomness::RngExt as _;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

@@ -30,11 +30,11 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 pub fn prepare_stake_pool(
     stake_pool_outpoint: UtxoOutPoint,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     available_amount: &mut Amount,
     tf: &mut TestFramework,
 ) -> (UtxoOutPoint, StakePoolData, PoolId, Block) {
@@ -42,16 +42,16 @@ pub fn prepare_stake_pool(
     let min_stake_pool_pledge =
         tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
     let amount_to_stake =
-        Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 2)));
+        Amount::from_atoms(rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 2)));
 
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
 
-    let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+    let margin_ratio_per_thousand = rng.random_range(1..=1000);
     let stake_pool_data = StakePoolData::new(
         amount_to_stake,
         Destination::PublicKey(pk),
         vrf_pk,
-        Destination::PublicKeyHash(PublicKeyHash::from_low_u64_ne(rng.gen::<u64>())),
+        Destination::PublicKeyHash(PublicKeyHash::from_low_u64_ne(rng.random::<u64>())),
         PerThousand::new(margin_ratio_per_thousand).unwrap(),
         Amount::ZERO,
     );
@@ -83,7 +83,7 @@ pub fn prepare_stake_pool(
 
 pub fn prepare_delegation(
     transfer_outpoint: UtxoOutPoint,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     pool_id: PoolId,
     available_amount: Amount,
     destination: Option<Destination>,
@@ -113,14 +113,14 @@ pub fn prepare_delegation(
 }
 
 pub fn stake_delegation(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     available_amount: Amount,
     transfer_outpoint: UtxoOutPoint,
     delegation_id: DelegationId,
     tf: &mut TestFramework,
 ) -> (Amount, UtxoOutPoint, Block) {
     let delegate_max_amount = std::cmp::min(1000, available_amount.into_atoms());
-    let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..=delegate_max_amount));
+    let amount_to_delegate = Amount::from_atoms(rng.random_range(1..=delegate_max_amount));
     let stake_tx = TransactionBuilder::new()
         .add_input(transfer_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
@@ -154,7 +154,7 @@ pub struct IssueAndMintTokensResult {
 
 pub fn issue_and_mint_tokens_from_genesis(
     min_mint_amount: Amount,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
 ) -> IssueAndMintTokensResult {
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
@@ -168,10 +168,10 @@ pub fn issue_and_mint_tokens_from_genesis(
     );
     let amount_to_mint = match issuance.total_supply {
         TokenTotalSupply::Fixed(limit) => {
-            Amount::from_atoms(rng.gen_range(min_mint_amount_atoms..=limit.into_atoms()))
+            Amount::from_atoms(rng.random_range(min_mint_amount_atoms..=limit.into_atoms()))
         }
         TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
-            Amount::from_atoms(rng.gen_range(min_mint_amount_atoms..min_mint_amount_atoms * 10))
+            Amount::from_atoms(rng.random_range(min_mint_amount_atoms..min_mint_amount_atoms * 10))
         }
     };
 

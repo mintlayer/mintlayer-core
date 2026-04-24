@@ -189,7 +189,7 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
         &[100_000_000, 50_000_000],
     );
     let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
-    let dangling = OutPointSourceId::Transaction(Id::new(H256(rng.gen())));
+    let dangling = OutPointSourceId::Transaction(Id::new(H256(rng.random())));
 
     let tx1a = make_tx(&mut rng, &[(tx0_outpt.clone(), 0)], &[80_000_000]);
     let tx1b = make_tx(&mut rng, &[(dangling, 0), (tx0_outpt, 0)], &[30_000_000]);
@@ -215,13 +215,13 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let mut gen_origin = {
-        let seed = Seed::from_u64(rng.gen());
+        let seed = Seed::from_u64(rng.random());
         let mut rng = make_seedable_rng(seed);
-        move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(1..=4)))
+        move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.random_range(1..=4)))
     };
 
     // Generate a valid graph of transactions
-    let num_txs = rng.gen_range(15..90);
+    let num_txs = rng.random_range(15..90);
     let time = TimeGetter::default().get_time();
     let full_tx_sequence: Vec<_> =
         generate_transaction_graph(&mut rng, time).take(num_txs).collect();
@@ -229,13 +229,13 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 
     // Pick a subset of these transactions, taking each with 90% probability.
     let tx_subseq_0: Vec<_> =
-        full_tx_sequence.iter().filter(|_| rng.gen_bool(0.9)).cloned().collect();
+        full_tx_sequence.iter().filter(|_| rng.random_bool(0.9)).cloned().collect();
 
     // Take the same subsequence but with randomly shuffled order.
     // This means some transactions will be temporarily in the orphan pool.
     let tx_subseq_1 = {
         let mut subseq = tx_subseq_0.clone();
-        let salt = rng.gen::<u64>();
+        let salt = rng.random::<u64>();
         subseq.sort_unstable_by_key(|tx| hash_encoded(&(tx.tx_id(), salt)));
         subseq
     };
@@ -252,7 +252,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
             let _ = mempool.add_transaction_with_origin(tx, gen_origin().into()).expect("tx add");
 
             // Randomly perform 0, 1, or 2 work units
-            for _ in 0..rng.gen_range(0..=2) {
+            for _ in 0..rng.random_range(0..=2) {
                 mempool.perform_work_unit();
             }
         });
@@ -357,9 +357,9 @@ async fn orphan_scheduling(#[case] seed: Seed) {
     let genesis_id = tf.genesis().get_id();
 
     let mut gen_origin = {
-        let seed = Seed::from_u64(rng.gen());
+        let seed = Seed::from_u64(rng.random());
         let mut rng = make_seedable_rng(seed);
-        move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(1..=4)))
+        move || RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.random_range(1..=4)))
     };
 
     // Set up the transactions, similar to the diamond test above

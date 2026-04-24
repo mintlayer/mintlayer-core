@@ -15,6 +15,8 @@
 
 use std::collections::BTreeMap;
 
+use rstest::rstest;
+
 use common::{
     chain::{
         tokens::{
@@ -25,8 +27,7 @@ use common::{
     },
     primitives::Amount,
 };
-use randomness::Rng;
-use rstest::rstest;
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
@@ -40,7 +41,7 @@ use crate::{
 fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -> TokenData {
     TokenData::FungibleToken(FungibleTokenData::new_unchecked(
         random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
-        rng.gen_range(1..18),
+        rng.random_range(1..18),
         random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         supply,
         locked,
@@ -56,7 +57,7 @@ fn make_token_issuance(
 ) -> TokenIssuance {
     TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
-        number_of_decimals: rng.gen_range(1..18),
+        number_of_decimals: rng.random_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         is_freezable: freezable,
@@ -180,7 +181,7 @@ fn mint_token_and_flush(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(1..1000));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(1..1000));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -256,7 +257,7 @@ fn mint_token_unlimited_max(#[case] seed: Seed) {
 fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let total_supply = Amount::from_atoms(rng.gen_range(100..100_000));
+    let total_supply = Amount::from_atoms(rng.random_range(100..100_000));
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Fixed(total_supply), false);
     let token_id = TokenId::random_using(&mut rng);
 
@@ -283,7 +284,7 @@ fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
     );
 
     // Try to mint over total supply
-    let exceed_supply_by = Amount::from_atoms(rng.gen_range(1..100));
+    let exceed_supply_by = Amount::from_atoms(rng.random_range(1..100));
     assert_eq!(
         cache.mint_tokens(token_id, exceed_supply_by),
         Err(crate::Error::MintExceedsSupplyLimit(
@@ -302,7 +303,7 @@ fn mint_token_undo(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(1..1000));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(1..1000));
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -342,8 +343,8 @@ fn unmint_token_and_flush(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(2..1000));
+    let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -382,8 +383,8 @@ fn unmint_token_undo(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(2..1000));
+    let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -421,7 +422,7 @@ fn unmint_token_undo(#[case] seed: Seed) {
 fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let total_supply = Amount::from_atoms(rng.gen_range(100..100_000));
+    let total_supply = Amount::from_atoms(rng.random_range(100..100_000));
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Fixed(total_supply), false);
     let token_id = TokenId::random_using(&mut rng);
     let amount_minted = total_supply;
@@ -459,7 +460,7 @@ fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
     );
 
     // Try to unmint over circulating supply
-    let exceed_minted_by = Amount::from_atoms(rng.gen_range(1..100));
+    let exceed_minted_by = Amount::from_atoms(rng.random_range(1..100));
     assert_eq!(
         cache.unmint_tokens(token_id, exceed_minted_by),
         Err(crate::Error::NotEnoughCirculatingSupplyToUnmint(
@@ -552,8 +553,8 @@ fn lock_supply_and_try_mint_unmint(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(2..1000));
+    let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -590,8 +591,8 @@ fn lock_supply_undo_mint_unmint(#[case] seed: Seed) {
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
     let token_id = TokenId::random_using(&mut rng);
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_mint = Amount::from_atoms(rng.random_range(2..1000));
+    let amount_to_unmint = Amount::from_atoms(rng.random_range(1..amount_to_mint.into_atoms()));
 
     let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),

@@ -98,7 +98,7 @@ async fn ok_tokens(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
 
-                let token_decimals = rng.gen_range(1..18);
+                let token_decimals = rng.random_range(1..18);
                 let token_issuance = TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     number_of_decimals: token_decimals,
@@ -344,9 +344,9 @@ async fn ok_coins(#[case] seed: Seed) {
                 available_amount = (available_amount - delegated_amount).unwrap();
 
                 let amount_to_unstake =
-                    Amount::from_atoms(rng.gen_range(1..=delegated_amount.into_atoms()));
+                    Amount::from_atoms(rng.random_range(1..=delegated_amount.into_atoms()));
                 let amount_to_burn =
-                    Amount::from_atoms(rng.gen_range(1..=available_amount.into_atoms()));
+                    Amount::from_atoms(rng.random_range(1..=available_amount.into_atoms()));
 
                 let undelegate_and_burn = TransactionBuilder::new()
                     .add_input(transfer_outpoint.into(), InputWitness::NoSignature(None))

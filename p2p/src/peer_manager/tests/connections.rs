@@ -38,7 +38,7 @@ use networking::test_helpers::{
 use networking::transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket};
 use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use test_utils::{
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
@@ -103,7 +103,7 @@ where
             A::make_transport(),
             A::make_address().into(),
             Arc::clone(&config),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -182,14 +182,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -263,8 +263,13 @@ async fn test_peer_manager_connect<T>(
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(config::create_unit_test_config());
-    let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(transport, bind_addr, config, make_seedable_rng(rng.gen())).await;
+    let (mut peer_manager, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        transport,
+        bind_addr,
+        config,
+        make_seedable_rng(rng.random()),
+    )
+    .await;
 
     peer_manager.try_connect(remote_addr, None, PeerRole::OutboundManual).unwrap();
 
@@ -333,14 +338,14 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         config,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -411,14 +416,14 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         config,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -476,14 +481,14 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -550,14 +555,14 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         config,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -625,14 +630,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -713,14 +718,14 @@ where
         A::make_transport(),
         addr1,
         Arc::new(config::create_unit_test_config()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::create_unit_test_config()),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -789,14 +794,14 @@ where
         A::make_transport(),
         addr1,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::clone(&config),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1053,7 +1058,7 @@ async fn connection_timeout_rpc_notified<T>(
         peer_mgr_event_receiver,
         time_getter,
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -1168,7 +1173,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1213,7 +1218,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1338,7 +1343,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1383,7 +1388,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1415,7 +1420,7 @@ where
         Arc::clone(&chain_config),
         p2p_config_3,
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
 
@@ -1561,7 +1566,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1607,7 +1612,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1640,7 +1645,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1737,7 +1742,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1783,7 +1788,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1816,7 +1821,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -1897,7 +1902,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -1983,7 +1988,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         let addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
         let is_last_addr = addresses.is_empty();
         let should_succeed = {
-            let rand_bool = rng.gen_bool(0.5);
+            let rand_bool = rng.random_bool(0.5);
             if is_last_addr {
                 if !had_successful_feelers {
                     true
@@ -2227,7 +2232,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
@@ -2378,7 +2383,7 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         Arc::clone(&p2p_config),
         vec![bind_addr],
         time_getter.get_time_getter(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer_addr = TestAddressMaker::new_random_address(&mut rng);

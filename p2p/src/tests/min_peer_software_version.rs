@@ -29,7 +29,7 @@ use networking::{
 };
 use p2p_test_utils::run_with_timeout;
 use p2p_types::socket_address::SocketAddress;
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
@@ -174,7 +174,7 @@ async fn outbound_manual_connection(#[case] seed: Seed, test_params: TestParams)
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -288,7 +288,7 @@ async fn outbound_auto_connection(#[case] seed: Seed, test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -407,7 +407,7 @@ async fn inbound_connection(#[case] seed: Seed, test_params: TestParams) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

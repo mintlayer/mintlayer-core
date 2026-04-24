@@ -119,7 +119,7 @@ async fn ok(#[case] seed: Seed) {
                     &mut tf,
                 );
 
-                let (_transfer_outpoint, mut delegations) = (0..rng.gen_range(0..5)).fold(
+                let (_transfer_outpoint, mut delegations) = (0..rng.random_range(0..5)).fold(
                     (transfer_outpoint, vec![]),
                     |(transfer_outpoint, mut delegations), _| {
                         if available_amount == Amount::ZERO {

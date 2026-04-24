@@ -24,13 +24,13 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 // Build a block that spends some outputs of its parent.
 pub fn build_block(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Block {
     tf.make_block_builder()
         .add_test_transaction_with_parent(*parent_block, rng)
@@ -55,7 +55,7 @@ pub fn make_some_block_reward() -> Vec<TxOutput> {
 pub fn process_block(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
     let block = build_block(tf, parent_block, rng);
     let block_id = block.get_id();
@@ -65,7 +65,7 @@ pub fn process_block(
 
 // Build a block with an invalid tx that has no inputs and outputs.
 pub fn build_block_with_empty_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
 ) -> Block {
@@ -78,7 +78,7 @@ pub fn build_block_with_empty_tx(
 
 // Process a block with an invalid tx that has no inputs and outputs.
 pub fn process_block_with_empty_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
@@ -93,7 +93,7 @@ pub fn build_block_burn_or_spend_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
     burn: bool,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Block, SignedTransaction) {
     let tx = TransactionBuilder::new()
         .add_input(
@@ -119,7 +119,7 @@ pub fn build_block_burn_or_spend_parent_reward(
 pub fn build_block_burn_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Block, SignedTransaction) {
     build_block_burn_or_spend_parent_reward(tf, parent_block, true, rng)
 }
@@ -127,7 +127,7 @@ pub fn build_block_burn_parent_reward(
 pub fn build_block_spend_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Block, SignedTransaction) {
     build_block_burn_or_spend_parent_reward(tf, parent_block, false, rng)
 }
@@ -136,7 +136,7 @@ pub fn process_block_burn_or_spend_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
     burn: bool,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
     let (block, _) = build_block_burn_or_spend_parent_reward(tf, parent_block, burn, rng);
     let block_id = block.get_id();
@@ -147,7 +147,7 @@ pub fn process_block_burn_or_spend_parent_reward(
 pub fn process_block_spend_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
     process_block_burn_or_spend_parent_reward(tf, parent_block, false, rng)
 }
@@ -157,7 +157,7 @@ pub fn process_block_spend_parent_reward(
 pub fn build_block_split_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Block, SignedTransaction) {
     let tx = TransactionBuilder::new()
         .add_input(
@@ -183,7 +183,7 @@ pub fn build_block_split_parent_reward(
 pub fn process_block_split_parent_reward(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (
     Id<Block>,
     Id<Transaction>,
@@ -201,7 +201,7 @@ pub fn build_block_spend_tx(
     parent_block: &Id<GenBlock>,
     parent_tx: &Id<Transaction>,
     tx_output_index: u32,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Block {
     let tx = TransactionBuilder::new()
         .add_input(
@@ -227,7 +227,7 @@ pub fn process_block_spend_tx(
     parent_block: &Id<GenBlock>,
     parent_tx: &Id<Transaction>,
     tx_output_index: u32,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
     let block = build_block_spend_tx(tf, parent_block, parent_tx, tx_output_index, rng);
     let block_id = block.get_id();
@@ -252,10 +252,10 @@ pub fn coins(amount: u32) -> OutputValue {
     OutputValue::Coin(Amount::from_atoms(amount.into()))
 }
 
-pub fn some_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
-    coins(rng.gen_range(100_000..200_000))
+pub fn some_coins(rng: &mut impl CryptoRng) -> OutputValue {
+    coins(rng.random_range(100_000..200_000))
 }
 
-pub fn less_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
-    coins(rng.gen_range(50_000..100_000))
+pub fn less_coins(rng: &mut impl CryptoRng) -> OutputValue {
+    coins(rng.random_range(50_000..100_000))
 }

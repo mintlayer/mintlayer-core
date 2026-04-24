@@ -43,10 +43,10 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
     let mut rng = make_seedable_rng(seed);
-    let block_height = rng.gen_range(1..50);
+    let block_height = rng.random_range(1..50);
     let task = tokio::spawn(async move {
         let web_server_state = {
-            let n_blocks = rng.gen_range(block_height..100);
+            let n_blocks = rng.random_range(block_height..100);
 
             let chain_config = create_unit_test_config();
 
@@ -63,7 +63,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
                 let block_id = chainstate_block_ids[block_height - 1];
                 let block = tf.block(tf.to_chain_block_id(&block_id));
 
-                let transaction_index = rng.gen_range(0..block.transactions().len());
+                let transaction_index = rng.random_range(0..block.transactions().len());
                 let transaction = block.transactions()[transaction_index].transaction();
                 let transaction_id = transaction.get_id();
 
@@ -175,8 +175,8 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(1..50);
-            let n_blocks = rng.gen_range(block_height..100);
+            let block_height = rng.random_range(1..50);
+            let n_blocks = rng.random_range(block_height..100);
 
             let chain_config = create_unit_test_config();
 
@@ -193,7 +193,7 @@ async fn ok(#[case] seed: Seed) {
                 let block_id = chainstate_block_ids[block_height - 1];
                 let block = tf.block(tf.to_chain_block_id(&block_id));
 
-                let transaction_index = rng.gen_range(0..block.transactions().len());
+                let transaction_index = rng.random_range(0..block.transactions().len());
                 let transaction = block.transactions()[transaction_index].transaction();
                 let transaction_id = transaction.get_id();
 

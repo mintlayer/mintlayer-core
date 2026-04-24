@@ -24,7 +24,7 @@ use common::{
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
-use randomness::{Rng, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
@@ -53,7 +53,7 @@ use utxo::UtxosView;
 /// ```
 ///
 pub struct RandomizedTransactionVerificationStrategy {
-    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
+    rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 }
 
 impl RandomizedTransactionVerificationStrategy {
@@ -152,7 +152,7 @@ impl RandomizedTransactionVerificationStrategy {
         let mut total_fees = AccumulatedFee::new();
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
-            if self.rng.lock().unwrap().gen::<bool>() {
+            if self.rng.lock().unwrap().random::<bool>() {
                 // derive a new cache
                 let (consumed_cache, fee, new_tx_index) = self.connect_with_derived(
                     &tx_verifier,
@@ -233,7 +233,7 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fees = AccumulatedFee::new();
         while tx_num < block.transactions().len() {
-            if self.rng.lock().unwrap().gen::<bool>() {
+            if self.rng.lock().unwrap().random::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
                 break;
             } else {
@@ -279,7 +279,7 @@ impl RandomizedTransactionVerificationStrategy {
 
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
-            if self.rng.lock().unwrap().gen::<bool>() {
+            if self.rng.lock().unwrap().random::<bool>() {
                 // derive a new cache
                 let (consumed_cache, new_tx_index) =
                     self.disconnect_with_derived(&tx_verifier, block, tx_num)?;
@@ -319,7 +319,7 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         while tx_num >= 0 {
-            if self.rng.lock().unwrap().gen::<bool>() {
+            if self.rng.lock().unwrap().random::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
                 break;
             } else {

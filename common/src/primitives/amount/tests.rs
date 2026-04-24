@@ -15,7 +15,7 @@
 
 use super::{signed::SignedIntType, *};
 
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -175,8 +175,8 @@ fn bit_shifts() {
 #[case(Seed::from_entropy())]
 fn abs_diff_never_fails(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let a = Amount::from_atoms(rng.gen());
-    let b = Amount::from_atoms(rng.gen());
+    let a = Amount::from_atoms(rng.random());
+    let b = Amount::from_atoms(rng.random());
     let _ = a.abs_diff(b);
 }
 
@@ -651,7 +651,7 @@ fn serde_serialization() {
 fn serde_serialization_randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let amount: Amount = Amount::from_atoms(rng.gen());
+    let amount: Amount = Amount::from_atoms(rng.random());
 
     let serialized = serde_json::to_string(&amount).unwrap();
 
@@ -679,7 +679,7 @@ fn as_non_zero(#[case] seed: Seed) {
     assert_eq!(Amount::from_atoms(0).as_non_zero(), None);
 
     for _ in 0..100 {
-        let amount = Amount::from_atoms(rng.gen_range(1..=UnsignedIntType::MAX));
+        let amount = Amount::from_atoms(rng.random_range(1..=UnsignedIntType::MAX));
         assert_eq!(amount.as_non_zero(), Some(amount));
     }
 }

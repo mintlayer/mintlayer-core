@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 
 pub trait Secp256k1SchnorrAuxDataProvider {
     /// Return BIP-340's "auxiliary random data" that will eventually be passed as the `data` parameter
@@ -32,10 +32,10 @@ impl<T> SigAuxDataProvider for T where T: Secp256k1SchnorrAuxDataProvider {}
 
 impl<R> Secp256k1SchnorrAuxDataProvider for R
 where
-    R: Rng + CryptoRng,
+    R: CryptoRng,
 {
     fn get_secp256k1_schnorr_aux_data(&mut self) -> [u8; 32] {
-        self.gen()
+        self.random()
     }
 }
 

@@ -40,7 +40,7 @@ use common::{chain::ChainConfig, time_getter::TimeGetter};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::expect_recv;
 use p2p_types::socket_address::SocketAddress;
-use randomness::{Rng, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::assert_matches_return_val;
 
 use crate::{
@@ -69,7 +69,7 @@ async fn make_peer_manager_custom<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     UnboundedSender<PeerManagerEvent>,
@@ -122,7 +122,7 @@ async fn make_peer_manager<T>(
     transport: T::Transport,
     bind_address: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     oneshot::Sender<()>,
@@ -155,7 +155,7 @@ pub fn make_standalone_peer_manager(
     p2p_config: Arc<P2pConfig>,
     bind_addresses: Vec<SocketAddress>,
     time_getter: TimeGetter,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> (
     PeerManager<TcpNetworkingService, impl PeerDbStorage>,
     mpsc::UnboundedSender<ConnectivityEvent>,
@@ -205,7 +205,7 @@ async fn run_peer_manager<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> (
     UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
@@ -253,7 +253,7 @@ async fn send_and_sync(
         })
         .unwrap();
 
-    let sent_nonce = rng.gen();
+    let sent_nonce = rng.random();
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,

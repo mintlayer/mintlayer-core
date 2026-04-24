@@ -58,7 +58,7 @@ pub fn to_key_and_chain_code<SecretKey>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -69,9 +69,9 @@ mod test {
     fn mac_key_of_any_size(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let key_size = rng.gen_range(0..=1000);
+        let key_size = rng.random_range(0..=1000);
 
-        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let _hmac = new_hmac_sha_512(&key);
     }

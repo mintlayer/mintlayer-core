@@ -167,7 +167,7 @@ pub enum IdCreationError {
 mod tests {
     use rstest::rstest;
 
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::Seed;
 
     use crate::{
@@ -188,7 +188,7 @@ mod tests {
     fn token_id_consistency(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let fork_height = BlockHeight::new(rng.gen_range(1..1_000_000));
+        let fork_height = BlockHeight::new(rng.random_range(1..1_000_000));
         let chain_config = config::Builder::test_chain()
             .chainstate_upgrades(
                 NetUpgrades::initialize(vec![
@@ -213,19 +213,19 @@ mod tests {
         logging::log::warn!("fork_height = {fork_height}");
 
         let non_utxo_input = TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(rng.gen()),
+            AccountNonce::new(rng.random()),
             AccountSpending::DelegationBalance(
                 Id::random_using(&mut rng),
-                Amount::from_atoms(rng.gen()),
+                Amount::from_atoms(rng.random()),
             ),
         ));
         let utxo_input = TxInput::Utxo(UtxoOutPoint::new(
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 OutPointSourceId::Transaction(Id::random_using(&mut rng))
             } else {
                 OutPointSourceId::BlockReward(Id::random_using(&mut rng))
             },
-            rng.gen(),
+            rng.random(),
         ));
 
         // Sanity check - if the first input is non-utxo, the ids will be generated differently

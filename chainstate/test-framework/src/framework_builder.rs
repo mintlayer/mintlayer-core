@@ -32,7 +32,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use strum::EnumCount;
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
@@ -60,7 +60,7 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn new(rng: &mut impl CryptoRng) -> Self {
         let chain_config = common::chain::config::create_unit_test_config();
         let chainstate_config = ChainstateConfig::new();
         let chainstate_storage = TestStore::new_empty().unwrap();
@@ -70,7 +70,7 @@ impl TestFrameworkBuilder {
         let staking_pools = StakingPools::new();
 
         assert_eq!(TxVerificationStrategy::COUNT, 3);
-        let tx_verification_strategy = match rng.gen_range(0..3) {
+        let tx_verification_strategy = match rng.random_range(0..3) {
             0 => TxVerificationStrategy::Default,
             1 => TxVerificationStrategy::Disposable,
             2 => TxVerificationStrategy::Randomized(Seed::from_u64(rng.next_u64())),

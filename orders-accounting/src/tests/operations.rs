@@ -15,13 +15,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rstest::rstest;
+
 use accounting::GetDataResult;
 use common::{
     chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
     primitives::Amount,
 };
-use randomness::Rng;
-use rstest::rstest;
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
@@ -34,8 +35,8 @@ fn make_order_data(rng: &mut impl Rng) -> OrderData {
     let token_id = TokenId::random_using(rng);
     OrderData::new(
         Destination::AnyoneCanSpend,
-        OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
-        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1u128..1000))),
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(1u128..1000))),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(1u128..1000))),
     )
 }
 
@@ -540,8 +541,8 @@ fn fill_order_partially_and_conclude(#[case] seed: Seed, #[case] version: Orders
 fn fill_order_must_converge(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
-    let ask_atoms = rng.gen_range(1u128..1_000_000_000);
-    let give_atoms = rng.gen_range(1u128..1_000_000_000);
+    let ask_atoms = rng.random_range(1u128..1_000_000_000);
+    let give_atoms = rng.random_range(1u128..1_000_000_000);
     let ask_amount = Amount::from_atoms(ask_atoms);
     let give_amount = Amount::from_atoms(give_atoms);
     let fill_orders = test_utils::split_value(&mut rng, ask_atoms)
@@ -724,8 +725,8 @@ fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
 fn fill_orders_interrupted_by_v0_to_v1_fork(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let ask_atoms = rng.gen_range(1u128..1_000_000_000);
-    let give_atoms = rng.gen_range(1u128..1_000_000_000);
+    let ask_atoms = rng.random_range(1u128..1_000_000_000);
+    let give_atoms = rng.random_range(1u128..1_000_000_000);
     let ask_amount = Amount::from_atoms(ask_atoms);
     let give_amount = Amount::from_atoms(give_atoms);
     let fill_orders = test_utils::split_value(&mut rng, ask_atoms)
@@ -733,7 +734,7 @@ fn fill_orders_interrupted_by_v0_to_v1_fork(#[case] seed: Seed) {
         .filter(|v| *v > 0)
         .collect::<Vec<_>>();
     let (fill_orders_v0, fill_orders_v1) =
-        fill_orders.split_at(rng.gen_range(1..=fill_orders.len()));
+        fill_orders.split_at(rng.random_range(1..=fill_orders.len()));
 
     let ask = OutputValue::Coin(ask_amount);
     let give = OutputValue::Coin(give_amount);

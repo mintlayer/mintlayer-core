@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use logging::log;
 use rstest::rstest;
+
+use logging::log;
+use randomness::{Rng, RngExt as _};
 use test_utils::random::{make_seedable_rng, Seed};
+
+use super::*;
 
 impl<W: Ord> WorkQueue<W> {
     fn check_integrity(&self) {
@@ -35,9 +38,9 @@ impl<W: Ord> WorkQueue<W> {
 }
 
 fn random_peer_queue(rng: &mut impl Rng) -> PeerQueue<u16> {
-    let mut pq = PeerQueue::new(rng.gen());
-    let n_items = rng.gen_range(0..100);
-    pq.queue.extend((0..n_items).map(|_| rng.gen::<u16>()));
+    let mut pq = PeerQueue::new(rng.random());
+    let n_items = rng.random_range(0..100);
+    pq.queue.extend((0..n_items).map(|_| rng.random::<u16>()));
     pq
 }
 
@@ -94,9 +97,9 @@ impl PeerIdSupply {
         Self { active, next }
     }
 
-    fn gen(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
+    fn random(&mut self, rng: &mut impl Rng, extra: usize) -> PeerId {
         self.active
-            .get(rng.gen_range(0..(self.active.len() + extra)))
+            .get(rng.random_range(0..(self.active.len() + extra)))
             .copied()
             .unwrap_or({
                 let peer = PeerId::from_u64(self.next);
@@ -130,9 +133,9 @@ fn simulation(#[case] seed: Seed) {
     let mut processed = BTreeSet::new();
 
     for _ in 0..500 {
-        match rng.gen_range(1..=6) {
+        match rng.random_range(1..=6) {
             1..=3 => {
-                let peer = peer_supply.gen(&mut rng, 2);
+                let peer = peer_supply.random(&mut rng, 2);
                 log::debug!("Inserting into peer{peer}'s queue: {next_item:03}");
 
                 wq.insert(peer, next_item);
@@ -150,7 +153,7 @@ fn simulation(#[case] seed: Seed) {
                 }
             }
             6..=6 => {
-                let peer = peer_supply.gen(&mut rng, 1);
+                let peer = peer_supply.random(&mut rng, 1);
                 log::debug!("Removing peer{peer}");
 
                 // Mark peer's work set as processed
@@ -198,7 +201,7 @@ fn scheduling_fairness_full_queues(#[case] seed: Seed) {
     const MIN_WORK: usize = 100;
 
     let mut rng = make_seedable_rng(seed);
-    let num_peers: usize = rng.gen_range(2..=8);
+    let num_peers: usize = rng.random_range(2..=8);
     let peer1 = PeerId::from_u64(1);
     let mut next_item = 0u64;
 
@@ -207,7 +210,7 @@ fn scheduling_fairness_full_queues(#[case] seed: Seed) {
     // Pre-populate the queue with at least MIN_ELEMS for each peer. We also fill the queue in
     // the peer-by-peer order and later observe if work for peers is interleaved.
     for peer in 1..=num_peers {
-        for _ in 0..rng.gen_range(MIN_WORK..(MIN_WORK + 100)) {
+        for _ in 0..rng.random_range(MIN_WORK..(MIN_WORK + 100)) {
             wq.insert(PeerId::from_u64(peer as u64), next_item);
             next_item += 1;
             wq.check_integrity();
@@ -220,7 +223,7 @@ fn scheduling_fairness_full_queues(#[case] seed: Seed) {
     for _ in 0..(MIN_WORK * num_peers) {
         // Peer 1 is a designated adversary trying to fill the queue at a high rate.
         // Despite this, it should not get any larger slice of time than other peers.
-        for _ in 0..rng.gen_range(0..4) {
+        for _ in 0..rng.random_range(0..4) {
             wq.insert(peer1, next_item);
             next_item += 1;
         }

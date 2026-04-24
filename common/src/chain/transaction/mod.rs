@@ -201,9 +201,10 @@ impl rpc_description::HasValueHint for Id<Transaction> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use proptest::prelude::Rng;
+    use randomness::RngExt as _;
     use serialization::{Decode, DecodeAll, Encode};
+
+    use super::*;
 
     #[derive(Encode, Decode, Debug, PartialEq, Eq)]
     struct TestCompactU128 {
@@ -215,7 +216,7 @@ mod test {
     #[allow(clippy::eq_op)]
     fn version_byte() {
         let mut rng = randomness::make_pseudo_rng();
-        let flags = rng.gen::<u128>();
+        let flags = rng.random::<u128>();
 
         let flags_compact = TestCompactU128 { value: flags };
 

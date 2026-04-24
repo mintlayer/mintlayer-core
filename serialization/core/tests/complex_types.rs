@@ -15,9 +15,13 @@
 
 mod utils;
 
-use rand::Rng;
-use serialization_core::{Decode, DecodeAll, Encode};
 use std::collections::BTreeMap;
+
+use rstest::rstest;
+
+use randomness::RngExt as _;
+use serialization_core::{Decode, DecodeAll, Encode};
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
@@ -61,9 +65,11 @@ fn test_enum_codec_index() {
     }
 }
 
-#[test]
-fn test_scale_structures() {
-    let mut rng = rand::thread_rng();
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn test_scale_structures(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
 
     #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
     enum TestEnum {
@@ -99,20 +105,20 @@ fn test_scale_structures() {
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
         btree_map.insert(
-            format!("Tom Sawyer {}", rng.gen::<u64>()),
+            format!("Tom Sawyer {}", rng.random::<u64>()),
             "The Adventure of Tom Sawyer is a novel by Mark Twain.".to_string(),
         );
         btree_map.insert(
-            format!("Tin-tin {}", rng.gen::<u64>()),
+            format!("Tin-tin {}", rng.random::<u64>()),
             "Life is rather like a tin of sardines - we're all of us looking for the key."
                 .to_string(),
         );
         btree_map.insert(
-            format!("Red Planet {}", rng.gen::<u64>()),
+            format!("Red Planet {}", rng.random::<u64>()),
             "In Red Planet, the only thing thicker than the Martian atmosphere (which is breathable, by the way)".to_string(),
         );
         btree_map.insert(
-            format!("Romeo and Juliet {}", rng.gen::<u64>()),
+            format!("Romeo and Juliet {}", rng.random::<u64>()),
             "Good night, good night! parting is such sweet sorrow. ".to_string(),
         );
     }
@@ -120,7 +126,7 @@ fn test_scale_structures() {
     let mut field_btree_map_string = BTreeMap::new();
     for _ in 0..1024 {
         field_btree_map_string.insert(
-            rng.gen::<u128>(),
+            rng.random::<u128>(),
             "The Adventure of Tom Sawyer is a novel by Mark Twain.".to_string(),
         );
     }
@@ -128,18 +134,18 @@ fn test_scale_structures() {
     let mut field_btree_map_bytes = BTreeMap::new();
     for _ in 0..1024 {
         field_btree_map_bytes.insert(
-            rng.gen::<u128>(),
+            rng.random::<u128>(),
             vec![
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
-                rng.gen::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
+                rng.random::<u8>(),
             ],
         );
     }

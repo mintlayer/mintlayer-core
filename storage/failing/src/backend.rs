@@ -19,7 +19,7 @@ use std::{
 };
 
 use storage_core::{backend, Data, DbMapId};
-use test_utils::random::{Rng, Seed, TestRng};
+use test_utils::random::{RngExt as _, Seed, TestRng};
 use utils::{atomics::AcqRelAtomicU32, shallow_clone::ShallowClone};
 
 use crate::{ErrorGeneration, FailureConfig};
@@ -92,7 +92,7 @@ impl<T> FailingImpl<T> {
     }
 
     fn make_rng_impl(rng: &Mutex<TestRng>) -> TestRng {
-        TestRng::new(Seed(rng.lock().expect("lock poisoned").gen()))
+        TestRng::new(Seed(rng.lock().expect("lock poisoned").random()))
     }
 
     fn make_rw_tx_state<'a>(

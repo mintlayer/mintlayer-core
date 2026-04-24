@@ -107,7 +107,7 @@ impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
 #[cfg(test)]
 mod tests {
     use crypto::symkey::SymmetricKeyKind;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -134,7 +134,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_new_plain_and_back_decrypted_error(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let value = rng.gen::<u32>();
+        let value = rng.random::<u32>();
         let maybe_encrypted = MaybeEncrypted::new(&value, &None);
 
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
@@ -148,7 +148,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_new_encrypted_and_back(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let value = rng.gen::<u32>();
+        let value = rng.random::<u32>();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let key = Some(key);
         let maybe_encrypted = MaybeEncrypted::new(&value, &key);
@@ -161,7 +161,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_new_encrypted_and_back_no_key_error(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let value = rng.gen::<u32>();
+        let value = rng.random::<u32>();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let key = Some(key);
         let maybe_encrypted = MaybeEncrypted::new(&value, &key);
@@ -174,7 +174,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_new_encrypted_and_back_different_key_error(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let value = rng.gen::<u32>();
+        let value = rng.random::<u32>();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let key = Some(key);
         let maybe_encrypted = MaybeEncrypted::new(&value, &key);
@@ -193,9 +193,9 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_wrong_encode_decode(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let value = rng.gen::<u32>();
+        let value = rng.random::<u32>();
 
-        let optional_key = if rng.gen::<bool>() {
+        let optional_key = if rng.random::<bool>() {
             Some(SymmetricKey::new(
                 SymmetricKeyKind::XChacha20Poly1305,
                 &mut rng,

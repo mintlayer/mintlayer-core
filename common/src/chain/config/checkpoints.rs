@@ -119,7 +119,7 @@ mod tests {
 
     use test_utils::{
         assert_matches,
-        random::{make_seedable_rng, Rng, Seed},
+        random::{make_seedable_rng, RngExt as _, Seed},
     };
 
     use super::*;
@@ -181,7 +181,7 @@ mod tests {
             checkpoints_map.insert(BlockHeight::new(15), Id::random_using(&mut rng));
             checkpoints_map
         };
-        let checkpoints = if rng.gen_bool(0.5) {
+        let checkpoints = if rng.random_bool(0.5) {
             Checkpoints::new(checkpoints_map.clone(), genesis_id).unwrap()
         } else {
             static MAP: OnceCell<BTreeMap<BlockHeight, Id<GenBlock>>> = OnceCell::new();
@@ -246,8 +246,9 @@ mod tests {
 
         // Anything above the last checkpoint should return the last checkpoint
         assert_eq!(
-            checkpoints
-                .parent_checkpoint_to_height(BlockHeight::new(rng.gen::<u64>().saturating_add(15))),
+            checkpoints.parent_checkpoint_to_height(BlockHeight::new(
+                rng.random::<u64>().saturating_add(15)
+            )),
             (15.into(), *checkpoints_map.get(&15.into()).unwrap()),
         );
 

@@ -31,13 +31,13 @@ use common::{
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use itertools::Itertools;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
 
 fn create_transactions(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
@@ -50,7 +50,7 @@ fn create_transactions(
         .chunks(input_size)
         .map(|inputs| {
             let outputs = if max_num_of_outputs > 1 {
-                let rnd = rng.gen_range(1..max_num_of_outputs);
+                let rnd = rng.random_range(1..max_num_of_outputs);
                 create_tx_outputs(rng, rnd as u32)
             } else {
                 vec![]
@@ -67,7 +67,7 @@ fn create_transactions(
 }
 
 fn create_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     prev_block_id: Id<GenBlock>,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
@@ -87,7 +87,7 @@ fn create_block(
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
 fn initialize_db(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tx_outputs_size: u32,
 ) -> (UtxosDBInMemoryImpl, Vec<UtxoOutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(rng));
@@ -113,7 +113,7 @@ fn initialize_db(
 }
 
 fn create_utxo_entries(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     num_of_utxos: u8,
 ) -> BTreeMap<UtxoOutPoint, UtxoEntry> {
     let mut map = BTreeMap::new();
@@ -273,7 +273,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let (db_impl, _) = initialize_db(&mut rng, tx_outputs_size);
     let db = UtxosDB::new(&db_impl);
 
-    let tx_inputs: Vec<TxInput> = (0..rng.gen_range(num_of_txs..20))
+    let tx_inputs: Vec<TxInput> = (0..rng.random_range(num_of_txs..20))
         .map(|i| {
             let id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
             let id = OutPointSourceId::BlockReward(id);
@@ -316,7 +316,7 @@ fn test_batch_write(#[case] seed: Seed) {
 
     // randomly get a key for checking
     let keys = utxos.container.keys().collect_vec();
-    let key_index = rng.gen_range(0..keys.len());
+    let key_index = rng.random_range(0..keys.len());
     let outpoint = keys[key_index].clone();
 
     // test the get_utxo

@@ -33,19 +33,19 @@ use common::{
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use pos_accounting::PoolData;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxosStorageRead;
 
 fn create_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     decommission_destination: Destination,
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ratio = PerThousand::new_from_rng(rng);
-    let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
+    let cost_per_block = Amount::from_atoms(rng.random_range(0..1000));
     PoolData::new(
         decommission_destination,
         pledged_amount,
@@ -57,7 +57,7 @@ fn create_pool_data(
 }
 
 fn make_tx_with_stake_pool_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
@@ -72,7 +72,7 @@ fn make_tx_with_stake_pool_from_genesis(
 }
 
 fn make_tx_with_stake_pool(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     input0_outpoint: UtxoOutPoint,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
@@ -102,7 +102,7 @@ fn make_tx_with_stake_pool(
 
     // random order of transfer and stake outputs so that tests can use different outpoint 0 or 1
     // to make the next pool
-    let (tx, transfer_output_idx) = if rng.gen::<bool>() {
+    let (tx, transfer_output_idx) = if rng.random::<bool>() {
         (
             tx_builder.add_output(transfer_output).add_output(stake_output).build(),
             0,
