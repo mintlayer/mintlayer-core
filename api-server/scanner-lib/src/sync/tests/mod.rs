@@ -37,6 +37,7 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
+        block::timestamp::BlockTimestamp,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
@@ -87,6 +88,7 @@ struct MockLocalState {
     genesis_id: Id<GenBlock>,
     blocks: Vec<Id<Block>>,
     new_tip_tx: mpsc::UnboundedSender<Id<Block>>,
+    mempool_txs: Vec<SignedTransaction>,
 }
 
 impl MockLocalState {
@@ -95,6 +97,7 @@ impl MockLocalState {
             genesis_id: chain_config.genesis_block_id(),
             blocks: Vec::new(),
             new_tip_tx,
+            mempool_txs: Vec::new(),
         }
     }
 
@@ -111,8 +114,12 @@ impl MockLocalState {
 impl LocalBlockchainState for MockLocalState {
     type Error = Infallible;
 
-    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        Ok((self.get_block_height(), self.get_best_block_id()))
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>, BlockTimestamp), Self::Error> {
+        Ok((
+            self.get_block_height(),
+            self.get_best_block_id(),
+            BlockTimestamp::from_int_seconds(0),
+        ))
     }
 
     async fn scan_blocks(
@@ -140,6 +147,11 @@ impl LocalBlockchainState for MockLocalState {
             self.get_block_height()
         );
 
+        Ok(())
+    }
+
+    async fn add_mempool_tx(&mut self, tx: &SignedTransaction) -> Result<(), Self::Error> {
+        self.mempool_txs.push(tx.clone());
         Ok(())
     }
 }
@@ -196,6 +208,10 @@ impl RemoteNode for MockRemoteNode {
             1,
             FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
         )])
+    }
+
+    async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        Ok(vec![])
     }
 }
 

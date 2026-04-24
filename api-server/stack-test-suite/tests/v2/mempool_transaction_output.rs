@@ -1,4 +1,4 @@
-// Copyright (c) 2025 RBB S.r.l
+// Copyright (c) 2026 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -18,41 +18,6 @@ use common::chain::UtxoOutPoint;
 
 use super::*;
 
-#[tokio::test]
-async fn invalid_transaction_id() {
-    let (task, response) =
-        spawn_webserver("/api/v2/transaction/invalid-transaction-id/output/1").await;
-
-    assert_eq!(response.status(), 400);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
-
-    task.abort();
-}
-
-#[tokio::test]
-async fn transaction_not_found() {
-    let (task, response) = spawn_webserver(
-        "/api/v2/transaction/0000000000000000000000000000000000000000000000000000000000000001/output/1",
-    )
-    .await;
-
-    assert_eq!(response.status(), 404);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(
-        body["error"].as_str().unwrap(),
-        "Transaction output not found"
-    );
-
-    task.abort();
-}
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -68,8 +33,8 @@ async fn ok(#[case] seed: Seed) {
             let mut rng = make_seedable_rng(seed);
             let chain_config = create_unit_test_config();
 
-            let chainstate_blocks = {
-                let mut tf = TestFramework::builder(&mut rng)
+            let (tx1, tx2) = {
+                let tf = TestFramework::builder(&mut rng)
                     .with_chain_config(chain_config.clone())
                     .build();
 
@@ -88,9 +53,6 @@ async fn ok(#[case] seed: Seed) {
                     ))
                     .build();
                 let tx1_id = tx1.transaction().get_id();
-                let block1 = tf.make_block_builder().add_transaction(tx1).build(&mut rng);
-
-                tf.process_block(block1.clone(), chainstate::BlockSource::Local).unwrap();
 
                 // Spend one of the outputs
                 let tx2 = TransactionBuilder::new()
@@ -101,13 +63,9 @@ async fn ok(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1))))
                     .build();
 
-                let block2 = tf.make_block_builder().add_transaction(tx2).build(&mut rng);
-
-                tf.process_block(block2.clone(), chainstate::BlockSource::Local).unwrap();
-
                 _ = tx.send(tx1_id.to_hash().encode_hex::<String>());
 
-                vec![block1, block2]
+                (tx1, tx2)
             };
 
             let storage = {
@@ -123,7 +81,8 @@ async fn ok(#[case] seed: Seed) {
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
             local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
-            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+            local_node.add_mempool_tx(&tx1).await.unwrap();
+            local_node.add_mempool_tx(&tx2).await.unwrap();
 
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
@@ -140,7 +99,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let transaction_id = rx.await.unwrap();
-    let url = format!("/api/v2/transaction/{transaction_id}/output/0");
+    let url = format!("/api/v2/transaction/{transaction_id}/output/0?with_mempool=true");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -158,14 +117,11 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
-    assert!(body.get("spent_in_mempool").is_none());
-    assert_eq!(
-        body.get("spent_at_block_height").unwrap().as_number().unwrap(),
-        &(2.into())
-    );
+    assert!(body.get("spent_in_mempool").unwrap().as_bool().unwrap());
+    assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     // Test the second output is not spent
-    let url = format!("/api/v2/transaction/{transaction_id}/output/1");
+    let url = format!("/api/v2/transaction/{transaction_id}/output/1?with_mempool=true");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -183,7 +139,7 @@ async fn ok(#[case] seed: Seed) {
         body.get("destination").unwrap().as_str().unwrap(),
         Address::new(&chain_config, Destination::AnyoneCanSpend).unwrap().as_str()
     );
-    assert!(body.get("spent_in_mempool").is_none());
+    assert!(!body.get("spent_in_mempool").unwrap().as_bool().unwrap(),);
     assert!(body.get("spent_at_block_height").unwrap().is_null());
 
     task.abort();

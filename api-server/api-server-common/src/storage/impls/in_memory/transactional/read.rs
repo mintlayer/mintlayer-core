@@ -317,4 +317,93 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_for_trading_pair(pair, len, offset)
     }
+
+    async fn get_utxo_mempool_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_utxo_mempool_with_fallback(outpoint)
+    }
+
+    async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_mempool_locked_utxo_with_fallback(outpoint)
+    }
+
+    async fn get_mempool_address_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction
+            .get_mempool_address_balance_with_fallback(address, coin_or_token_id)
+    }
+
+    async fn get_mempool_address_locked_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction
+            .get_mempool_address_locked_balance_with_fallback(address, coin_or_token_id)
+    }
+
+    async fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError> {
+        self.transaction.get_mempool_transaction(transaction_id)
+    }
+
+    async fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError> {
+        self.transaction.get_mempool_transactions(len, offset)
+    }
+
+    async fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<common::chain::Transaction>>, ApiServerStorageError> {
+        self.transaction.get_mempool_address_transactions(address)
+    }
+
+    async fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        self.transaction.get_mempool_address_balances(address)
+    }
+
+    async fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
+        self.transaction.get_mempool_address_all_utxos(address)
+    }
+
+    async fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.transaction.get_mempool_pool_data_with_fallback(pool_id)
+    }
+
+    async fn get_mempool_token_num_decimals_with_fallback(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        self.transaction.get_mempool_token_num_decimals_with_fallback(token_id)
+    }
+
+    async fn get_mempool_order_with_fallback(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        self.transaction.get_mempool_order_with_fallback(order_id)
+    }
 }

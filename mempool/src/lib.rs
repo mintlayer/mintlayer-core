@@ -28,7 +28,10 @@ pub mod rpc;
 pub mod rpc_event;
 pub mod tx_accumulator;
 
-pub use {config::MempoolConfig, pool::feerate_points::find_interpolated_value, pool::FeeRate};
+pub use {
+    config::MempoolConfig, config::FUTURE_TIMELOCK_TOLERANCE_BLOCKS,
+    pool::feerate_points::find_interpolated_value, pool::FeeRate,
+};
 
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 

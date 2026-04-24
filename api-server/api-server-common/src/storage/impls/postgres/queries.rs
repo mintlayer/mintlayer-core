@@ -39,7 +39,8 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
         FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoSpent,
+        UtxoWithExtraInfo,
     },
 };
 
@@ -1046,6 +1047,142 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        self.just_execute(
+            "CREATE TABLE ml.mempool_transactions (
+                transaction_id bytea PRIMARY KEY,
+                transaction_data bytea NOT NULL,
+                insertion_time timestamp NOT NULL DEFAULT NOW()
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_utxo (
+                outpoint bytea PRIMARY KEY,
+                utxo bytea NOT NULL,
+                spent BOOLEAN NOT NULL DEFAULT FALSE
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_locked_utxo (
+                    outpoint bytea PRIMARY KEY,
+                    utxo bytea NOT NULL,
+                    spent BOOLEAN NOT NULL DEFAULT FALSE
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_utxo_addresses (
+                outpoint bytea NOT NULL,
+                address TEXT NOT NULL,
+                PRIMARY KEY (outpoint, address)
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE INDEX mempool_utxo_addresses_index ON ml.mempool_utxo_addresses (address);",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_address_balance (
+                address TEXT NOT NULL,
+                coin_or_token_id bytea NOT NULL,
+                amount bytea NOT NULL,
+                number_of_decimals smallint NOT NULL,
+                PRIMARY KEY (address, coin_or_token_id)
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_locked_address_balance (
+                    address TEXT NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
+                    amount bytea NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (address, coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_address_transactions (
+                address TEXT NOT NULL,
+                transaction_id bytea NOT NULL REFERENCES ml.mempool_transactions(transaction_id) ON DELETE CASCADE,
+                PRIMARY KEY (address, transaction_id)
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_token_transactions (
+                token_id bytea NOT NULL,
+                transaction_id bytea NOT NULL REFERENCES ml.mempool_transactions(transaction_id) ON DELETE CASCADE,
+                PRIMARY KEY (token_id, transaction_id)
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_pool_data (
+                    pool_id TEXT NOT NULL,
+                    data bytea NOT NULL,
+                    PRIMARY KEY (pool_id)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_fungible_token (
+                token_id bytea PRIMARY KEY,
+                ticker TEXT NOT NULL,
+                authority TEXT NOT NULL,
+                issuance bytea NOT NULL
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_nft_issuance (
+                nft_id bytea PRIMARY KEY,
+                ticker TEXT NOT NULL,
+                issuance bytea NOT NULL,
+                owner bytea
+            );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_coin_or_token_decimals (
+                    coin_or_token_id bytea NOT NULL,
+                    number_of_decimals smallint NOT NULL,
+                    PRIMARY KEY (coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.mempool_orders (
+                    order_id TEXT NOT NULL,
+                    initially_asked TEXT NOT NULL,
+                    ask_balance TEXT NOT NULL,
+                    ask_currency bytea NOT NULL,
+                    initially_given TEXT NOT NULL,
+                    give_balance TEXT NOT NULL,
+                    give_currency bytea NOT NULL,
+                    next_nonce bytea NOT NULL,
+                    conclude_destination bytea NOT NULL,
+                    frozen BOOLEAN NOT NULL,
+                    PRIMARY KEY (order_id)
+                );",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -1657,7 +1794,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn get_pool_data(
-        &mut self,
+        &self,
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
@@ -1802,6 +1939,68 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SET staker_balance = $3, data = $4;
                 "#,
                 &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let pool_id_addr = Address::new(chain_config, pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self
+            .tx
+            .query_opt(
+                r#"
+                SELECT data
+                FROM ml.mempool_pool_data
+                WHERE pool_id = $1
+                LIMIT 1;
+            "#,
+                &[&pool_id_addr.as_str()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let pool_data: Vec<u8> = row.get(0);
+            let pool_data =
+                PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool data deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(Some(pool_data))
+        } else {
+            self.get_pool_data(pool_id, chain_config).await
+        }
+    }
+
+    pub async fn set_mempool_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolDataWithExtraInfo,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let pool_id = Address::new(chain_config, pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.mempool_pool_data (pool_id, data)
+                    VALUES ($1, $2)
+                    ON CONFLICT (pool_id) DO UPDATE
+                    SET data = $2;
+                "#,
+                &[&pool_id.as_str(), &pool_data.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2073,7 +2272,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn get_utxo(
-        &mut self,
+        &self,
         outpoint: UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
         let row = self
@@ -2093,7 +2292,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let serialized_data: Vec<u8> = row.get(0);
         let spent: bool = row.get(1);
         let block_height: i64 = row.get(2);
-        let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
+        let spent_at_block_height = spent.then_some(UtxoSpent::AtBlockHeight(BlockHeight::new(
+            block_height as u64,
+        )));
 
         let output =
             UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
@@ -2944,7 +3145,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
         let creation_block_height =
-            Self::block_height_to_postgres_friendly(order.creation_block_height);
+            order.creation_block_height.map(Self::block_height_to_postgres_friendly);
         let order_id = Address::new(chain_config, order_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
 
@@ -3055,6 +3256,637 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })
             .collect()
     }
+
+    pub async fn set_mempool_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+        transaction: &TransactionInfo,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_transactions (transaction_id, transaction_data)
+                 VALUES ($1, $2)
+                 ON CONFLICT (transaction_id) DO NOTHING;",
+                &[&transaction_id.encode(), &transaction.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn get_utxo_mempool_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        // TODO: optimize it into a single query
+        let mempool_row = self
+            .tx
+            .query_opt(
+                "SELECT utxo, spent FROM ml.mempool_utxo WHERE outpoint = $1 LIMIT 1;",
+                &[&outpoint.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = mempool_row {
+            let serialized_data: Vec<u8> = row.get(0);
+            let spent: bool = row.get(1);
+
+            let output =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Mempool Utxo deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            let spent = spent.then_some(UtxoSpent::InMempool);
+            return Ok(Some(Utxo::new_with_info(output, spent)));
+        }
+
+        // Fallback to mainchain if not found in mempool
+        self.get_utxo(outpoint.clone()).await
+    }
+
+    pub async fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let mempool_row = self
+            .tx
+            .query_opt(
+                r#"
+                (SELECT utxo, spent FROM ml.mempool_locked_utxo WHERE outpoint = $1 LIMIT 1)
+                UNION ALL
+                (SELECT utxo, false as spent FROM ml.locked_utxo WHERE outpoint = $1 LIMIT 1)
+                LIMIT 1
+                "#,
+                &[&outpoint.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = mempool_row {
+            let serialized_data: Vec<u8> = row.get(0);
+            let spent: bool = row.get(1);
+
+            let output =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Mempool Utxo deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            let spent = spent.then_some(UtxoSpent::InMempool);
+            return Ok(Some(Utxo::new_with_info(output, spent)));
+        }
+
+        Ok(None)
+    }
+
+    pub async fn set_mempool_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_utxo (outpoint, utxo, spent)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (outpoint) DO UPDATE SET spent = EXCLUDED.spent, utxo = EXCLUDED.utxo;",
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.mempool_utxo_addresses (outpoint, address) VALUES ($1, $2)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_locked_utxo (outpoint, utxo, spent)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (outpoint) DO UPDATE SET spent = EXCLUDED.spent, utxo = EXCLUDED.utxo;",
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        for address in addresses {
+            self.tx
+                .execute(
+                    "INSERT INTO ml.mempool_utxo_addresses (outpoint, address) VALUES ($1, $2)
+                     ON CONFLICT (outpoint, address) DO NOTHING;",
+                    &[&outpoint.encode(), &address],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_mempool_address_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        // TODO: optimize it into a single query
+        let mempool_row = self
+            .tx
+            .query_opt(
+                "SELECT amount FROM ml.mempool_address_balance WHERE address = $1 AND coin_or_token_id = $2 LIMIT 1;",
+                &[&address, &coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = mempool_row {
+            let amount_bytes: Vec<u8> = row.get(0);
+            let amount = Amount::decode_all(&mut amount_bytes.as_slice())
+                .map_err(|e| ApiServerStorageError::DeserializationError(e.to_string()))?;
+            return Ok(Some(amount));
+        }
+
+        // Fallback to mainchain balance
+        self.get_address_balance(address, coin_or_token_id).await
+    }
+
+    pub async fn get_mempool_address_locked_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        // TODO: optimize it into a single query
+        let mempool_row = self
+            .tx
+            .query_opt(
+                "SELECT amount FROM ml.mempool_locked_address_balance WHERE address = $1 AND coin_or_token_id = $2 LIMIT 1;",
+                &[&address, &coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = mempool_row {
+            let amount_bytes: Vec<u8> = row.get(0);
+            let amount = Amount::decode_all(&mut amount_bytes.as_slice())
+                .map_err(|e| ApiServerStorageError::DeserializationError(e.to_string()))?;
+            return Ok(Some(amount));
+        }
+
+        // Fallback to mainchain balance
+        self.get_address_locked_balance(address, coin_or_token_id).await
+    }
+
+    pub async fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT transaction_data FROM ml.mempool_transactions WHERE transaction_id = $1 LIMIT 1;",
+                &[&transaction_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        match row {
+            Some(row) => {
+                let bytes: Vec<u8> = row.get(0);
+                let tx_info = TransactionInfo::decode_all(&mut bytes.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "TransactionInfo deserialization failed: {}",
+                        e
+                    ))
+                })?;
+                Ok(Some(tx_info))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        let rows = self
+            .tx
+            .query(
+                "SELECT transaction_data FROM ml.mempool_transactions ORDER BY insertion_time DESC LIMIT $1 OFFSET $2;",
+                &[&len, &offset],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut res = Vec::new();
+        for row in rows {
+            let bytes: Vec<u8> = row.get(0);
+            let tx_info = TransactionInfo::decode_all(&mut bytes.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "TransactionInfo deserialization failed: {}",
+                    e
+                ))
+            })?;
+            res.push(tx_info);
+        }
+        Ok(res)
+    }
+
+    pub async fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                "SELECT transaction_id FROM ml.mempool_address_transactions WHERE address = $1;",
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut res = Vec::new();
+        for row in rows {
+            let bytes: Vec<u8> = row.get(0);
+            let tx_id = Id::<Transaction>::decode_all(&mut bytes.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "TransactionId deserialization failed: {}",
+                    e
+                ))
+            })?;
+            res.push(tx_id);
+        }
+        Ok(res)
+    }
+
+    pub async fn set_mempool_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_address_balance (address, coin_or_token_id, amount, number_of_decimals)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (address, coin_or_token_id) DO UPDATE SET amount = EXCLUDED.amount;",
+                &[&address, &coin_or_token_id.encode(), &amount.encode(), &(decimals as i16)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn set_mempool_locked_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_locked_address_balance (address, coin_or_token_id, amount, number_of_decimals)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (address, coin_or_token_id) DO UPDATE SET amount = EXCLUDED.amount;",
+                &[&address, &coin_or_token_id.encode(), &amount.encode(), &(decimals as i16)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                "SELECT coin_or_token_id, amount, number_of_decimals FROM ml.mempool_address_balance WHERE address = $1;",
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let coin_or_token_id: Vec<u8> = row.get(0);
+                let amount: Vec<u8> = row.get(1);
+                let number_of_decimals: i16 = row.get(2);
+
+                let amount = Amount::decode_all(&mut amount.as_slice())
+                    .map_err(|e| ApiServerStorageError::DeserializationError(e.to_string()))?;
+                let coin_or_token_id = CoinOrTokenId::decode_all(&mut coin_or_token_id.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "CoinOrTokenId deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                Ok((
+                    coin_or_token_id,
+                    AmountWithDecimals {
+                        amount,
+                        decimals: number_of_decimals as u8,
+                    },
+                ))
+            })
+            .collect()
+    }
+
+    pub async fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"SELECT ua.outpoint, u.utxo
+                FROM ml.mempool_utxo_addresses ua
+                CROSS JOIN LATERAL (
+                    SELECT utxo, spent
+                    FROM ml.mempool_utxo
+                    WHERE outpoint = ua.outpoint
+                    LIMIT 1
+                ) u
+                WHERE ua.address = $1 AND u.spent = false;"#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let outpoint: Vec<u8> = row.get(0);
+                let utxo: Vec<u8> = row.get(1);
+
+                let outpoint = UtxoOutPoint::decode_all(&mut outpoint.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Outpoint for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+
+                let output = UtxoWithExtraInfo::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+                Ok((outpoint, output))
+            })
+            .collect()
+    }
+
+    pub async fn set_mempool_address_transaction(
+        &mut self,
+        address: &str,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_address_transactions (address, transaction_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (address, transaction_id) DO NOTHING;",
+                &[&address, &transaction_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn set_mempool_token_transaction(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_token_transactions (token_id, transaction_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (token_id, transaction_id) DO NOTHING;",
+                &[&token_id.encode(), &transaction_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn set_mempool_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: FungibleTokenData,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let authority = Address::new(chain_config, issuance.authority.clone())
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_fungible_token (token_id, ticker, authority, issuance)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (token_id) DO UPDATE SET ticker = EXCLUDED.ticker, authority = EXCLUDED.authority, issuance = EXCLUDED.issuance;",
+                &[
+                    &token_id.encode(),
+                    &String::from_utf8(issuance.token_ticker.clone()).expect("Ticker is valid UTF-8 string"),
+                    &authority.into_string(),
+                    &issuance.encode(),
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2);",
+                &[&coin_or_token_id.encode(), &(issuance.number_of_decimals as i16)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn set_mempool_nft_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: NftIssuance,
+        owner: &Destination,
+    ) -> Result<(), ApiServerStorageError> {
+        let ticker = match &issuance {
+            NftIssuance::V0(data) => data.metadata.ticker(),
+        };
+
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_nft_issuance (nft_id, ticker, issuance, owner)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (nft_id) DO UPDATE SET ticker = EXCLUDED.ticker, issuance = EXCLUDED.issuance, owner = EXCLUDED.owner;",
+                &[
+                    &token_id.encode(),
+                    &String::from_utf8(ticker.clone()).expect("Ticker is valid UTF-8 string"),
+                    &issuance.encode(),
+                    &owner.encode(),
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        self.tx
+            .execute(
+                "INSERT INTO ml.mempool_coin_or_token_decimals (coin_or_token_id, number_of_decimals) VALUES ($1, $2);",
+                &[&coin_or_token_id.encode(), &0_i16],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn get_mempool_token_num_decimals_with_fallback(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        let coin_or_token_id = CoinOrTokenId::TokenId(token_id);
+        let res = self
+            .tx
+            .query_opt(
+                "SELECT number_of_decimals FROM ml.mempool_coin_or_token_decimals WHERE coin_or_token_id = $1",
+                &[&coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if let Some(row) = res {
+            let num_decimals: i16 = row.get(0);
+            return Ok(Some(num_decimals as u8));
+        }
+
+        self.get_token_num_decimals(token_id).await
+    }
+
+    pub async fn get_mempool_order_with_fallback(
+        &self,
+        order_id: OrderId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        let order_id_addr = Address::new(chain_config, order_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self
+            .tx
+            .query_opt(
+                r#"
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, null as creation_block_height, frozen
+                FROM ml.mempool_orders
+                WHERE order_id = $1
+                LIMIT 1;
+                "#,
+                &[&order_id_addr.as_str()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let data = match row {
+            Some(d) => d,
+            None => return self.get_order(order_id, chain_config).await,
+        };
+
+        let (decoded_order_id, order) = decode_order_from_row(&data, chain_config)?;
+        assert_eq!(order_id, decoded_order_id);
+
+        Ok(Some(order))
+    }
+
+    pub async fn set_mempool_order(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let order_id_addr = Address::new(chain_config, order_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        self.tx
+            .execute(
+                r#"
+                INSERT INTO ml.mempool_orders (order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, frozen)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (order_id) DO UPDATE SET initially_asked = EXCLUDED.initially_asked, ask_balance = EXCLUDED.ask_balance, ask_currency = EXCLUDED.ask_currency, initially_given = EXCLUDED.initially_given, give_balance = EXCLUDED.give_balance, give_currency = EXCLUDED.give_currency, conclude_destination = EXCLUDED.conclude_destination, next_nonce = EXCLUDED.next_nonce, frozen = EXCLUDED.frozen;
+                "#,
+                &[
+                    &order_id_addr.as_str(),
+                    &amount_to_str(order.initially_asked),
+                    &amount_to_str(order.ask_balance),
+                    &order.ask_currency.encode(),
+                    &amount_to_str(order.initially_given),
+                    &amount_to_str(order.give_balance),
+                    &order.give_currency.encode(),
+                    &order.conclude_destination.encode(),
+                    &order.next_nonce.encode(),
+                    &order.is_frozen,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn clear_mempool_data(&mut self) -> Result<(), ApiServerStorageError> {
+        logging::log::info!("Clearing all mempool tables");
+
+        self.just_execute(
+            "TRUNCATE TABLE
+                ml.mempool_transactions,
+                ml.mempool_utxo,
+                ml.mempool_locked_utxo,
+                ml.mempool_utxo_addresses,
+                ml.mempool_address_balance,
+                ml.mempool_locked_address_balance,
+                ml.mempool_address_transactions,
+                ml.mempool_token_transactions,
+                ml.mempool_pool_data,
+                ml.mempool_fungible_token,
+                ml.mempool_nft_issuance,
+                ml.mempool_orders,
+                ml.mempool_coin_or_token_decimals
+            RESTART IDENTITY CASCADE;",
+        )
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        logging::log::info!("Done clearing mempool tables");
+
+        Ok(())
+    }
 }
 
 fn decode_order_from_row(
@@ -3070,7 +3902,7 @@ fn decode_order_from_row(
     let give_currency: Vec<u8> = data.get("give_currency");
     let conclude_destination: Vec<u8> = data.get("conclude_destination");
     let next_nonce: Vec<u8> = data.get("next_nonce");
-    let creation_block_height: i64 = data.get("creation_block_height");
+    let creation_block_height: Option<i64> = data.try_get("creation_block_height").ok().flatten();
     let is_frozen: bool = data.get("frozen");
 
     let order_id = Address::<OrderId>::from_string(chain_config, order_id)
@@ -3127,7 +3959,7 @@ fn decode_order_from_row(
     })?;
 
     let order = Order {
-        creation_block_height: BlockHeight::new(creation_block_height as u64),
+        creation_block_height: creation_block_height.map(|h| BlockHeight::new(h as u64)),
         conclude_destination,
         ask_balance,
         initially_asked,

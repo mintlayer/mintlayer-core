@@ -9,9 +9,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [1.3.0] - 2026-04-09
 
 ### Added
-- New endpoint was added: `/v2/transaction/{id}/output/{idx}`.
+- New endpoint was added: `/v2/transaction/{id}/output/{idx}`, including an optional `with_mempool` parameter that controls the display of mempool spent status.
 - New endpoint was added: `/v2/token/{id}/transactions` will return all transactions related to a token.\
   Pagination works like the new absolute mode in `/v2/transaction`, using `offset` and `items`.
+- New endpoints for addresses and transactions from the mempool:
+  - `/v2/mempool/transaction`
+  - `/v2/mempool/transaction/:id`
+  - `/v2/mempool/address/:address`
+  - `/v2/mempool/address/:address/all-utxos`
 
 ### Changed
 - `/v2/token/ticker/{ticker}` will now return all tokens whose ticker has the specified `{ticker}`

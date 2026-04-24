@@ -82,6 +82,19 @@ struct ApiServerInMemoryStorage {
     statistics:
         BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     orders_table: BTreeMap<OrderId, BTreeMap<BlockHeight, Order>>,
+    mempool_transaction_table: BTreeMap<Id<Transaction>, TransactionInfo>,
+    mempool_utxo_table: BTreeMap<UtxoOutPoint, (Utxo, bool)>,
+    mempool_locked_utxo_table: BTreeMap<UtxoOutPoint, (Utxo, bool)>,
+    mempool_address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
+    mempool_address_balance_table: BTreeMap<String, BTreeMap<CoinOrTokenId, AmountWithDecimals>>,
+    mempool_locked_address_balance_table:
+        BTreeMap<String, BTreeMap<CoinOrTokenId, AmountWithDecimals>>,
+    mempool_address_transactions_table: BTreeMap<String, BTreeSet<Id<Transaction>>>,
+    mempool_token_transactions_table: BTreeMap<TokenId, BTreeSet<Id<Transaction>>>,
+    mempool_pool_data_table: BTreeMap<PoolId, PoolDataWithExtraInfo>,
+    mempool_fungible_token_data: BTreeMap<TokenId, FungibleTokenData>,
+    mempool_nft_token_issuances: BTreeMap<TokenId, NftWithOwner>,
+    mempool_orders_table: BTreeMap<OrderId, Order>,
     genesis_block: Arc<WithId<Genesis>>,
     number_of_coin_decimals: u8,
     storage_version: u32,
@@ -109,6 +122,18 @@ impl ApiServerInMemoryStorage {
             nft_token_issuances: BTreeMap::new(),
             statistics: BTreeMap::new(),
             orders_table: BTreeMap::new(),
+            mempool_transaction_table: BTreeMap::new(),
+            mempool_utxo_table: BTreeMap::new(),
+            mempool_locked_utxo_table: BTreeMap::new(),
+            mempool_address_utxos: BTreeMap::new(),
+            mempool_address_balance_table: BTreeMap::new(),
+            mempool_locked_address_balance_table: BTreeMap::new(),
+            mempool_address_transactions_table: BTreeMap::new(),
+            mempool_token_transactions_table: BTreeMap::new(),
+            mempool_pool_data_table: BTreeMap::new(),
+            mempool_fungible_token_data: BTreeMap::new(),
+            mempool_nft_token_issuances: BTreeMap::new(),
+            mempool_orders_table: BTreeMap::new(),
             genesis_block: chain_config.genesis_block().clone(),
             number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: CURRENT_STORAGE_VERSION,
@@ -840,6 +865,154 @@ impl ApiServerInMemoryStorage {
         });
         Ok(())
     }
+
+    fn get_utxo_mempool_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        if let Some(res) = self.mempool_utxo_table.get(outpoint).map(|(utxo, _)| utxo.clone()) {
+            return Ok(Some(res));
+        }
+
+        self.get_utxo(outpoint.clone())
+    }
+
+    fn get_mempool_locked_utxo_with_fallback(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        if let Some(res) =
+            self.mempool_locked_utxo_table.get(outpoint).map(|(utxo, _)| utxo.clone())
+        {
+            return Ok(Some(res));
+        }
+
+        Ok(self
+            .locked_utxo_table
+            .get(outpoint)
+            .and_then(|by_height| by_height.values().last())
+            .map(|locked_utxo| {
+                Utxo::new_with_info(locked_utxo.utxo_with_extra_info().clone(), None)
+            }))
+    }
+
+    fn get_mempool_address_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let mempool_balance = self
+            .mempool_address_balance_table
+            .get(address)
+            .and_then(|by_coin| by_coin.get(&coin_or_token_id).map(|amount| amount.amount));
+
+        if mempool_balance.is_some() {
+            return Ok(mempool_balance);
+        }
+
+        self.get_address_balance(address, coin_or_token_id)
+    }
+
+    fn get_mempool_address_locked_balance_with_fallback(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let mempool_balance = self
+            .mempool_locked_address_balance_table
+            .get(address)
+            .and_then(|by_coin| by_coin.get(&coin_or_token_id).map(|amount| amount.amount));
+
+        if mempool_balance.is_some() {
+            return Ok(mempool_balance);
+        }
+
+        self.get_address_locked_balance(address, coin_or_token_id)
+    }
+
+    fn get_mempool_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<TransactionInfo>, ApiServerStorageError> {
+        Ok(self.mempool_transaction_table.get(&transaction_id).cloned())
+    }
+
+    fn get_mempool_transactions(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<TransactionInfo>, ApiServerStorageError> {
+        Ok(self
+            .mempool_transaction_table
+            .values()
+            .skip(offset as usize)
+            .take(len as usize)
+            .cloned()
+            .collect())
+    }
+
+    fn get_mempool_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<common::chain::Transaction>>, ApiServerStorageError> {
+        Ok(self
+            .mempool_address_transactions_table
+            .get(address)
+            .map(|txs| txs.iter().copied().collect())
+            .unwrap_or_default())
+    }
+
+    fn get_mempool_address_balances(
+        &self,
+        address: &str,
+    ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
+        Ok(self
+            .mempool_address_balance_table
+            .get(address)
+            .cloned()
+            .map(|balances| balances.into_iter().collect())
+            .unwrap_or_default())
+    }
+
+    fn get_mempool_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
+        let result = self
+            .mempool_address_utxos
+            .get(address)
+            .unwrap_or(&BTreeSet::new())
+            // TODO:
+            .union(self.address_locked_utxos.get(address).unwrap_or(&BTreeSet::new()))
+            .filter_map(|outpoint| {
+                if let Some(utxo) = self.get_utxo_mempool_with_fallback(outpoint).expect("no error")
+                {
+                    (!utxo.spent())
+                        .then_some((outpoint.clone(), utxo.utxo_with_extra_info().clone()))
+                } else {
+                    self.get_mempool_locked_utxo_with_fallback(outpoint).expect("no error").map(
+                        |locked_utxo| {
+                            (outpoint.clone(), locked_utxo.utxo_with_extra_info().clone())
+                        },
+                    )
+                }
+            })
+            .collect();
+        Ok(result)
+    }
+
+    fn get_mempool_pool_data_with_fallback(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let pool_data = self.mempool_pool_data_table.get(&pool_id).cloned();
+
+        if pool_data.is_some() {
+            return Ok(pool_data);
+        }
+
+        self.get_pool_data(pool_id)
+    }
 }
 
 impl ApiServerInMemoryStorage {
@@ -1290,6 +1463,188 @@ impl ApiServerInMemoryStorage {
             !v.is_empty()
         });
 
+        Ok(())
+    }
+
+    fn set_mempool_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+        transaction: &TransactionInfo,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_transaction_table.insert(transaction_id, transaction.clone());
+        Ok(())
+    }
+
+    fn set_mempool_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.mempool_utxo_table.insert(outpoint.clone(), (utxo, spent));
+        for address in addresses {
+            self.mempool_address_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
+        Ok(())
+    }
+
+    fn set_mempool_locked_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        addresses: &[&str],
+    ) -> Result<(), ApiServerStorageError> {
+        let spent = utxo.spent();
+        self.mempool_locked_utxo_table.insert(outpoint.clone(), (utxo, spent));
+        for address in addresses {
+            self.mempool_address_utxos
+                .entry((*address).into())
+                .or_default()
+                .insert(outpoint.clone());
+        }
+        Ok(())
+    }
+
+    fn set_mempool_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_address_balance_table
+            .entry(address.to_string())
+            .or_default()
+            .insert(coin_or_token_id, AmountWithDecimals { amount, decimals });
+        Ok(())
+    }
+
+    fn set_mempool_locked_address_balance(
+        &mut self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+        amount: Amount,
+        decimals: u8,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_locked_address_balance_table
+            .entry(address.to_string())
+            .or_default()
+            .insert(coin_or_token_id, AmountWithDecimals { amount, decimals });
+        Ok(())
+    }
+
+    fn set_mempool_address_transaction(
+        &mut self,
+        address: &str,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_address_transactions_table
+            .entry(address.to_string())
+            .or_default()
+            .insert(transaction_id);
+        Ok(())
+    }
+
+    fn set_mempool_token_transaction(
+        &mut self,
+        token_id: TokenId,
+        transaction_id: Id<Transaction>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_token_transactions_table
+            .entry(token_id)
+            .or_default()
+            .insert(transaction_id);
+        Ok(())
+    }
+
+    fn set_mempool_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: PoolDataWithExtraInfo,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_pool_data_table.insert(pool_id, pool_data);
+        Ok(())
+    }
+
+    fn set_mempool_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_fungible_token_data.insert(token_id, issuance);
+        Ok(())
+    }
+
+    fn set_mempool_nft_issuance(
+        &mut self,
+        token_id: TokenId,
+        issuance: NftIssuance,
+        owner: &Destination,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_nft_token_issuances.insert(
+            token_id,
+            NftWithOwner {
+                nft: issuance,
+                owner: Some(owner.clone()),
+            },
+        );
+        Ok(())
+    }
+
+    fn get_mempool_token_num_decimals_with_fallback(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        let decimals = self
+            .mempool_fungible_token_data
+            .get(&token_id)
+            .map(|data| data.number_of_decimals)
+            .or_else(|| self.mempool_nft_token_issuances.get(&token_id).map(|_| 0));
+
+        if decimals.is_some() {
+            return Ok(decimals);
+        }
+
+        self.get_token_num_decimals(token_id)
+    }
+
+    fn get_mempool_order_with_fallback(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        let order_result = self.mempool_orders_table.get(&order_id).cloned();
+        if order_result.is_some() {
+            return Ok(order_result);
+        }
+
+        self.get_order(order_id)
+    }
+
+    fn set_mempool_order(
+        &mut self,
+        order_id: OrderId,
+        order: Order,
+    ) -> Result<(), ApiServerStorageError> {
+        self.mempool_orders_table.insert(order_id, order);
+        Ok(())
+    }
+
+    fn clear_mempool_data(&mut self) -> Result<(), ApiServerStorageError> {
+        self.mempool_transaction_table.clear();
+        self.mempool_utxo_table.clear();
+        self.mempool_address_utxos.clear();
+        self.mempool_address_balance_table.clear();
+        self.mempool_locked_address_balance_table.clear();
+        self.mempool_address_transactions_table.clear();
+        self.mempool_pool_data_table.clear();
+        self.mempool_token_transactions_table.clear();
+        self.mempool_fungible_token_data.clear();
+        self.mempool_nft_token_issuances.clear();
+        self.mempool_orders_table.clear();
         Ok(())
     }
 }

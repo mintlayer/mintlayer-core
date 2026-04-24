@@ -59,7 +59,6 @@ trait MempoolRpc {
     /// Get all mempool transactions in a Vec/List, with hex-encoding.
     ///
     /// Notice that this call may be expensive. Use it with caution.
-    /// This function is mostly used for testing purposes.
     #[method(name = "transactions")]
     async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 

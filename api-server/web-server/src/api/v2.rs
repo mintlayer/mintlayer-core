@@ -102,6 +102,10 @@ pub fn routes<
         .route("/transaction/:id/output/:idx", get(transaction_output));
 
     let router = router
+        .route("/mempool/transaction", get(mempool_transactions))
+        .route("/mempool/transaction/:id", get(mempool_transaction));
+
+    let router = router
         .route("/address/:address", get(address))
         .route("/address/:address/all-utxos", get(all_address_utxos))
         .route("/address/:address/spendable-utxos", get(address_utxos))
@@ -110,6 +114,11 @@ pub fn routes<
             "/address/:address/token-authority",
             get(address_token_authority),
         );
+
+    let router = router.route("/mempool/address/:address", get(mempool_address)).route(
+        "/mempool/address/:address/all-utxos",
+        get(mempool_all_address_utxos),
+    );
 
     let router = router
         .route("/pool", get(pools))
@@ -563,9 +572,15 @@ pub async fn transaction<T: ApiServerStorage>(
     Ok(Json(json))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WithMempool {
+    with_mempool: Option<bool>,
+}
+
 pub async fn transaction_output<T: ApiServerStorage>(
     Path((transaction_id, output_idx)): Path<(String, u32)>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+    Query(params): Query<WithMempool>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
         .map_err(|_| {
@@ -582,16 +597,20 @@ pub async fn transaction_output<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let utxo = db_tx
-        .get_utxo(outpoint)
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .ok_or(ApiServerWebServerError::NotFound(
-            ApiServerWebServerNotFoundError::TransactionOutputNotFound,
-        ))?;
+    let with_mempool = params.with_mempool.unwrap_or(false);
+    let utxo = if with_mempool {
+        db_tx.get_utxo_mempool_with_fallback(&outpoint)
+    } else {
+        db_tx.get_utxo(outpoint)
+    }
+    .await
+    .map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?
+    .ok_or(ApiServerWebServerError::NotFound(
+        ApiServerWebServerNotFoundError::TransactionOutputNotFound,
+    ))?;
 
     let mut json = txoutput_to_json(
         utxo.output(),
@@ -604,6 +623,9 @@ pub async fn transaction_output<T: ApiServerStorage>(
         "spent_at_block_height".into(),
         utxo.spent_at_block_height().map(BlockHeight::into_int).into(),
     );
+    if with_mempool {
+        obj.insert("spent_in_mempool".into(), utxo.spent_in_mempool().into());
+    }
 
     Ok(Json(json))
 }
@@ -671,6 +693,68 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         "merkle_root": block.block.merkle_root().encode_hex::<String>(),
         "merkle_path": merkle_tree,
     })))
+}
+
+pub async fn mempool_transactions<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let txs = db_tx
+        .get_mempool_transactions(offset_and_items.items, offset_and_items.offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let txs = txs
+        .into_iter()
+        .map(|tx| tx_to_json(&tx.tx, &tx.additional_info, &state.chain_config))
+        .collect::<Vec<_>>();
+
+    Ok(Json(serde_json::Value::Array(txs)))
+}
+
+pub async fn mempool_transaction<T: ApiServerStorage>(
+    Path(transaction_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidTransactionId,
+            )
+        })?
+        .into();
+
+    let tx_info = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_mempool_transaction(transaction_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionNotFound,
+        ))?;
+
+    let json = tx_to_json(&tx_info.tx, &tx_info.additional_info, &state.chain_config);
+
+    Ok(Json(json))
 }
 
 //
@@ -1664,4 +1748,113 @@ fn get_offset_and_items(
     );
 
     Ok(OffsetAndItems { offset, items })
+}
+
+pub async fn mempool_address<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let transaction_history =
+        tx.get_mempool_address_transactions(&address.to_string()).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    // if there is no transaction history then return not found
+    ensure!(
+        !transaction_history.is_empty(),
+        ApiServerWebServerError::NotFound(ApiServerWebServerNotFoundError::AddressNotFound,)
+    );
+
+    let address_balances =
+        tx.get_mempool_address_balances(&address.to_string()).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let locked_coin_balance = tx
+        .get_mempool_address_locked_balance_with_fallback(&address.to_string(), CoinOrTokenId::Coin)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .unwrap_or(Amount::ZERO);
+
+    let mut tokens = Vec::with_capacity(address_balances.len());
+    let mut coin_balance = AmountWithDecimals {
+        amount: Amount::ZERO,
+        decimals: state.chain_config.coin_decimals(),
+    };
+
+    for (coin_or_token_id, balance) in address_balances {
+        match coin_or_token_id {
+            CoinOrTokenId::Coin => {
+                coin_balance = balance;
+            }
+            CoinOrTokenId::TokenId(token_id) => {
+                tokens.push(json!({
+                    "token_id": Address::new(&state.chain_config, token_id).expect("no error").as_str(),
+                    "amount": amount_to_json(balance.amount, balance.decimals),
+                }));
+            }
+        }
+    }
+
+    Ok(Json(json!({
+        "coin_balance": amount_to_json(coin_balance.amount, coin_balance.decimals),
+        "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
+        "transaction_history": transaction_history,
+        "tokens": tokens
+    })))
+}
+
+pub async fn mempool_all_address_utxos<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+    let utxos = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_mempool_address_all_utxos(&address.to_string())
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                json!({
+                    "outpoint": utxo_outpoint_to_json(&utxo.0),
+                    "utxo": txoutput_to_json(
+                        &utxo.1.output,
+                        &state.chain_config,
+                        &TokenDecimals::Single(utxo.1.token_decimals),
+                    ),
+                })
+            })
+            .collect::<Vec<_>>(),
+    ))
 }

@@ -14,13 +14,13 @@ chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+mempool = { path = "../../mempool" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
 pos-accounting = { path = "../../pos-accounting" }
 node-comm = { path = "../../wallet/wallet-node-client" }
-mempool = { path = "../../mempool" }
 
 async-trait.workspace = true
 axum.workspace = true
