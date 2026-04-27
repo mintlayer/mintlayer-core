@@ -1081,8 +1081,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.openssl]]
-version = "0.10.75"
-when = "2025-11-07"
+version = "0.10.78"
+when = "2026-04-19"
 user-id = 163
 user-login = "alex"
 user-name = "Alex Gaynor"
@@ -1102,8 +1102,8 @@ user-login = "djc"
 user-name = "Dirkjan Ochtman"
 
 [[publisher.openssl-sys]]
-version = "0.9.111"
-when = "2025-11-07"
+version = "0.9.114"
+when = "2026-04-19"
 user-id = 163
 user-login = "alex"
 user-name = "Alex Gaynor"
