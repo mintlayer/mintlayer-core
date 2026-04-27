@@ -240,7 +240,10 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResult> {
+pub async fn setup(
+    options: OptionsWithResolvedCommand,
+    default_log_filter: &str,
+) -> Result<NodeSetupResult> {
     let chain_config = options.command.create_chain_config()?;
 
     // Prepare data dir
@@ -255,7 +258,7 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     let lock_file = lock_data_dir(&data_dir)?;
 
     // Init logging
-    let main_log_writer_settings = logging::default_writer_settings();
+    let main_log_writer_settings = logging::default_writer_settings(default_log_filter.to_owned());
     if options.log_to_file_option_set() {
         let log_file_name = std::env::current_exe().map_or_else(
             |_| DEFAULT_LOG_FILE_NAME.to_owned(),
@@ -279,7 +282,7 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
             Some(logging::WriterSettings {
                 make_writer: logging::write_to_make_writer(log_file),
                 is_terminal: false,
-                filter: logging::ValueOrEnvVar::Value("info".into()),
+                filter: logging::ValueOrEnvVarWithDefault::Value("info".into()),
                 log_style: logging::ValueOrEnvVar::Value(logging::LogStyle::Text(
                     logging::TextColoring::Off,
                 )),

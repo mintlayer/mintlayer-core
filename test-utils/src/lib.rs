@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod basic_test_time_getter;
+mod env;
 pub mod mock_time_getter;
 pub mod random;
 pub mod test_dir;
@@ -28,6 +29,7 @@ use itertools::Itertools;
 use randomness::{distributions::uniform::SampleRange, Rng, RngExt as _};
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
+pub use env::{remove_env_var, set_env_var};
 
 pub trait UnwrapInfallible {
     type Output;
@@ -119,13 +121,13 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     token_ticker
 }
 
-pub fn gen_different_value<T, G>(orig_val: &T, mut gen: G) -> T
+pub fn gen_different_value<T, G>(orig_val: &T, mut generator: G) -> T
 where
     T: Eq,
     G: FnMut() -> T,
 {
     for _ in 0..1000 {
-        let val = gen();
+        let val = generator();
 
         if val != *orig_val {
             return val;

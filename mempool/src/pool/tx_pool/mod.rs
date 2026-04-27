@@ -144,7 +144,7 @@ impl<M> TxPool<M> {
     }
 
     // Reset the mempool state, returning the list of transactions previously stored in mempool
-    pub fn reset(&mut self) -> impl Iterator<Item = TxEntry> {
+    pub fn reset(&mut self) -> impl Iterator<Item = TxEntry> + use<M> {
         // Discard the old tx verifier and replace it with a fresh one
         self.tx_verifier = tx_verifier::create(
             self.chain_config.shallow_clone(),

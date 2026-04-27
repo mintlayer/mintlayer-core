@@ -106,22 +106,17 @@ pub enum NodeInitializationOutcome {
     DataDirCleanedUp,
 }
 
+// Note: wgpu_hal=error is included to prevent it from spamming warnings "Unrecognized present
+// mode 1000361000" on Windows (which are emitted e.g. when resizing the window).
+// Note that this seems to have been fixed in https://github.com/gfx-rs/wgpu/pull/7850 and the fix
+// has already been released, however our dependencies still use a pretty old version of wgpu.
+const DEFAULT_LOG_FILTER: &str =
+    "info,wgpu_core=error,wgpu_hal=error,hyper=error,jsonrpsee-server=error";
+
 pub async fn node_initialize(
     opts: node_lib::OptionsWithResolvedCommand,
     mode: WalletMode,
 ) -> anyhow::Result<NodeInitializationOutcome> {
-    if std::env::var("RUST_LOG").is_err() {
-        // Note: wgpu_hal=error is included to prevent it from spamming warnings
-        // "Unrecognized present mode 1000361000" on Windows. Note that this seems
-        // to have been fixed in https://github.com/gfx-rs/wgpu/pull/7850 and
-        // the fix has already been released, however our dependencies still use
-        // a pretty old version of wgpu.
-        std::env::set_var(
-            "RUST_LOG",
-            "info,wgpu_core=error,wgpu_hal=error,hyper=error,jsonrpsee-server=error",
-        );
-    }
-
     let opts = {
         let mut opts = opts;
         let run_opts = opts.command.run_options_mut();
@@ -141,7 +136,7 @@ pub async fn node_initialize(
 
     let (chain_config, chain_info) = match mode {
         WalletMode::Hot => {
-            let setup_result = node_lib::setup(opts).await?;
+            let setup_result = node_lib::setup(opts, DEFAULT_LOG_FILTER).await?;
             let node = match setup_result {
                 node_lib::NodeSetupResult::RunNode(node) => node,
                 node_lib::NodeSetupResult::Bootstrap(_, _) => {
@@ -227,7 +222,7 @@ fn spawn_cold_backend(
     wallet_updated_tx: UnboundedSender<messages::WalletId>,
     wallet_updated_rx: UnboundedReceiver<messages::WalletId>,
 ) -> anyhow::Result<(Arc<ChainConfig>, ChainInfo)> {
-    logging::init_logging();
+    logging::init_logging_with_default_filter(DEFAULT_LOG_FILTER.to_owned());
 
     let chain_config = Arc::new(handle_options_in_cold_wallet_mode(options)?);
     let chain_info = ChainInfo {

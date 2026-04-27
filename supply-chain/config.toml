@@ -269,11 +269,15 @@ version = "0.5.0"
 criteria = "safe-to-run"
 
 [[exemptions.ctor]]
-version = "0.2.9"
+version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ctor-lite]]
 version = "0.1.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.ctor-proc-macro]]
+version = "0.0.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.cursor-icon]]
@@ -414,6 +418,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.drm-sys]]
 version = "0.8.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.dtor]]
+version = "0.8.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.dtor-proc-macro]]
+version = "0.0.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.encdec]]
@@ -738,6 +750,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libusb1-sys]]
 version = "0.7.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.link-section]]
+version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.lru]]
