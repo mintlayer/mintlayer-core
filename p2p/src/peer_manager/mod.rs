@@ -863,16 +863,16 @@ where
             P2pError::ConnectionValidationFailed(ConnectionValidationError::NoCommonServices),
         );
 
-        if let Some(min_version) = self.p2p_config.peer_manager_config.min_peer_software_version {
-            if info.user_agent == self.p2p_config.user_agent && info.software_version < min_version
-            {
-                return Err(P2pError::ConnectionValidationFailed(
-                    ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
-                        min_version,
-                        actual_version: info.software_version,
-                    },
-                ));
-            }
+        if let Some(min_version) = self.p2p_config.peer_manager_config.min_peer_software_version
+            && info.user_agent == self.p2p_config.user_agent
+            && info.software_version < min_version
+        {
+            return Err(P2pError::ConnectionValidationFailed(
+                ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
+                    min_version,
+                    actual_version: info.software_version,
+                },
+            ));
         }
 
         match peer_role {

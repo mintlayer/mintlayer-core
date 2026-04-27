@@ -208,11 +208,11 @@ pub fn group_coin_utxos_for_input_by_destination<T: std::fmt::Debug, Grouped: Cl
         let (currency, value) = output_spendable_value(output)?;
         let destination = get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip);
 
-        if let Some(destination) = destination {
-            if currency == Currency::Coin {
-                let for_destination = acc.entry(destination).or_insert_with(|| init.clone());
-                combiner(for_destination, &item, value)?;
-            }
+        if let Some(destination) = destination
+            && currency == Currency::Coin
+        {
+            let for_destination = acc.entry(destination).or_insert_with(|| init.clone());
+            combiner(for_destination, &item, value)?;
         }
         Ok(acc)
     })

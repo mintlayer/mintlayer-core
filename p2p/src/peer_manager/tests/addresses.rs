@@ -463,14 +463,12 @@ async fn resend_own_addresses(#[case] seed: Seed) {
             peer_id: _,
             message,
         } = cmd
+            && let CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AnnounceAddrRequest(
+                AnnounceAddrRequest { address },
+            )) = message.categorize()
         {
-            if let CategorizedMessage::PeerManagerMessage(
-                PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }),
-            ) = message.categorize()
-            {
-                let announced_addr = address.as_discoverable_socket_address(false).unwrap();
-                listening_addresses.remove(&announced_addr);
-            }
+            let announced_addr = address.as_discoverable_socket_address(false).unwrap();
+            listening_addresses.remove(&announced_addr);
         }
     }
 }

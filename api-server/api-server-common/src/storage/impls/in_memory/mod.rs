@@ -1038,10 +1038,10 @@ impl ApiServerInMemoryStorage {
 
         // Handle a degenerate case when the block is stored several times using different heights
         // (to be consistent with the postgres implementation).
-        if let Some(previously_stored_height) = previously_stored_height {
-            if previously_stored_height != block_height {
-                self.main_chain_blocks_table.remove(&previously_stored_height);
-            }
+        if let Some(previously_stored_height) = previously_stored_height
+            && previously_stored_height != block_height
+        {
+            self.main_chain_blocks_table.remove(&previously_stored_height);
         }
 
         Ok(())
