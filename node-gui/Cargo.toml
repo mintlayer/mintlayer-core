@@ -25,6 +25,7 @@ wallet-storage = { path = "../wallet/storage", default-features = false }
 
 anyhow.workspace = true
 chrono.workspace = true
+ctor.workspace = true
 futures.workspace = true
 heck.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio", "lazy"] }

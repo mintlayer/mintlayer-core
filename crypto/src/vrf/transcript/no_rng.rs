@@ -117,7 +117,7 @@ mod tests {
             .finalize(&mut Rng08Adapter(&mut ChaChaRng::from_seed([0u8; 32])));
 
         for _ in 0..100 {
-            assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
+            assert_eq!(g1.r#gen::<u64>(), g2.r#gen::<u64>());
         }
     }
 }

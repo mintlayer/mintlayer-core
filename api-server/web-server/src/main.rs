@@ -36,12 +36,10 @@ use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chai
 
 use crate::error::ApiServerWebServerInitError;
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() -> Result<(), ApiServerWebServerInitError> {
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     logging::init_logging();
 
     let args = ApiServerWebServerConfig::parse();

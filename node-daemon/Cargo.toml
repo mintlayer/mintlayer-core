@@ -11,6 +11,7 @@ node-lib = { path = "../node-lib/" }
 utils = { path = "../utils" }
 
 anyhow.workspace = true
+ctor.workspace = true
 tokio = { workspace = true, default-features = false }
 
 [dev-dependencies]

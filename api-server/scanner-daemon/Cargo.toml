@@ -17,6 +17,7 @@ utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

@@ -355,7 +355,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(ref outpoint) => {
+                TxInput::Utxo(outpoint) => {
                     self.spend_input_from_utxo(tx_source.into(), outpoint).transpose()
                 }
                 TxInput::Account(outpoint) => {
@@ -553,7 +553,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountCommand::UnmintTokens(ref token_id) => {
+                    AccountCommand::UnmintTokens(token_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
@@ -704,7 +704,7 @@ where
             | TxOutput::LockThenTransfer(output_value, _, _)
             | TxOutput::Htlc(output_value, _) => match output_value {
                 OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
-                OutputValue::TokenV1(ref token_id, _) => check_not_frozen(*token_id),
+                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
             },
             TxOutput::CreateOrder(data) => {
                 [data.ask(), data.give()].iter().try_for_each(|v| match v {

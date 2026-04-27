@@ -442,10 +442,10 @@ pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> + Clone {
 }
 
 /// Returns an iterator over all possible destinations.
-pub fn destinations(
-    rng: &mut impl Rng,
+pub fn destinations<R: Rng>(
+    rng: &mut R,
     public_key: PublicKey,
-) -> impl Iterator<Item = Destination> {
+) -> impl Iterator<Item = Destination> + use<R> {
     // TODO: find a way to write this such that it loops over all possible arms instead of doing this manually
     [
         Destination::PublicKeyHash(PublicKeyHash::from(&public_key)),

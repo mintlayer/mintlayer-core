@@ -19,6 +19,7 @@ serialization = { path = "../../serialization" }
 
 async-trait.workspace = true
 chrono.workspace = true
+ctor.workspace = true
 futures = { workspace = true, default-features = false }
 libtest-mimic.workspace = true
 proptest.workspace = true

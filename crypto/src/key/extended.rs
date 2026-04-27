@@ -114,7 +114,7 @@ impl ExtendedPublicKey {
 
     pub fn from_private_key(private_key: &ExtendedPrivateKey) -> ExtendedPublicKey {
         match private_key.get_internal_key() {
-            ExtendedPrivateKeyHolder::Secp256k1Schnorr(ref k) => {
+            ExtendedPrivateKeyHolder::Secp256k1Schnorr(k) => {
                 let secp_key = Secp256k1ExtendedPublicKey::from_private_key(k);
                 ExtendedPublicKey {
                     pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(secp_key),
