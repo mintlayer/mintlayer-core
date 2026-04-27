@@ -42,14 +42,14 @@ impl<Msg> MessageCodec<Msg> {
     }
 
     fn check_encoded_message_size(&self, size: usize) -> Result<()> {
-        if let Some(max_message_size) = self.max_encoded_message_size {
-            if size > max_message_size {
-                return Err(MessageCodecError::MessageTooLarge {
-                    actual_size: size,
-                    max_size: max_message_size,
-                }
-                .into());
+        if let Some(max_message_size) = self.max_encoded_message_size
+            && size > max_message_size
+        {
+            return Err(MessageCodecError::MessageTooLarge {
+                actual_size: size,
+                max_size: max_message_size,
             }
+            .into());
         }
 
         Ok(())

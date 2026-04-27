@@ -860,41 +860,37 @@ impl OutputCache {
 
                 match unconfirmed_tx {
                     WalletTx::Tx(tx) => {
-                        if let Some(frozen_token_id) = conflict_check.frozen_token_id {
-                            if self.violates_frozen_token(unconfirmed_tx, &frozen_token_id) {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
+                        if let Some(frozen_token_id) = conflict_check.frozen_token_id
+                            && self.violates_frozen_token(unconfirmed_tx, &frozen_token_id)
+                        {
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
 
                         if let Some((confirmed_account, confirmed_account_nonce)) =
                             conflict_check.confirmed_account_nonce
+                            && confirmed_tx.get_id() != tx.get_transaction().get_id()
+                            && uses_conflicting_nonce(
+                                unconfirmed_tx,
+                                confirmed_account,
+                                confirmed_account_nonce,
+                            )
                         {
-                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
-                                && uses_conflicting_nonce(
-                                    unconfirmed_tx,
-                                    confirmed_account,
-                                    confirmed_account_nonce,
-                                )
-                            {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
 
                         if let Some((confirmed_cmd_tag, confirmed_order_id)) =
                             conflict_check.conflicting_order_command
+                            && confirmed_tx.get_id() != tx.get_transaction().get_id()
+                            && uses_conflicting_order_command(
+                                unconfirmed_tx,
+                                confirmed_cmd_tag,
+                                confirmed_order_id,
+                            )
                         {
-                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
-                                && uses_conflicting_order_command(
-                                    unconfirmed_tx,
-                                    confirmed_cmd_tag,
-                                    confirmed_order_id,
-                                )
-                            {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
                     }
                     WalletTx::Block(_) => {
@@ -1190,16 +1186,16 @@ impl OutputCache {
                 }
                 TxInput::Account(outpoint) => match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, _) => {
-                        if !already_present {
-                            if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                Self::update_delegation_state(
-                                    &mut self.unconfirmed_descendants,
-                                    data,
-                                    delegation_id,
-                                    outpoint.nonce(),
-                                    tx_id,
-                                )?;
-                            }
+                        if !already_present
+                            && let Some(data) = self.delegations.get_mut(delegation_id)
+                        {
+                            Self::update_delegation_state(
+                                &mut self.unconfirmed_descendants,
+                                data,
+                                delegation_id,
+                                outpoint.nonce(),
+                                tx_id,
+                            )?;
                         }
                     }
                 },
@@ -1276,17 +1272,15 @@ impl OutputCache {
                     OrderAccountCommand::FillOrder(order_id, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
-                        if !already_present {
-                            if let Some(data) = self.orders.get_mut(order_id) {
-                                Self::update_order_state(
-                                    &mut self.unconfirmed_descendants,
-                                    data,
-                                    order_id,
-                                    cmd.into(),
-                                    None,
-                                    tx_id,
-                                )?;
-                            }
+                        if !already_present && let Some(data) = self.orders.get_mut(order_id) {
+                            Self::update_order_state(
+                                &mut self.unconfirmed_descendants,
+                                data,
+                                order_id,
+                                cmd.into(),
+                                None,
+                                tx_id,
+                            )?;
                         }
                     }
                 },

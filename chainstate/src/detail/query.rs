@@ -314,11 +314,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut best_height = BlockHeight::new(0);
 
         for block_id in locator.iter() {
-            if let Some(block_index) = self.chainstate_ref.get_gen_block_index(block_id)? {
-                if self.chainstate_ref.is_block_in_main_chain(block_id)? {
-                    best_height = block_index.block_height();
-                    break;
-                }
+            if let Some(block_index) = self.chainstate_ref.get_gen_block_index(block_id)?
+                && self.chainstate_ref.is_block_in_main_chain(block_id)?
+            {
+                best_height = block_index.block_height();
+                break;
             }
         }
 

@@ -398,15 +398,15 @@ async fn maybe_send_will_disconnect<S: PeerStream>(
     peer_protocol_version: ProtocolVersion,
     socket_writer: &mut MessageWriter<S, Message>,
 ) -> crate::Result<()> {
-    if can_send_will_disconnect(peer_protocol_version) {
-        if let Some(reason) = reason {
-            log::debug!("Sending WillDisconnect, reason: {:?}", reason);
-            socket_writer
-                .send(Message::WillDisconnect(WillDisconnectMessage {
-                    reason: reason.to_string(),
-                }))
-                .await?;
-        }
+    if can_send_will_disconnect(peer_protocol_version)
+        && let Some(reason) = reason
+    {
+        log::debug!("Sending WillDisconnect, reason: {:?}", reason);
+        socket_writer
+            .send(Message::WillDisconnect(WillDisconnectMessage {
+                reason: reason.to_string(),
+            }))
+            .await?;
     }
 
     Ok(())

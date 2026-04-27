@@ -172,13 +172,12 @@ fn perform_random_operation(
         }
         // delete delegation
         10 => {
-            if let Some((delegation_id, delegation_data)) = random_delegation {
-                if !op.pool_exists(*delegation_data.source_pool()).unwrap()
-                    && op.get_delegation_balance(delegation_id).unwrap() == Amount::ZERO
-                {
-                    let undo = op.delete_delegation_id(delegation_id).unwrap();
-                    undos.push(undo);
-                }
+            if let Some((delegation_id, delegation_data)) = random_delegation
+                && !op.pool_exists(*delegation_data.source_pool()).unwrap()
+                && op.get_delegation_balance(delegation_id).unwrap() == Amount::ZERO
+            {
+                let undo = op.delete_delegation_id(delegation_id).unwrap();
+                undos.push(undo);
             }
         }
         // undo
