@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use crate::{
-    chain::{chaintrust, signature::inputsig::InputWitness, PoolId, TxInput},
-    primitives::Compact,
     Uint256,
+    chain::{PoolId, TxInput, chaintrust, signature::inputsig::InputWitness},
+    primitives::Compact,
 };
 use crypto::vrf::VRFReturn;
 

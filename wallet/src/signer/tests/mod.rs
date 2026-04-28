@@ -19,14 +19,14 @@ pub mod generic_tests;
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
-use crypto::key::{hdkd::u31::U31, PredefinedSigAuxDataProvider};
+use crypto::key::{PredefinedSigAuxDataProvider, hdkd::u31::U31};
 use wallet_storage::StoreTxRwUnlocked;
 use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::{
-    key_chain::{AccountKeyChainImplSoftware, MasterKeyChain, LOOKAHEAD_SIZE},
-    signer::software_signer::SoftwareSigner,
     Account,
+    key_chain::{AccountKeyChainImplSoftware, LOOKAHEAD_SIZE, MasterKeyChain},
+    signer::software_signer::SoftwareSigner,
 };
 
 const MNEMONIC: &str =

@@ -35,7 +35,7 @@
 //! in this case basically encodes the purpose of the atomic in its type's name and makes
 //! the orderings a part of the module's interface.
 
-use crate::atomics::{atomic_traits::HasStdAtomic, AtomicNumTrait, AtomicTrait};
+use crate::atomics::{AtomicNumTrait, AtomicTrait, atomic_traits::HasStdAtomic};
 use std::marker::PhantomData;
 
 use crate::concurrency_impl::sync::atomic::Ordering;

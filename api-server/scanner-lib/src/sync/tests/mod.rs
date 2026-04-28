@@ -37,19 +37,22 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
+        AccountCommand, AccountNonce, CoinUnit, Destination, OrderAccountCommand, OrderData,
+        OrderId, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         signature::{
             inputsig::{
-                authorize_pubkey_spend::sign_public_key_spending,
-                standard_signature::StandardInputSignature, InputWitness,
+                InputWitness, authorize_pubkey_spend::sign_public_key_spending,
+                standard_signature::StandardInputSignature,
             },
             sighash::{
                 input_commitments::{
-                    make_sighash_input_commitments_for_transaction_inputs_at_height, OrderInfo,
-                    PoolInfo, SighashInputCommitment, TrivialUtxoProvider,
+                    OrderInfo, PoolInfo, SighashInputCommitment, TrivialUtxoProvider,
+                    make_sighash_input_commitments_for_transaction_inputs_at_height,
                 },
                 sighashtype::SigHashType,
                 signature_hash,
@@ -58,11 +61,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, TokenIssuance},
-        AccountCommand, AccountNonce, CoinUnit, Destination, OrderAccountCommand, OrderData,
-        OrderId, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, Idable, H256},
+    primitives::{Amount, CoinOrTokenId, H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -70,9 +70,9 @@ use crypto::{
 };
 use logging::log;
 use mempool::FeeRate;
-use randomness::{seq::IteratorRandom, CryptoRng, RngExt as _};
+use randomness::{CryptoRng, RngExt as _, seq::IteratorRandom};
 use serialization::Encode;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::blockchain_state::BlockchainState;
 
@@ -1428,7 +1428,9 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     );
     let tx_authority_id = tx_authority.transaction().get_id();
 
-    eprintln!("{tx_mint_id:?}, {tx_freeze_id:?}, {tx_unfreeze_id:?}, {tx_metadata_id:?}, {tx_authority_id}");
+    eprintln!(
+        "{tx_mint_id:?}, {tx_freeze_id:?}, {tx_unfreeze_id:?}, {tx_metadata_id:?}, {tx_authority_id}"
+    );
     // Process Block 3 with all management commands
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let best_block_id = tf.best_block_id();

@@ -21,9 +21,9 @@ use merkletree_mintlayer::{
 use crate::primitives::H256;
 
 use super::{
+    BlockBody, BlockMerkleTreeError,
     block_merkle::{calculate_tx_merkle_tree, calculate_witness_merkle_tree},
     merkle_tools::MerkleHasher,
-    BlockBody, BlockMerkleTreeError,
 };
 
 mod private {

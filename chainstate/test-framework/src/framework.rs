@@ -17,21 +17,21 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use rstest::rstest;
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
+use chainstate::{BlockSource, ChainstateError, chainstate_interface::ChainstateInterface};
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
-    TipStorageTag,
+    BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex, TipStorageTag,
+    pos_randomness::PoSRandomness,
 };
 use common::{
     chain::{
-        signature::sighash::{self, input_commitments::SighashInputCommitment},
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
         TxOutput, UtxoOutPoint,
+        signature::sighash::{self, input_commitments::SighashInputCommitment},
     },
-    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id::WithId, time::Time},
     time_getter::TimeGetter,
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
@@ -42,6 +42,7 @@ use utils::atomics::SeqCstAtomicU64;
 use utxo::{Utxo, UtxosDB};
 
 use crate::{
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
     framework_builder::TestFrameworkBuilderValue,
     get_output_value,
     key_manager::KeyManager,
@@ -49,11 +50,10 @@ use crate::{
     random_tx_maker::StakingPoolsObserver,
     staking_pools::StakingPools,
     utils::{
-        assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
-        assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
-        outputs_from_block, outputs_from_genesis, SighashInputCommitmentInfoProvider,
+        SighashInputCommitmentInfoProvider, assert_block_index_opt_identical_to,
+        assert_gen_block_index_identical_to, assert_gen_block_index_opt_identical_to,
+        find_create_pool_tx_in_genesis, outputs_from_block, outputs_from_genesis,
     },
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
@@ -714,8 +714,8 @@ impl TestFramework {
 fn build_test_framework(#[case] seed: test_utils::random::Seed) {
     use chainstate::ChainstateConfig;
     use common::chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
         Destination, NetUpgrades,
+        config::{Builder as ChainConfigBuilder, ChainType},
     };
     use common::time_getter::TimeGetter;
     let chain_type = ChainType::Mainnet;
@@ -753,8 +753,8 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
     use crate::TransactionBuilder;
     use common::{
         chain::{
-            output_value::OutputValue, signature::inputsig::InputWitness, Destination, GenBlock,
-            OutPointSourceId, TxInput, TxOutput,
+            Destination, GenBlock, OutPointSourceId, TxInput, TxOutput, output_value::OutputValue,
+            signature::inputsig::InputWitness,
         },
         primitives::{Amount, Id, Idable},
     };

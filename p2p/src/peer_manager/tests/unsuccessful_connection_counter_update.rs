@@ -23,8 +23,8 @@ use tokio::sync::mpsc;
 
 use common::{
     chain::{
-        config::{self},
         ChainConfig,
+        config::{self},
     },
     primitives::time::Time,
 };
@@ -34,13 +34,13 @@ use p2p_test_utils::{expect_no_recv, expect_recv};
 use p2p_types::socket_address::SocketAddress;
 use randomness::RngExt;
 use test_utils::{
-    assert_matches, assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
+    PeerManagerEvent,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError},
@@ -65,7 +65,6 @@ use crate::{
     test_helpers::test_p2p_config_with_peer_mgr_config,
     tests::helpers::PeerManagerNotification,
     types::peer_id::PeerId,
-    PeerManagerEvent,
 };
 
 // Check the case of an automatic connection failure when the peer address would end up in the

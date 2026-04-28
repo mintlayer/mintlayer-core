@@ -14,9 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    alignment,
+    Color, Element, Length, Theme, alignment,
     widget::{button, container, text},
-    Color, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
 use wallet_types::wallet_type::WalletType;

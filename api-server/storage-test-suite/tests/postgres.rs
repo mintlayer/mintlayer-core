@@ -21,7 +21,7 @@ use api_server_backend_test_suite::podman::{Container, Podman};
 use api_server_common::storage::{
     impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
 };
-use common::chain::{config::create_unit_test_config, ChainConfig};
+use common::chain::{ChainConfig, config::create_unit_test_config};
 use containers::with_container::ApiServerStorageWithContainer;
 
 #[must_use]

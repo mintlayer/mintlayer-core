@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::{
-    chain::{output_value::OutputValue, Destination, OrderId},
+    chain::{Destination, OrderId, output_value::OutputValue},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};

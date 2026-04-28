@@ -28,10 +28,10 @@ use wallet_storage::{DefaultBackend, Store};
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 use crate::{
-    signer::{software_signer::SoftwareSignerProvider, SignerProvider},
+    DefaultWallet, Wallet,
+    signer::{SignerProvider, software_signer::SoftwareSignerProvider},
     wallet::create_wallet_in_memory,
     wallet_events::WalletEventsNoOp,
-    DefaultWallet, Wallet,
 };
 
 pub async fn create_wallet_with_mnemonic(

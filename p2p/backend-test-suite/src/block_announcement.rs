@@ -18,8 +18,8 @@ use std::{fmt::Debug, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 use common::{
-    chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
-    primitives::{user_agent::mintlayer_core_user_agent, Id, H256},
+    chain::block::{Block, BlockReward, consensus_data::ConsensusData, timestamp::BlockTimestamp},
+    primitives::{H256, Id, user_agent::mintlayer_core_user_agent},
     time_getter::TimeGetter,
 };
 use networking::test_helpers::TestTransportMaker;
@@ -27,8 +27,8 @@ use p2p::{
     config::{NodeType, P2pConfig},
     message::{BlockSyncMessage, HeaderList},
     net::{
-        types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
-        SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        types::SyncingEvent,
     },
     test_helpers::{connect_and_accept_services, test_p2p_config},
 };

@@ -20,14 +20,14 @@ use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{TestFramework, TestStore, TransactionBuilder};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, config::Builder as ConfigBuilder,
-        timelock::OutputTimeLock, ChainConfig,
+        ChainConfig, block::timestamp::BlockTimestamp, config::Builder as ConfigBuilder,
+        timelock::OutputTimeLock,
     },
-    primitives::{time, BlockHeight},
+    primitives::{BlockHeight, time},
 };
 use randomness::CryptoRng;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TimelockError},
     transaction_verifier::{TransactionSourceForConnect, TransactionVerifier},

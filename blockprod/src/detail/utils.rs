@@ -14,24 +14,24 @@
 // limitations under the License.
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockIndex, GenBlockIndex, NonZeroPoolBalances,
+    BlockIndex, GenBlockIndex, NonZeroPoolBalances, chainstate_interface::ChainstateInterface,
 };
-use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
+use chainstate_types::{EpochData, pos_randomness::PoSRandomness};
 use common::{
     chain::{
-        block::{
-            consensus_data::PoSData,
-            timestamp::{BlockTimestamp, BlockTimestampInternalType},
-            BlockHeader, ConsensusData,
-        },
         Block, ChainConfig, GenBlock, PoSStatus, PoolId, RequiredConsensus, SignedTransaction,
         Transaction,
+        block::{
+            BlockHeader, ConsensusData,
+            consensus_data::PoSData,
+            timestamp::{BlockTimestamp, BlockTimestampInternalType},
+        },
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use mempool::{
-    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
     MempoolHandle,
+    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
 };
 
 use crate::BlockProductionError;

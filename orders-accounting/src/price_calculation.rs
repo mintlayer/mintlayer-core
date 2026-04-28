@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use common::{
+    Uint256,
     chain::{OrderId, OrdersVersion},
     primitives::Amount,
-    Uint256,
 };
 use utils::ensure;
 
-use crate::{error::Result, Error, OrdersAccountingView};
+use crate::{Error, OrdersAccountingView, error::Result};
 
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
@@ -114,7 +114,7 @@ mod tests {
 
     use super::*;
     use common::{
-        chain::{output_value::OutputValue, tokens::TokenId, Destination},
+        chain::{Destination, output_value::OutputValue, tokens::TokenId},
         primitives::H256,
     };
     use rstest::rstest;

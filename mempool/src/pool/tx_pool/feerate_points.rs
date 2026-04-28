@@ -93,7 +93,7 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    pub use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
+    pub use test_utils::random::{RngExt as _, Seed, make_seedable_rng};
 
     use crate::pool::tx_pool::DescendantScore;
 

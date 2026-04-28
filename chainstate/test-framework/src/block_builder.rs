@@ -15,25 +15,25 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::TestFramework;
 use crate::framework::BlockOutputs;
 use crate::signature_destination_getter::SignatureDestinationGetter;
 use crate::utils::{create_new_outputs, outputs_from_block, sign_witnesses};
-use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_types::BlockIndex;
+use common::chain::block::BlockHeader;
 use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
-use common::chain::block::BlockHeader;
 use common::chain::{AccountNonce, AccountType, OutPointSourceId, UtxoOutPoint};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        Block, GenBlock, Transaction, TxInput, TxOutput,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Block, GenBlock, Transaction, TxInput, TxOutput,
     },
-    primitives::{Id, H256},
+    primitives::{H256, Id},
 };
 use crypto::key::PrivateKey;
 use itertools::Itertools;

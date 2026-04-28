@@ -257,8 +257,8 @@ impl DisconnectionReason {
 mod tests {
     use common::{
         chain::{
-            output_value::OutputValue, signature::inputsig::InputWitness, SignedTransaction,
-            Transaction, TxInput, TxOutput,
+            SignedTransaction, Transaction, TxInput, TxOutput, output_value::OutputValue,
+            signature::inputsig::InputWitness,
         },
         primitives::{Amount, VersionTag},
     };

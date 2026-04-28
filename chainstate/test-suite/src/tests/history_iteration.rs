@@ -19,8 +19,8 @@ use chainstate::BlockSource;
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{TestBlockIndexHandle, TestFramework};
 use chainstate_types::BlockIndexHistoryIterator;
-use common::primitives::{Id, Idable, H256};
-use test_utils::random::{make_seedable_rng, Seed};
+use common::primitives::{H256, Id, Idable};
+use test_utils::random::{Seed, make_seedable_rng};
 
 #[rstest]
 #[trace]

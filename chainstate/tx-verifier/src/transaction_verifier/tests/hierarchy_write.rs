@@ -18,9 +18,9 @@ use rstest::rstest;
 
 use accounting::TxUndo;
 use common::chain::{
+    DelegationId, PoolId,
     config::Builder as ConfigBuilder,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
-    DelegationId, PoolId,
 };
 use orders_accounting::OrdersAccountingDeltaUndoData;
 use pos_accounting::DeltaMergeUndo;

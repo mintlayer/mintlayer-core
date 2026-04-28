@@ -20,9 +20,9 @@ mod queries;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use bb8_postgres::PostgresConnectionManager;
 use bb8_postgres::bb8::Pool;
 use bb8_postgres::bb8::PooledConnection;
-use bb8_postgres::PostgresConnectionManager;
 use common::chain::ChainConfig;
 use tokio_postgres::NoTls;
 

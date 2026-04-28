@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable, signature::Signable, Block, ChainConfig,
-        StakerDestinationUpdateForbidden, Transaction, TxInput, TxOutput,
+        Block, ChainConfig, StakerDestinationUpdateForbidden, Transaction, TxInput, TxOutput,
+        block::BlockRewardTransactable, signature::Signable,
     },
     primitives::{BlockHeight, Id},
 };
@@ -58,7 +58,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 [] => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                    ))
+                    ));
                 }
                 // single input
                 [intput_utxo] => match intput_utxo {
@@ -75,7 +75,7 @@ pub fn check_reward_inputs_outputs_purposes(
                         return Err(ConnectTransactionError::IOPolicyError(
                             IOPolicyError::InvalidInputTypeInReward,
                             block_id.into(),
-                        ))
+                        ));
                     }
                     TxOutput::CreateStakePool(input_pool_id, input_pool_data) => {
                         (input_pool_id, input_pool_data.staker())
@@ -88,7 +88,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 _ => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::ConsensusPoSError(ConsensusPoSError::MultipleKernels),
-                    ))
+                    ));
                 }
             };
 
@@ -99,7 +99,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 [] => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::NoBlockRewardOutputs,
-                    ))
+                    ));
                 }
                 [output] => match output {
                     TxOutput::Transfer(..)
@@ -116,7 +116,7 @@ pub fn check_reward_inputs_outputs_purposes(
                         return Err(ConnectTransactionError::IOPolicyError(
                             IOPolicyError::InvalidOutputTypeInReward,
                             block_id.into(),
-                        ))
+                        ));
                     }
                     TxOutput::ProduceBlockFromStake(output_staker_destination, output_pool_id) => {
                         (output_staker_destination, output_pool_id)
@@ -125,7 +125,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 _ => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::MultipleBlockRewardOutputs,
-                    ))
+                    ));
                 }
             };
 

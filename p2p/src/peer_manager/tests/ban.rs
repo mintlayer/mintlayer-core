@@ -22,8 +22,8 @@ use networking::test_helpers::{TestAddressMaker, TestTransportMaker, TestTranspo
 use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv};
 use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
@@ -37,6 +37,7 @@ use crate::{
         types::ConnectivityEvent,
     },
     peer_manager::{
+        MAX_ADDR_RATE_PER_SECOND,
         config::PeerManagerConfig,
         peerdb::test_utils::make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups,
         tests::{
@@ -49,7 +50,6 @@ use crate::{
                 wait_for_heartbeat,
             },
         },
-        MAX_ADDR_RATE_PER_SECOND,
     },
     test_helpers::{
         test_p2p_config, test_p2p_config_with_ban_config, test_p2p_config_with_peer_mgr_config,

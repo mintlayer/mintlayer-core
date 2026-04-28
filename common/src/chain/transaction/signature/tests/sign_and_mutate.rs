@@ -19,18 +19,18 @@ use test_utils::random::Seed;
 
 use crate::{
     chain::{
-        config::create_mainnet,
-        signature::{
-            sighash::sighashtype::{OutputsMode, SigHashType},
-            DestinationSigError,
-        },
-        signed_transaction::SignedTransaction,
-        tokens::TokenId,
         AccountCommand, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
         OrderAccountCommand, OrderId, OutPointSourceId, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
+        config::create_mainnet,
+        signature::{
+            DestinationSigError,
+            sighash::sighashtype::{OutputsMode, SigHashType},
+        },
+        signed_transaction::SignedTransaction,
+        tokens::TokenId,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{Amount, H256, Id},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng, RngExt as _};

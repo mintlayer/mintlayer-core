@@ -93,10 +93,12 @@ mod tests {
     fn test_orphans_proxy_control() {
         let orphans_proxy = OrphansProxy::new(500);
         assert_eq!(orphans_proxy.call(|o| o.len()).recv().unwrap(), 0);
-        assert!(!orphans_proxy
-            .call(|o| o.is_already_an_orphan(&H256::zero().into()))
-            .recv()
-            .unwrap());
+        assert!(
+            !orphans_proxy
+                .call(|o| o.is_already_an_orphan(&H256::zero().into()))
+                .recv()
+                .unwrap()
+        );
         assert_eq!(
             orphans_proxy
                 .call_mut(|o| o.take_all_children_of(&H256::zero().into()))

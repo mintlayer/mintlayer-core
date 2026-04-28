@@ -15,28 +15,28 @@
 
 use std::{
     cmp::Reverse,
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
     ops::Add,
 };
 
 use common::{
     chain::{
+        AccountCommand, AccountCommandTag, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        DelegationId, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag, OrderId,
+        OutPointSourceId, PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         make_delegation_id, make_order_id, make_token_id, make_token_id_with_version,
         output_value::{OutputValue, RpcOutputValue},
         output_values_holder::RpcOutputValuesHolder,
         stakelock::StakePoolData,
         tokens::{
-            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
-            TokenId, TokenIssuance, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo, RPCIsTokenFrozen,
+            RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
+            get_referenced_token_ids_ignore_issuance,
         },
-        AccountCommand, AccountCommandTag, AccountNonce, AccountSpending, AccountType, ChainConfig,
-        DelegationId, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag, OrderId,
-        OutPointSourceId, PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id::WithId, per_thousand::PerThousand},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -44,13 +44,13 @@ use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
-    utxo_types::{get_utxo_state, UtxoState, UtxoStates},
+    AccountWalletTxId, BlockInfo, WalletTx,
+    utxo_types::{UtxoState, UtxoStates, get_utxo_state},
     wallet_tx::{TxData, TxState},
     with_locked::WithLocked,
-    AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
+use crate::{WalletError, WalletResult, destination_getters::get_all_tx_output_destinations};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, &'a TxOutput);
 
@@ -930,9 +930,11 @@ impl OutputCache {
                                     TxState::Conflicted(..)
                                     | TxState::Abandoned
                                     | TxState::Confirmed(..) => {
-                                        return Err(WalletError::CannotMarkTxAsConflictedIfInState(
-                                            *tx.state(),
-                                        ))
+                                        return Err(
+                                            WalletError::CannotMarkTxAsConflictedIfInState(
+                                                *tx.state(),
+                                            ),
+                                        );
                                     }
                                 }
                                 conflicting_txs_with_descendants
@@ -1806,7 +1808,7 @@ impl OutputCache {
                                     return Err(WalletError::CannotChangeTransactionState(
                                         *state,
                                         TxState::Abandoned,
-                                    ))
+                                    ));
                                 }
                             };
 

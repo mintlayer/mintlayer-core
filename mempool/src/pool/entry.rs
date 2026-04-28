@@ -17,8 +17,8 @@ use std::num::NonZeroUsize;
 
 use common::{
     chain::{
-        tokens::TokenId, AccountCommand, AccountNonce, AccountSpending, DelegationId, OrderId,
-        SignedTransaction, Transaction, TxInput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, OrderId, SignedTransaction,
+        Transaction, TxInput, UtxoOutPoint, tokens::TokenId,
     },
     primitives::{Id, Idable},
 };

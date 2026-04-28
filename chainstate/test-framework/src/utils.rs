@@ -16,40 +16,40 @@
 use std::borrow::Cow;
 
 use crate::{
-    framework::BlockOutputs, key_manager::KeyManager,
-    signature_destination_getter::SignatureDestinationGetter, TestBlockIndexHandle, TestFramework,
+    TestBlockIndexHandle, TestFramework, framework::BlockOutputs, key_manager::KeyManager,
+    signature_destination_getter::SignatureDestinationGetter,
 };
 use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
-use chainstate_types::{pos_randomness::PoSRandomness, TipStorageTag};
+use chainstate_types::{TipStorageTag, pos_randomness::PoSRandomness};
 use common::{
+    Uint256,
     chain::{
+        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoSStatus,
+        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
         block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
-            ConsensusData,
+            BlockRewardTransactable, ConsensusData, consensus_data::PoSData,
+            timestamp::BlockTimestamp,
         },
-        config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
+        config::{Builder as ConfigBuilder, ChainType, EpochIndex, create_unit_test_config},
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::{
                 self,
                 input_commitments::{
-                    make_sighash_input_commitments_for_transaction_inputs_at_height,
                     SighashInputCommitment,
+                    make_sighash_input_commitments_for_transaction_inputs_at_height,
                 },
                 sighashtype::SigHashType,
             },
         },
         stakelock::StakePoolData,
-        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoSStatus,
-        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
-    Uint256,
+    primitives::{Amount, BlockHeight, Compact, H256, Id, Idable, per_thousand::PerThousand},
 };
-use consensus::{find_timestamp_for_staking, ConsensusPoSError};
+use consensus::{ConsensusPoSError, find_timestamp_for_staking};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},

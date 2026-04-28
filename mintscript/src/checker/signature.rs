@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{
-        sighash::input_commitments::SighashInputCommitment, DestinationSigError,
-        EvaluatedInputWitness, Transactable,
-    },
     ChainConfig, Destination,
+    signature::{
+        DestinationSigError, EvaluatedInputWitness, Transactable,
+        sighash::input_commitments::SighashInputCommitment,
+    },
 };
 
 pub trait SignatureChecker<C> {

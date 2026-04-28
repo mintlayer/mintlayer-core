@@ -19,15 +19,15 @@ use serialization::Encode;
 use standard_signature::StandardInputSignature;
 
 use crate::chain::{
-    htlc::HtlcSecret, signature::sighash::input_commitments::SighashInputCommitment, ChainConfig,
-    Destination, Transaction,
+    ChainConfig, Destination, Transaction, htlc::HtlcSecret,
+    signature::sighash::input_commitments::SighashInputCommitment,
 };
 
 use super::{
-    super::sighash::sighashtype::SigHashType,
+    super::sighash::sighashtype::SigHashType, DestinationSigError, Signable,
     authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
     classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-    standard_signature, DestinationSigError, Signable,
+    standard_signature,
 };
 
 #[allow(clippy::too_many_arguments)]

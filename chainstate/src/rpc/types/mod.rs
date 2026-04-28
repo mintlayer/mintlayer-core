@@ -23,7 +23,7 @@ pub mod output;
 pub mod signed_transaction;
 pub mod token;
 
-use common::{address::AddressError, TokenDecimalsUnavailableError};
+use common::{TokenDecimalsUnavailableError, address::AddressError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum RpcTypeError {

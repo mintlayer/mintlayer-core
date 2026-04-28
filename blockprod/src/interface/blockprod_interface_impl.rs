@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::{
-    detail::{job_manager::JobKey, BlockProduction},
     BlockProductionError, TimestampSearchData,
+    detail::{BlockProduction, job_manager::JobKey},
 };
 use common::{
     chain::{Block, PoolId, SignedTransaction, Transaction},

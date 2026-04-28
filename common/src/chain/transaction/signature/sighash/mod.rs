@@ -22,8 +22,8 @@ pub mod input_commitments;
 pub mod sighashtype;
 
 use crate::primitives::{
-    id::{hash_encoded_to, DefaultHashAlgoStream},
     H256,
+    id::{DefaultHashAlgoStream, hash_encoded_to},
 };
 
 use self::hashable::{SignatureHashableElement, SignatureHashableInputs};

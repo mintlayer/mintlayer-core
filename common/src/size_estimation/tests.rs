@@ -23,36 +23,36 @@ use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use randomness::RngExt;
 use serialization::Encode;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         config::create_unit_test_config,
         htlc::HtlcSecret,
         output_value::OutputValue,
         signature::{
             inputsig::{
+                InputWitness,
                 authorize_hashed_timelock_contract_spend::{
                     AuthorizedHashedTimelockContractSpend, AuthorizedHashedTimelockContractSpendTag,
                 },
-                authorize_pubkey_spend::{sign_public_key_spending, AuthorizedPublicKeySpend},
+                authorize_pubkey_spend::{AuthorizedPublicKeySpend, sign_public_key_spending},
                 authorize_pubkeyhash_spend::sign_public_key_hash_spending,
                 classical_multisig::authorize_classical_multisig::{
-                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                    AuthorizedClassicalMultisigSpend, sign_classical_multisig_spending,
                 },
                 standard_signature::StandardInputSignature,
-                InputWitness,
             },
             sighash::sighashtype::SigHashType,
         },
-        Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{Amount, H256, Id},
     size_estimation::{
-        input_signature_size_from_destination, tx_size_with_num_inputs_and_outputs,
-        DestinationInfoProvider, MultisigInfo,
+        DestinationInfoProvider, MultisigInfo, input_signature_size_from_destination,
+        tx_size_with_num_inputs_and_outputs,
     },
 };
 

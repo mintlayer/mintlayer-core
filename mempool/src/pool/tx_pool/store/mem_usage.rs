@@ -18,11 +18,11 @@
 use std::{cmp, mem};
 
 use common::chain::{
+    SignedTransaction, TxInput, TxOutput,
     htlc::HashedTimelockContract,
     signature::inputsig::InputWitness,
     stakelock::StakePoolData,
     tokens::{NftIssuance, TokenIssuance},
-    SignedTransaction, TxInput, TxOutput,
 };
 use logging::log;
 

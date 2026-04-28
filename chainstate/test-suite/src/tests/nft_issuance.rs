@@ -22,11 +22,11 @@ use chainstate::{
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue,
-        signature::inputsig::InputWitness,
-        tokens::{is_rfc3986_valid_symbol, Metadata, NftIssuance, NftIssuanceV0, TokenId},
         Block, ChainstateUpgradeBuilder, Destination, GenBlock, OutPointSourceId,
         TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
+        tokens::{Metadata, NftIssuance, NftIssuanceV0, TokenId, is_rfc3986_valid_symbol},
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -34,13 +34,13 @@ use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
     token_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
 };
-use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
+use tx_verifier::{CheckTransactionError, error::TokenIssuanceError};
 
-use crate::tests::helpers::token_checks::{check_nft, ExpectedNftData};
+use crate::tests::helpers::token_checks::{ExpectedNftData, check_nft};
 
 #[rstest]
 #[trace]

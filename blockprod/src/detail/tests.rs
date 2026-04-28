@@ -25,20 +25,20 @@ use tokio::{
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use chainstate_test_framework::TransactionBuilder;
 use common::{
+    Uint256,
     chain::{
+        CoinUnit, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId, PoolId,
+        RequiredConsensus, TxOutput,
         block::timestamp::BlockTimestamp,
-        config::{create_unit_test_config, Builder, ChainType},
+        config::{Builder, ChainType, create_unit_test_config},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         transaction::TxInput,
-        CoinUnit, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
     time_getter::TimeGetter,
-    Uint256,
 };
 use consensus::{
     ConsensusCreationError, ConsensusPoSError, ConsensusPoWError, PoSGenerateBlockInputData,
@@ -49,32 +49,31 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use mempool::{
+    TxOptions,
     error::{BlockConstructionError, TxValidationError},
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy},
     tx_origin::LocalTxOrigin,
-    TxOptions,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
 use randomness::RngExt as _;
 use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
+    BlockProduction, BlockProductionError, JobKey,
     detail::{
-        collect_transactions,
-        job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
-        CustomId, GenerateBlockInputData,
+        CustomId, GenerateBlockInputData, collect_transactions,
+        job_manager::{JobManagerError, JobManagerImpl, tests::MockJobManager},
     },
     prepare_thread_pool, test_blockprod_config,
     tests::{
         assert_process_block, build_chain_config_for_pos, make_genesis_timestamp,
         setup_blockprod_test, setup_pos, setup_pos_with_genesis_timestamp,
     },
-    BlockProduction, BlockProductionError, JobKey,
 };
 
 mod collect_transactions {

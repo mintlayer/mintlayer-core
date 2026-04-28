@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 use crate::Utxo;
 use common::{
@@ -197,7 +197,7 @@ pub mod test {
     use crate::tests::test_helper::create_utxo;
     use common::primitives::H256;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     #[rstest]
     #[trace]

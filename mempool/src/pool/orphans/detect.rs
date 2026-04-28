@@ -24,8 +24,8 @@ pub enum OrphanType {
 impl OrphanType {
     /// Check an error signifies a potential orphan transaction
     pub fn from_error(err: ConnectTransactionError) -> Result<Self, ConnectTransactionError> {
-        use chainstate::tx_verifier::error::InputCheckErrorPayload as ICE;
         use ConnectTransactionError as CTE;
+        use chainstate::tx_verifier::error::InputCheckErrorPayload as ICE;
 
         match &err {
             // Missing UTXO signifies a possible orphan

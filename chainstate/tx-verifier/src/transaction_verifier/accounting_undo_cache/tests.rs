@@ -16,12 +16,12 @@
 use super::*;
 
 use crate::{
-    transaction_verifier::{flush, storage::TransactionVerifierStorageRef, tests::mock},
     TransactionVerifier,
+    transaction_verifier::{flush, storage::TransactionVerifierStorageRef, tests::mock},
 };
 
 use common::{
-    chain::{config::Builder as ConfigBuilder, Block},
+    chain::{Block, config::Builder as ConfigBuilder},
     primitives::H256,
 };
 use orders_accounting::OrdersAccountingDeltaUndoData;

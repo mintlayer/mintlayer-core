@@ -16,16 +16,16 @@
 use std::collections::BTreeMap;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
-use common::primitives::{amount::SignedAmount, Amount};
+use common::primitives::{Amount, amount::SignedAmount};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::{create_pool_data, new_delegation_id, new_pool_id, new_pub_key_destination};
 
 use crate::{
     pool::{
         delegation::DelegationData,
-        delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
+        delta::{PoSAccountingDelta, data::PoSAccountingDeltaData},
         storage::PoSAccountingDB,
     },
     storage::in_memory::InMemoryPoSAccounting,

@@ -25,7 +25,7 @@ mod wallet_events;
 use std::{fmt::Debug, sync::Arc};
 
 use anyhow::anyhow;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use chainstate::ChainInfo;
 use common::{

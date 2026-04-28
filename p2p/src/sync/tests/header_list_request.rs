@@ -17,21 +17,21 @@ use std::{iter, sync::Arc, time::Duration};
 
 use itertools::Itertools as _;
 
-use chainstate::{ban_score::BanScore, Locator};
+use chainstate::{Locator, ban_score::BanScore};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::config::create_unit_test_config,
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
+    P2pError,
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
@@ -40,7 +40,6 @@ use crate::{
     sync::tests::helpers::TestNode,
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
     types::peer_id::PeerId,
-    P2pError,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -172,11 +171,12 @@ async fn respond_with_empty_header_list_when_in_ibd() {
             .await;
 
         // Node must be in Initial Download State
-        assert!(node
-            .chainstate()
-            .call(|chainstate| chainstate.is_initial_block_download())
-            .await
-            .unwrap());
+        assert!(
+            node.chainstate()
+                .call(|chainstate| chainstate.is_initial_block_download())
+                .await
+                .unwrap()
+        );
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 

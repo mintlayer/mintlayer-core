@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
+use p2p::{P2pEvent, interface::p2p_interface::P2pInterface};
 use subsystem::Handle;
 use utils::tap_log::TapLog;
 

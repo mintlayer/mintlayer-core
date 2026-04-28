@@ -19,12 +19,12 @@ use rstest::rstest;
 
 use common::{
     chain::{
-        signature::inputsig::InputWitness, AccountNonce, AccountSpending, DelegationId,
-        SignedTransaction, TxInput,
+        AccountNonce, AccountSpending, DelegationId, SignedTransaction, TxInput,
+        signature::inputsig::InputWitness,
     },
     primitives::{Amount, H256},
 };
-use test_utils::random::{make_seedable_rng, Rng, RngExt as _, Seed};
+use test_utils::random::{Rng, RngExt as _, Seed, make_seedable_rng};
 
 use super::*;
 

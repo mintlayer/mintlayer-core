@@ -18,6 +18,7 @@ use std::str::FromStr as _;
 use wasm_bindgen::prelude::*;
 
 use common::chain::{
+    ChainConfig, OrderData, TxOutput,
     config::Builder,
     htlc::{HashedTimelockContract, HtlcSecretHash},
     output_value::OutputValue::{self, Coin, TokenV1},
@@ -27,7 +28,6 @@ use common::chain::{
         Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceV1,
         TokenTotalSupply,
     },
-    ChainConfig, OrderData, TxOutput,
 };
 use crypto::key::PublicKey;
 use serialization::{DecodeAll, Encode};

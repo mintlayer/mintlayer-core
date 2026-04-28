@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use storage::error::Fatal;
-use storage_backend_test_suite::prelude::{desc, MAPID};
+use storage_backend_test_suite::prelude::{MAPID, desc};
 use storage_core::{
-    backend::{BackendImpl as _, ReadOps as _, TxRw as _, WriteOps as _},
     Backend as _,
+    backend::{BackendImpl as _, ReadOps as _, TxRw as _, WriteOps as _},
 };
 use test_utils::assert_matches_return_val;
 

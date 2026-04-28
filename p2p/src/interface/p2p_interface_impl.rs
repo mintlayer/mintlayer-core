@@ -24,6 +24,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    MessagingService, P2p, P2pEvent, PeerManagerEvent,
     disconnection_reason::DisconnectionReason,
     error::P2pError,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
@@ -31,7 +32,6 @@ use crate::{
     peer_manager_event::PeerDisconnectionDbAction,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, P2p, P2pEvent, PeerManagerEvent,
 };
 
 #[async_trait::async_trait]

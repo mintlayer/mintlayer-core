@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::key::PublicKey;
-use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
+use serialization::{Decode, Encode, extras::non_empty_vec::DataOrNoVec};
 
 #[derive(
     Debug,

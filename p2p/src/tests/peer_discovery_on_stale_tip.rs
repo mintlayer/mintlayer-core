@@ -18,16 +18,16 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use chainstate::{BlockSource, ChainstateConfig};
 use common::{
     chain::{Block, ChainConfig},
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
-use p2p_test_utils::{run_with_timeout, SHORT_TIMEOUT};
+use p2p_test_utils::{SHORT_TIMEOUT, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
 use randomness::{Rng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
     net::types::PeerRole,
     peer_manager::{self, address_groups::AddressGroup, config::PeerManagerConfig},
     sync::test_helpers::make_new_block,
-    test_helpers::{make_transport_with_local_addr_in_group, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, make_transport_with_local_addr_in_group},
     tests::helpers::{PeerManagerNotification, TestNode, TestNodeGroup},
 };
 

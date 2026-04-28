@@ -26,9 +26,9 @@ use wallet_rpc_client::{
     wallet_rpc_traits::WalletInterface,
 };
 use wallet_rpc_lib::{
+    ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
     config::WalletRpcConfig,
     types::{ControllerConfig, NodeInterface},
-    ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
 };
 
 use crate::{errors::WalletCliError, version_check::parse_version_without_metadata};

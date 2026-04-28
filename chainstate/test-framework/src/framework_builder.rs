@@ -19,12 +19,12 @@ use std::{
 };
 
 use crate::{
+    TestFramework, TestStore,
     key_manager::KeyManager,
     staking_pools::StakingPools,
     tx_verification_strategy::{
         DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
     },
-    TestFramework, TestStore,
 };
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{

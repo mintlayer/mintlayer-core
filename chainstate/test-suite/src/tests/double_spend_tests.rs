@@ -18,12 +18,12 @@ use chainstate::{
     ConnectTransactionError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        output_value::OutputValue, signed_transaction::SignedTransaction, OutPointSourceId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue,
+        signed_transaction::SignedTransaction,
     },
     primitives::{Amount, CoinOrTokenId, Id, Idable},
 };

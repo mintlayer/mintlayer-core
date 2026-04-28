@@ -22,9 +22,9 @@ use super::*;
 use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
+        DelegationId, PoolId,
         config::Builder as ConfigBuilder,
         tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
-        DelegationId, PoolId,
     },
     primitives::H256,
 };

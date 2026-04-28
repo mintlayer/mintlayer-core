@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, row, tooltip, Text},
     Element,
+    widget::{Text, button, column, row, tooltip},
 };
 use iced_aw::{Grid, GridRow};
 

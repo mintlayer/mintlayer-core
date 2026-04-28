@@ -15,8 +15,8 @@
 
 use std::fmt::Display;
 
-use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::ConsensusData;
+use common::chain::block::timestamp::BlockTimestamp;
 use serialization::{Decode, Encode};
 
 use common::chain::{

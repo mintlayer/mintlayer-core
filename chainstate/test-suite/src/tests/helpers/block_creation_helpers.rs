@@ -15,12 +15,12 @@
 
 use chainstate::{BlockError, BlockIndex, BlockSource, ChainstateError, OrphanCheckError};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        output_value::OutputValue, signed_transaction::SignedTransaction, timelock::OutputTimeLock,
         Block, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
+        output_value::OutputValue, signed_transaction::SignedTransaction, timelock::OutputTimeLock,
     },
     primitives::{Amount, Id, Idable},
 };

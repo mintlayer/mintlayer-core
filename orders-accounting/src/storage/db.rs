@@ -19,16 +19,16 @@ use std::{
 };
 
 use accounting::{
-    combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
+    DeltaAmountCollection, DeltaDataUndoCollection, combine_amount_delta, combine_data_with_delta,
 };
 use common::{chain::OrderId, primitives::Amount};
 use utils::tap_log::TapLog;
 
 use crate::{
+    OrderData,
     data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
     error::Error,
     view::{FlushableOrdersAccountingView, OrdersAccountingView},
-    OrderData,
 };
 
 use super::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};

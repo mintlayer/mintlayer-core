@@ -18,12 +18,12 @@ use std::collections::BTreeSet;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
-        output_value::OutputValue,
-        signature::inputsig::InputWitness,
-        tokens::{get_tokens_issuance_count, NftIssuance},
         AccountCommand, ChainConfig, ChangeTokenMetadataUriActivated, HtlcActivated, OrderId,
         OrdersVersion, SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize,
         TxInput, TxOutput,
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
+        tokens::{NftIssuance, get_tokens_issuance_count},
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
@@ -230,7 +230,7 @@ fn check_tokens_tx(
                 match change_token_metadata_uri_activated {
                     ChangeTokenMetadataUriActivated::Yes => { /* do nothing */ }
                     ChangeTokenMetadataUriActivated::No => {
-                        return Err(CheckTransactionError::ChangeTokenMetadataUriNotActivated)
+                        return Err(CheckTransactionError::ChangeTokenMetadataUriNotActivated);
                     }
                 }
 
@@ -464,7 +464,7 @@ fn check_order_inputs_outputs(
                     common::chain::OrdersActivated::No => {
                         return Err(CheckTransactionError::OrdersAreNotActivated(
                             tx.transaction().get_id(),
-                        ))
+                        ));
                     }
                 }
             }

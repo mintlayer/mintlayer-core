@@ -30,11 +30,11 @@ use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
-    net::default_backend::types::{peer_event, HandshakeMessage, Message, P2pTimestamp, PeerEvent},
-    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
+    net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp, PeerEvent, peer_event},
+    protocol::{ProtocolVersion, SupportedProtocolVersion, choose_common_protocol_version},
 };
 
-use super::{maybe_send_will_disconnect, ConnectionInfo};
+use super::{ConnectionInfo, maybe_send_will_disconnect};
 
 /// The chosen common protocol version; available only after the handshake has completed.
 pub struct CommonProtocolVersion(pub SupportedProtocolVersion);

@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use common::{chain::Destination, primitives::Amount};
 use randomness::Rng;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::{
     create_delegation_id, create_pool, create_storage_with_pool,

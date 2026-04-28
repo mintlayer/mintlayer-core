@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use logging::{get_log_style_from_env, LogStyle, LogStyleParseError, TextColoring};
+use logging::{LogStyle, LogStyleParseError, TextColoring, get_log_style_from_env};
 use test_utils::{remove_env_var, set_env_var};
 
 static TEST_ENV_VAR: &str = "LOG_STYLE_TEST_ENV_VAR";

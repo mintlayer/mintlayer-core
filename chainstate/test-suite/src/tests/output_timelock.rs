@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, GenBlock},
+        OutPointSourceId, TxInput, TxOutput,
+        block::{GenBlock, timestamp::BlockTimestamp},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -32,12 +32,12 @@ use super::helpers::add_block_with_locked_output;
 use chainstate::BlockError;
 use chainstate::ChainstateError;
 use chainstate::ConnectTransactionError;
-use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use chainstate_test_framework::anyonecanspend_address;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use utils::atomics::SeqCstAtomicU64;
 

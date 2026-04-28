@@ -15,7 +15,7 @@
 
 //! A dead-simple reference implementation of some aspects of a storage backend
 
-use storage_core::{backend, Data, DbMapId};
+use storage_core::{Data, DbMapId, backend};
 
 /// A modifying action to apply to a backend or a model
 #[derive(Debug, PartialEq, Eq, Clone)]

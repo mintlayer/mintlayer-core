@@ -16,30 +16,30 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
+    TestFramework,
     random_tx_maker::StakingPoolsObserver,
     signature_destination_getter::SignatureDestinationGetter,
     utils::{
         calculate_new_pos_compact_target, find_create_pool_tx_in_genesis, get_pos_status, pos_mine,
         produce_kernel_signature, sign_witnesses,
     },
-    TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex};
+use chainstate_types::{BlockIndex, pos_randomness::PoSRandomness};
 use common::{
     chain::{
+        AccountNonce, AccountType, Block, Destination, GenBlock, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
         block::{
+            BlockHeader, BlockReward, ConsensusData,
             block_body::BlockBody,
             consensus_data::PoSData,
             signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData},
             timestamp::BlockTimestamp,
-            BlockHeader, BlockReward, ConsensusData,
         },
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        AccountNonce, AccountType, Block, Destination, GenBlock, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -49,7 +49,7 @@ use crypto::{
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
-use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
+use randomness::{CryptoRng, Rng, RngExt as _, seq::IteratorRandom};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 

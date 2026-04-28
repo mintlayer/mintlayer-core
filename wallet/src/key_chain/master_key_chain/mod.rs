@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND};
+use crate::key_chain::{DEFAULT_KEY_KIND, KeyChainError, KeyChainResult};
 use common::chain::ChainConfig;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::derivable::Derivable;

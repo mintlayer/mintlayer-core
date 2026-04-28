@@ -16,20 +16,20 @@
 use rstest::rstest;
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, get_output_value};
 use common::{
     chain::{
+        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
+        TxInput, TxOutput, UtxoOutPoint,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{NftIssuance, TokenId},
-        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
-        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
 use randomness::RngExt;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 
@@ -60,9 +60,10 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        assert!(tf
-            .outputs_from_genblock(block.get_id().into())
-            .contains_key(&issuance_outpoint_id));
+        assert!(
+            tf.outputs_from_genblock(block.get_id().into())
+                .contains_key(&issuance_outpoint_id)
+        );
 
         // Try to transfer NFT with wrong ID
         let random_token_id = TokenId::random_using(&mut rng);

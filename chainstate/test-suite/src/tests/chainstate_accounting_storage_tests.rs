@@ -22,20 +22,20 @@ use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
         Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
     },
-    primitives::{per_thousand::PerThousand, Amount, Idable},
+    primitives::{Amount, Idable, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use pos_accounting::PoolData;
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utxo::UtxosStorageRead;
 
 fn create_pool_data(
@@ -166,12 +166,14 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
             expected_tip_storage_data
         );
 
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .read_pos_accounting_data_sealed()
-            .unwrap()
-            .is_empty());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .read_pos_accounting_data_sealed()
+                .unwrap()
+                .is_empty()
+        );
     });
 }
 
@@ -259,12 +261,14 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         );
 
         // check that result is not stored to sealed
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .read_pos_accounting_data_sealed()
-            .unwrap()
-            .is_empty());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .read_pos_accounting_data_sealed()
+                .unwrap()
+                .is_empty()
+        );
 
         // check that delta for epoch is stored
         let expected_epoch_delta = pos_accounting::PoSAccountingDeltaData {
@@ -295,12 +299,14 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .expect("some");
         assert_eq!(epoch_delta, expected_epoch_delta);
 
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(0)
-            .unwrap()
-            .is_none());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(0)
+                .unwrap()
+                .is_none()
+        );
     });
 }
 
@@ -570,24 +576,30 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .expect("some");
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(0)
-            .unwrap()
-            .is_none());
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(1)
-            .unwrap()
-            .is_some());
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(2)
-            .unwrap()
-            .is_none());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(1)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(2)
+                .unwrap()
+                .is_none()
+        );
     });
 }
 
@@ -673,18 +685,22 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(0)
-            .unwrap()
-            .is_none());
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(1)
-            .unwrap()
-            .is_some());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(1)
+                .unwrap()
+                .is_some()
+        );
     });
 }
 
@@ -749,25 +765,31 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
         );
 
         // check that deltas per epoch are not stored
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_delta(block1_epoch_index)
-            .unwrap()
-            .is_none());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_delta(block1_epoch_index)
+                .unwrap()
+                .is_none()
+        );
 
         // check that undo per epoch are not stored
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(0)
-            .unwrap()
-            .is_none());
-        assert!(storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_epoch_undo_delta(1)
-            .unwrap()
-            .is_none());
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            storage
+                .transaction_ro()
+                .unwrap()
+                .get_accounting_epoch_undo_delta(1)
+                .unwrap()
+                .is_none()
+        );
     });
 }

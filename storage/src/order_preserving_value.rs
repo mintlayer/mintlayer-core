@@ -75,9 +75,8 @@ mod tests {
     use rstest::rstest;
 
     use test_utils::random::{
-        make_seedable_rng,
+        Rng, RngExt as _, Seed, make_seedable_rng,
         randomness::{self, distributions::Distribution},
-        Rng, RngExt as _, Seed,
     };
 
     use super::*;

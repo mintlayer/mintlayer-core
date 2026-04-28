@@ -18,7 +18,7 @@
 use std::fmt::Display;
 
 /// RPC error
-use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, error::CALL_EXECUTION_FAILED_CODE};
 
 /// The Result type with RPC-specific error.
 pub type RpcResult<T> = jsonrpsee::core::RpcResult<T>;

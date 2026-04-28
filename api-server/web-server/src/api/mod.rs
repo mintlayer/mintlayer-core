@@ -18,7 +18,7 @@ pub mod v2;
 
 use std::sync::Arc;
 
-use axum::{http::Method, response::IntoResponse, routing::get, Json, Router};
+use axum::{Json, Router, http::Method, response::IntoResponse, routing::get};
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowMethods, Any, CorsLayer};
@@ -26,9 +26,8 @@ use tower_http::cors::{AllowMethods, Any, CorsLayer};
 use api_server_common::storage::storage_api::ApiServerStorage;
 
 use crate::{
-    api,
+    ApiServerWebServerState, TxSubmitClient, api,
     error::{ApiServerWebServerClientError, ApiServerWebServerError},
-    ApiServerWebServerState, TxSubmitClient,
 };
 
 #[allow(clippy::unused_async)]

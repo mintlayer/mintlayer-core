@@ -18,7 +18,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use chainstate::{ChainstateError, ChainstateEvent};
 use common::{
     chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{time::Time, BlockHeight, Id},
+    primitives::{BlockHeight, Id, time::Time},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -28,7 +28,7 @@ use utils::{
 use utils_networking::broadcaster;
 
 use crate::{
-    config,
+    MempoolConfig, MempoolMaxSize, TxStatus, config,
     error::{
         BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxValidationError,
     },
@@ -36,7 +36,6 @@ use crate::{
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
-    MempoolConfig, MempoolMaxSize, TxStatus,
 };
 
 use self::{
@@ -173,7 +172,9 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 }));
             }
             (MempoolState::AfterIbd(_), true) => {
-                log::error!("Received chainstate's IBD flag is true while mempool has already switched from IBD");
+                log::error!(
+                    "Received chainstate's IBD flag is true while mempool has already switched from IBD"
+                );
             }
         }
 

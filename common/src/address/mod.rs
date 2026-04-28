@@ -20,11 +20,11 @@ pub mod rpc;
 pub mod traits;
 
 use crate::chain::ChainConfig;
-use crate::primitives::{bech32_encoding, Bech32Error};
+use crate::primitives::{Bech32Error, bech32_encoding};
 use std::fmt::Display;
 use utils::{
     ensure,
-    qrcode::{qrcode_from_str, QrCode, QrCodeError},
+    qrcode::{QrCode, QrCodeError, qrcode_from_str},
 };
 
 use self::traits::Addressable;

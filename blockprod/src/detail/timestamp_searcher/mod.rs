@@ -21,18 +21,18 @@ use std::{
 use rayon::prelude::*;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockIndex, ChainstateHandle, NonZeroPoolBalances,
+    BlockIndex, ChainstateHandle, NonZeroPoolBalances, chainstate_interface::ChainstateInterface,
 };
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSConsensusVersion, PoolId},
-    primitives::{Amount, BlockHeight, Compact},
     Uint256,
+    chain::{PoSConsensusVersion, PoolId, block::timestamp::BlockTimestamp, config::EpochIndex},
+    primitives::{Amount, BlockHeight, Compact},
 };
 use consensus::{
+    ConsensusCreationError, ConsensusPoSError, PoSTimestampSearchInputData,
     calc_pos_hash_from_prv_key, calculate_target_required_from_block_index, check_pos_hash,
-    compact_target_to_target, ConsensusCreationError, ConsensusPoSError,
-    PoSTimestampSearchInputData,
+    compact_target_to_target,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use logging::log;
@@ -41,12 +41,12 @@ use serialization::{Decode, Encode};
 use utils::{ensure, once_destructor::OnceDestructor, tokio_spawn_blocking};
 
 use crate::{
+    BlockProductionError,
     detail::utils::{
         get_best_block_index, get_block_id_from_height, get_existing_block_index,
         get_existing_gen_block_index, get_pool_balances_at_heights, get_sealed_epoch_randomness,
         make_ancestor_getter, pos_data_from_header, pos_status_from_height, timestamp_add_secs,
     },
-    BlockProductionError,
 };
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
@@ -401,11 +401,7 @@ fn find_timestamps_for_staking_impl(
             .reduce(
                 || Ok::<_, BlockProductionError>(()),
                 |res1, res2| {
-                    if res1.is_err() {
-                        res1
-                    } else {
-                        res2
-                    }
+                    if res1.is_err() { res1 } else { res2 }
                 },
             )?
     };

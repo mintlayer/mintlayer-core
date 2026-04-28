@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, pick_list, progress_bar, row, text, tooltip, Column, Text},
     Alignment, Element, Length,
+    widget::{Column, Text, button, column, pick_list, progress_bar, row, text, tooltip},
 };
 
-use node_gui_backend::{messages::WalletInfo, AccountId};
+use node_gui_backend::{AccountId, messages::WalletInfo};
 use wallet_types::wallet_type::WalletType;
 
 use crate::main_window::NodeState;
@@ -38,8 +38,7 @@ const DELEGATION_TOOLTIP_TEXT: &str = "Delegation is part of staking, where if y
     and you won't have to keep your node running.";
 const CONSOLE_TOOLTIP_TEXT: &str = "Console for using low-level functions of the wallet.";
 
-const NEW_ACCOUNT_TOOLTIP_TEXT: &str =
-    "Accounts provide a way to completely separate keys and operations. \
+const NEW_ACCOUNT_TOOLTIP_TEXT: &str = "Accounts provide a way to completely separate keys and operations. \
     For example, you can have an account for personal use, and an account for work. \
     Each account will have a completely different set of keys.";
 

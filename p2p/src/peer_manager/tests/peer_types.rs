@@ -21,16 +21,17 @@ use strum::IntoEnumIterator as _;
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use networking::transport::TcpTransportSocket;
 use p2p_types::{
-    services::{Service, Services},
     PeerId,
+    services::{Service, Services},
 };
 use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
+    PeerManagerEvent,
     config::{NodeType, P2pConfig},
     error::{ConnectionValidationError, P2pError},
     net::{
@@ -38,8 +39,7 @@ use crate::{
         types::{PeerInfo, PeerRole},
     },
     peer_manager::PeerManager,
-    test_helpers::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
-    PeerManagerEvent,
+    test_helpers::{TEST_PROTOCOL_VERSION, peerdb_inmemory_store},
 };
 
 #[tracing::instrument(skip(seed))]

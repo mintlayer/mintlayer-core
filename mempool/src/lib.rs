@@ -17,7 +17,7 @@
 
 pub use config::MempoolMaxSize;
 pub use interface::{MempoolInit, MempoolInterface};
-pub use mempool_types::{tx_options, tx_origin, TxOptions, TxStatus};
+pub use mempool_types::{TxOptions, TxStatus, tx_options, tx_origin};
 
 mod config;
 pub mod error;
@@ -28,7 +28,7 @@ pub mod rpc;
 pub mod rpc_event;
 pub mod tx_accumulator;
 
-pub use {config::MempoolConfig, pool::feerate_points::find_interpolated_value, pool::FeeRate};
+pub use {config::MempoolConfig, pool::FeeRate, pool::feerate_points::find_interpolated_value};
 
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 

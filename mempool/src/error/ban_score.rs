@@ -14,14 +14,13 @@
 // limitations under the License.
 
 use chainstate::{
-    ban_score::BanScore,
-    tx_verifier::{
-        self,
-        transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
-        CheckTransactionError,
-    },
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
     TransactionVerifierStorageError,
+    ban_score::BanScore,
+    tx_verifier::{
+        self, CheckTransactionError,
+        transaction_verifier::{RewardDistributionError, error::SignatureDestinationGetterError},
+    },
 };
 use common::chain::IdCreationError;
 

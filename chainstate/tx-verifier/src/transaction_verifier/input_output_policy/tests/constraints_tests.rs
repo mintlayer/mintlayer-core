@@ -19,18 +19,18 @@ use rstest::rstest;
 
 use common::{
     chain::{
+        AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId, TxOutput,
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
-        TxOutput,
+        timelock::OutputTimeLock,
     },
-    primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, H256},
+    primitives::{Amount, CoinOrTokenId, H256, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::DelegationData;
 use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     split_value,
 };
 

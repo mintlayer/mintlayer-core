@@ -140,7 +140,7 @@ mod tests {
     use super::*;
     use randomness::Rng;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
     use test_utils::{assert_encoded_eq, decode_from_hex};
 
     #[rstest]

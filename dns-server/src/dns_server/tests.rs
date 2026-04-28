@@ -35,7 +35,7 @@ use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
 use crate::{
     crawler_p2p::crawler::address_data::SoftwareInfo,
-    dns_server::{handle_command, AuthorityImpl, DnsServerCommand},
+    dns_server::{AuthorityImpl, DnsServerCommand, handle_command},
 };
 
 use super::{AuthorityImplConfig, MinSameSoftwareVersionNodesRatio};

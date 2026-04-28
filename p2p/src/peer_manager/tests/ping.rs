@@ -25,27 +25,26 @@ use networking::{
 use p2p_test_utils::expect_recv;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches, assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
+    PeerManagerEvent,
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
+        default_backend::{ConnectivityHandle, DefaultNetworkingService, types::Command},
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::{
-        tests::{send_and_sync, utils::cmd_to_peer_man_msg},
         PeerManager,
+        tests::{send_and_sync, utils::cmd_to_peer_man_msg},
     },
-    test_helpers::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, peerdb_inmemory_store},
     types::peer_id::PeerId,
-    PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]

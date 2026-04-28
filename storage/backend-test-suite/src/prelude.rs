@@ -20,10 +20,10 @@ use utils::shallow_clone::ShallowClone;
 // Re-export a bunch of often used items
 pub use crate::model::{ApplyActions, Model, WriteAction};
 pub use storage_core::{
+    DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData,
     backend::{
         Backend, BackendImpl, Data, ReadOps, SharedBackend, SharedBackendImpl, TxRo, TxRw, WriteOps,
     },
-    DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData,
 };
 pub use utils::{sync, thread};
 

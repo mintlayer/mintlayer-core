@@ -16,15 +16,15 @@
 use serialization::Encode;
 
 use crate::chain::{
+    TxOutput,
     signature::{
+        DestinationSigError,
         inputsig::{
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             standard_signature::StandardInputSignature,
         },
         sighash::sighashtype::SigHashType,
-        DestinationSigError,
     },
-    TxOutput,
 };
 
 use super::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;

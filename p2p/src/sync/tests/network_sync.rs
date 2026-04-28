@@ -21,32 +21,31 @@ use chainstate::{BlockSource, ChainstateConfig, ChainstateHandle, Locator};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{self, block::timestamp::BlockTimestamp},
-    primitives::{user_agent::mintlayer_core_user_agent, BlockDistance, Idable},
+    primitives::{BlockDistance, Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
-use p2p_test_utils::{create_n_blocks, run_with_timeout, MEDIUM_TIMEOUT};
+use p2p_test_utils::{MEDIUM_TIMEOUT, create_n_blocks, run_with_timeout};
 use p2p_types::PeerId;
 use randomness::RngExt;
 use test_utils::{
-    mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{Seed, make_seedable_rng},
 };
 use utils::atomics::SeqCstAtomicU64;
 
 use crate::{
+    PeerManagerEvent,
     config::{BackendTimeoutsConfig, P2pConfig},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     protocol::ProtocolConfig,
     sync::tests::helpers::{
-        make_new_block, make_new_blocks, make_new_top_blocks,
+        TestNode, make_new_block, make_new_blocks, make_new_top_blocks,
         test_node_group::{
             BlockSyncMessageWithNodeIdx, MsgAction, PeerManagerEventWithNodeIdx, TestNodeGroup,
         },
-        TestNode,
     },
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
-    PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]

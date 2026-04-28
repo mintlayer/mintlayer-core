@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
+use crate::chain::{Block, GenBlock, Genesis, transaction::Transaction};
 use crate::primitives::Id;
 use serialization::{Decode, Encode};
 

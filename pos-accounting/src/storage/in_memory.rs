@@ -21,8 +21,8 @@ use common::{
 };
 
 use crate::{
-    pool::{delegation::DelegationData, pool_data::PoolData},
     PoSAccountingData,
+    pool::{delegation::DelegationData, pool_data::PoolData},
 };
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};

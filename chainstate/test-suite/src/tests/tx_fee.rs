@@ -17,21 +17,21 @@ use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 use super::*;
 
 use chainstate_test_framework::{
-    create_stake_pool_data_with_all_reward_to_staker, empty_witness, TestFramework, TestStore,
-    TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, create_stake_pool_data_with_all_reward_to_staker,
+    empty_witness,
 };
 use common::{
     chain::{
-        config::{create_unit_test_config, ChainType},
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
+        DelegationId, Destination, NetUpgrades, PoolId, TokenIssuanceVersion, TxInput, TxOutput,
+        UtxoOutPoint,
+        config::{ChainType, create_unit_test_config},
         make_delegation_id, make_token_id,
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{
             IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
-        DelegationId, Destination, NetUpgrades, PoolId, TokenIssuanceVersion, TxInput, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };

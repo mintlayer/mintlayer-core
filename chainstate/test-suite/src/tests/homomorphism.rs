@@ -16,14 +16,14 @@
 use super::*;
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
-    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
-    TestFramework, TestStore, TransactionBuilder, TxVerificationStrategy,
+    TestFramework, TestStore, TransactionBuilder, TxVerificationStrategy, anyonecanspend_address,
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness,
 };
 use common::{
     chain::{
-        make_delegation_id, make_token_id, output_value::OutputValue, timelock::OutputTimeLock,
-        tokens::TokenIssuance, AccountCommand, AccountNonce, Destination, OutPointSourceId, PoolId,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, Destination, OutPointSourceId, PoolId, TxInput, TxOutput,
+        UtxoOutPoint, make_delegation_id, make_token_id, output_value::OutputValue,
+        timelock::OutputTimeLock, tokens::TokenIssuance,
     },
     primitives::{Amount, Idable},
 };

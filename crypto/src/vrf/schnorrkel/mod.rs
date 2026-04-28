@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use schnorrkel::{derive::Derivation, Keypair};
+use schnorrkel::{Keypair, derive::Derivation};
 
-use randomness::{adapters::Rng08Adapter, CryptoRng};
+use randomness::{CryptoRng, adapters::Rng08Adapter};
 use serialization::{Decode, Encode};
 
 use crate::key::hdkd::{
     chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError,
 };
 
-use super::{primitives::VRFReturn, transcript::traits::SignableTranscript, VRFError};
+use super::{VRFError, primitives::VRFReturn, transcript::traits::SignableTranscript};
 
 use self::data::SchnorrkelVRFReturn;
 
@@ -216,10 +216,10 @@ impl Decode for SchnorrkelPrivateKey {
 mod tests {
     use super::*;
     use hex::FromHex;
-    use randomness::{make_true_rng, Rng};
-    use schnorrkel::{signing_context, Keypair};
+    use randomness::{Rng, make_true_rng};
+    use schnorrkel::{Keypair, signing_context};
     use serialization::{DecodeAll, Encode};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     #[test]
     fn key_serialization() {
@@ -310,9 +310,18 @@ mod tests {
     fn vrf_from_bytes() {
         // Verify that [SchnorrkelPrivateKey::new_from_bytes] returns the same result to prevent future regressions
         let keys = [
-            ("783231456c206e78989c15741764d6c4e7b96e1bac4ea322bfb5df5676876717", "a9246f2ac3b7c3c46bfd903ce077c6033148a13692ccb33a732d9c3616d93a0ca73efa91903bfe5eea90e0d6e684f6e444218baa403aece75c3036a322e845a2"),
-            ("c247d6edd1b5e32c0750eeb256ef63186c1a7cebf1729249ae31f65f959aa1ae", "3e16bf35d133fd5ae2b59838cc29847aa040f76f37a0445405bcb9238e3ae1049354882edf8916041d23c2d33cbed8e537a23da5bbf5a432f0c1737253f5c188"),
-            ("440acd9f2e1d3e197f745d11c03cd9b805acfb5c5d5f4dfe0d8a55d1d29efa42", "956c30c899065b7b3e085fe50f6431bce7adcc5dbcc114e7c6ad73c148b30c0f85bc02f31c809a173929dec21c8c2380bdc5fe5cfa37f1a6b8b6af9c0ae95515"),
+            (
+                "783231456c206e78989c15741764d6c4e7b96e1bac4ea322bfb5df5676876717",
+                "a9246f2ac3b7c3c46bfd903ce077c6033148a13692ccb33a732d9c3616d93a0ca73efa91903bfe5eea90e0d6e684f6e444218baa403aece75c3036a322e845a2",
+            ),
+            (
+                "c247d6edd1b5e32c0750eeb256ef63186c1a7cebf1729249ae31f65f959aa1ae",
+                "3e16bf35d133fd5ae2b59838cc29847aa040f76f37a0445405bcb9238e3ae1049354882edf8916041d23c2d33cbed8e537a23da5bbf5a432f0c1737253f5c188",
+            ),
+            (
+                "440acd9f2e1d3e197f745d11c03cd9b805acfb5c5d5f4dfe0d8a55d1d29efa42",
+                "956c30c899065b7b3e085fe50f6431bce7adcc5dbcc114e7c6ad73c148b30c0f85bc02f31c809a173929dec21c8c2380bdc5fe5cfa37f1a6b8b6af9c0ae95515",
+            ),
         ];
         for (bytes_hex, expected) in keys {
             let bytes = hex::decode(bytes_hex).unwrap();

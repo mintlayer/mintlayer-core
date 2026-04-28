@@ -22,11 +22,11 @@ use common::{
     primitives::Id,
 };
 use mempool::{
+    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
 
 mockall::mock! {

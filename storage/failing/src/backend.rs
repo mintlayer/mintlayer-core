@@ -18,7 +18,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use storage_core::{backend, Data, DbMapId};
+use storage_core::{Data, DbMapId, backend};
 use test_utils::random::{RngExt as _, Seed, TestRng};
 use utils::{atomics::AcqRelAtomicU32, shallow_clone::ShallowClone};
 

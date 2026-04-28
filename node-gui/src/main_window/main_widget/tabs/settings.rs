@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    widget::{column, Column, Container, Radio, Text},
     Element, Length, Task,
+    widget::{Column, Container, Radio, Text, column},
 };
 use iced_aw::tab_bar::TabLabel;
 

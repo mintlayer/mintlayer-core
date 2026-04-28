@@ -22,23 +22,24 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use randomness::{seq::IteratorRandom as _, CryptoRng, Rng, RngExt as _};
+use randomness::{CryptoRng, Rng, RngExt as _, seq::IteratorRandom as _};
 use script::Script;
 use test_utils::{random::gen_random_bytes, random_ascii_alphanumeric_string};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        self,
+        self, AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, OrderData,
+        PoolId, Transaction, TransactionCreationError, TxInput, TxOutput, TxOutputTag,
         htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            DestinationSigError, EvaluatedInputWitness, Signable,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::{
                 input_commitments::{SighashInputCommitment, SighashInputCommitmentTag},
                 sighashtype::SigHashType,
             },
-            DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
@@ -47,10 +48,8 @@ use crate::{
             IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, OrderData, PoolId,
-        Transaction, TransactionCreationError, TxInput, TxOutput, TxOutputTag,
     },
-    primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, Id, H256},
+    primitives::{Amount, H256, Id, amount::UnsignedIntType, per_thousand::PerThousand},
 };
 
 fn make_random_output_value(rng: &mut impl CryptoRng) -> OutputValue {

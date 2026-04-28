@@ -50,7 +50,7 @@ pub use accounting_undo_cache::CachedBlockUndo;
 mod utxos_undo_cache;
 pub use utxos_undo_cache::CachedUtxosBlockUndo;
 
-pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
+pub use input_output_policy::{IOPolicyError, calculate_tokens_burned_in_outputs};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -63,21 +63,21 @@ use self::{
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
-pub use reward_distribution::{distribute_pos_reward, RewardDistributionError};
+pub use reward_distribution::{RewardDistributionError, distribute_pos_reward};
 
 use chainstate_types::{BlockIndex, TipStorageTag};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        block::{BlockRewardTransactable, ConsensusData, timestamp::BlockTimestamp},
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
+    primitives::{Amount, BlockHeight, Fee, Id, Idable, id::WithId},
 };
 use pos_accounting::{
     PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
@@ -1222,10 +1222,10 @@ where
     ) -> Result<(), input_check::InputCheckError>
     where
         Tx: input_check::FullyVerifiable<
-            PoSAccountingDelta<A>,
-            TokensAccountingCache<T>,
-            OrdersAccountingCache<O>,
-        >,
+                PoSAccountingDelta<A>,
+                TokensAccountingCache<T>,
+                OrdersAccountingCache<O>,
+            >,
     {
         input_check::verify_full(
             tx,

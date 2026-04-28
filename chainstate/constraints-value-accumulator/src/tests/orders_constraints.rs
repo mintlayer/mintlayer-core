@@ -19,18 +19,18 @@ use rstest::rstest;
 
 use common::{
     chain::{
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
+        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
         config::{create_unit_test_config, create_unit_test_config_builder},
         output_value::OutputValue,
         tokens::TokenId,
-        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
-        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, H256, Id},
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::RngExt as _;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{ConstrainedValueAccumulator, Error};
 

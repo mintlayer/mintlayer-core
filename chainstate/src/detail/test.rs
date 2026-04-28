@@ -19,17 +19,16 @@ use static_assertions::*;
 
 use chainstate_storage::inmemory::Store;
 use common::{
-    chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
-        Destination, NetUpgrades,
-    },
     Uint256,
+    chain::{
+        Destination, NetUpgrades,
+        config::{Builder as ChainConfigBuilder, ChainType},
+    },
 };
 
 use crate::{
-    detail::query::locator_tip_distances,
+    DefaultTransactionVerificationStrategy, detail::query::locator_tip_distances,
     interface::chainstate_interface_impl::ChainstateInterfaceImpl,
-    DefaultTransactionVerificationStrategy,
 };
 
 use super::*;

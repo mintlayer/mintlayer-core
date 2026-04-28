@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::{
-    chain::{stakelock::StakePoolData, Destination},
-    primitives::{per_thousand::PerThousand, Amount},
+    chain::{Destination, stakelock::StakePoolData},
+    primitives::{Amount, per_thousand::PerThousand},
 };
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};

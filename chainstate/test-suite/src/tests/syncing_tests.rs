@@ -25,19 +25,18 @@ use chainstate::{
 use chainstate_test_framework::{TestFramework, TestFrameworkBuilder};
 use chainstate_types::{BlockStatus, BlockValidationStage, PropertyQueryError};
 use common::{
-    chain::{
-        self,
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
-        Block, GenBlock,
-    },
-    primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
+    chain::{
+        self, Block, GenBlock,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
+    },
+    primitives::{BlockDistance, BlockHeight, H256, Id, Idable},
 };
 use logging::log;
 use randomness::RngExt;
 use test_utils::{
     assert_matches,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use tx_verifier::CheckTransactionError;
 

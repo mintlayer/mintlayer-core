@@ -16,11 +16,11 @@
 use std::path::PathBuf;
 
 use clap::ValueEnum;
-use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+use common::chain::config::{ChainType, regtest_options::ChainConfigOptions};
 use crypto::key::hdkd::u31::U31;
 use rpc::{
-    rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
+    rpc_creds::{RpcCreds, RpcCredsError},
 };
 use utils::{
     app_version_with_git_info, clap_utils, cookie::COOKIE_FILENAME,

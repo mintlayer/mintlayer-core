@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_test_framework::{calculate_new_pos_compact_target, TestFramework};
+use chainstate_test_framework::{TestFramework, calculate_new_pos_compact_target};
 use common::{
     chain::{CoinUnit, Genesis},
     primitives::{BlockHeight, Compact},

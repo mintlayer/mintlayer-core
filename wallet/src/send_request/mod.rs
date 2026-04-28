@@ -18,14 +18,14 @@ use std::{collections::BTreeMap, mem::take};
 use common::{
     address::Address,
     chain::{
+        ChainConfig, Currency, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         htlc::HtlcSecret,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock::ForBlockCount,
         tokens::{Metadata, TokenId, TokenIssuance},
-        ChainConfig, Currency, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, per_thousand::PerThousand},
 };
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
@@ -34,9 +34,9 @@ use wallet_types::partially_signed_transaction::{
 };
 
 use crate::{
-    account::PoolData,
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError, WalletResult,
+    account::PoolData,
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
 };
 
 /// The `SendRequest` struct provides the necessary information to the wallet
