@@ -74,7 +74,7 @@ impl<Tx: lmdb::Transaction> DbTx<'_, Tx> {
         &self,
         map_id: DbMapId,
         key: &[u8],
-    ) -> storage_core::Result<lmdb::Iter<'_, impl Cursor<'_>>> {
+    ) -> storage_core::Result<lmdb::Iter<'_, impl Cursor<'_> + use<'_, Tx>>> {
         let cursor = self
             .tx
             .open_ro_cursor(self.backend.dbs[map_id])

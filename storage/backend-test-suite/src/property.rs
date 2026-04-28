@@ -19,7 +19,7 @@ use crate::prelude::*;
 use proptest::prelude::Strategy;
 
 /// Proptest generators
-mod gen {
+mod gens {
     use super::WriteAction;
     pub use proptest::prelude::*;
     use storage_core::{Data, DbMapId};
@@ -65,7 +65,7 @@ fn overwrite_and_abort<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>
     using_proptest(
         file!(),
         backend_factory,
-        (gen::key(100), gen::any::<Data>(), gen::any::<Data>())
+        (gens::key(100), gens::any::<Data>(), gens::any::<Data>())
             .prop_filter("not equal", |(_, a, b)| a != b),
         |backend, (key, val0, val1)| {
             let mut store = backend.open(desc(1)).expect("db open to succeed");
@@ -122,7 +122,7 @@ fn add_and_delete<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
     using_proptest(
         file!(),
         backend_factory,
-        gen::entries(NUM_DBS, 0usize..20),
+        gens::entries(NUM_DBS, 0usize..20),
         |backend, entries| {
             let mut store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
 
@@ -165,8 +165,8 @@ fn last_write_wins<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
         file!(),
         backend_factory,
         (
-            gen::key(1000),
-            gen::prop::collection::vec(gen::any::<Data>(), 0..100),
+            gens::key(1000),
+            gens::prop::collection::vec(gens::any::<Data>(), 0..100),
         ),
         |backend, (key, vals)| {
             let mut store = backend.open(desc(1)).expect("db open to succeed");
@@ -194,9 +194,9 @@ fn add_and_delete_some<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>
         file!(),
         backend_factory,
         (
-            gen::entries(NUM_DBS, 0usize..20),
-            gen::entries(NUM_DBS, 0usize..20),
-            proptest::collection::vec((gen::map_id(NUM_DBS), gen::big_key()), 0usize..10),
+            gens::entries(NUM_DBS, 0usize..20),
+            gens::entries(NUM_DBS, 0usize..20),
+            proptest::collection::vec((gens::map_id(NUM_DBS), gens::big_key()), 0usize..10),
         ),
         |backend, (entries1, entries2, extra_keys)| {
             let mut store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
@@ -249,9 +249,9 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFactory<B>>(backend_fact
         file!(),
         backend_factory,
         (
-            gen::actions(100, 0..20),
-            gen::actions(100, 0..20),
-            gen::actions(100, 0..20),
+            gens::actions(100, 0..20),
+            gens::actions(100, 0..20),
+            gens::actions(100, 0..20),
         ),
         |backend, (to_prepopulate, to_abort, to_commit)| {
             let model = Model::from_actions(to_prepopulate.clone());
@@ -293,7 +293,7 @@ fn add_modify_abort_replay_commit<B: Backend, F: BackendFactory<B>>(backend_fact
     using_proptest(
         file!(),
         backend_factory,
-        (gen::actions(100, 0..20), gen::actions(100, 0..20)),
+        (gens::actions(100, 0..20), gens::actions(100, 0..20)),
         |backend, (initial, actions)| {
             let mut store = backend.open(desc(1)).expect("db open to succeed");
 
@@ -324,7 +324,7 @@ fn db_writes_do_not_interfere<B: Backend, F: BackendFactory<B>>(backend_factory:
     using_proptest(
         file!(),
         backend_factory,
-        (gen::actions(100, 0..20), gen::actions(100, 0..20)),
+        (gens::actions(100, 0..20), gens::actions(100, 0..20)),
         |backend, (actions0, actions1)| {
             let mut store = backend.open(desc(2)).expect("db open to succeed");
 
@@ -350,8 +350,8 @@ fn empty_after_abort<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) 
         file!(),
         backend_factory,
         (
-            gen::actions(100, 0..20),
-            gen::prop::collection::vec(gen::key(100), 0..20),
+            gens::actions(100, 0..20),
+            gens::prop::collection::vec(gens::key(100), 0..20),
         ),
         |backend, (actions, keys)| {
             let mut store = backend.open(desc(5)).expect("db open to succeed");
@@ -380,7 +380,7 @@ fn prefix_iteration<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
     using_proptest(
         file!(),
         backend_factory,
-        (gen::actions(100, 0..20), gen::actions(100, 0..20)),
+        (gens::actions(100, 0..20), gens::actions(100, 0..20)),
         |backend, (actions_a, actions_b)| {
             // Add prefixes to action keys
             fn add_prefix(pfx: u8, mut key: Data) -> Data {
@@ -440,7 +440,7 @@ fn post_commit_consistency<B: Backend, F: BackendFactory<B>>(backend_factory: Ar
     using_proptest(
         file!(),
         backend_factory,
-        gen::actions(100, 0..50),
+        gens::actions(100, 0..50),
         |backend, actions| {
             // Open storage
             let mut store = backend.open(desc(1)).expect("db open to succeed");

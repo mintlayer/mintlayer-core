@@ -853,7 +853,8 @@ mod log_output {
     };
 
     use logging::{
-        init_logging_generic, write_to_make_writer, LogStyle, ValueOrEnvVar, WriterSettings,
+        init_logging_generic, write_to_make_writer, LogStyle, ValueOrEnvVar,
+        ValueOrEnvVarWithDefault, WriterSettings,
     };
 
     #[derive(Clone)]
@@ -869,7 +870,7 @@ mod log_output {
                 WriterSettings {
                     make_writer: write_to_make_writer(self.clone()),
                     is_terminal: false,
-                    filter: ValueOrEnvVar::Value("trace".to_owned()),
+                    filter: ValueOrEnvVarWithDefault::Value("trace".to_owned()),
                     log_style: ValueOrEnvVar::Value(LogStyle::Text(logging::TextColoring::Off)),
                 },
                 logging::no_writer_settings(),

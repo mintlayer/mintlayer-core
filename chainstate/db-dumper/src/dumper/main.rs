@@ -45,13 +45,9 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+utils::enable_rust_backtrace!();
+
 fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     init_logging();
 
     run().unwrap_or_else(|err| {

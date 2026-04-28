@@ -549,21 +549,20 @@ where
                         P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(id)),
                     )?;
 
-                    if let Some(ref best_sent_block) = best_sent_block {
-                        if index.block_height() <= best_sent_block.block_height() {
-                            // This can be normal in case of reorg; ensure that the mainchain block
-                            // at best_sent_block's height has a different id.
-                            // Note that mainchain could have become shorter due to blocks
-                            // invalidation, so no block at that height may be present at all.
-                            if let Some(mainchain_block_id_at_height) =
-                                c.get_block_id_from_height(best_sent_block.block_height())?
-                            {
-                                if &mainchain_block_id_at_height == best_sent_block.block_id() {
-                                    return Err(P2pError::ProtocolError(
-                                        ProtocolError::DuplicatedBlockRequest(id),
-                                    ));
-                                }
-                            }
+                    if let Some(ref best_sent_block) = best_sent_block
+                        && index.block_height() <= best_sent_block.block_height()
+                    {
+                        // This can be normal in case of reorg; ensure that the mainchain block
+                        // at best_sent_block's height has a different id.
+                        // Note that mainchain could have become shorter due to blocks
+                        // invalidation, so no block at that height may be present at all.
+                        if let Some(mainchain_block_id_at_height) =
+                            c.get_block_id_from_height(best_sent_block.block_height())?
+                            && &mainchain_block_id_at_height == best_sent_block.block_id()
+                        {
+                            return Err(P2pError::ProtocolError(
+                                ProtocolError::DuplicatedBlockRequest(id),
+                            ));
                         }
                     }
                 }

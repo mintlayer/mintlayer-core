@@ -19,14 +19,10 @@ use wallet_cli_lib::{
     console::{StdioInputConsole, StdioOutputConsole},
 };
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     let args = WalletCliArgs::parse();
     wallet_cli_lib::run(StdioInputConsole, StdioOutputConsole, args, None)
         .await

@@ -980,34 +980,31 @@ impl<'a> RandomTxMaker<'a> {
                 // create order to exchange part of available coins for tokens
                 if let Some((token_id, token_supply)) =
                     get_random_token(rng, self.tokens_store, tokens_cache)
+                    && token_supply > Amount::ZERO
                 {
-                    if token_supply > Amount::ZERO {
-                        let ask_amount =
-                            Amount::from_atoms(rng.random_range(1u128..=token_supply.into_atoms()));
-                        let give_amount =
-                            Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
-                        let order_data = OrderData::new(
-                            Destination::AnyoneCanSpend,
-                            OutputValue::TokenV1(token_id, ask_amount),
-                            OutputValue::Coin(give_amount),
-                        );
-                        let change = (amount_to_spend - give_amount).unwrap();
+                    let ask_amount =
+                        Amount::from_atoms(rng.random_range(1u128..=token_supply.into_atoms()));
+                    let give_amount = Amount::from_atoms(rng.random_range(1u128..=atoms_to_spend));
+                    let order_data = OrderData::new(
+                        Destination::AnyoneCanSpend,
+                        OutputValue::TokenV1(token_id, ask_amount),
+                        OutputValue::Coin(give_amount),
+                    );
+                    let change = (amount_to_spend - give_amount).unwrap();
 
-                        // Transfer output is created intentionally besides order output to not waste utxo
-                        // (e.g. single genesis output on issuance)
-                        let outputs = vec![
-                            TxOutput::CreateOrder(Box::new(order_data)),
-                            TxOutput::Transfer(
-                                OutputValue::Coin(change),
-                                key_manager
-                                    .new_destination(self.chainstate.get_chain_config(), rng),
-                            ),
-                        ];
+                    // Transfer output is created intentionally besides order output to not waste utxo
+                    // (e.g. single genesis output on issuance)
+                    let outputs = vec![
+                        TxOutput::CreateOrder(Box::new(order_data)),
+                        TxOutput::Transfer(
+                            OutputValue::Coin(change),
+                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
+                        ),
+                    ];
 
-                        self.order_can_be_created = false;
+                    self.order_can_be_created = false;
 
-                        result_outputs.extend_from_slice(&outputs);
-                    }
+                    result_outputs.extend_from_slice(&outputs);
                 }
             } else if switch == 3 && !self.account_command_used {
                 // try fill order
@@ -1019,28 +1016,27 @@ impl<'a> RandomTxMaker<'a> {
                         calculate_filled_order_value(&orders_cache, order_id, amount_to_spend)
                             .unwrap();
 
-                    if let Some(filled_value) = filled_value {
-                        if !is_frozen_token(&filled_value, tokens_cache)
-                            && !is_frozen_order(&orders_cache, order_id)
-                        {
-                            let input = TxInput::OrderAccountCommand(
-                                OrderAccountCommand::FillOrder(order_id, amount_to_spend),
-                            );
+                    if let Some(filled_value) = filled_value
+                        && !is_frozen_token(&filled_value, tokens_cache)
+                        && !is_frozen_order(&orders_cache, order_id)
+                    {
+                        let input = TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                            order_id,
+                            amount_to_spend,
+                        ));
 
-                            let output = TxOutput::Transfer(
-                                filled_value,
-                                key_manager
-                                    .new_destination(self.chainstate.get_chain_config(), rng),
-                            );
+                        let output = TxOutput::Transfer(
+                            filled_value,
+                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
+                        );
 
-                            let _ = orders_cache
-                                .fill_order(order_id, amount_to_spend, OrdersVersion::V1)
-                                .unwrap();
-                            self.account_command_used = true;
+                        let _ = orders_cache
+                            .fill_order(order_id, amount_to_spend, OrdersVersion::V1)
+                            .unwrap();
+                        self.account_command_used = true;
 
-                            result_inputs.push(input);
-                            result_outputs.push(output);
-                        }
+                        result_inputs.push(input);
+                        result_outputs.push(output);
                     }
                 }
             } else if switch == 6 {
@@ -1136,17 +1132,17 @@ impl<'a> RandomTxMaker<'a> {
                 result_outputs.push(output);
 
                 // Occasionally create new delegation id
-                if rng.random::<bool>() && self.delegation_can_be_created {
-                    if let Some((pool_id, _)) =
+                if rng.random::<bool>()
+                    && self.delegation_can_be_created
+                    && let Some((pool_id, _)) =
                         get_random_pool_data(rng, self.pos_accounting_store, &pos_accounting_cache)
-                    {
-                        self.delegation_can_be_created = false;
+                {
+                    self.delegation_can_be_created = false;
 
-                        result_outputs.push(TxOutput::CreateDelegationId(
-                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
-                            *pool_id,
-                        ));
-                    }
+                    result_outputs.push(TxOutput::CreateDelegationId(
+                        key_manager.new_destination(self.chainstate.get_chain_config(), rng),
+                        *pool_id,
+                    ));
                 }
             }
         }
@@ -1244,32 +1240,24 @@ impl<'a> RandomTxMaker<'a> {
                         )
                         .unwrap();
 
-                        if let Some(filled_value) = filled_value {
-                            if !is_frozen_token(&filled_value, tokens_cache)
-                                && !is_frozen_order(orders_cache, order_id)
-                            {
-                                result_outputs.push(TxOutput::Transfer(
-                                    filled_value,
-                                    key_manager
-                                        .new_destination(self.chainstate.get_chain_config(), rng),
-                                ));
+                        if let Some(filled_value) = filled_value
+                            && !is_frozen_token(&filled_value, tokens_cache)
+                            && !is_frozen_order(orders_cache, order_id)
+                        {
+                            result_outputs.push(TxOutput::Transfer(
+                                filled_value,
+                                key_manager
+                                    .new_destination(self.chainstate.get_chain_config(), rng),
+                            ));
 
-                                result_inputs.push(TxInput::OrderAccountCommand(
-                                    OrderAccountCommand::FillOrder(
-                                        order_id,
-                                        Amount::from_atoms(atoms),
-                                    ),
-                                ));
+                            result_inputs.push(TxInput::OrderAccountCommand(
+                                OrderAccountCommand::FillOrder(order_id, Amount::from_atoms(atoms)),
+                            ));
 
-                                let _ = orders_cache
-                                    .fill_order(
-                                        order_id,
-                                        Amount::from_atoms(atoms),
-                                        OrdersVersion::V1,
-                                    )
-                                    .unwrap();
-                                self.account_command_used = true;
-                            }
+                            let _ = orders_cache
+                                .fill_order(order_id, Amount::from_atoms(atoms), OrdersVersion::V1)
+                                .unwrap();
+                            self.account_command_used = true;
                         }
                     }
                 }

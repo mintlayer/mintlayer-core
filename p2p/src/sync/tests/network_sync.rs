@@ -368,16 +368,16 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
         nodes
             .exchange_block_sync_messages_while(&mut delayed_msgs, async |_, delayed_msgs, msg| {
-                if msg.sender_node_idx == 1 {
-                    if let BlockSyncMessage::BlockListRequest(req) = &msg.message {
-                        assert_eq!(req.block_ids().len(), initial_block_count);
-                        log::debug!(
-                            "Got block list request from node idx {}, delaying it",
-                            msg.sender_node_idx
-                        );
-                        delayed_msgs.push(msg.clone());
-                        return MsgAction::Break;
-                    }
+                if msg.sender_node_idx == 1
+                    && let BlockSyncMessage::BlockListRequest(req) = &msg.message
+                {
+                    assert_eq!(req.block_ids().len(), initial_block_count);
+                    log::debug!(
+                        "Got block list request from node idx {}, delaying it",
+                        msg.sender_node_idx
+                    );
+                    delayed_msgs.push(msg.clone());
+                    return MsgAction::Break;
                 }
 
                 MsgAction::SendAndContinue

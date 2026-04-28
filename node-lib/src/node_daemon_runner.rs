@@ -27,7 +27,11 @@ pub struct ExitCode(pub i32);
 
 pub async fn run_node_daemon() -> anyhow::Result<ExitCode> {
     let opts = Options::from_args(std::env::args_os(), NodeType::NodeDaemon);
-    let setup_result = setup(opts.with_resolved_command()).await?;
+    let setup_result = setup(
+        opts.with_resolved_command(),
+        logging::SIMPLE_INIT_DEFAULT_FILTER,
+    )
+    .await?;
     match setup_result {
         NodeSetupResult::RunNode(node) => {
             node.main().await;

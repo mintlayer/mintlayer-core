@@ -169,58 +169,57 @@ fn randomized_test(#[case] seed: Seed) {
                     did_something = true;
                 }
                 1 => {
-                    if rng.random_bool(0.5) {
-                        if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
-                            test_data.decommission_pool(&mut tf, &mut rng, &pool_id);
-                            did_something = true;
-                        }
+                    if rng.random_bool(0.5)
+                        && let Some(pool_id) = test_data.random_pool_id(&mut rng)
+                    {
+                        test_data.decommission_pool(&mut tf, &mut rng, &pool_id);
+                        did_something = true;
                     }
                 }
                 2 => {
-                    if rng.random_bool(0.5) {
-                        if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
-                            let _ = test_data.create_delegation(&mut tf, &mut rng, &pool_id);
-                            did_something = true;
-                        }
+                    if rng.random_bool(0.5)
+                        && let Some(pool_id) = test_data.random_pool_id(&mut rng)
+                    {
+                        let _ = test_data.create_delegation(&mut tf, &mut rng, &pool_id);
+                        did_something = true;
                     }
                 }
                 3 => {
-                    if rng.random_bool(0.5) {
-                        if let Some((pool_id, delegation_id)) =
+                    if rng.random_bool(0.5)
+                        && let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
-                        {
-                            let _ = test_data.withdraw_from_delegation(
-                                &mut tf,
-                                &mut rng,
-                                &pool_id,
-                                &delegation_id,
-                            );
-                            did_something = true;
-                        }
+                    {
+                        let _ = test_data.withdraw_from_delegation(
+                            &mut tf,
+                            &mut rng,
+                            &pool_id,
+                            &delegation_id,
+                        );
+                        did_something = true;
                     }
                 }
                 _ => {
-                    if rng.random_bool(0.5) {
-                        if let Some((pool_id, delegation_id)) =
+                    if rng.random_bool(0.5)
+                        && let Some((pool_id, delegation_id)) =
                             test_data.random_pool_and_delegation_id(&mut rng)
-                        {
-                            let _ = test_data.add_to_delegation(
-                                &mut tf,
-                                &mut rng,
-                                &pool_id,
-                                &delegation_id,
-                            );
-                            did_something = true;
-                        }
+                    {
+                        let _ = test_data.add_to_delegation(
+                            &mut tf,
+                            &mut rng,
+                            &pool_id,
+                            &delegation_id,
+                        );
+                        did_something = true;
                     }
                 }
             }
 
-            if !did_something && rng.random_bool(0.5) {
-                if let Some(pool_id) = test_data.random_pool_id(&mut rng) {
-                    test_data.produce_trivial_block_with_pool(&mut tf, &mut rng, &pool_id);
-                    did_something = true;
-                }
+            if !did_something
+                && rng.random_bool(0.5)
+                && let Some(pool_id) = test_data.random_pool_id(&mut rng)
+            {
+                test_data.produce_trivial_block_with_pool(&mut tf, &mut rng, &pool_id);
+                did_something = true;
             }
 
             if !did_something {

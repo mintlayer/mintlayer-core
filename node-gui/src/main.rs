@@ -50,9 +50,9 @@ const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that
 const INITIAL_MAIN_WINDOW_WIDTH: f32 = 1024.0;
 const INITIAL_MAIN_WINDOW_HEIGHT: f32 = 768.0;
 
-pub fn main() -> iced::Result {
-    utils::rust_backtrace::enable();
+utils::enable_rust_backtrace!();
 
+pub fn main() -> iced::Result {
     let initial_opts = node_lib::Options::from_args(std::env::args_os(), NodeType::NodeGui);
 
     iced::application(title, update, view)

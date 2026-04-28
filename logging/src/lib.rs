@@ -17,6 +17,7 @@ mod log_style;
 mod utils;
 
 use std::{
+    borrow::Cow,
     io::{IsTerminal, Write},
     sync::Mutex,
 };
@@ -26,18 +27,44 @@ use tracing_subscriber::{
     fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
 
-use log_style::{get_log_style_from_env, LogStyleParseError};
-
 pub use log;
+pub use log_style::{get_log_style_from_env, LogStyleParseError};
 pub use log_style::{LogStyle, TextColoring};
-pub use utils::{get_from_env, GetFromEnvError, ValueOrEnvVar};
+pub use utils::{get_from_env, GetFromEnvError};
 
-/// Send log output to the terminal.
-pub fn init_logging() {
-    init_logging_generic(default_writer_settings(), no_writer_settings());
+/// Default value for `RUST_LOG` used by the "simple" log initialization functions.
+///
+/// I.e. `init_logging_generic` doesn't use this.
+pub const SIMPLE_INIT_DEFAULT_FILTER: &str = "info";
+
+/// This defines the default filter directive to use when the specified one turned out to be
+/// empty or invalid.
+///
+/// Note that `EnvFilter::from_env` would use ERROR as the default, but we want to be consistent
+/// with `SIMPLE_INIT_DEFAULT_FILTER`.
+fn default_filter_directive() -> tracing_subscriber::filter::Directive {
+    LevelFilter::INFO.into()
 }
 
-/// Send log output to the specified [Write] instance, log lines are separated by '\n'
+/// Send log output to the terminal, taking the log filter from the "RUST_LOG" env var and using
+/// `SIMPLE_INIT_DEFAULT_FILTER` if it's not set.
+pub fn init_logging() {
+    init_logging_with_default_filter(SIMPLE_INIT_DEFAULT_FILTER.to_owned());
+}
+
+/// A more generic version of `init_logging` that allows to specify a custom default value for
+/// `RUST_LOG`.
+pub fn init_logging_with_default_filter(default_filter: String) {
+    init_logging_generic(
+        default_writer_settings(default_filter),
+        no_writer_settings(),
+    );
+}
+
+/// Send log output to the specified [Write] instance, log lines are separated by '\n'.
+///
+/// The log filter is taken from the "RUST_LOG" env var, using `SIMPLE_INIT_DEFAULT_FILTER` as
+/// the default value.
 ///
 /// `is_terminal` will determine text coloring in the `TextColoring::Auto` case.
 pub fn init_logging_to(file: impl Write + Send + 'static, is_terminal: bool) {
@@ -45,14 +72,17 @@ pub fn init_logging_to(file: impl Write + Send + 'static, is_terminal: bool) {
         WriterSettings {
             make_writer: write_to_make_writer(file),
             is_terminal,
-            filter: ValueOrEnvVar::EnvVar("RUST_LOG".into()),
+            filter: ValueOrEnvVarWithDefault::EnvVar {
+                var_name: "RUST_LOG".into(),
+                default_value: SIMPLE_INIT_DEFAULT_FILTER.to_owned(),
+            },
             log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
         },
         no_writer_settings(),
     );
 }
 
-pub fn default_writer_settings() -> WriterSettings<fn() -> std::io::Stderr> {
+pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() -> std::io::Stderr> {
     WriterSettings {
         // Write to stderr to mimic the behavior of env_logger.
         make_writer: std::io::stderr,
@@ -60,7 +90,10 @@ pub fn default_writer_settings() -> WriterSettings<fn() -> std::io::Stderr> {
         // to a file etc).
         is_terminal: std::io::stderr().is_terminal(),
         // Use the default env var for filtering.
-        filter: ValueOrEnvVar::EnvVar("RUST_LOG".into()),
+        filter: ValueOrEnvVarWithDefault::EnvVar {
+            var_name: "RUST_LOG".into(),
+            default_value: default_filter,
+        },
         // Use the default env var for style.
         log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
     }
@@ -78,10 +111,23 @@ static DEFAULT_LOG_STYLE: LogStyle = LogStyle::Text(TextColoring::Auto);
 
 static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
 
+pub enum ValueOrEnvVar<T> {
+    Value(T),
+    EnvVar(Cow<'static, str>),
+}
+
+pub enum ValueOrEnvVarWithDefault<T1, T2> {
+    Value(T1),
+    EnvVar {
+        var_name: Cow<'static, str>,
+        default_value: T2,
+    },
+}
+
 pub struct WriterSettings<MW> {
     pub make_writer: MW,
     pub is_terminal: bool,
-    pub filter: ValueOrEnvVar<String>,
+    pub filter: ValueOrEnvVarWithDefault<String, String>,
     pub log_style: ValueOrEnvVar<LogStyle>,
 }
 
@@ -208,10 +254,10 @@ fn get_log_style_impl(
 }
 
 fn make_env_filter(
-    filter_str: ValueOrEnvVar<String>,
+    filter: ValueOrEnvVarWithDefault<String, String>,
     errors: &mut Vec<InternalLogInitError>,
 ) -> EnvFilter {
-    let result_opt = match make_env_filter_impl(filter_str) {
+    let result_opt = match make_env_filter_impl(filter) {
         Ok(filter) => Some(filter),
         Err(err) => {
             errors.push(err);
@@ -226,12 +272,16 @@ fn make_env_filter(
     })
 }
 
-fn make_env_filter_impl(filter: ValueOrEnvVar<String>) -> Result<EnvFilter, InternalLogInitError> {
+fn make_env_filter_impl(
+    filter: ValueOrEnvVarWithDefault<String, String>,
+) -> Result<EnvFilter, InternalLogInitError> {
     let filter_directives = match filter {
-        ValueOrEnvVar::Value(val) => Some(val),
-        ValueOrEnvVar::EnvVar(var_name) => get_from_env(var_name.as_ref())?,
+        ValueOrEnvVarWithDefault::Value(val) => val,
+        ValueOrEnvVarWithDefault::EnvVar {
+            var_name,
+            default_value,
+        } => get_from_env(var_name.as_ref())?.unwrap_or(default_value),
     };
-    let filter_directives = filter_directives.unwrap_or_default();
 
     // Note: here we try to catch errors to later print them to the log with the "error" severity, so that
     // typos in the filter string can be noticed. But not all errors will be caught. E.g. if you set the filter
@@ -248,11 +298,6 @@ fn make_env_filter_impl(filter: ValueOrEnvVar<String>) -> Result<EnvFilter, Inte
         })?;
 
     Ok(filter)
-}
-
-// Note: EnvFilter::from_env also uses ERROR as the default.
-fn default_filter_directive() -> tracing_subscriber::filter::Directive {
-    LevelFilter::ERROR.into()
 }
 
 #[allow(clippy::enum_variant_names)]

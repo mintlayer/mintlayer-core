@@ -1507,15 +1507,15 @@ pub fn get_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
         let mut new_subcommand =
             subcommand.clone().help_template(COMMAND_HELP_TEMPLATE).display_order(0);
 
-        if new_subcommand.get_about().is_none() {
-            if let Some(rpc_method) = method_desc_from_rpc.get(subcommand.get_name()) {
-                let (about, long_about) = clapify_and_split_rpc_description(rpc_method.description);
+        if new_subcommand.get_about().is_none()
+            && let Some(rpc_method) = method_desc_from_rpc.get(subcommand.get_name())
+        {
+            let (about, long_about) = clapify_and_split_rpc_description(rpc_method.description);
 
-                new_subcommand = new_subcommand.about(about);
+            new_subcommand = new_subcommand.about(about);
 
-                if let Some(long_about) = long_about {
-                    new_subcommand = new_subcommand.long_about(long_about);
-                }
+            if let Some(long_about) = long_about {
+                new_subcommand = new_subcommand.long_about(long_about);
             }
         }
 

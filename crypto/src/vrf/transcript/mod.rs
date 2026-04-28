@@ -44,7 +44,7 @@ mod tests {
             let mut generator =
                 assembled_transcript.take().build_rng().finalize(&mut Rng08Adapter(&mut rng));
 
-            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+            (0..100).map(|_| generator.r#gen::<u64>()).collect::<Vec<_>>()
         };
 
         let with_rng_value = {
@@ -58,7 +58,7 @@ mod tests {
             let mut generator =
                 assembled_transcript.take().build_rng().finalize(&mut Rng08Adapter(&mut rng2));
 
-            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+            (0..100).map(|_| generator.r#gen::<u64>()).collect::<Vec<_>>()
         };
 
         assert_eq!(with_rng_value, no_rng_value);

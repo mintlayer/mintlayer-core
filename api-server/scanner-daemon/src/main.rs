@@ -140,14 +140,10 @@ pub enum ApiServerScannerError {
     PostgresConnectionError(ApiServerStorageError),
 }
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() -> Result<(), ApiServerScannerError> {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     let args = ApiServerScannerArgs::parse();
 
     logging::init_logging();
