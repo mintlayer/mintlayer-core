@@ -18,7 +18,7 @@
 use std::future::IntoFuture;
 
 use tokio::{
-    sync::{mpsc, oneshot, RwLock},
+    sync::{RwLock, mpsc, oneshot},
     task::JoinSet,
 };
 use tracing::Instrument;
@@ -26,7 +26,7 @@ use tracing::Instrument;
 use logging::log;
 use utils::{once_destructor::OnceDestructor, sync::Arc, tokio_spawn_in_join_set};
 
-use crate::{calls::Action, Subsystem};
+use crate::{Subsystem, calls::Action};
 
 /// Handle a task completion result
 pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::task::JoinError>) {

@@ -21,31 +21,31 @@ use std::{collections::BTreeMap, convert::Infallible, num::NonZeroUsize, sync::A
 
 use chainstate_types::BlockIndex;
 use common::{
-    address::{dehexify::to_dehexified_json, Address, RpcAddress},
+    TokenDecimals,
+    address::{Address, RpcAddress, dehexify::to_dehexified_json},
     chain::{
-        output_values_holder::collect_token_v1_ids_from_output_values_holder,
-        tokens::{RPCTokenInfo, TokenId},
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcCurrency, RpcOrderInfo,
         TxOutput,
+        output_values_holder::collect_token_v1_ids_from_output_values_holder,
+        tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id},
-    TokenDecimals,
 };
-use rpc::{subscription, RpcResult};
+use rpc::{RpcResult, subscription};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{
-    chainstate_interface::ChainstateInterface, export_bootstrap_file, import_bootstrap_file, Block,
-    BlockSource, ChainInfo, ChainstateError, GenBlock,
+    Block, BlockSource, ChainInfo, ChainstateError, GenBlock,
+    chainstate_interface::ChainstateInterface, export_bootstrap_file, import_bootstrap_file,
 };
 
 use self::types::{block::RpcBlock, event::RpcEvent};
 
 pub use types::{
+    RpcTypeError,
     input::RpcUtxoOutpoint,
     output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
-    RpcTypeError,
 };
 
 #[rpc::describe]

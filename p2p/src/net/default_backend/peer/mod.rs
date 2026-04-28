@@ -30,8 +30,8 @@ use logging::log;
 use networking::{
     error::NetworkingError,
     transport::{
-        new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream,
-        TransportSocket,
+        ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream, TransportSocket,
+        new_message_stream,
     },
 };
 use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
@@ -54,7 +54,7 @@ use crate::{
     types::peer_id::PeerId,
 };
 
-use super::types::{can_send_will_disconnect, CategorizedMessage, HandshakeNonce, Message};
+use super::types::{CategorizedMessage, HandshakeNonce, Message, can_send_will_disconnect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionInfo {

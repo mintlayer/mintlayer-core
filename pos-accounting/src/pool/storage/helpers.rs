@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::{
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
     StorageTag,
+    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
 };
 
 pub struct BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {

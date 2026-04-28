@@ -32,20 +32,20 @@ use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
 use crate::{
+    MessagingService, PeerManagerEvent, Result,
     config::P2pConfig,
     error::{P2pError, ProtocolError},
     message::{TransactionResponse, TransactionSyncMessage},
     net::{
-        types::services::{Service, Services},
         NetworkingService,
+        types::services::{Service, Services},
     },
     sync::{
-        chainstate_handle::ChainstateHandle,
-        peer_common::{handle_message_processing_result, KnownTransactions},
         BoxedObserver, LocalEvent,
+        chainstate_handle::ChainstateHandle,
+        peer_common::{KnownTransactions, handle_message_processing_result},
     },
     types::peer_id::PeerId,
-    MessagingService, PeerManagerEvent, Result,
 };
 
 use super::{
@@ -350,7 +350,9 @@ where
             // in such a situation. Note that after certain time, older requests will be purged
             // from requested_transactions, after which we'll start to handle peer's tx
             // announcements again.
-            log::warn!("Ignoring announcement for tx {tx} because requested_transactions is over the limit");
+            log::warn!(
+                "Ignoring announcement for tx {tx} because requested_transactions is over the limit"
+            );
             return Ok(());
         }
 

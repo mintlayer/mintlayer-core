@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use crate::{
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     Error, FlushableUtxoView, Utxo, UtxoSource, UtxosBlockRewardUndo, UtxosTxUndo,
     UtxosTxUndoWithSources, UtxosView,
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
 };
 use common::{
     chain::{
+        GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{BlockReward, BlockRewardTransactable},
         signature::Signable,
-        GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -525,13 +525,13 @@ mod unit_test {
 
     use common::primitives::H256;
     use test_utils::{
-        random::{make_seedable_rng, Seed},
         UnwrapInfallible as _,
+        random::{Seed, make_seedable_rng},
     };
 
     use super::*;
 
-    use crate::tests::test_helper::{empty_test_utxos_view, insert_single_entry, Presence};
+    use crate::tests::test_helper::{Presence, empty_test_utxos_view, insert_single_entry};
 
     #[rstest]
     #[trace]

@@ -22,23 +22,22 @@ use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, get_output_value};
 use common::{
     chain::{
-        make_token_id,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
+        TxOutput, UtxoOutPoint, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{Metadata, NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
-        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
-        TxOutput, UtxoOutPoint,
     },
-    primitives::{id, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id},
 };
 use crypto::hash::StreamHasher;
 use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
     token_utils::random_token_issuance,
 };

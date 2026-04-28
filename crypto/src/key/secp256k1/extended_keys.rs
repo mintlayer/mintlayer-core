@@ -19,7 +19,7 @@ use hmac::{Hmac, Mac};
 use secp256k1;
 use sha2::Sha512;
 
-use randomness::{adapters::Rng08Adapter, CryptoRng};
+use randomness::{CryptoRng, adapters::Rng08Adapter};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -359,8 +359,14 @@ mod test {
             Secp256k1ExtendedPrivateKey::new_master(&mnemonic.to_seed_normalized("")).unwrap();
         let master_pub_key = Secp256k1ExtendedPublicKey::from_private_key(&master_key);
         assert_eq!(master_key.chain_code, master_pub_key.chain_code);
-        assert_encoded_eq(&master_key, "007923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67");
-        assert_encoded_eq(&master_pub_key, "007923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e03d902f35f560e0470c63313c7369168d9d7df2d49bf295fd9fb7cb109ccee0494");
+        assert_encoded_eq(
+            &master_key,
+            "007923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67",
+        );
+        assert_encoded_eq(
+            &master_pub_key,
+            "007923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e03d902f35f560e0470c63313c7369168d9d7df2d49bf295fd9fb7cb109ccee0494",
+        );
 
         let path = DerivationPath::from_str(path).unwrap();
         assert_encoded_eq(&path, path_encoded);

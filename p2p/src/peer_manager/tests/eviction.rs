@@ -18,25 +18,27 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use rstest::rstest;
 
 use common::{
-    chain::{config, Block},
-    primitives::{user_agent::mintlayer_core_user_agent, Id},
     Uint256,
+    chain::{Block, config},
+    primitives::{Id, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
 use p2p_test_utils::{expect_no_recv, expect_recv};
 use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
+    PeerManagerEvent,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     net::default_backend::types::Command,
     peer_manager::{
+        HEARTBEAT_INTERVAL_MAX,
         config::PeerManagerConfig,
         peerdb::{self, config::PeerDbConfig, salt::Salt},
         peers_eviction,
@@ -44,10 +46,8 @@ use crate::{
             make_standalone_peer_manager,
             utils::{expect_cmd_connect_to_one_of, outbound_block_relay_peer_accepted_by_backend},
         },
-        HEARTBEAT_INTERVAL_MAX,
     },
     sync::sync_status::PeerBlockSyncStatus,
-    PeerManagerEvent,
 };
 
 // 1) Setup the peer manager so that it must open 3 block relay connections, 1 of which is

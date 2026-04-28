@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use crate::{
-    primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
+    primitives::{BlockCount, per_thousand::PerThousand},
 };
 
-use super::{config::PoSChainConfig, PoSConsensusVersion};
+use super::{PoSConsensusVersion, config::PoSChainConfig};
 
 pub struct PoSChainConfigBuilder {
     target_limit: Uint256,

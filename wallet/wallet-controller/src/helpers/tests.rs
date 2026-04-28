@@ -26,7 +26,10 @@ use chainstate::ChainInfo;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
+        DelegationId, Destination, OrderAccountCommand, OrderData, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         classic_multisig::ClassicMultisigChallenge,
         config::create_regtest,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
@@ -39,18 +42,15 @@ use common::{
             IsTokenFreezable, RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
-        DelegationId, Destination, OrderAccountCommand, OrderData, PoolId, RpcOrderInfo,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, per_thousand::PerThousand},
 };
 use node_comm::node_traits::MockNodeInterface;
 use randomness::{Rng, RngExt as _, SliceRandom as _};
-use test_utils::random::{gen_random_alnum_string, gen_random_bytes, make_seedable_rng, Seed};
+use test_utils::random::{Seed, gen_random_alnum_string, gen_random_bytes, make_seedable_rng};
 use wallet::{
-    wallet::test_helpers::{create_wallet_with_mnemonic, scan_wallet},
     DefaultWallet,
+    wallet::test_helpers::{create_wallet_with_mnemonic, scan_wallet},
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -62,10 +62,10 @@ use wallet_types::{
 
 use crate::{
     tests::test_utils::{
-        create_block_scan_wallet, random_is_token_unfreezable, random_nft_issuance,
-        random_order_currencies_with_token, random_pub_key, random_rpc_is_token_frozen,
-        random_token_data_with_id_and_authority, random_vrf_pub_key, tx_with_outputs,
-        wallet_new_dest, OrderCurrencies, TestOrderData, TestTokenData, MNEMONIC,
+        MNEMONIC, OrderCurrencies, TestOrderData, TestTokenData, create_block_scan_wallet,
+        random_is_token_unfreezable, random_nft_issuance, random_order_currencies_with_token,
+        random_pub_key, random_rpc_is_token_frozen, random_token_data_with_id_and_authority,
+        random_vrf_pub_key, tx_with_outputs, wallet_new_dest,
     },
     {
         helpers::{

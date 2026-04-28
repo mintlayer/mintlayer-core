@@ -20,10 +20,10 @@ pub mod mock;
 use super::*;
 use common::{
     chain::{
-        output_value::OutputValue, stakelock::StakePoolData, Destination, OutPointSourceId,
-        UtxoOutPoint,
+        Destination, OutPointSourceId, UtxoOutPoint, output_value::OutputValue,
+        stakelock::StakePoolData,
     },
-    primitives::{amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, H256},
+    primitives::{BlockHeight, H256, amount::UnsignedIntType, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},

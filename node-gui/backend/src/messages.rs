@@ -35,7 +35,7 @@ use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::{Balances, WalletExtraInfo, WalletTypeArgs};
 use wallet_rpc_lib::types::PoolInfo;
-use wallet_types::{wallet_type::WalletType, ImportOrCreate};
+use wallet_types::{ImportOrCreate, wallet_type::WalletType};
 
 use super::{AccountId, BackendError};
 

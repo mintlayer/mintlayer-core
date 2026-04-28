@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::{amount::SignedAmount, Amount};
+use common::primitives::{Amount, amount::SignedAmount};
 
-use crate::{error::Error, DataDelta};
+use crate::{DataDelta, error::Error};
 
 /// Combine data with an element of `DeltaDataCollection`.
 /// An element can be either a Delta or a result of delta undo.
@@ -66,7 +66,7 @@ pub mod test {
     use crate::DataDelta;
 
     use super::*;
-    use common::primitives::amount::{signed::SignedIntType, UnsignedIntType};
+    use common::primitives::amount::{UnsignedIntType, signed::SignedIntType};
 
     use rstest::rstest;
 

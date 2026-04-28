@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use rstest::rstest;
 
 use chain::signature::{
-    inputsig::{standard_signature::StandardInputSignature, InputWitness},
+    inputsig::{InputWitness, standard_signature::StandardInputSignature},
     sighash::input_commitments::SighashInputCommitment,
     sighash::{sighashtype::SigHashType, signature_hash},
     tests::utils::verify_signature,
@@ -32,13 +32,13 @@ use randomness::RngExt;
 use serialization::DecodeAll;
 use test_utils::{
     assert_matches,
-    random::{flip_random_bit, with_random_bit_flipped, Seed},
+    random::{Seed, flip_random_bit, with_random_bit_flipped},
 };
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{self, Destination, SignedTransaction},
-    primitives::{id::DefaultHashAlgoStream, Id},
+    primitives::{Id, id::DefaultHashAlgoStream},
 };
 
 use super::*;

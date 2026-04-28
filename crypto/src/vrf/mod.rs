@@ -16,8 +16,8 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 
-use randomness::{make_true_rng, CryptoRng};
-use serialization::{hex_encoded::HexEncoded, Decode, Encode};
+use randomness::{CryptoRng, make_true_rng};
+use serialization::{Decode, Encode, hex_encoded::HexEncoded};
 
 use crate::{
     key::hdkd::{
@@ -341,8 +341,8 @@ mod tests {
     use hex::FromHex;
     use rstest::rstest;
     use serialization::DecodeAll;
-    use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
+    use test_utils::random::make_seedable_rng;
 
     use self::transcript::no_rng::VRFTranscript;
 

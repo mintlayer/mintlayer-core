@@ -19,8 +19,8 @@ use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{
-    error::{MessageCodecError, NetworkingError},
     Result,
+    error::{MessageCodecError, NetworkingError},
 };
 use serialization::{DecodeAll, Encode};
 

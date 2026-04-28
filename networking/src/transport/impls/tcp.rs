@@ -16,13 +16,13 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use tokio::net::{TcpListener, TcpStream};
 use utils::tap_log::TapLog;
 
 use crate::{
-    transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
     Result,
+    transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
 };
 
 #[derive(Debug)]
@@ -152,7 +152,7 @@ impl ConnectedSocketInfo for TcpTransportStream {
 #[cfg(test)]
 mod tests {
     use serialization::Encode;
-    use test_utils::random::{gen_random_bytes, Seed};
+    use test_utils::random::{Seed, gen_random_bytes};
 
     use crate::{
         test_helpers::{TestTransportMaker, TestTransportTcp},

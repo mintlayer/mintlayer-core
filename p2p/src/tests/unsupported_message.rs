@@ -19,15 +19,14 @@ use chainstate::ChainstateConfig;
 use common::{chain::Transaction, primitives::Id};
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{new_message_stream, TransportSocket as _},
+    transport::{TransportSocket as _, new_message_stream},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::RngExt as _;
 use serialization::{Decode, Encode};
 use test_utils::{
-    assert_matches, assert_matches_return_val,
-    random::{gen_random_bytes, make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches, assert_matches_return_val,
+    random::{Seed, gen_random_bytes, make_seedable_rng},
 };
 
 use crate::{
@@ -38,7 +37,7 @@ use crate::{
     },
     net::default_backend::types::{HandshakeMessage, P2pTimestamp},
     protocol::ProtocolConfig,
-    test_helpers::{test_p2p_config_with_protocol_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, test_p2p_config_with_protocol_config},
     tests::helpers::TestNode,
 };
 

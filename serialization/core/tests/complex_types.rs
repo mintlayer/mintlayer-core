@@ -21,7 +21,7 @@ use rstest::rstest;
 
 use randomness::RngExt as _;
 use serialization_core::{Decode, DecodeAll, Encode};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]

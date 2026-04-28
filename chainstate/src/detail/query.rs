@@ -22,13 +22,13 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        AccountType, Block, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
+        block::{BlockReward, signed_block_header::SignedBlockHeader},
         output_value::{OutputValue, RpcOutputValue},
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        AccountType, Block, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };

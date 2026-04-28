@@ -26,7 +26,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 use hex::ToHex;
 use itertools::Itertools;
 
-use randomness::{distributions::uniform::SampleRange, Rng, RngExt as _};
+use randomness::{Rng, RngExt as _, distributions::uniform::SampleRange};
 
 pub use basic_test_time_getter::BasicTestTimeGetter;
 pub use env::{remove_env_var, set_env_var};
@@ -188,7 +188,7 @@ macro_rules! assert_matches {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::{make_seedable_rng, Seed};
+    use crate::random::{Seed, make_seedable_rng};
     use rstest::rstest;
 
     mod match_macro_tests {

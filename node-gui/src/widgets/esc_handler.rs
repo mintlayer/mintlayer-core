@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use iced::{
+    Element, Event, Length, Rectangle, Size, Vector,
     advanced::{
-        layout, renderer,
-        widget::{tree, Operation, Tree},
-        Clipboard, Layout, Shell, Widget,
+        Clipboard, Layout, Shell, Widget, layout, renderer,
+        widget::{Operation, Tree, tree},
     },
     event, keyboard,
     mouse::{self},
-    overlay, Element, Event, Length, Rectangle, Size, Vector,
+    overlay,
 };
 
 /// Wrap an element, capturing Esc key press events and optionally emitting the specified message

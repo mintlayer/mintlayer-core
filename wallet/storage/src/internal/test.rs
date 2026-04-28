@@ -23,7 +23,7 @@ use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::vrf::ExtendedVRFPrivateKey;
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use wallet_types::keys::RootKeys;
 
 fn gen_random_password(rng: &mut impl CryptoRng) -> String {

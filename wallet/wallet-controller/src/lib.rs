@@ -33,7 +33,7 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::StreamExt;
-use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
+use futures::{TryStreamExt, never::Never, stream::FuturesOrdered};
 use helpers::{
     fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
@@ -62,19 +62,19 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
+        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
         signature::{
-            inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
-            DestinationSigError, Transactable,
+            DestinationSigError, Transactable, inputsig::InputWitness,
+            sighash::input_commitments::SighashInputCommitment,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        time::{get_time, Time},
         Amount, BlockHeight, Id, Idable,
+        time::{Time, get_time},
     },
 };
 use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
@@ -88,24 +88,24 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
 };
-use randomness::{make_pseudo_rng, make_true_rng, RngExt as _};
+use randomness::{RngExt as _, make_pseudo_rng, make_true_rng};
+#[cfg(feature = "trezor")]
+use wallet::signer::SignerError;
 #[cfg(feature = "ledger")]
 use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::{SelectedDevice, TrezorSignerProvider};
-#[cfg(feature = "trezor")]
-use wallet::signer::SignerError;
 
 use wallet::{
+    WalletError, WalletResult,
     account::{
-        currency_grouper::{self},
         TransactionToSign,
+        currency_grouper::{self},
     },
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     signer::software_signer::SoftwareSignerProvider,
     wallet::{WalletCreation, WalletPoolsFilter},
     wallet_events::WalletEvents,
-    WalletError, WalletResult,
 };
 
 pub use wallet_types::{
@@ -117,9 +117,9 @@ pub use wallet_types::{
 use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::{
     partially_signed_transaction::{
-        make_sighash_input_commitments, PartiallySignedTransaction,
-        PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _,
-        PtxAdditionalInfo, SighashInputCommitmentCreationError,
+        PartiallySignedTransaction, PartiallySignedTransactionError,
+        PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
+        SighashInputCommitmentCreationError, make_sighash_input_commitments,
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},

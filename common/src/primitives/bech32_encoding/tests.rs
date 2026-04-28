@@ -15,9 +15,9 @@
 
 use bitcoin_bech32::WitnessProgram;
 use hex::FromHex;
-use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng, RngExt as _};
+use randomness::{Rng, RngExt as _, distributions::Alphanumeric, make_pseudo_rng};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::Bech32Error;
 
@@ -204,7 +204,8 @@ fn check_arbitraty_data_convertion() {
 )]
 #[trace]
 #[case(
-    "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc","7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061"
+    "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc",
+    "7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061"
 )]
 #[trace]
 #[case("hrp1xyerxdp4xcmnswfs3y3n8w", "31323334353637383930")]

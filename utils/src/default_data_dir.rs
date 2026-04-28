@@ -44,7 +44,9 @@ pub fn default_data_dir_for_chain(chain_name: &str) -> PathBuf {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PrepareDataDirError {
-    #[error("Custom data directory '{0}' does not exist. Please create it or use the default data directory.")]
+    #[error(
+        "Custom data directory '{0}' does not exist. Please create it or use the default data directory."
+    )]
     DoesNotExist(PathBuf),
     #[error("Failed to create the '{0}' data directory: {1}")]
     CreateFailed(PathBuf, std::io::Error),
@@ -86,7 +88,7 @@ pub fn prepare_data_dir<F: Fn() -> PathBuf>(
 mod test {
     use std::io::{Read, Write};
 
-    use randomness::{make_pseudo_rng, RngExt as _};
+    use randomness::{RngExt as _, make_pseudo_rng};
     use tempfile::TempDir;
 
     use super::*;

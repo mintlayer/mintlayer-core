@@ -25,13 +25,13 @@ use chainstate::ChainInfo;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        Destination, OrderData, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         config::create_regtest,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{RPCTokenInfo, TokenId},
-        Destination, OrderData, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -39,7 +39,7 @@ use node_comm::{mock::ClonableMockNodeInterface, node_traits::MockNodeInterface}
 use randomness::RngExt as _;
 use test_utils::{
     assert_matches_return_val,
-    random::{gen_random_alnum_string, make_seedable_rng, Seed},
+    random::{Seed, gen_random_alnum_string, make_seedable_rng},
 };
 use wallet::{
     account::TransactionToSign, wallet::test_helpers::create_wallet_with_mnemonic,
@@ -48,13 +48,13 @@ use wallet::{
 use wallet_types::partially_signed_transaction::PtxAdditionalInfo;
 
 use crate::{
+    Controller,
     helpers::get_referenced_token_ids_from_partially_signed_transaction,
     runtime_wallet::RuntimeWallet,
     tests::test_utils::{
-        assert_fees, create_block_scan_wallet, random_rpc_ft_info_with_id_ticker_decimals,
-        tx_with_outputs, wallet_new_dest, MNEMONIC,
+        MNEMONIC, assert_fees, create_block_scan_wallet,
+        random_rpc_ft_info_with_id_ticker_decimals, tx_with_outputs, wallet_new_dest,
     },
-    Controller,
 };
 
 #[rstest]

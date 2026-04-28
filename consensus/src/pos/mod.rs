@@ -23,21 +23,21 @@ pub mod target;
 mod effective_pool_balance;
 
 use chainstate_types::{
-    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndexHandle,
-    EpochStorageRead, GenBlockIndex,
+    BlockIndexHandle, EpochStorageRead, GenBlockIndex, pos_randomness::PoSRandomness,
+    vrf_tools::construct_transcript,
 };
 use common::{
+    Uint256,
     address::Address,
     chain::{
+        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
         block::{
-            consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            BlockHeader, ConsensusData, consensus_data::PoSData,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp,
         },
         config::EpochIndex,
-        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Idable},
-    Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
 use logging::log;
@@ -47,12 +47,12 @@ use utils::ensure;
 use utxo::UtxosView;
 
 use crate::{
-    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
     PoSFinalizeBlockInputData,
+    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
 };
 
 pub use effective_pool_balance::{
-    effective_pool_balance as calculate_effective_pool_balance, EffectivePoolBalanceError,
+    EffectivePoolBalanceError, effective_pool_balance as calculate_effective_pool_balance,
 };
 pub use hash_check::check_pos_hash;
 
@@ -182,7 +182,7 @@ where
             | TxOutput::CreateOrder(_) => {
                 return Err(ConsensusPoSError::InvalidOutputTypeInStakeKernel(
                     header.get_id(),
-                ))
+                ));
             }
             TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker().clone(),
             TxOutput::ProduceBlockFromStake(dest, _) => dest,

@@ -15,10 +15,10 @@
 
 use crypto::{
     kdf::{
-        argon2::Argon2Config, hash_from_challenge, hash_password, KdfChallenge, KdfConfig,
-        KdfResult,
+        KdfChallenge, KdfConfig, KdfResult, argon2::Argon2Config, hash_from_challenge,
+        hash_password,
     },
-    symkey::{key_size, SymmetricKey, SymmetricKeyKind},
+    symkey::{SymmetricKey, SymmetricKeyKind, key_size},
 };
 use randomness::make_true_rng;
 use utils::const_nz_usize;
@@ -105,7 +105,7 @@ pub fn challenge_to_sym_key(
 mod test {
     use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::{challenge_to_sym_key, password_to_sym_key};
 

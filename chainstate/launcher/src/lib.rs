@@ -29,8 +29,8 @@ use utils::set_flag::SetFlag;
 
 // Some useful reexports
 pub use chainstate::{
-    chainstate_interface::ChainstateInterface, ChainstateConfig, ChainstateError as Error,
-    ChainstateSubsystem, DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateError as Error, ChainstateSubsystem,
+    DefaultTransactionVerificationStrategy, chainstate_interface::ChainstateInterface,
 };
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};

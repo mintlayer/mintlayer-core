@@ -21,12 +21,12 @@ use super::storage::{AddressInfo, DnsServerStorage, DnsServerStorageRead, DnsSer
 use common::primitives::time::Time;
 use p2p::{
     peer_manager::peerdb_common::{
-        storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
         StorageVersion,
+        storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
     },
     types::{bannable_address::BannableAddress, socket_address::SocketAddress},
 };
-use serialization::{encoded::Encoded, DecodeAll, Encode};
+use serialization::{DecodeAll, Encode, encoded::Encoded};
 use storage::MakeMapRef;
 
 type ValueId = u32;

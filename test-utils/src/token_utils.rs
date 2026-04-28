@@ -17,17 +17,17 @@ use strum::IntoEnumIterator as _;
 
 use common::{
     chain::{
+        Destination,
         config::ChainConfig,
         tokens::{
             IsTokenFreezable, Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0,
             TokenIssuanceV1, TokenTotalSupply, TokenTotalSupplyTag,
         },
-        Destination,
     },
-    primitives::{amount, Amount},
+    primitives::{Amount, amount},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{seq::IteratorRandom as _, CryptoRng, Rng, RngExt as _};
+use randomness::{CryptoRng, Rng, RngExt as _, seq::IteratorRandom as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 
 use crate::random_ascii_alphanumeric_string;

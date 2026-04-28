@@ -704,7 +704,7 @@ mod tests {
     use super::*;
     use crate::uint::BitArray;
     use randomness::RngExt;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     #[test]
     pub fn uint256_bits_test() {

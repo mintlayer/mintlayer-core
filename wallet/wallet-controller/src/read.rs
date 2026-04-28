@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
+use futures::{FutureExt, TryStreamExt, stream::FuturesUnordered};
 
 use common::{
     address::Address,
@@ -25,7 +25,7 @@ use common::{
         ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id},
+    primitives::{Amount, Id, id::WithId},
 };
 use crypto::{
     key::{
@@ -37,21 +37,21 @@ use crypto::{
 use node_comm::node_traits::NodeInterface;
 use utils::tap_log::TapLog;
 use wallet::{
-    account::{transaction_list::TransactionList, DelegationData, PoolData, TxInfo},
+    account::{DelegationData, PoolData, TxInfo, transaction_list::TransactionList},
     wallet::WalletPoolsFilter,
 };
 use wallet_types::{
+    KeyPurpose, KeychainUsageState,
     account_info::StandaloneAddresses,
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    KeyPurpose, KeychainUsageState,
 };
 
 use crate::{
+    ControllerError,
     runtime_wallet::RuntimeWallet,
     types::{AccountStandaloneKeyDetails, Balances, CreatedBlockInfo},
-    ControllerError,
 };
 
 pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static> {

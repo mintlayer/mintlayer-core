@@ -29,26 +29,26 @@ use thiserror::Error;
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, BlockStatus,
-    BlockValidationStage, EpochData, EpochDataCache, GenBlockIndex, GetAncestorError,
-    PropertyQueryError, TipStorageTag,
+    BlockIndex, BlockIndexHandle, BlockStatus, BlockValidationStage, EpochData, EpochDataCache,
+    GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
+    block_index_ancestor_getter, get_skip_height,
 };
 use common::{
+    Uint256,
     chain::{
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OrderAccountCommand,
+        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
-            ConsensusData,
+            BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp,
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OrderAccountCommand,
-        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        id::WithId, time::Time, Amount, BlockCount, BlockDistance, BlockHeight, Id, Idable,
+        Amount, BlockCount, BlockDistance, BlockHeight, Id, Idable, id::WithId, time::Time,
     },
     time_getter::TimeGetter,
-    Uint256,
 };
 use logging::log;
 use pos_accounting::{
@@ -66,9 +66,9 @@ use self::{
 };
 
 use super::{
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
     median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
-    tx_verification_strategy::TransactionVerificationStrategy, BlockSizeError, CheckBlockError,
-    CheckBlockTransactionsError,
+    tx_verification_strategy::TransactionVerificationStrategy,
 };
 
 pub use epoch_seal::EpochSealError;
@@ -343,7 +343,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         loop {
             match (&first_block_index, &second_block_index) {
                 _ if first_block_index.block_id() == second_block_index.block_id() => {
-                    break Ok(first_block_index)
+                    break Ok(first_block_index);
                 }
                 (GenBlockIndex::Block(first_blkidx), GenBlockIndex::Block(second_blkidx)) => {
                     first_block_index = self.get_previous_block_index(first_blkidx)?;

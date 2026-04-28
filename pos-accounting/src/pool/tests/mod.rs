@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{DelegationId, Destination, PoolId},
-    primitives::{per_thousand::PerThousand, Amount, H256},
+    primitives::{Amount, H256, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -26,8 +26,8 @@ use crypto::{
 use randomness::{CryptoRng, RngExt as _};
 
 use crate::{
-    error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,
-    PoSAccountingOperations, PoSAccountingUndo, PoolData,
+    DelegationData, PoSAccountingOperations, PoSAccountingUndo, PoolData, error::Error,
+    storage::in_memory::InMemoryPoSAccounting,
 };
 
 mod delta_tests;

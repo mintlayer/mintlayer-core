@@ -15,11 +15,11 @@
 
 use std::ops::Deref;
 
-use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
+use chainstate_types::{GenBlockIndex, TipStorageTag, storage_result};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, GenBlock, Transaction,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::Id,
 };
@@ -36,8 +36,8 @@ use tokens_accounting::{
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
 use super::{
-    accounting_undo_cache::CachedBlockUndo, error::TokensError,
-    utxos_undo_cache::CachedUtxosBlockUndo, TransactionSource,
+    TransactionSource, accounting_undo_cache::CachedBlockUndo, error::TokensError,
+    utxos_undo_cache::CachedUtxosBlockUndo,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

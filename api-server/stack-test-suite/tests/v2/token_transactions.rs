@@ -17,11 +17,11 @@ use serde_json::Value;
 
 use chainstate_test_framework::empty_witness;
 use common::{
-    chain::{tokens::TokenId, AccountCommand, AccountNonce, UtxoOutPoint},
+    chain::{AccountCommand, AccountNonce, UtxoOutPoint, tokens::TokenId},
     primitives::H256,
 };
 
-use crate::v2::helpers::{issue_and_mint_tokens_from_genesis, IssueAndMintTokensResult};
+use crate::v2::helpers::{IssueAndMintTokensResult, issue_and_mint_tokens_from_genesis};
 
 use super::*;
 

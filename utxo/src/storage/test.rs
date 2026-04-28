@@ -15,26 +15,26 @@
 
 use super::{in_memory::UtxosDBInMemoryImpl, *};
 use crate::{
-    tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::*,
     FlushableUtxoView, UtxoSource, UtxosBlockUndo, UtxosView,
+    tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward},
+        Block, OutPointSourceId, Transaction, TxInput,
+        block::{BlockReward, timestamp::BlockTimestamp},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Block, OutPointSourceId, Transaction, TxInput,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{BlockHeight, H256, Id, Idable},
 };
 use itertools::Itertools;
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use std::collections::BTreeMap;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 fn create_transactions(
     rng: &mut impl CryptoRng,

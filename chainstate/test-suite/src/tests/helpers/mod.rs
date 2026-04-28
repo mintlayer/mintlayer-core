@@ -19,12 +19,11 @@ use std::{
 };
 
 use chainstate::ChainstateEvent;
-use chainstate_test_framework::{anyonecanspend_address, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, anyonecanspend_address};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, output_value::OutputValue,
-        signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination, Transaction,
-        TxInput, TxOutput,
+        Destination, Transaction, TxInput, TxOutput, block::timestamp::BlockTimestamp,
+        output_value::OutputValue, signature::inputsig::InputWitness, timelock::OutputTimeLock,
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };

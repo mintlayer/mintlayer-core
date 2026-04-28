@@ -18,26 +18,26 @@ use rstest::rstest;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
-    create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
-    TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, create_stake_pool_data_with_all_reward_to_staker,
+    empty_witness, get_output_value,
 };
 use chainstate_types::TipStorageTag;
 use common::{
     chain::{
+        AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
+        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
         config::create_unit_test_config,
         make_delegation_id,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::input_commitments::SighashInputCommitment,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
-        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Idable, H256},
+    primitives::{Amount, H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -45,7 +45,7 @@ use crypto::{
 };
 use pos_accounting::{DelegationData, PoSAccountingStorageRead};
 use randomness::{CryptoRng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 fn prepare_stake_pool(

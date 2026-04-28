@@ -17,14 +17,14 @@ use serialization::{Decode, Encode};
 use utils::ensure;
 
 use crate::chain::{
+    AccountCommand, Destination, OrderAccountCommand, OrderId, SignedTransaction, Transaction,
+    TxInput, TxOutput,
     htlc::HtlcSecret,
     partially_signed_transaction::{
         PartiallySignedTransactionConsistencyCheck, PartiallySignedTransactionError,
         TxAdditionalInfo,
     },
     signature::inputsig::InputWitness,
-    AccountCommand, Destination, OrderAccountCommand, OrderId, SignedTransaction, Transaction,
-    TxInput, TxOutput,
 };
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, serde::Serialize)]

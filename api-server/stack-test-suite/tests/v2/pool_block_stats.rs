@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::{
-    chain::{config::create_regtest, stakelock::StakePoolData, CoinUnit, PoolId},
-    primitives::{per_thousand::PerThousand, H256},
+    chain::{CoinUnit, PoolId, config::create_regtest, stakelock::StakePoolData},
+    primitives::{H256, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 

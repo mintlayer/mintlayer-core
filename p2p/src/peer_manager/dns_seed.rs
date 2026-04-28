@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use common::chain::ChainConfig;
 use logging::log;
 use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, Rng};
+use randomness::{Rng, seq::IteratorRandom};
 
 use crate::config::P2pConfig;
 

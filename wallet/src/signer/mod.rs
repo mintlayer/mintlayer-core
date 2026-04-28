@@ -23,15 +23,15 @@ use async_trait::async_trait;
 use common::{
     address::AddressError,
     chain::{
+        ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
+        Transaction, UtxoOutPoint,
         signature::{
+            DestinationSigError,
             inputsig::{
                 arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
                 classical_multisig::multisig_partial_signature::PartiallySignedMultisigStructureError,
             },
-            DestinationSigError,
         },
-        ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
-        Transaction, UtxoOutPoint,
     },
     primitives::BlockHeight,
     primitives_converters::PrimitivesConvertersError,
@@ -41,19 +41,19 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId,
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
         PartiallySignedTransaction, PartiallySignedTransactionError, TokensAdditionalInfo,
     },
     signature_status::SignatureStatus,
-    AccountId,
 };
 
 #[cfg(feature = "ledger")]
 use crate::signer::ledger_signer::LedgerError;
 use crate::{
-    key_chain::{AccountKeyChains, KeyChainError},
     Account, WalletResult,
+    key_chain::{AccountKeyChains, KeyChainError},
 };
 
 #[cfg(any(feature = "trezor", feature = "ledger"))]

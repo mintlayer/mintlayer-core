@@ -18,6 +18,8 @@ use std::collections::BTreeMap;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        Block, ChainConfig, Currency, Destination, OrderId, SignedTransaction, Transaction,
+        TxOutput,
         block::{BlockReward, ConsensusData},
         output_value::OutputValue,
         tokens::{
@@ -25,10 +27,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenCreator, TokenId,
             TokenTotalSupply,
         },
-        Block, ChainConfig, Currency, Destination, OrderId, SignedTransaction, Transaction,
-        TxOutput,
     },
-    primitives::{amount::RpcAmountOut, Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, amount::RpcAmountOut},
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
@@ -36,7 +36,7 @@ use crypto::{
 };
 use randomness::{CryptoRng, Rng, RngExt as _};
 use test_utils::random::{gen_random_alnum_string, gen_random_bytes};
-use wallet::{signer::SignerProvider, wallet::test_helpers::scan_wallet, DefaultWallet, Wallet};
+use wallet::{DefaultWallet, Wallet, signer::SignerProvider, wallet::test_helpers::scan_wallet};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use crate::types::Balances;

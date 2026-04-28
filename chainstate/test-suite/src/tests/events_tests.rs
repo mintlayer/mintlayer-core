@@ -25,13 +25,13 @@ use chainstate::{
 };
 use chainstate_test_framework::{OrphanErrorHandler, TestChainstate, TestFramework};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
-    primitives::{id::Idable, BlockHeight, Id},
+    chain::{GenBlock, block::timestamp::BlockTimestamp},
+    primitives::{BlockHeight, Id, id::Idable},
 };
 use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 
 // TODO use EventList from helpers instead.

@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock, Genesis},
-    primitives::{id::WithId, BlockHeight, Id},
     Uint256,
+    chain::{ChainConfig, GenBlock, Genesis, block::timestamp::BlockTimestamp},
+    primitives::{BlockHeight, Id, id::WithId},
 };
 use static_assertions::assert_not_impl_any;
 

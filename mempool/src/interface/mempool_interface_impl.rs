@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use crate::{
+    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     config::MempoolConfig,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
 use chainstate::ChainstateEventTracingWrapper;
 use common::{

@@ -15,17 +15,17 @@
 
 use common::{
     chain::{
-        config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, DelegationId, Destination,
-        NetUpgrades, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        AccountNonce, AccountSpending, DelegationId, Destination, NetUpgrades, OutPointSourceId,
+        PoolId, Transaction, TxInput, TxOutput, config::ChainType, output_value::OutputValue,
+        stakelock::StakePoolData, timelock::OutputTimeLock,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Fee, Id, H256},
+    primitives::{Amount, BlockHeight, Fee, H256, Id, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     split_value,
 };
 

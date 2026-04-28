@@ -29,28 +29,26 @@ use p2p_test_utils::expect_recv;
 use p2p_types::peer_address::PeerAddress;
 use randomness::{Rng, RngExt as _};
 use test_utils::{
-    assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
     config::{NodeType, P2pConfig},
     message::AddrListResponse,
     net::{
+        ConnectivityService, NetworkingService,
         default_backend::{
-            types::{Command, Message},
             DefaultNetworkingService,
+            types::{Command, Message},
         },
         types::PeerInfo,
-        ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        addr_list_response_cache,
+        PeerManager, addr_list_response_cache,
         peerdb::{
             address_tables::table::test_utils::make_non_colliding_addresses, storage::PeerDbStorage,
         },
-        PeerManager,
     },
     protocol::ProtocolConfig,
     test_helpers::TEST_PROTOCOL_VERSION,

@@ -23,15 +23,15 @@ use std::path::PathBuf;
 use clap::Command;
 use itertools::Itertools;
 use reedline::{
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultPrompt, DefaultValidator, EditMode, Emacs, FileBackedHistory, History,
-    ListMenu, MenuBuilder, Reedline, ReedlineMenu, Signal, Vi,
+    ListMenu, MenuBuilder, Reedline, ReedlineMenu, Signal, Vi, default_emacs_keybindings,
+    default_vi_insert_keybindings, default_vi_normal_keybindings,
 };
 
 use tokio::sync::{mpsc, oneshot};
 use utils::once_destructor::OnceDestructor;
 use wallet_cli_commands::{
-    get_repl_command, parse_input, ChoiceMenu, ConsoleCommand, ManageableWalletCommand,
+    ChoiceMenu, ConsoleCommand, ManageableWalletCommand, get_repl_command, parse_input,
 };
 use wallet_rpc_lib::types::NodeInterface;
 
@@ -435,10 +435,10 @@ fn read_command(
                     reedline::KeyCode::Char('j') | reedline::KeyCode::Down
                         if end_batch < last_batch =>
                     {
-                        return Ok(PagginationCommand::Next)
+                        return Ok(PagginationCommand::Next);
                     }
                     reedline::KeyCode::Char('k') | reedline::KeyCode::Up if current_index > 0 => {
-                        return Ok(PagginationCommand::Previous)
+                        return Ok(PagginationCommand::Previous);
                     }
                     reedline::KeyCode::Char('q') | reedline::KeyCode::Esc => {
                         return Ok(PagginationCommand::Exit);

@@ -19,32 +19,32 @@ use itertools::Itertools as _;
 use rstest::rstest;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockError, ChainstateError, ConnectTransactionError,
+    BlockError, ChainstateError, ConnectTransactionError, chainstate_interface::ChainstateInterface,
 };
 use chainstate_test_framework::{
-    create_chain_config_with_staking_pool, empty_witness,
+    PoSBlockBuilder, TestFramework, TransactionBuilder, create_chain_config_with_staking_pool,
+    empty_witness,
     helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block},
-    PoSBlockBuilder, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        self,
+        self, AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination,
+        OrderAccountCommand, OrderData, OrderId, OrdersVersion, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         config::create_unit_test_config,
         make_order_id,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::input_commitments::SighashInputCommitment,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{IsTokenFreezable, TokenTotalSupply},
-        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
-        OrderData, OrderId, OrdersVersion, OutPointSourceId, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
+    primitives::{Amount, BlockHeight, H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -54,7 +54,7 @@ use logging::log;
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use tx_verifier::{
     error::{InputCheckError, ScriptError},

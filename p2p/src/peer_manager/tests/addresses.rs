@@ -20,10 +20,10 @@ use std::{
 };
 
 use rstest::rstest;
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use common::{
-    chain::{self, config, ChainConfig},
+    chain::{self, ChainConfig, config},
     primitives::user_agent::mintlayer_core_user_agent,
 };
 use logging::log;
@@ -40,37 +40,35 @@ use p2p_types::{
 };
 use randomness::{Rng, RngExt as _};
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
+    PeerManagerEvent,
     config::{NodeType, P2pConfig},
     error::{DialError, P2pError},
     message::{AddrListRequest, AnnounceAddrRequest, PeerManagerMessage},
     net::{
+        ConnectivityService, NetworkingService,
         default_backend::{
-            types::{CategorizedMessage, Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
+            types::{CategorizedMessage, Command, Message},
         },
         types::{ConnectivityEvent, PeerInfo},
-        ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        self,
+        self, DNS_SEED_QUERY_INTERVAL, OutboundConnectType, PeerManager,
         tests::{
             make_peer_manager_custom,
             utils::{cmd_to_peer_man_msg, expect_cmd_connect_to, make_full_relay_peer_info},
         },
-        OutboundConnectType, PeerManager, DNS_SEED_QUERY_INTERVAL,
     },
-    test_helpers::{peerdb_inmemory_store, test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, peerdb_inmemory_store, test_p2p_config},
     tests::helpers::TestDnsSeed,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 fn get_new_discoverable_address(rng: &mut impl Rng) -> PeerAddress {

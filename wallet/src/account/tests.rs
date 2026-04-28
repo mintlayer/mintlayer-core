@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use super::*;
-use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
+use crate::key_chain::{LOOKAHEAD_SIZE, MasterKeyChain};
 use common::chain::config::create_regtest;
 use crypto::key::hdkd::child_number::ChildNumber;
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
+use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::seed_phrase::StoreSeedPhrase;
-use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";

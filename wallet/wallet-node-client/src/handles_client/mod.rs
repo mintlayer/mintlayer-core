@@ -25,23 +25,23 @@ use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    event::MempoolEvent, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate,
-    MempoolHandle,
+    FeeRate, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
+    tx_options::TxOptionsOverrides,
 };
 use p2p::{
+    P2pHandle,
     error::P2pError,
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
-    P2pHandle,
 };
 use serialization::hex::HexError;
 use utils::app_version_with_git_info;

@@ -22,26 +22,25 @@ use chainstate_types::{
 };
 use common::{
     chain::{Block, ChainConfig, GenBlock, GenBlockId},
-    primitives::{id::WithId, Id},
+    primitives::{Id, id::WithId},
 };
 use orders_accounting::OrdersAccountingDB;
 use pos_accounting::PoSAccountingDB;
 use thiserror::Error;
 use tokens_accounting::TokensAccountingDB;
 use tx_verifier::{
-    error::ConnectTransactionError, flush_to_storage,
-    transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
-    TransactionVerifierStorageError,
+    TransactionVerifier, TransactionVerifierStorageError, error::ConnectTransactionError,
+    flush_to_storage, transaction_verifier::TransactionVerifierDelta,
 };
 use utils::{ensure, log_error, tap_log::TapLog};
 use utxo::UtxosDB;
 
 use crate::{
-    ban_score::BanScore, calculate_median_time_past, BlockProcessingErrorClass,
-    BlockProcessingErrorClassification, TransactionVerificationStrategy,
+    BlockProcessingErrorClass, BlockProcessingErrorClassification, TransactionVerificationStrategy,
+    ban_score::BanScore, calculate_median_time_past,
 };
 
-use super::{epoch_seal, ChainstateRef, EpochSealError};
+use super::{ChainstateRef, EpochSealError, epoch_seal};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
     /// Disconnect all blocks from mainchain until the first mainchain ancestor of

@@ -21,9 +21,9 @@ use futures::future::BoxFuture;
 use super::wrapped_listener::AdaptedListener;
 
 use crate::{
-    transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
-    types::ConnectionDirection,
     Result,
+    transport::{TransportSocket, impls::stream_adapter::traits::StreamAdapter},
+    types::ConnectionDirection,
 };
 
 /// Transport layer that wraps a lower-level transport layer (can be seen like an onion with multiple layer)

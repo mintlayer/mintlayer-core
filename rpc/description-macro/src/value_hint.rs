@@ -91,7 +91,7 @@ impl SerdeAttributes {
             },
             (None, Some(span)) => EnumTag::None(span),
             (Some(_), Some(span)) => {
-                return Err(syn::Error::new(span, "Conflicting tag specifiers"))
+                return Err(syn::Error::new(span, "Conflicting tag specifiers"));
             }
         };
 

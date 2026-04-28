@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, GenBlock},
+    chain::{Block, GenBlock, block::timestamp::BlockTimestamp},
     primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};

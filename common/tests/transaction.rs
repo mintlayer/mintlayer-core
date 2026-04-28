@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::DelegationId;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signed_transaction::SignedTransaction;
-use common::chain::DelegationId;
 use common::chain::{output_value::OutputValue, transaction::*};
-use common::primitives::{Amount, Id, Idable, H256};
+use common::primitives::{Amount, H256, Id, Idable};
 use expect_test::expect;
 
 #[test]

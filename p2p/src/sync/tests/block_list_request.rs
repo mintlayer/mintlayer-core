@@ -15,24 +15,24 @@
 
 use std::{iter, sync::Arc};
 
-use chainstate::{ban_score::BanScore, BlockSource};
+use chainstate::{BlockSource, ban_score::BanScore};
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::create_unit_test_config, Block},
+    chain::{Block, config::create_unit_test_config},
     primitives::{Id, Idable},
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
 use randomness::RngExt;
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, random::Seed};
 
 use crate::{
+    P2pError,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage},
-    sync::tests::helpers::{make_new_blocks, TestNode},
+    sync::tests::helpers::{TestNode, make_new_blocks},
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pError,
 };
 
 #[tracing::instrument(skip(seed))]

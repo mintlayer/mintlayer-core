@@ -20,7 +20,7 @@ use crate::{
         block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
         signed_transaction::SignedTransaction,
     },
-    primitives::{id::Idable, Id, H256},
+    primitives::{H256, Id, id::Idable},
 };
 
 use super::{

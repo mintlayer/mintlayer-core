@@ -15,7 +15,7 @@
 
 use num_traits::{One, Zero};
 use std::{
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 

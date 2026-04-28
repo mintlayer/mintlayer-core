@@ -16,7 +16,7 @@
 use itertools::Itertools;
 use proc_macro::{self, TokenStream};
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 #[proc_macro_derive(TypeName)]
 pub fn derive(input: TokenStream) -> TokenStream {

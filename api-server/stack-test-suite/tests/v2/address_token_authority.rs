@@ -16,9 +16,8 @@
 use std::borrow::Cow;
 
 use common::chain::{
-    make_token_id,
+    AccountNonce, make_token_id,
     tokens::{IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
-    AccountNonce,
 };
 
 use crate::DummyRPC;

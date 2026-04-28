@@ -17,10 +17,10 @@ use utils::ensure;
 
 use crate::{
     chain::{
-        signature::{sighash::sighashtype, DestinationSigError},
         TxInput, TxOutput,
+        signature::{DestinationSigError, sighash::sighashtype},
     },
-    primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
+    primitives::id::{DefaultHashAlgoStream, hash_encoded_to},
 };
 
 use super::SighashInputCommitment;
@@ -137,17 +137,17 @@ mod tests {
 
     use crypto::hash::StreamHasher;
     use randomness::{CryptoRng, Rng, RngExt as _};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{
         chain::{
+            OutPointSourceId,
             signature::{
-                sighash::{sighashtype::SigHashType, SighashInputCommitment},
+                sighash::{SighashInputCommitment, sighashtype::SigHashType},
                 tests::utils::{generate_input_commitments, generate_inputs_utxos, sig_hash_types},
             },
-            OutPointSourceId,
         },
-        primitives::{Id, H256},
+        primitives::{H256, Id},
     };
 
     use super::*;
@@ -194,14 +194,16 @@ mod tests {
             let index_to_hash = rng.random_range(0..inputs.len());
 
             // Invalid input index
-            assert!(hashable_inputs
-                .signature_hash(
-                    &mut stream,
-                    SigHashType::all(),
-                    &inputs[index_to_hash],
-                    index_to_hash,
-                )
-                .is_ok());
+            assert!(
+                hashable_inputs
+                    .signature_hash(
+                        &mut stream,
+                        SigHashType::all(),
+                        &inputs[index_to_hash],
+                        index_to_hash,
+                    )
+                    .is_ok()
+            );
 
             // Valid case
             assert_eq!(

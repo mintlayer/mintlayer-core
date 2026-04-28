@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use super::{
-    signature::{inputsig::InputWitness, Signable, Transactable},
     Transaction, TransactionSize, TxOutput,
+    signature::{Signable, Transactable, inputsig::InputWitness},
 };
 use crate::{
     chain::{
-        output_value::OutputValue, output_values_holder::OutputValuesHolder,
-        TransactionCreationError, TxInput,
+        TransactionCreationError, TxInput, output_value::OutputValue,
+        output_values_holder::OutputValuesHolder,
     },
     primitives::id::{self, H256},
 };
@@ -150,14 +150,14 @@ impl OutputValuesHolder for SignedTransaction {
 mod tests {
     use crate::primitives::Amount;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
+    use test_utils::random::{RngExt as _, Seed, make_seedable_rng};
 
     use super::*;
 
-    use crate::chain::output_value::OutputValue;
     use crate::chain::TxInput;
-    use crate::primitives::id::Id;
+    use crate::chain::output_value::OutputValue;
     use crate::primitives::H256;
+    use crate::primitives::id::Id;
 
     #[test]
     fn require_inputs_witnesses_same_size() {
@@ -193,14 +193,16 @@ mod tests {
         }
         {
             let tx = Transaction::new(0x00, ins1, vec![]).unwrap();
-            assert!(SignedTransaction::new(
-                tx.clone(),
-                vec![
-                    InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
-                    InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
-                ],
-            )
-            .is_ok());
+            assert!(
+                SignedTransaction::new(
+                    tx.clone(),
+                    vec![
+                        InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
+                        InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
+                    ],
+                )
+                .is_ok()
+            );
             assert_eq!(
                 SignedTransaction::new(
                     tx.clone(),

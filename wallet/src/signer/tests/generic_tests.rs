@@ -19,19 +19,23 @@ use std::{
     sync::Arc,
 };
 
-use itertools::{izip, Itertools as _};
+use itertools::{Itertools as _, izip};
 
 use common::{
     chain::{
-        self,
+        self, AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, Currency, DelegationId, Destination, GenBlock, NetUpgrades,
+        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::{create_regtest, ChainType},
+        config::{ChainType, create_regtest},
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::{
-            inputsig::arbitrary_message::produce_message_challenge, DestinationSigError,
-            Transactable,
+            DestinationSigError, Transactable,
+            inputsig::arbitrary_message::produce_message_challenge,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -39,16 +43,11 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
-        ChainstateUpgradeBuilder, Currency, DelegationId, Destination, GenBlock, NetUpgrades,
-        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
-        SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
-    key::{hdkd::u31::U31, KeyKind, PrivateKey},
+    key::{KeyKind, PrivateKey, hdkd::u31::U31},
     vrf::VRFPrivateKey,
 };
 use logging::log;
@@ -61,19 +60,19 @@ use test_utils::{
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
+    BlockInfo, KeyPurpose,
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
         OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
         TokensAdditionalInfo,
     },
-    BlockInfo, KeyPurpose,
 };
 
 use crate::{
+    Account, SendRequest,
     account::PoolData,
     key_chain::AccountKeyChains,
-    signer::{tests::account_from_mnemonic, Signer, SignerError},
-    Account, SendRequest,
+    signer::{Signer, SignerError, tests::account_from_mnemonic},
 };
 
 #[derive(Debug)]

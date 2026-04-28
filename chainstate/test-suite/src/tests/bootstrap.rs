@@ -23,18 +23,18 @@ use rstest::rstest;
 use strum::IntoEnumIterator;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BootstrapError, ChainstateConfig, ChainstateError,
+    BootstrapError, ChainstateConfig, ChainstateError, chainstate_interface::ChainstateInterface,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{self, config::ChainType, Block, ChainConfig, Destination, NetUpgrades},
+    chain::{self, Block, ChainConfig, Destination, NetUpgrades, config::ChainType},
     primitives::{Id, Idable},
 };
 use logging::log;
-use randomness::{seq::IteratorRandom as _, CryptoRng, RngExt as _};
+use randomness::{CryptoRng, RngExt as _, seq::IteratorRandom as _};
 use serialization::Encode as _;
-use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
+use test_utils::random::{Seed, gen_random_bytes, make_seedable_rng};
 
 /// Ensure that the blocks vector put blocks in order with height in the blockchain
 fn check_height_order(blocks: &[Id<Block>], tf: &TestFramework) {

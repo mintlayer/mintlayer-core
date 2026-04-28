@@ -20,24 +20,24 @@ use chainstate::{
     IOPolicyError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
-    get_output_value, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address,
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
 };
 use chainstate_types::TipStorageTag;
 use common::{
     chain::{
+        AccountCommand, AccountNonce, Destination, GenBlock, OutPointSourceId, PoolId,
+        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::TokenIssuance,
-        AccountCommand, AccountNonce, Destination, GenBlock, OutPointSourceId, PoolId,
-        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -46,7 +46,7 @@ use crypto::{
 use pos_accounting::PoSAccountingStorageRead;
 use randomness::RngExt;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_token_issuance_v1,
 };
 use tx_verifier::error::{InputCheckError, ScriptError};

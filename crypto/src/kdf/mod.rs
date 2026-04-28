@@ -178,7 +178,7 @@ pub fn verify_password(
 #[cfg(test)]
 pub mod test {
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 
@@ -214,26 +214,32 @@ pub mod test {
         assert!(
             verify_password(password, &password_hash, SliceEqualityCheckMethod::Normal).unwrap()
         );
-        assert!(verify_password(
-            password,
-            &password_hash,
-            SliceEqualityCheckMethod::TimingResistant
-        )
-        .unwrap());
+        assert!(
+            verify_password(
+                password,
+                &password_hash,
+                SliceEqualityCheckMethod::TimingResistant
+            )
+            .unwrap()
+        );
 
         let wrong_password = b"RandomWrong____password?";
-        assert!(!verify_password(
-            wrong_password,
-            &password_hash,
-            SliceEqualityCheckMethod::Normal
-        )
-        .unwrap());
-        assert!(!verify_password(
-            wrong_password,
-            &password_hash,
-            SliceEqualityCheckMethod::TimingResistant
-        )
-        .unwrap());
+        assert!(
+            !verify_password(
+                wrong_password,
+                &password_hash,
+                SliceEqualityCheckMethod::Normal
+            )
+            .unwrap()
+        );
+        assert!(
+            !verify_password(
+                wrong_password,
+                &password_hash,
+                SliceEqualityCheckMethod::TimingResistant
+            )
+            .unwrap()
+        );
     }
 
     #[rstest]
@@ -256,12 +262,14 @@ pub mod test {
         assert!(
             verify_password(password, &password_hash, SliceEqualityCheckMethod::Normal).unwrap()
         );
-        assert!(verify_password(
-            password,
-            &password_hash,
-            SliceEqualityCheckMethod::TimingResistant
-        )
-        .unwrap());
+        assert!(
+            verify_password(
+                password,
+                &password_hash,
+                SliceEqualityCheckMethod::TimingResistant
+            )
+            .unwrap()
+        );
 
         let challenge = password_hash.into_challenge();
 

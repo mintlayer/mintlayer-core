@@ -19,17 +19,17 @@ use itertools::Itertools;
 
 use common::{
     chain::{
-        output_value::OutputValue, Destination, GenBlock, OutPointSourceId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        Destination, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{seq, CryptoRng, Rng, RngExt as _};
+use randomness::{CryptoRng, Rng, RngExt as _, seq};
 
 use crate::{
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     Utxo, UtxosCache, UtxosView,
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
 };
 struct EmptyUtxosView {
     best_block_hash: Id<GenBlock>,

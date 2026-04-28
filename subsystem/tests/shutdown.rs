@@ -18,7 +18,7 @@
 use std::{sync::Arc, time::Duration};
 
 use subsystem::wrappers;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{Mutex, watch};
 use utils::{set_flag::SetFlag, tokio_spawn};
 
 // A subsystem that blocks the shutdown process.

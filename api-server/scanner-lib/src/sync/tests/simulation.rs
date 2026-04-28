@@ -29,21 +29,21 @@ use api_server_common::storage::{
     },
 };
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateConfig};
+use chainstate::{BlockSource, ChainstateConfig, chainstate_interface::ChainstateInterface};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        ChainstateUpgradeBuilder, ConsensusUpgrade, DelegationId, Destination, GenBlockId,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
         make_delegation_id, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
         tokens::{IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
-        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig,
-        ChainstateUpgradeBuilder, ConsensusUpgrade, DelegationId, Destination, GenBlockId,
-        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
-        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
+    primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, H256, Idable},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use crypto::{
@@ -54,7 +54,7 @@ use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingV
 use pos_accounting::PoSAccountingView;
 use randomness::RngExt as _;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tokens_accounting::TokensAccountingView;
 
 struct PoSAccountingAdapterToCheckFees<'a> {

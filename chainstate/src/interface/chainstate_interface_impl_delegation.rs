@@ -23,11 +23,11 @@ use std::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
-        config::ChainConfig,
-        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, Currency, DelegationId, GenBlock, OrderId, PoolId,
         RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
+        block::{BlockReward, signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
+        config::ChainConfig,
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -38,8 +38,8 @@ use utils_networking::broadcaster;
 use utxo::Utxo;
 
 use crate::{
-    chainstate_interface::ChainstateInterface, BlockSource, ChainInfo, ChainstateConfig,
-    ChainstateError, ChainstateEvent, NonZeroPoolBalances,
+    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    NonZeroPoolBalances, chainstate_interface::ChainstateInterface,
 };
 
 impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
@@ -460,14 +460,14 @@ mod tests {
 
     use chainstate_storage::inmemory::Store;
     use common::{
-        chain::{config::create_unit_test_config, ChainConfig},
+        chain::{ChainConfig, config::create_unit_test_config},
         primitives::BlockHeight,
         time_getter::TimeGetter,
     };
 
     use crate::{
-        chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
-        DefaultTransactionVerificationStrategy,
+        ChainstateConfig, DefaultTransactionVerificationStrategy,
+        chainstate_interface::ChainstateInterface, make_chainstate,
     };
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {

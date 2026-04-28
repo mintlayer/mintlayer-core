@@ -24,13 +24,13 @@ mod view;
 pub use crate::{
     cache::{ConsumedUtxoCache, UtxosCache},
     error::Error,
-    storage::{in_memory::UtxosDBInMemoryImpl, UtxosDB, UtxosStorageRead, UtxosStorageWrite},
+    storage::{UtxosDB, UtxosStorageRead, UtxosStorageWrite, in_memory::UtxosDBInMemoryImpl},
     undo::{
         ConsumedUtxosBlockUndo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError,
         UtxosTxUndo, UtxosTxUndoWithSources,
     },
     utxo::{Utxo, UtxoSource},
-    view::{flush_to_base, FlushableUtxoView, UtxosView},
+    view::{FlushableUtxoView, UtxosView, flush_to_base},
 };
 
 #[cfg(test)]

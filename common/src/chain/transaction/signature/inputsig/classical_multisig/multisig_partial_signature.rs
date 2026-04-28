@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::chain::{
-    classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
     ChainConfig,
+    classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
 };
 
 use super::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
@@ -155,7 +155,7 @@ mod tests {
     use crypto::key::{KeyKind, PrivateKey, Signature};
     use randomness::{CryptoRng, IndexedMutRandom as _, Rng, RngExt as _, SliceRandom};
     use serialization::{DecodeAll, Encode};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{chain::config::create_mainnet, primitives::H256};
 

@@ -16,8 +16,8 @@
 use chainstate::Locator;
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, Block},
         SignedTransaction, Transaction,
+        block::{Block, signed_block_header::SignedBlockHeader},
     },
     primitives::Id,
 };

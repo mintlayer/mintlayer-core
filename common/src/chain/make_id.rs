@@ -35,13 +35,13 @@
 use crypto::hash::StreamHasher as _;
 
 use crate::primitives::{
-    id::{hash_encoded, hash_encoded_to, DefaultHashAlgoStream},
     BlockHeight,
+    id::{DefaultHashAlgoStream, hash_encoded, hash_encoded_to},
 };
 
 use super::{
-    tokens::TokenId, ChainConfig, DelegationId, OrderId, PoolId, TokenIdGenerationVersion, TxInput,
-    UtxoOutPoint,
+    ChainConfig, DelegationId, OrderId, PoolId, TokenIdGenerationVersion, TxInput, UtxoOutPoint,
+    tokens::TokenId,
 };
 
 pub fn make_pool_id(inputs: &[TxInput]) -> Result<PoolId, IdCreationError> {
@@ -172,8 +172,8 @@ mod tests {
 
     use crate::{
         chain::{
-            config, AccountNonce, AccountOutPoint, AccountSpending, ChainstateUpgradeBuilder,
-            NetUpgrades, OutPointSourceId, TokenIdGenerationVersion, TxInput, UtxoOutPoint,
+            AccountNonce, AccountOutPoint, AccountSpending, ChainstateUpgradeBuilder, NetUpgrades,
+            OutPointSourceId, TokenIdGenerationVersion, TxInput, UtxoOutPoint, config,
         },
         primitives::{Amount, BlockHeight, Id},
     };

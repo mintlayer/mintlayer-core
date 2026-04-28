@@ -17,9 +17,9 @@
 use iced::widget::Component;
 
 use iced::{
-    alignment::Horizontal,
-    widget::{self, container, text, text_input, Button, Text},
     Element, Length, Theme,
+    alignment::Horizontal,
+    widget::{self, Button, Text, container, text, text_input},
 };
 use iced_aw::Card;
 

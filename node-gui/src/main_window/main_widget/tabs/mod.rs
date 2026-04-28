@@ -18,9 +18,9 @@ use iced_aw::{TabLabel, Tabs};
 use strum::EnumCount;
 use wallet_types::wallet_type::WalletType;
 
-use node_gui_backend::{messages::WalletId, BackendSender};
+use node_gui_backend::{BackendSender, messages::WalletId};
 
-use crate::{main_window::NodeState, WalletMode};
+use crate::{WalletMode, main_window::NodeState};
 
 use self::{
     cold_wallet::ColdWalletTab,

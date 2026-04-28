@@ -89,11 +89,7 @@ mod test_log_error_trait_helpers {
     use super::*;
 
     pub fn failing_func(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 }
 
@@ -216,20 +212,12 @@ mod test_log_error_macro_non_async_funcs_helpers {
 
     #[log_error]
     pub fn func_returns_unit(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error]
     pub fn func_returns_i32(fail: bool) -> Result<i32, SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(42)
-        }
+        if fail { Err(SeriousError) } else { Ok(42) }
     }
 
     #[log_error]
@@ -243,11 +231,7 @@ mod test_log_error_macro_non_async_funcs_helpers {
 
     #[log_error]
     pub fn nested_funcs_innermost(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     pub const INNERMOST_FUNC_CALL_LINE: u32 = line!() + 4;
@@ -267,112 +251,64 @@ mod test_log_error_macro_non_async_funcs_helpers {
     #[log_error]
     #[tracing::instrument]
     pub fn func_with_tracing_instrument_inner(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     // Same as func_with_tracing_instrument_inner, but here the call to tracing::instrument comes first.
     #[tracing::instrument]
     #[log_error]
     pub fn func_with_tracing_instrument_outer(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "trace")]
     pub fn func_log_level_trace1(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "tRaCe")]
     pub fn func_log_level_trace2(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "debug")]
     pub fn func_log_level_debug1(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "dEbUg")]
     pub fn func_log_level_debug2(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "info")]
     pub fn func_log_level_info1(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "iNfO")]
     pub fn func_log_level_info2(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "warn")]
     pub fn func_log_level_warn1(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "wArN")]
     pub fn func_log_level_warn2(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "error")]
     pub fn func_log_level_error1(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error(level = "eRrOr")]
     pub fn func_log_level_error2(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 }
 
@@ -514,20 +450,12 @@ mod test_log_error_macro_async_funcs_helpers {
 
     #[log_error]
     pub async fn func_returns_unit(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error]
     pub async fn func_returns_i32(fail: bool) -> Result<i32, SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(42)
-        }
+        if fail { Err(SeriousError) } else { Ok(42) }
     }
 
     #[log_error]
@@ -541,11 +469,7 @@ mod test_log_error_macro_async_funcs_helpers {
 
     #[log_error]
     pub async fn nested_funcs_innermost(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     pub const INNERMOST_FUNC_CALL_LINE: u32 = line!() + 4;
@@ -577,32 +501,20 @@ mod test_log_error_macro_async_funcs_helpers {
 
     #[log_error(level = "trace")]
     pub async fn func_log_level_trace(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     #[log_error]
     #[tracing::instrument]
     pub async fn func_with_tracing_instrument_inner(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     // Same as func_with_tracing_instrument_inner, but here the call to tracing::instrument comes first.
     #[tracing::instrument]
     #[log_error]
     pub async fn func_with_tracing_instrument_outer(fail: bool) -> Result<(), SeriousError> {
-        if fail {
-            Err(SeriousError)
-        } else {
-            Ok(())
-        }
+        if fail { Err(SeriousError) } else { Ok(()) }
     }
 
     // Note: for CapturesLifetime cases, `mut self` is important.
@@ -613,11 +525,7 @@ mod test_log_error_macro_async_funcs_helpers {
         pub async fn func(&mut self, fail: bool) -> Result<(), SeriousError> {
             let _ = self.0.to_owned();
 
-            if fail {
-                Err(SeriousError)
-            } else {
-                Ok(())
-            }
+            if fail { Err(SeriousError) } else { Ok(()) }
         }
     }
 
@@ -629,11 +537,7 @@ mod test_log_error_macro_async_funcs_helpers {
             let _ = self.0.to_owned();
             let _ = self.1.to_owned();
 
-            if fail {
-                Err(SeriousError)
-            } else {
-                Ok(())
-            }
+            if fail { Err(SeriousError) } else { Ok(()) }
         }
     }
 }
@@ -853,8 +757,8 @@ mod log_output {
     };
 
     use logging::{
-        init_logging_generic, write_to_make_writer, LogStyle, ValueOrEnvVar,
-        ValueOrEnvVarWithDefault, WriterSettings,
+        LogStyle, ValueOrEnvVar, ValueOrEnvVarWithDefault, WriterSettings, init_logging_generic,
+        write_to_make_writer,
     };
 
     #[derive(Clone)]

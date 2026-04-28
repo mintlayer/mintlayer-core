@@ -16,12 +16,12 @@
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{signature::inputsig::InputWitness, GenBlock, Genesis},
+    chain::{GenBlock, Genesis, signature::inputsig::InputWitness},
     primitives::{BlockHeight, Id},
 };
 use randomness::RngExt as _;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 mod basic_tests;
 mod block_invalidation;

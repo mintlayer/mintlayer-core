@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{detail::job_manager::JobKey, BlockProductionError, TimestampSearchData};
+use crate::{BlockProductionError, TimestampSearchData, detail::job_manager::JobKey};
 use common::{
     chain::{Block, PoolId, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},

@@ -19,8 +19,8 @@ mod error;
 
 use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use api_web_server::{
-    api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState, CachedValues,
-    TxSubmitClient,
+    ApiServerWebServerState, CachedValues, TxSubmitClient, api::web_server,
+    config::ApiServerWebServerConfig,
 };
 use clap::Parser;
 use common::{
@@ -78,7 +78,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
             _ => {
                 return Err(ApiServerWebServerInitError::InvalidConfig(
                     "Invalid RPC cookie/username/password combination".to_owned(),
-                ))
+                ));
             }
         };
         let default_rpc_bind_address =

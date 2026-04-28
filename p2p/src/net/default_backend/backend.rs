@@ -19,12 +19,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
+use futures::{FutureExt, future::BoxFuture, never::Never, stream::FuturesUnordered};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
-use tokio_stream::{wrappers::ReceiverStream, StreamExt, StreamMap};
+use tokio_stream::{StreamExt, StreamMap, wrappers::ReceiverStream};
 
 use common::{
     chain::ChainConfig,
@@ -34,13 +34,14 @@ use common::{
 use logging::log;
 use networking::transport::{ConnectedSocketInfo, TransportListener, TransportSocket};
 use p2p_types::socket_address::SocketAddress;
-use randomness::{make_pseudo_rng, RngExt as _};
+use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
     shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
 };
 
 use crate::{
+    P2pEvent, P2pEventHandler,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError, PeerError},
@@ -50,17 +51,16 @@ use crate::{
             types::{BackendEvent, BackendObserver, Command, PeerEvent},
         },
         types::{
-            services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent,
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent, services::Services,
         },
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
-    P2pEvent, P2pEventHandler,
 };
 
 use super::{
     peer::ConnectionInfo,
-    types::{peer_event, HandshakeNonce, Message},
+    types::{HandshakeNonce, Message, peer_event},
 };
 
 /// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.

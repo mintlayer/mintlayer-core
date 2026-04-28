@@ -24,15 +24,15 @@ use futures::stream::Stream;
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
+use mempool::{FeeRate, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides};
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -144,7 +144,7 @@ pub trait NodeInterface {
     async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error>;
     async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
     async fn p2p_remove_reserved_node(&self, address: IpOrSocketAddress)
-        -> Result<(), Self::Error>;
+    -> Result<(), Self::Error>;
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;

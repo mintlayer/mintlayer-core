@@ -19,34 +19,34 @@ use rstest::rstest;
 
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        self,
+        self, ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         config::ChainType,
         output_value::OutputValue,
         signature::{
+            DestinationSigError,
             inputsig::{
+                InputWitness,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                standard_signature::StandardInputSignature, InputWitness,
+                standard_signature::StandardInputSignature,
             },
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
-        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{RngExt as _, SliceRandom};
 use serialization::Encode;
-use test_utils::random::{gen_random_bytes, Seed};
+use test_utils::random::{Seed, gen_random_bytes};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 #[rstest]

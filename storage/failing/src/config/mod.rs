@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use storage_core::{error::Recoverable as StorageError, DbMapId};
+use storage_core::{DbMapId, error::Recoverable as StorageError};
 use test_utils::random::{IteratorRandom, Rng, RngExt as _};
 use utils::ensure;
 

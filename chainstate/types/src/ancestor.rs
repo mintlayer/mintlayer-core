@@ -21,8 +21,8 @@ use common::{
 };
 
 use crate::{
-    get_skip_height, storage_result, BlockIndexHandle, GenBlockIndex, GetAncestorError,
-    PropertyQueryError,
+    BlockIndexHandle, GenBlockIndex, GetAncestorError, PropertyQueryError, get_skip_height,
+    storage_result,
 };
 
 pub enum AncestorGetterStartingPoint<'a> {

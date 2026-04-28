@@ -16,14 +16,15 @@
 use accounting::combine_amount_delta;
 use common::{
     chain::{
-        tokens::{IsTokenUnfreezable, TokenId, TokenTotalSupply},
         Destination,
+        tokens::{IsTokenUnfreezable, TokenId, TokenTotalSupply},
     },
     primitives::Amount,
 };
 use logging::log;
 
 use crate::{
+    FlushableTokensAccountingView,
     data::{TokenData, TokensAccountingDeltaData},
     error::Error,
     operations::{
@@ -32,7 +33,6 @@ use crate::{
         UnfreezeTokenUndo, UnmintTokenUndo,
     },
     view::TokensAccountingView,
-    FlushableTokensAccountingView,
 };
 
 pub struct TokensAccountingCache<P> {

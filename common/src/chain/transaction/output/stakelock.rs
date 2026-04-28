@@ -16,7 +16,7 @@
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
-use crate::primitives::{per_thousand::PerThousand, Amount};
+use crate::primitives::{Amount, per_thousand::PerThousand};
 
 use super::Destination;
 

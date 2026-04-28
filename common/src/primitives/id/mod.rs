@@ -20,7 +20,7 @@ mod with_id;
 
 use std::fmt::{Debug, Display, LowerHex, UpperHex};
 
-use generic_array::{typenum, GenericArray};
+use generic_array::{GenericArray, typenum};
 use ref_cast::RefCast;
 
 use crypto::hash::StreamHasher;
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn hashes_stream_and_msg_identical() {
-        use randomness::{make_pseudo_rng, RngExt as _};
+        use randomness::{RngExt as _, make_pseudo_rng};
         let random_bytes = make_pseudo_rng().random::<[u8; H256::len_bytes()]>();
 
         let h1 = default_hash(random_bytes);

@@ -29,29 +29,29 @@ use networking::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
+    PeerManagerEvent,
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
     net::{
-        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
-        types::{PeerInfo, PeerRole},
         ConnectivityService, NetworkingService,
+        default_backend::{ConnectivityHandle, DefaultNetworkingService, types::Command},
+        types::{PeerInfo, PeerRole},
     },
     peer_manager::{
-        peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
+        PeerManager,
+        peerdb::{CURRENT_STORAGE_VERSION, salt::Salt, storage::PeerDbStorageWrite},
         peerdb_common::storage::{TransactionRw, Transactional},
         tests::{make_peer_manager, make_peer_manager_custom},
-        PeerManager,
     },
-    test_helpers::{connect_services, peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, connect_services, peerdb_inmemory_store},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig {

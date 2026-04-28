@@ -13,19 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::output_value::OutputValue;
 use common::chain::UtxoOutPoint;
+use common::chain::output_value::OutputValue;
 use common::primitives::H256;
 
 // Re-export various testing utils from other crates
 pub use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, CryptoRng, RngExt as _, Seed},
+    random::{CryptoRng, RngExt as _, Seed, make_seedable_rng},
 };
 
 pub use memory_usage_estimator::StoreMemoryUsageEstimator;

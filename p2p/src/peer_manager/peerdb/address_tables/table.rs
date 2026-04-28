@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{BTreeMap, btree_map};
 
 use p2p_types::socket_address::SocketAddress;
 use utils::array_2d::Array2d;
@@ -259,7 +259,7 @@ impl Table {
 #[cfg(test)]
 pub mod test_utils {
     use std::{
-        collections::{btree_map::Entry, BTreeSet},
+        collections::{BTreeSet, btree_map::Entry},
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     };
 
@@ -383,7 +383,7 @@ pub mod test_utils {
 mod tests {
     use rstest::rstest;
 
-    use ::test_utils::random::{make_seedable_rng, Seed};
+    use ::test_utils::random::{Seed, make_seedable_rng};
 
     use super::{test_utils::*, *};
 

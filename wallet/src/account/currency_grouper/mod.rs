@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use crate::{
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError, WalletResult,
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
 };
 
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{output_value::OutputValue, ChainConfig, Currency, Destination, TxOutput},
+    chain::{ChainConfig, Currency, Destination, TxOutput, output_value::OutputValue},
     primitives::{Amount, BlockHeight},
 };
 
@@ -53,7 +53,7 @@ pub fn group_outputs<T, Grouped: Clone>(
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
-                )))
+                )));
             }
             TxOutput::CreateOrder(data) => data.give().clone(),
         };
@@ -110,7 +110,7 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
-                )))
+                )));
             }
             TxOutput::CreateOrder(data) => data.give().clone(),
         };
@@ -141,7 +141,7 @@ fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoS
                 OutputValue::TokenV0(_) => {
                     return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                         output.clone(),
-                    )))
+                    )));
                 }
                 OutputValue::TokenV1(token_id, output_amount) => {
                     (Currency::Token(*token_id), *output_amount)
@@ -160,7 +160,7 @@ fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoS
         | TxOutput::CreateOrder(_) => {
             return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                 output.clone(),
-            )))
+            )));
         }
     };
     Ok(value)

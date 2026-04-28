@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use generic_array::{sequence::Split, typenum::U32, GenericArray};
+use generic_array::{GenericArray, sequence::Split, typenum::U32};
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use zeroize::Zeroize;
 
 use crate::key::hdkd::{
-    chain_code::{ChainCode, CHAINCODE_LENGTH},
+    chain_code::{CHAINCODE_LENGTH, ChainCode},
     derivable::DerivationError,
 };
 
@@ -60,7 +60,7 @@ mod test {
     use super::*;
     use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     #[rstest]
     #[trace]

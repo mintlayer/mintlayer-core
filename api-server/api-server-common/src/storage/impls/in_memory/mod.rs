@@ -27,19 +27,19 @@ use itertools::Itertools as _;
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{NftIssuance, TokenId},
         Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        tokens::{NftIssuance, TokenId},
     },
-    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, id::WithId},
 };
 
 use crate::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
     AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
     FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
     TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
 
 use super::CURRENT_STORAGE_VERSION;

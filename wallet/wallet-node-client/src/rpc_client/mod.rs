@@ -21,10 +21,10 @@ use std::sync::Arc;
 use common::address::AddressError;
 use common::chain::ChainConfig;
 use common::primitives::per_thousand::PerThousandParseError;
-use rpc::new_ws_client;
 use rpc::ClientError;
 use rpc::RpcAuthData;
 use rpc::RpcWsClient;
+use rpc::new_ws_client;
 
 use crate::node_traits::NodeInterface;
 

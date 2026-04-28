@@ -14,9 +14,8 @@
 // limitations under the License.
 
 use bech32::{
-    self,
+    self, DecodeError, EncodeError,
     primitives::{decode::CheckedHrpstringError, hrp},
-    DecodeError, EncodeError,
 };
 
 #[derive(thiserror::Error, PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]

@@ -16,8 +16,8 @@
 use storage::raw;
 
 use crate::{
-    schema::Schema, TransactionRwUnlocked, Transactional, WalletStorageEncryptionRead,
-    WalletStorageEncryptionWrite,
+    TransactionRwUnlocked, Transactional, WalletStorageEncryptionRead,
+    WalletStorageEncryptionWrite, schema::Schema,
 };
 
 mod password;

@@ -20,16 +20,20 @@ mod utxo_selector;
 
 use std::{
     cmp::Reverse,
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     ops::{Add, Sub},
     sync::Arc,
 };
 
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address, RpcAddress},
+    Uint256,
+    address::{Address, RpcAddress, pubkeyhash::PublicKeyHash},
     chain::{
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
+        Currency, DelegationId, Destination, GenBlock, OrderAccountCommand, OrderId, OrdersVersion,
+        PoolId, RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
@@ -40,27 +44,23 @@ use common::{
             IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
             TokenIssuance,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, Block, ChainConfig,
-        Currency, DelegationId, Destination, GenBlock, OrderAccountCommand, OrderId, OrdersVersion,
-        PoolId, RpcOrderInfo, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        id::{Idable, WithId, H256},
         Amount, BlockHeight, Id,
+        id::{H256, Idable, WithId},
     },
     size_estimation::{
-        input_signature_size, input_signature_size_from_destination,
+        DestinationInfoProvider, input_signature_size, input_signature_size_from_destination,
         input_signatures_size_from_destinations, inputs_encoded_size, outputs_encoded_size,
-        tx_size_with_num_inputs_and_outputs, DestinationInfoProvider,
+        tx_size_with_num_inputs_and_outputs,
     },
-    Uint256,
 };
 use consensus::PoSGenerateBlockInputData;
 use crypto::{
     key::{
+        PrivateKey, PublicKey,
         extended::ExtendedPublicKey,
         hdkd::{child_number::ChildNumber, u31::U31},
-        PrivateKey, PublicKey,
     },
     vrf::VRFPublicKey,
 };
@@ -72,34 +72,35 @@ use wallet_storage::{
     WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    KeychainUsageState, WalletTx,
     account_id::AccountPrefixedId,
     account_info::{StandaloneAddressDetails, StandaloneAddresses},
     partially_signed_transaction::PartiallySignedTransaction,
-    utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes},
+    utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes, get_utxo_type},
     wallet_tx::{BlockData, TxData, TxState},
     with_locked::WithLocked,
-    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
-    KeychainUsageState, WalletTx,
 };
 
 use crate::{
-    account::utxo_selector::{select_coins, OutputGroup},
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    SendRequest, WalletError, WalletResult,
+    account::utxo_selector::{OutputGroup, select_coins},
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains},
     send_request::{
-        make_address_output, make_address_output_from_delegation, make_address_output_token,
+        IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+        StakePoolCreationResolvedArguments, make_address_output,
+        make_address_output_from_delegation, make_address_output_token,
         make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-        make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-        StakePoolCreationResolvedArguments,
+        make_unmint_token_outputs,
     },
     wallet::WalletPoolsFilter,
     wallet_events::{WalletEvents, WalletEventsNoOp},
-    SendRequest, WalletError, WalletResult,
 };
 
 use self::{
     output_cache::{OutputCache, TokenIssuanceData},
-    transaction_list::{get_transaction_list, TransactionList},
+    transaction_list::{TransactionList, get_transaction_list},
     utxo_selector::{PayFee, SelectionResult},
 };
 
@@ -1606,7 +1607,7 @@ impl<K: AccountKeyChains> Account<K> {
                 | Destination::PublicKeyHash(_)
                 | Destination::ScriptHash(_)
                 | Destination::ClassicMultisig(_) => {
-                    return Err(WalletError::StakerDestinationMustBePublicKey)
+                    return Err(WalletError::StakerDestinationMustBePublicKey);
                 }
             },
             None => Destination::PublicKey(
@@ -2736,7 +2737,7 @@ fn group_preselected_inputs(
                         OutputValue::TokenV0(_) => {
                             return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                                 output.clone(),
-                            )))
+                            )));
                         }
                         OutputValue::TokenV1(token_id, output_amount) => {
                             (Currency::Token(*token_id), *output_amount)
@@ -2755,7 +2756,7 @@ fn group_preselected_inputs(
                     | TxOutput::CreateOrder(_) => {
                         return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                             output.clone(),
-                        )))
+                        )));
                     }
                 };
                 update_preselected_inputs(currency, value, Currency::Coin, Amount::ZERO)?;

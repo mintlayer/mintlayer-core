@@ -15,9 +15,9 @@
 
 use crate::{chain::ChainConfig, primitives::bech32_encoding};
 
-use super::{traits::Addressable, Address};
+use super::{Address, traits::Addressable};
 use regex::Regex;
-use serde::{de::Error, Deserialize};
+use serde::{Deserialize, de::Error};
 use serialization::DecodeAll;
 
 const REGEX_SUFFIX: &str = r"\{0x([0-9a-fA-F]+)\}";
@@ -217,14 +217,14 @@ mod tests {
     };
     use randomness::Rng;
     use serialization::{Decode, DecodeAll, Encode};
-    use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
+    use test_utils::random::{RngExt as _, Seed, make_seedable_rng};
 
     use crate::{
         address::{
-            hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
-            AddressError,
+            Address, AddressError, hexified::HexifiedAddress, pubkeyhash::PublicKeyHash,
+            traits::Addressable,
         },
-        chain::{config::create_regtest, ChainConfig, Destination},
+        chain::{ChainConfig, Destination, config::create_regtest},
         primitives::H256,
     };
 

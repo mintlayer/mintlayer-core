@@ -44,19 +44,19 @@ use randomness::{Rng, RngExt as _};
 use test_utils::assert_matches_return_val;
 
 use crate::{
+    P2pConfig, P2pEventHandler, PeerManagerEvent,
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
-        types::ConnectivityEvent,
         ConnectivityService, NetworkingService,
+        default_backend::{ConnectivityHandle, DefaultNetworkingService, types::Command},
+        types::ConnectivityEvent,
     },
     peer_manager::PeerManager,
     test_helpers::{peerdb_inmemory_store, test_p2p_config},
     tests::helpers::{PeerManagerNotification, PeerManagerObserverImpl},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    P2pConfig, P2pEventHandler, PeerManagerEvent,
 };
 
 use self::utils::cmd_to_peer_man_msg;

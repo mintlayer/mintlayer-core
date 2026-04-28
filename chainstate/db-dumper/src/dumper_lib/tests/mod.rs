@@ -21,28 +21,27 @@ use strum::IntoEnumIterator as _;
 
 use chainstate::BlockIndex;
 use chainstate_launcher::ChainConfig;
-use chainstate_types::{vrf_tools::construct_transcript, BlockStatus, BlockValidationStage};
+use chainstate_types::{BlockStatus, BlockValidationStage, vrf_tools::construct_transcript};
 use common::{
+    Uint256,
     address::Address,
     chain::{
-        self,
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        Block, GenBlock, Genesis, PoolId,
+        self, Block, GenBlock, Genesis, PoolId,
+        block::{BlockReward, ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
     },
-    primitives::{BlockHeight, Compact, Id, H256},
-    Uint256,
+    primitives::{BlockHeight, Compact, H256, Id},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFReturn};
 use mocks::MockChainstateInterface;
 use test_utils::{
     random::{
-        make_seedable_rng, randomness::SliceRandom, CryptoRng, IteratorRandom as _, RngExt as _,
-        Seed,
+        CryptoRng, IteratorRandom as _, RngExt as _, Seed, make_seedable_rng,
+        randomness::SliceRandom,
     },
     random_ascii_alphanumeric_string,
 };
 
-use crate::{dump_blocks::BlockStatusOutput, dump_blocks_generic, BlockOutputField};
+use crate::{BlockOutputField, dump_blocks::BlockStatusOutput, dump_blocks_generic};
 
 #[ctor::ctor]
 fn init() {

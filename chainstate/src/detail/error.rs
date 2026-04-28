@@ -28,11 +28,11 @@ use chainstate_storage::ChainstateStorageVersion;
 use chainstate_types::{GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
+        Block, GenBlock, PoolId,
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
         config::MagicBytes,
-        Block, GenBlock, PoolId,
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::ConsensusVerificationError;
 
@@ -91,7 +91,9 @@ pub enum BlockError {
     #[error("Error querying a property: {0}")]
     PropertyQueryError(PropertyQueryError),
 
-    #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
+    #[error(
+        "Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}"
+    )]
     InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block {0} that isn't on the tip")]
     InvariantErrorInvalidTip(Id<GenBlock>),
@@ -99,7 +101,9 @@ pub enum BlockError {
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
     #[error("Disconnected headers")]
     InvariantErrorDisconnectedHeaders,
-    #[error("Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}; best block height = {best_block_height}")]
+    #[error(
+        "Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}; best block height = {best_block_height}"
+    )]
     InvariantErrorTotalPoolBalanceLessThanStakers {
         total_balance: Amount,
         staker_balance: Amount,
@@ -143,7 +147,9 @@ pub enum CheckBlockError {
     },
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
-    #[error("Block {block_id} time too far into the future (block timestamp = {block_timestamp}, current time = {current_time})")]
+    #[error(
+        "Block {block_id} time too far into the future (block timestamp = {block_timestamp}, current time = {current_time})"
+    )]
     BlockFromTheFuture {
         block_id: Id<Block>,
         block_timestamp: BlockTimestamp,

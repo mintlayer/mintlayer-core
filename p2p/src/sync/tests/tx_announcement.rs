@@ -15,25 +15,26 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use chainstate::{ban_score::BanScore, BlockSource};
-use chainstate_test_framework::{anyonecanspend_address, TestFramework};
+use chainstate::{BlockSource, ban_score::BanScore};
+use chainstate_test_framework::{TestFramework, anyonecanspend_address};
 use common::{
     chain::{
+        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
         config::create_unit_test_config, output_value::OutputValue,
-        signature::inputsig::InputWitness, timelock::OutputTimeLock, GenBlock, OutPointSourceId,
-        SignedTransaction, Transaction, TxInput, TxOutput,
+        signature::inputsig::InputWitness, timelock::OutputTimeLock,
     },
     primitives::{Amount, Id, Idable},
 };
 use mempool::{
+    FeeRate, MempoolConfig,
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
-    FeeRate, MempoolConfig,
 };
 use serialization::Encode;
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, random::Seed};
 
 use crate::{
+    P2pConfig, P2pError,
     config::NodeType,
     error::ProtocolError,
     message::{TransactionResponse, TransactionSyncMessage},
@@ -44,7 +45,6 @@ use crate::{
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pConfig, P2pError,
 };
 
 #[tracing::instrument(skip(seed))]

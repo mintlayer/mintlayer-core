@@ -31,12 +31,12 @@ use chainstate_launcher::ChainConfig;
 pub use config_files::{
     NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
 };
-pub use node_daemon_runner::{run_node_daemon, ExitCode};
+pub use node_daemon_runner::{ExitCode, run_node_daemon};
 pub use options::{
-    Command, Options, OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
-    CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
+    CLEAN_DATA_OPTION_LONG_NAME, Command, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, Options,
+    OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
 };
-pub use runner::{setup, NodeSetupResult, NodeType};
+pub use runner::{NodeSetupResult, NodeType, setup};
 
 pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {
     RpcConfigFile::with_run_options(

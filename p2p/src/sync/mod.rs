@@ -33,25 +33,25 @@ use tokio::{
 use tracing::Instrument;
 
 use common::{
-    chain::{config::ChainConfig, GenBlock, Transaction},
+    chain::{GenBlock, Transaction, config::ChainConfig},
     primitives::Id,
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
+use mempool::{MempoolHandle, event::TransactionProcessed, tx_origin::TxOrigin};
 use utils::{sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
 
 use crate::{
+    PeerManagerEvent, Result,
     config::P2pConfig,
     error::P2pError,
     message::{BlockSyncMessage, TransactionSyncMessage},
     net::{
-        types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
+        types::{SyncingEvent, services::Services},
     },
     protocol::SupportedProtocolVersion,
     types::peer_id::PeerId,
-    PeerManagerEvent, Result,
 };
 
 use self::chainstate_handle::ChainstateHandle;

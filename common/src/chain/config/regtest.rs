@@ -21,13 +21,13 @@ use std::{
 
 use crate::{
     chain::{
+        Genesis, PoolId, TxOutput,
         block::timestamp::BlockTimestamp,
-        config::{StakePoolData, DEFAULT_INITIAL_MINT, MIN_STAKE_POOL_PLEDGE},
+        config::{DEFAULT_INITIAL_MINT, MIN_STAKE_POOL_PLEDGE, StakePoolData},
         output_value::OutputValue,
         transaction::Destination,
-        Genesis, PoolId, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount},
+    primitives::{Amount, per_thousand::PerThousand},
 };
 use crypto::{
     key::{PrivateKey, PublicKey},

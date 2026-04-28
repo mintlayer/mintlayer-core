@@ -22,20 +22,20 @@ use crypto::key::SigAuxDataProvider;
 use serialization::Encode;
 
 use crate::{
-    chain::{signature::DestinationSigError, ChainConfig, Destination},
-    primitives::{id::default_hash, H256},
+    chain::{ChainConfig, Destination, signature::DestinationSigError},
+    primitives::{H256, id::default_hash},
 };
 
 use super::{
     authorize_pubkey_spend::{
-        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        AuthorizedPublicKeySpend, sign_public_key_spending, verify_public_key_spending,
     },
     authorize_pubkeyhash_spend::{
-        sign_public_key_hash_spending, sign_public_key_hash_spending_unchecked,
-        verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
+        AuthorizedPublicKeyHashSpend, sign_public_key_hash_spending,
+        sign_public_key_hash_spending_unchecked, verify_public_key_hash_spending,
     },
     classical_multisig::authorize_classical_multisig::{
-        verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+        AuthorizedClassicalMultisigSpend, verify_classical_multisig_spending,
     },
 };
 
@@ -43,7 +43,9 @@ use super::{
 pub enum SignArbitraryMessageError {
     #[error("Destination signature error: {0}")]
     DestinationSigError(#[from] DestinationSigError),
-    #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
+    #[error(
+        "AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible"
+    )]
     AttemptedToProduceSignatureForAnyoneCanSpend,
     #[error("Classical multisig signature attempted in uni-party function")]
     AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,

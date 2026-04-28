@@ -23,8 +23,8 @@ use std::sync::Arc;
 use chainstate::ChainstateHandle;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockCreationError},
         ChainConfig, GenBlock, PoolId, Transaction,
+        block::{BlockCreationError, timestamp::BlockTimestamp},
     },
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
@@ -33,15 +33,15 @@ use config::BlockProdConfig;
 use consensus::ConsensusCreationError;
 use crypto::ephemeral_e2e;
 use detail::{
-    job_manager::{JobKey, JobManagerError},
     BlockProduction,
+    job_manager::{JobKey, JobManagerError},
 };
 use interface::blockprod_interface::BlockProductionInterface;
-use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
+use mempool::{MempoolHandle, tx_accumulator::TxAccumulatorError};
 use p2p::P2pHandle;
 use subsystem::error::CallError;
 
-pub use detail::timestamp_searcher::{find_timestamps_for_staking, TimestampSearchData};
+pub use detail::timestamp_searcher::{TimestampSearchData, find_timestamps_for_staking};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
@@ -160,18 +160,17 @@ mod tests {
     };
     use chainstate_storage::inmemory::Store;
     use common::{
+        Uint256, Uint512,
         chain::{
-            self,
+            self, Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades,
+            PoSChainConfigBuilder, TxOutput,
             block::timestamp::BlockTimestamp,
-            config::{create_unit_test_config, ChainConfig, ChainType},
+            config::{ChainConfig, ChainType, create_unit_test_config},
             pos_initial_difficulty,
             stakelock::StakePoolData,
-            Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-            TxOutput,
         },
-        primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
+        primitives::{Amount, BlockHeight, H256, Idable, per_thousand::PerThousand},
         time_getter::TimeGetter,
-        Uint256, Uint512,
     };
     use consensus::{calculate_effective_pool_balance, compact_target_to_target};
     use crypto::{

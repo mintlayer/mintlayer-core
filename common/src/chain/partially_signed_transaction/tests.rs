@@ -18,22 +18,23 @@ use serialization::hex::{HexDecode, HexEncode as _};
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        htlc::{HashedTimelockContract, HtlcSecret, HTLC_SECRET_SIZE},
+        Destination, OrderAccountCommand, OrderId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
+        htlc::{HTLC_SECRET_SIZE, HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         partially_signed_transaction::{
-            v1::PartiallySignedTransactionV1, OrderAdditionalInfo, PartiallySignedTransaction,
+            OrderAdditionalInfo, PartiallySignedTransaction,
             PartiallySignedTransactionConsistencyCheck, PoolAdditionalInfo, TxAdditionalInfo,
+            v1::PartiallySignedTransactionV1,
         },
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::sighashtype::SigHashType,
         },
         timelock::OutputTimeLock,
         tokens::TokenId,
-        Destination, OrderAccountCommand, OrderId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{Amount, H256, Id},
 };
 
 #[test]

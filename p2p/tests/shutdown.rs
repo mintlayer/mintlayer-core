@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
+use chainstate::{ChainstateConfig, DefaultTransactionVerificationStrategy, make_chainstate};
 use common::chain::config::create_unit_test_config;
 use mempool::{MempoolConfig, MempoolInit};
 use storage_inmemory::InMemory;

@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::{
-    primitives::{rational::Rational, Amount},
     Uint256,
+    primitives::{Amount, rational::Rational},
 };
 use logging::log;
 use thiserror::Error;
@@ -230,7 +230,7 @@ mod tests {
     use common::{chain::CoinUnit, primitives::Amount};
     use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     fn effective_pool_balance_float_impl(
         pledge_amount: Amount,

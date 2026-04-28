@@ -19,8 +19,8 @@ use common::{
 };
 
 use super::{
-    account::{RpcAccountCommand, RpcAccountSpending, RpcOrderAccountCommand},
     RpcTypeError,
+    account::{RpcAccountCommand, RpcAccountSpending, RpcOrderAccountCommand},
 };
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]

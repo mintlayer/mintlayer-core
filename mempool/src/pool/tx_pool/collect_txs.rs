@@ -15,13 +15,13 @@
 
 use crate::{
     error::{BlockConstructionError, TxValidationError},
-    pool::tx_pool::{tx_verifier, TxMempoolEntry, TxPool},
+    pool::tx_pool::{TxMempoolEntry, TxPool, tx_verifier},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
 
 use std::{
     cmp::Ordering,
-    collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, binary_heap, btree_map},
     ops::Deref,
 };
 

@@ -43,7 +43,7 @@ mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
-use crate::{spawn_webserver, DummyRPC};
+use crate::{DummyRPC, spawn_webserver};
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
 };
@@ -52,27 +52,27 @@ use api_server_common::storage::{
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
 use api_web_server::{
+    ApiServerWebServerState, CachedValues,
     api::{
-        json_helpers::{txoutput_to_json, TokenDecimals},
+        json_helpers::{TokenDecimals, txoutput_to_json},
         web_server,
     },
-    ApiServerWebServerState, CachedValues,
 };
 use chainstate::BlockSource;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::{Address, pubkeyhash::PublicKeyHash},
     chain::{
+        Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
         config::create_unit_test_config,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         transaction::output::timelock::OutputTimeLock,
-        Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{time::get_time, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, time::get_time},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use hex::ToHex;
@@ -82,7 +82,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use test_utils::random::{make_seedable_rng, RngExt as _, Seed};
+use test_utils::random::{RngExt as _, Seed, make_seedable_rng};
 
 #[ctor::ctor]
 fn init() {

@@ -17,18 +17,18 @@ use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionErr
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenId, Destination,
-        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue,
+        signature::inputsig::InputWitness, tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
 use rstest::rstest;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 
-use crate::tests::helpers::token_checks::{assert_token_missing, check_nft, ExpectedNftData};
+use crate::tests::helpers::token_checks::{ExpectedNftData, assert_token_missing, check_nft};
 
 #[rstest]
 #[trace]
