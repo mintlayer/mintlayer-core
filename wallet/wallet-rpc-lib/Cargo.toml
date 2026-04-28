@@ -13,18 +13,18 @@ crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool-types = { path = "../../mempool/types" }
 mempool = { path = "../../mempool" }
-node-comm = { path = "../wallet-node-client" }
+node-comm = { path = "../wallet-node-client", default-features = false }
+p2p-types = { path = "../../p2p/types" }
 randomness = { path = "../../randomness" }
 rpc = { path = "../../rpc" }
 rpc-description = { path = "../../rpc/description" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet = { path = ".." }
-wallet-controller = { path = "../wallet-controller" }
-wallet-storage = { path = "../storage" }
-wallet-types = { path = "../types" }
-p2p-types = { path = "../../p2p/types" }
+wallet = { path = "..", default-features = false }
+wallet-controller = { path = "../wallet-controller", default-features = false }
+wallet-storage = { path = "../storage", default-features = false }
+wallet-types = { path = "../types", default-features = false }
 
 anyhow.workspace = true
 async-trait.workspace = true
@@ -48,7 +48,6 @@ rpc = { path = "../../rpc", features = ["test-support"] }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
-wallet-types = { path = "../types" }
 
 rstest.workspace = true
 
@@ -56,6 +55,18 @@ rstest.workspace = true
 build_utils = { path = "../../utils/build_utils" }
 
 [features]
-trezor = ["wallet-types/trezor", "wallet/trezor", "wallet-controller/trezor"]
-ledger = ["wallet-types/ledger", "wallet/ledger", "wallet-controller/ledger"]
+trezor = [
+  "node-comm/trezor",
+  "wallet/trezor",
+  "wallet-controller/trezor",
+  "wallet-storage/trezor",
+  "wallet-types/trezor",
+]
+ledger = [
+  "node-comm/ledger",
+  "wallet/ledger",
+  "wallet-controller/ledger",
+  "wallet-storage/ledger",
+  "wallet-types/ledger",
+]
 default = ["trezor", "ledger"]

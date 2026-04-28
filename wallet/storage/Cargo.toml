@@ -12,9 +12,9 @@ randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
 storage-sqlite = { path = "../../storage/sqlite" }
-utxo = { path = "../../utxo" }
-wallet-types = { path = "../types" }
 utils = { path = "../../utils" }
+utxo = { path = "../../utxo" }
+wallet-types = { path = "../types", default-features = false }
 
 thiserror.workspace = true
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }

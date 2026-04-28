@@ -10,7 +10,7 @@ chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
-node-comm = { path = "../wallet-node-client" }
+node-comm = { path = "../wallet-node-client", default-features = false }
 node-lib = { path = "../../node-lib" }
 p2p-types = { path = "../../p2p/types" }
 rpc = { path = "../../rpc" }
@@ -18,10 +18,10 @@ serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet = { path = ".." }
-wallet-controller = { path = "../wallet-controller" }
-wallet-rpc-lib = { path = "../wallet-rpc-lib" }
-wallet-types = { path = "../types" }
+wallet = { path = "..", default-features = false }
+wallet-controller = { path = "../wallet-controller", default-features = false }
+wallet-rpc-lib = { path = "../wallet-rpc-lib", default-features = false }
+wallet-types = { path = "../types", default-features = false }
 
 async-trait.workspace = true
 base64.workspace = true
@@ -47,15 +47,17 @@ build_utils = { path = "../../utils/build_utils" }
 
 [features]
 trezor = [
+  "node-comm/trezor",
   "wallet/trezor",
-  "wallet-types/trezor",
-  "wallet-rpc-lib/trezor",
   "wallet-controller/trezor",
+  "wallet-rpc-lib/trezor",
+  "wallet-types/trezor",
 ]
 ledger = [
+  "node-comm/ledger",
   "wallet/ledger",
-  "wallet-types/ledger",
-  "wallet-rpc-lib/ledger",
   "wallet-controller/ledger",
+  "wallet-rpc-lib/ledger",
+  "wallet-types/ledger",
 ]
 default = ["trezor", "ledger"]

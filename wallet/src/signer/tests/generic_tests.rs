@@ -85,6 +85,10 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
+#[cfg(any(
+    feature = "enable-trezor-device-tests",
+    feature = "enable-ledger-device-tests"
+))]
 #[rstest_reuse::template]
 pub fn sign_message_test_params(
     #[values(
