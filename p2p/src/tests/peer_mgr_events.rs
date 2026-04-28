@@ -25,15 +25,14 @@ use chainstate::{ChainstateConfig, Locator};
 use common::primitives::Id;
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{new_message_stream, TransportListener, TransportSocket},
+    transport::{TransportListener, TransportSocket, new_message_stream},
 };
-use p2p_test_utils::{run_with_timeout, MEDIUM_TIMEOUT, SHORT_TIMEOUT};
+use p2p_test_utils::{MEDIUM_TIMEOUT, SHORT_TIMEOUT, run_with_timeout};
 use p2p_types::peer_address::PeerAddress;
-use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
+use randomness::{Rng, RngExt as _, seq::IteratorRandom as _};
 use test_utils::{
-    assert_matches,
-    random::{gen_random_alnum_string, make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, gen_random_alnum_string, make_seedable_rng},
 };
 
 use crate::{
@@ -47,7 +46,7 @@ use crate::{
         types::PeerManagerMessageExtTag,
     },
     sync::test_helpers::make_new_block,
-    test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, test_p2p_config},
     tests::helpers::{PeerManagerNotification, TestNode},
 };
 

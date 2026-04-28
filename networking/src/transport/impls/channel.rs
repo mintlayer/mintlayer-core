@@ -17,8 +17,8 @@ use std::{
     collections::BTreeMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
-        atomic::{AtomicU32 as StdAtomicU32, Ordering},
         Mutex,
+        atomic::{AtomicU32 as StdAtomicU32, Ordering},
     },
 };
 
@@ -28,7 +28,7 @@ use once_cell::sync::Lazy;
 use tokio::{
     io::{AsyncRead, AsyncWrite, DuplexStream},
     sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         oneshot::{self, Sender},
     },
 };
@@ -36,9 +36,9 @@ use tokio::{
 use utils::sync::atomic::AtomicU16;
 
 use crate::{
+    Result,
     error::NetworkingError,
     transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
-    Result,
 };
 
 /// The default value for how much bytes is allowed for write (without reading on the other side).
@@ -313,11 +313,15 @@ pub enum MpscChannelTransportError {
     NoListener(SocketAddr),
     #[error("Listener for address {0} dropped unexpectedly")]
     ListenerDroppedUnexpectedly(SocketAddr),
-    #[error("Unknown connection initiator dropped unexpectedly when listening to addresses {listening_addresses:?}")]
+    #[error(
+        "Unknown connection initiator dropped unexpectedly when listening to addresses {listening_addresses:?}"
+    )]
     UnknownConnectorDroppedUnexpectedly {
         listening_addresses: Vec<SocketAddr>,
     },
-    #[error("Connection initiator dropped unexpectedly, local_address = {local_address}, remote_address = {remote_address}")]
+    #[error(
+        "Connection initiator dropped unexpectedly, local_address = {local_address}, remote_address = {remote_address}"
+    )]
     ConnectorDroppedUnexpectedly {
         local_address: SocketAddr,
         remote_address: SocketAddr,
@@ -329,7 +333,7 @@ mod tests {
     use std::net::SocketAddrV4;
 
     use randomness::RngExt;
-    use test_utils::random::{gen_random_bytes, Seed};
+    use test_utils::random::{Seed, gen_random_bytes};
 
     use crate::transport::new_message_stream;
 

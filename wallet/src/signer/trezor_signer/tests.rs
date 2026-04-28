@@ -18,24 +18,24 @@ use std::sync::{Arc, Mutex};
 use rstest::rstest;
 use serial_test::serial;
 
-use ::test_utils::random::{make_seedable_rng, Seed};
+use ::test_utils::random::{Seed, make_seedable_rng};
 use common::chain::{ChainConfig, SighashInputCommitmentVersion};
-use crypto::key::{hdkd::u31::U31, PredefinedSigAuxDataProvider};
+use crypto::key::{PredefinedSigAuxDataProvider, hdkd::u31::U31};
 use logging::log;
 
 use crate::signer::{
     tests::{
         generic_fixed_signature_tests::{
-            test_fixed_signatures_generic, test_fixed_signatures_generic2,
-            test_fixed_signatures_generic_htlc_refunding, test_fixed_signatures_generic_no_legacy,
+            test_fixed_signatures_generic, test_fixed_signatures_generic_htlc_refunding,
+            test_fixed_signatures_generic_no_legacy, test_fixed_signatures_generic2,
         },
         generic_tests::{
-            sign_message_test_params, test_sign_message_generic, test_sign_transaction_generic,
-            test_sign_transaction_intent_generic, MessageToSign,
+            MessageToSign, sign_message_test_params, test_sign_message_generic,
+            test_sign_transaction_generic, test_sign_transaction_intent_generic,
         },
         make_deterministic_software_signer, no_another_signer,
     },
-    trezor_signer::{test_utils::find_test_device_and_connect, TrezorSigner},
+    trezor_signer::{TrezorSigner, test_utils::find_test_device_and_connect},
 };
 
 use super::test_utils::maybe_spawn_auto_confirmer;
@@ -121,7 +121,9 @@ async fn test_sign_transaction(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -164,7 +166,9 @@ async fn test_fixed_signatures2(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_fixed_signatures2, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_fixed_signatures2, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -200,7 +204,9 @@ async fn test_fixed_signatures_htlc_refunding(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_fixed_signatures_htlc_refunding, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_fixed_signatures_htlc_refunding, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -267,7 +273,9 @@ async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 

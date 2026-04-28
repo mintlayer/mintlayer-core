@@ -19,22 +19,22 @@ use std::{collections::BTreeMap, num::NonZeroU8};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        ChainConfig, Destination, Transaction, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         signature::{
             inputsig::{
+                InputWitness,
                 classical_multisig::authorize_classical_multisig::{
-                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                    ClassicalMultisigCompletionStatus,
+                    AuthorizedClassicalMultisigSpend, ClassicalMultisigCompletionStatus,
+                    sign_classical_multisig_spending,
                 },
                 htlc::produce_classical_multisig_signature_for_htlc_refunding,
                 standard_signature::StandardInputSignature,
-                InputWitness,
             },
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
         },
-        ChainConfig, Destination, Transaction, TxOutput,
     },
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};

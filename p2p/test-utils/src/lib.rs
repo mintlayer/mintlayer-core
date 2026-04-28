@@ -24,12 +24,12 @@ use std::{future::Future, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
 use chainstate::{
-    make_chainstate, ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
+    DefaultTransactionVerificationStrategy, make_chainstate,
 };
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::ChainConfig, Block},
+    chain::{Block, config::ChainConfig},
     primitives::Idable,
     time_getter::TimeGetter,
 };

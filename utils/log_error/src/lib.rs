@@ -17,10 +17,10 @@ use derive_more::Display;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
+    Error, ItemFn, LitStr, ReturnType, Token,
     parse::{Parse, ParseStream},
     parse_quote,
     punctuated::Punctuated,
-    Error, ItemFn, LitStr, ReturnType, Token,
 };
 
 /// A macro that logs errors returned by the function to which it is attached, mentioning

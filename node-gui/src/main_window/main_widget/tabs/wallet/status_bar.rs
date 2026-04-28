@@ -16,9 +16,8 @@
 use iced::Element;
 #[cfg(any(feature = "trezor", feature = "ledger"))]
 use iced::{
-    font,
-    widget::{container, rich_text, row, span, Container, Row},
-    Alignment, Font, Length, Padding, Theme,
+    Alignment, Font, Length, Padding, Theme, font,
+    widget::{Container, Row, container, rich_text, row, span},
 };
 
 use wallet_controller::types::WalletExtraInfo;

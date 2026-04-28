@@ -15,8 +15,8 @@
 
 use crate::{
     chain::{
-        tokens::{IsTokenUnfreezable, TokenId},
         AccountNonce, DelegationId, OrderId,
+        tokens::{IsTokenUnfreezable, TokenId},
     },
     primitives::Amount,
 };

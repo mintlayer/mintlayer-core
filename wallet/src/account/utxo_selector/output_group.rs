@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{output_value::OutputValue, TxInput, TxOutput},
+    chain::{TxInput, TxOutput, output_value::OutputValue},
     primitives::Amount,
 };
 
@@ -71,7 +71,7 @@ impl OutputGroup {
             | TxOutput::CreateOrder(_) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
-                )))
+                )));
             }
         };
         let value = output_value.amount();

@@ -18,7 +18,7 @@ use rstest::rstest;
 
 use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use serialization::Encode;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils::sorted::Sorted;
 
 pub mod makers;

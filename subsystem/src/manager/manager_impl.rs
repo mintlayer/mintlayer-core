@@ -27,7 +27,7 @@ use utils::{
     tokio_spawn_in_current_tracing_span, tokio_spawn_in_tracing_span,
 };
 
-use crate::{task, wrappers, Handle, ManagerConfig, SubmitOnlyHandle, Subsystem};
+use crate::{Handle, ManagerConfig, SubmitOnlyHandle, Subsystem, task, wrappers};
 
 use super::shutdown_signal::shutdown_signal;
 

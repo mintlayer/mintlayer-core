@@ -15,12 +15,12 @@
 
 use anyhow::Result;
 
-use chainstate::{import_bootstrap_file, BootstrapError, ChainstateError};
+use chainstate::{BootstrapError, ChainstateError, import_bootstrap_file};
 use utils::{shallow_clone::ShallowClone as _, tokio_spawn};
 
 use crate::{
-    setup, NodeSetupResult, NodeType, Options, CLEAN_DATA_OPTION_LONG_NAME,
-    IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
+    CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, NodeSetupResult, NodeType,
+    Options, setup,
 };
 
 pub struct ExitCode(pub i32);

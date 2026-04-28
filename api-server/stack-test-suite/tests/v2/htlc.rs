@@ -16,6 +16,7 @@
 use std::borrow::Cow;
 
 use common::chain::{
+    ChainConfig,
     classic_multisig::ClassicMultisigChallenge,
     htlc::HtlcSecret,
     htlc::{HashedTimelockContract, HtlcSecretHash},
@@ -29,7 +30,6 @@ use common::chain::{
         },
         sighash::signature_hash,
     },
-    ChainConfig,
 };
 use crypto::key::PublicKey;
 use serialization::Encode;

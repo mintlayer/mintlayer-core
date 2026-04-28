@@ -15,20 +15,20 @@
 
 use tokio::sync::mpsc::unbounded_channel;
 
-use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, CheckBlockError};
-use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
+use chainstate::{BlockError, BlockSource, ChainstateError, CheckBlockError, ban_score::BanScore};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, empty_witness};
 use common::{
-    chain::{
-        self, output_value::OutputValue, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput,
-    },
-    primitives::{Amount, BlockHeight, Id, Idable, H256},
     Uint256,
+    chain::{
+        self, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, output_value::OutputValue,
+    },
+    primitives::{Amount, BlockHeight, H256, Id, Idable},
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use mempool::error::MempoolPolicyError;
 use p2p_test_utils::create_n_blocks;
 use randomness::RngExt;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{

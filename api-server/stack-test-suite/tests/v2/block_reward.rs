@@ -15,7 +15,7 @@
 
 use std::sync::RwLock;
 
-use api_web_server::{api::json_helpers::txoutput_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::txoutput_to_json};
 use common::primitives::time::get_time;
 
 use crate::DummyRPC;

@@ -15,7 +15,7 @@
 
 use crate::{
     chain::ChainConfig,
-    primitives::{Idable, H256},
+    primitives::{H256, Idable},
     text_summary::TextSummary,
 };
 
@@ -66,11 +66,13 @@ mod tests {
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use serialization::extras::non_empty_vec::DataOrNoVec;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{
         address::Address,
         chain::{
+            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
+            Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
             block::timestamp::BlockTimestamp,
             config::create_mainnet,
             output_value::OutputValue,
@@ -80,10 +82,8 @@ mod tests {
                 IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenId,
                 TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
             },
-            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
-            Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         },
-        primitives::{per_thousand::PerThousand, Amount, Id, H256},
+        primitives::{Amount, H256, Id, per_thousand::PerThousand},
         time_getter::TimeGetter,
     };
 

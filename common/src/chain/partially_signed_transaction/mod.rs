@@ -19,25 +19,24 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
+        ChainConfig, Destination, OrderId, PoolId, SighashInputCommitmentVersion,
+        SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput,
         htlc::HtlcSecret,
         output_value::OutputValue,
         output_values_holder::OutputValuesHolder,
         partially_signed_transaction::v1::PartiallySignedTransactionV1,
         signature::{
+            Signable, Transactable,
             inputsig::InputWitness,
             sighash::{
                 self,
                 input_commitments::{
-                    make_sighash_input_commitments_for_transaction_inputs,
+                    SighashInputCommitment, make_sighash_input_commitments_for_transaction_inputs,
                     make_sighash_input_commitments_for_transaction_inputs_at_height,
-                    SighashInputCommitment,
                 },
             },
-            Signable, Transactable,
         },
         tokens::TokenId,
-        ChainConfig, Destination, OrderId, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::BlockHeight,
 };

@@ -15,7 +15,7 @@
 
 use crate::key_chain::leaf_key_chain::LeafKeySoftChain;
 use crate::key_chain::with_purpose::WithPurpose;
-use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
+use crate::key_chain::{KeyChainError, KeyChainResult, make_account_path};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, RpcAddress};
 use common::chain::classic_multisig::ClassicMultisigChallenge;
@@ -42,7 +42,7 @@ use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::vrf_key_chain::{EmptyVrfKeyChain, VrfKeyChain, VrfKeySoftChain};
 use super::{
-    make_path_to_vrf_key, AccountKeyChains, MasterKeyChain, VRFAccountKeyChains, VRF_INDEX,
+    AccountKeyChains, MasterKeyChain, VRF_INDEX, VRFAccountKeyChains, make_path_to_vrf_key,
 };
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet

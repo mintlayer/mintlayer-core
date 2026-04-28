@@ -24,46 +24,46 @@ use std::{
 
 use async_trait::async_trait;
 use ledger_lib::{
-    transport::{TcpDevice, TcpInfo, TcpTransport},
     Device as _, Transport,
+    transport::{TcpDevice, TcpInfo, TcpTransport},
 };
 use mintlayer_ledger_messages::CoinType;
 use rstest::rstest;
 use tokio::{
     sync::{
-        mpsc::{self, Sender},
         Mutex,
+        mpsc::{self, Sender},
     },
     time::sleep,
 };
 
 use crate::signer::{
+    SignerError, SignerResult,
     ledger_signer::{
+        LedgerError, LedgerFinder, LedgerSigner,
         ledger_messages::{
             check_current_app, get_extended_public_key, get_extended_public_key_raw,
         },
-        LedgerError, LedgerFinder, LedgerSigner,
     },
     tests::{
         generic_fixed_signature_tests::test_fixed_signatures_generic_no_legacy,
         generic_tests::{
-            sign_message_test_params, test_sign_message_generic, test_sign_transaction_generic,
-            test_sign_transaction_intent_generic, MessageToSign,
+            MessageToSign, sign_message_test_params, test_sign_message_generic,
+            test_sign_transaction_generic, test_sign_transaction_intent_generic,
         },
         make_deterministic_software_signer, no_another_signer,
     },
-    SignerError, SignerResult,
 };
-use common::chain::{config::create_mainnet, ChainConfig, SighashInputCommitmentVersion};
+use common::chain::{ChainConfig, SighashInputCommitmentVersion, config::create_mainnet};
 use crypto::key::{
-    hdkd::{derivation_path::DerivationPath, u31::U31},
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
+    hdkd::{derivation_path::DerivationPath, u31::U31},
 };
 use logging::log;
 use randomness::make_true_rng;
 use serialization::hex::HexEncode;
 use speculos::{Device, Handle};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils::env_utils::{bool_from_env, get_from_env};
 use wallet_storage::WalletStorageReadLocked;
 use wallet_types::hw_data::LedgerData;
@@ -322,7 +322,9 @@ async fn test_sign_transaction(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
@@ -403,7 +405,9 @@ async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}"
+    );
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 

@@ -23,7 +23,7 @@ use std::{
 
 use chainstate::ban_score::BanScore;
 use common::{
-    chain::{config::MagicBytes, ChainConfig},
+    chain::{ChainConfig, config::MagicBytes},
     primitives::{time::Time, user_agent::mintlayer_core_user_agent},
 };
 use p2p::{
@@ -34,18 +34,18 @@ use p2p::{
     types::{peer_id::PeerId, socket_address::SocketAddress},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use randomness::{
-    seq::{IndexedRandom as _, IteratorRandom},
     RngExt as _,
+    seq::{IndexedRandom as _, IteratorRandom},
 };
 
 use mock_crawler::test_crawler;
 
 use crate::crawler_p2p::{crawler::CrawlerEvent, crawler_manager::storage::AddressInfo};
 
-use super::{address_data::SoftwareInfo, CrawlerConfig};
+use super::{CrawlerConfig, address_data::SoftwareInfo};
 
 #[rstest]
 #[trace]

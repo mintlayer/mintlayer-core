@@ -19,16 +19,16 @@ use rstest::rstest;
 
 use accounting::GetDataResult;
 use common::{
-    chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderId, OrdersVersion},
+    chain::{Destination, OrderId, OrdersVersion, output_value::OutputValue, tokens::TokenId},
     primitives::Amount,
 };
 use randomness::{Rng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{
+    Error, InMemoryOrdersAccounting, OrderData, OrdersAccountingDB, OrdersAccountingView,
     cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
-    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrderData,
-    OrdersAccountingDB, OrdersAccountingView,
+    view::FlushableOrdersAccountingView,
 };
 
 fn make_order_data(rng: &mut impl Rng) -> OrderData {

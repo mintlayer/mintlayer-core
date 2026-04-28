@@ -23,26 +23,26 @@ use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::config::create_unit_test_config,
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
 use randomness::RngExt;
 use test_utils::{
-    random::{shuffle_until_different, Seed},
     BasicTestTimeGetter,
+    random::{Seed, shuffle_until_different},
 };
 
 use crate::{
+    P2pConfig, P2pError, PeerManagerEvent,
     ban_config::BanConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     sync::tests::helpers::{
-        make_new_blocks, make_new_top_blocks_return_headers, PeerManagerEventDesc, TestNode,
+        PeerManagerEventDesc, TestNode, make_new_blocks, make_new_top_blocks_return_headers,
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pConfig, P2pError, PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -314,10 +314,10 @@ async fn disconnect(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            block.header().clone(),
+        ])))
+        .await;
 
         let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
@@ -391,10 +391,10 @@ async fn slow_response(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            block.header().clone(),
+        ])))
+        .await;
 
         let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);

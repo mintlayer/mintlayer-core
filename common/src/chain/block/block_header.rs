@@ -17,9 +17,9 @@ use serialization::{Decode, Encode};
 
 use super::signed_block_header::{BlockHeaderSignature, SignedBlockHeader};
 use super::timestamp::BlockTimestamp;
-use crate::chain::{block::ConsensusData, Block, GenBlock};
-use crate::primitives::id::{Id, Idable, H256};
-use crate::primitives::{id, VersionTag};
+use crate::chain::{Block, GenBlock, block::ConsensusData};
+use crate::primitives::id::{H256, Id, Idable};
+use crate::primitives::{VersionTag, id};
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]

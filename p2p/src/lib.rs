@@ -45,7 +45,7 @@ use tokio::{
 
 use ::utils::{atomics::SeqCstAtomicBool, ensure, tokio_spawn_in_current_tracing_span};
 use common::{
-    chain::{config::ChainType, ChainConfig},
+    chain::{ChainConfig, config::ChainType},
     primitives::BlockHeight,
     time_getter::TimeGetter,
 };
@@ -64,8 +64,8 @@ use crate::{
     config::P2pConfig,
     error::P2pError,
     net::{
-        default_backend::DefaultNetworkingService, ConnectivityService, MessagingService,
-        NetworkingService, SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        default_backend::DefaultNetworkingService,
     },
 };
 

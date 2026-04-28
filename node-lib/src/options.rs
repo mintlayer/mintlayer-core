@@ -29,8 +29,8 @@ use common::{
     chain::{
         self,
         config::{
-            regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
             ChainType,
+            regtest_options::{ChainConfigOptions, regtest_chain_config_builder},
         },
     },
     primitives::semver::SemVer,
@@ -42,9 +42,9 @@ use utils::{
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    NodeType,
     checkpoints_from_file::read_checkpoints_from_csv_file,
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
-    NodeType,
 };
 
 const CONFIG_NAME: &str = "config.toml";
@@ -449,7 +449,7 @@ mod tests {
 
     use common::{
         chain::config::Checkpoints,
-        primitives::{BlockHeight, Id, Idable as _, H256},
+        primitives::{BlockHeight, H256, Id, Idable as _},
     };
     use utils::concatln;
 

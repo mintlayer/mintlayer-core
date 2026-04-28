@@ -21,25 +21,25 @@ use chainstate::{
     BlockError, BlockInvalidatorError, BlockSource, ChainstateError, ChainstateEvent,
     CheckBlockError,
 };
-use chainstate_test_framework::{storage::Builder as StorageBuilder, TestFramework};
+use chainstate_test_framework::{TestFramework, storage::Builder as StorageBuilder};
 use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{
+    Uint256,
     chain::{
         self,
-        block::{consensus_data::PoWData, Block, ConsensusData},
+        block::{Block, ConsensusData, consensus_data::PoWData},
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
-    Uint256,
 };
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use utils::atomics::SeqCstAtomicU64;
 
-use super::helpers::{block_creation_helpers::*, block_status_helpers::*, EventList};
+use super::helpers::{EventList, block_creation_helpers::*, block_status_helpers::*};
 
 mod storage_configs {
     use super::StorageBuilder;

@@ -16,9 +16,9 @@
 use crate::{
     address::{AddressError, RpcAddress},
     chain::{
+        ChainConfig,
         output_value::{OutputValue, RpcOutputValue},
         tokens::TokenId,
-        ChainConfig,
     },
     primitives::Amount,
 };

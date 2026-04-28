@@ -21,11 +21,11 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
-use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
+use mempool_types::{TxOptions, tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin};
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_log::TapLog;
 
-use crate::{rpc_event::RpcEvent, FeeRate, MempoolMaxSize, TxStatus};
+use crate::{FeeRate, MempoolMaxSize, TxStatus, rpc_event::RpcEvent};
 
 use rpc::RpcResult;
 

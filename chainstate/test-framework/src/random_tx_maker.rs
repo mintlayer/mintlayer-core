@@ -16,25 +16,25 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    TestChainstate,
     key_manager::KeyManager,
     utils::{output_value_amount, output_value_with_amount},
-    TestChainstate,
 };
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
+        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         htlc::{HashedTimelockContract, HtlcSecretHash},
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, GenBlockId, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -49,7 +49,7 @@ use pos_accounting::{
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
-use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _, SliceRandom};
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom, seq::IteratorRandom};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::*};
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
@@ -456,8 +456,9 @@ impl<'a> RandomTxMaker<'a> {
         rng: &mut impl CryptoRng,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_before_tx: &impl PoSAccountingView,
-        pos_accounting_latest: &mut (impl PoSAccountingView
-                  + PoSAccountingOperations<PoSAccountingUndo>),
+        pos_accounting_latest: &mut (
+                 impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>
+             ),
         orders_cache: &mut (impl OrdersAccountingView + OrdersAccountingOperations),
         accounts: &[AccountType],
         key_manager: &mut KeyManager,

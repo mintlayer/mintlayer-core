@@ -19,16 +19,16 @@ use rstest::rstest;
 
 use common::{
     chain::{
-        self, stakelock::StakePoolData, ChainstateUpgradeBuilder, Destination, GenBlock,
-        NetUpgrades, OutPointSourceId, StakerDestinationUpdateForbidden, TxInput, UtxoOutPoint,
+        self, ChainstateUpgradeBuilder, Destination, GenBlock, NetUpgrades, OutPointSourceId,
+        StakerDestinationUpdateForbidden, TxInput, UtxoOutPoint, stakelock::StakePoolData,
     },
-    primitives::{per_thousand::PerThousand, Id, H256},
+    primitives::{H256, Id, per_thousand::PerThousand},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{RngExt as _, SliceRandom};
 use test_utils::{
     assert_matches,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 

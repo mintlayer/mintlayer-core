@@ -21,29 +21,30 @@ use crate::wallet_rpc_traits::{
 
 use super::{ClientWalletRpc, WalletRpcError};
 
-use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
+use chainstate::{ChainInfo, rpc::RpcOutputValueIn};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint, block::timestamp::BlockTimestamp, tokens::RPCTokenInfo,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey};
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use crypto::key::{PrivateKey, hdkd::u31::U31};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
-use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
+use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
     types::{
         Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
         WalletTypeArgs,
     },
-    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
+    ColdWalletRpcClient, WalletRpcClient,
     types::{
         AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, BlockInfo,
         ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
@@ -55,7 +56,6 @@ use wallet_rpc_lib::{
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
         TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
-    ColdWalletRpcClient, WalletRpcClient,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,

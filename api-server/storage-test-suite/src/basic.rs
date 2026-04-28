@@ -23,11 +23,11 @@ use pos_accounting::PoolData;
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
         LockedUtxo, Order, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, Transactional,
         TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
 use crypto::{
@@ -36,26 +36,26 @@ use crypto::{
 };
 use randomness::{CryptoRng, RngExt as _};
 
-use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, empty_witness};
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::{Address, pubkeyhash::PublicKeyHash},
     chain::{
+        AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
         output_value::OutputValue,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, NftIssuance, NftIssuanceV0, TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, per_thousand::PerThousand},
 };
 use futures::Future;
 use libtest_mimic::Failed;
 use test_utils::{
     assert_matches,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 
 pub async fn initialization<S, Fut, F: Fn() -> Fut>(
@@ -1333,11 +1333,7 @@ where
                 let id1 = DelegationId::random_using(&mut rng);
                 let id2 = DelegationId::random_using(&mut rng);
 
-                if id1 < id2 {
-                    (id1, id2)
-                } else {
-                    (id2, id1)
-                }
+                if id1 < id2 { (id1, id2) } else { (id2, id1) }
             };
 
             let random_block_height = BlockHeight::new(rng.random_range(500..1000) as u64);

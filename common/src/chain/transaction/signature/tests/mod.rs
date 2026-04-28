@@ -26,16 +26,16 @@ use test_utils::random::Seed;
 
 use crate::{
     chain::{
-        config::create_mainnet, output_value::OutputValue, ChainConfig, Destination,
-        OutPointSourceId, Transaction, TxInput, TxOutput, TxOutputTag,
+        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput, TxOutputTag,
+        config::create_mainnet, output_value::OutputValue,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{Amount, H256, Id},
 };
 
 use super::{
-    inputsig::{standard_signature::StandardInputSignature, InputWitness},
-    sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
     DestinationSigError,
+    inputsig::{InputWitness, standard_signature::StandardInputSignature},
+    sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
 };
 
 use self::utils::*;

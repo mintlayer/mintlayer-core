@@ -19,13 +19,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::{
-    mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+    mpsc::{self, UnboundedReceiver, UnboundedSender, unbounded_channel},
     oneshot,
 };
 
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    chain::{GenBlock, block::timestamp::BlockTimestamp},
     primitives::Id,
 };
 use logging::log;

@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{Block, GenBlock},
-    primitives::{time::Time, Id, Idable},
+    primitives::{Id, Idable, time::Time},
 };
 use logging::log;
 use utils::ensure;

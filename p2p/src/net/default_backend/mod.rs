@@ -31,9 +31,8 @@ use crate::{
     error::P2pError,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     net::{
-        self,
+        self, ConnectivityService, MessagingService, NetworkingService,
         types::{ConnectivityEvent, SyncingEvent},
-        ConnectivityService, MessagingService, NetworkingService,
     },
     types::peer_id::PeerId,
 };

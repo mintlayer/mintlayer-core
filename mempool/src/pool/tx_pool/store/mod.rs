@@ -31,7 +31,7 @@ use utils::newtype;
 
 use super::{Fee, Time, TxEntry, TxEntryWithFee};
 
-use crate::{error::MempoolPolicyError, pool::entry::TxDependency, FeeRate};
+use crate::{FeeRate, error::MempoolPolicyError, pool::entry::TxDependency};
 
 pub use mem_usage::Tracked;
 

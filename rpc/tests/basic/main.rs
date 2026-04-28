@@ -22,14 +22,14 @@ use jsonrpsee::{
 use rstest::rstest;
 
 use randomness::{
-    distributions::{Alphanumeric, SampleString},
     Rng, RngExt as _,
+    distributions::{Alphanumeric, SampleString},
 };
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use rpc::{
-    new_http_client, new_ws_client, rpc_creds::RpcCreds, subscription, Builder, Rpc, RpcAuthData,
-    RpcClientResult, RpcResult,
+    Builder, Rpc, RpcAuthData, RpcClientResult, RpcResult, new_http_client, new_ws_client,
+    rpc_creds::RpcCreds, subscription,
 };
 
 mod desc;

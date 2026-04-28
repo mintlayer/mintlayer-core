@@ -27,11 +27,11 @@ use bip39::{Language, Mnemonic};
 
 use common::{
     chain::{
+        ChainConfig, Destination, TxOutput,
         output_value::OutputValue,
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, Destination, TxOutput,
     },
-    primitives::{amount::decimal::DecimalAmountWithIsSameComparison, DecimalAmount, H256},
+    primitives::{DecimalAmount, H256, amount::decimal::DecimalAmountWithIsSameComparison},
 };
 use utils::ensure;
 #[cfg(feature = "trezor")]

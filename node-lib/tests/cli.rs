@@ -56,13 +56,15 @@ fn create_default_config() {
         None
     );
 
-    assert!(config
-        .p2p
-        .clone()
-        .unwrap_or_default()
-        .bind_addresses
-        .unwrap_or_default()
-        .is_empty());
+    assert!(
+        config
+            .p2p
+            .clone()
+            .unwrap_or_default()
+            .bind_addresses
+            .unwrap_or_default()
+            .is_empty()
+    );
     assert_eq!(
         config.p2p.clone().unwrap_or_default().discouragement_threshold,
         None

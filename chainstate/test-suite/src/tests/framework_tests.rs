@@ -21,10 +21,9 @@ use chainstate::{BlockIndex, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{
-        self,
+        self, Destination, NetUpgrades,
         block::timestamp::BlockTimestamp,
-        config::{create_regtest, ChainType},
-        Destination, NetUpgrades,
+        config::{ChainType, create_regtest},
     },
     primitives::Idable,
 };
@@ -32,7 +31,7 @@ use randomness::CryptoRng;
 
 use chainstate_test_framework::TestFramework;
 use chainstate_types::{BlockStatus, BlockValidationStage};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::helpers::block_creation_helpers::build_block;
 

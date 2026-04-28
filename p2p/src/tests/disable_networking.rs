@@ -23,19 +23,19 @@ use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::run_with_timeout;
 use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
     error::{DialError, P2pError},
     peer_manager,
     test_helpers::{
-        make_transport_with_local_addr_in_group, test_p2p_config, TEST_PROTOCOL_VERSION,
+        TEST_PROTOCOL_VERSION, make_transport_with_local_addr_in_group, test_p2p_config,
     },
     tests::helpers::{
-        node_wait_for_connection_to_ip_addr, node_wait_for_connection_to_sock_addr,
-        node_wait_for_disconnection_from_ip_addr, TestNode,
+        TestNode, node_wait_for_connection_to_ip_addr, node_wait_for_connection_to_sock_addr,
+        node_wait_for_disconnection_from_ip_addr,
     },
 };
 

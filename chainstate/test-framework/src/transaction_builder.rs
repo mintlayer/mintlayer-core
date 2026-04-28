@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness,
-        signed_transaction::SignedTransaction, Destination, Transaction, TxInput, TxOutput,
+        Destination, Transaction, TxInput, TxOutput, output_value::OutputValue,
+        signature::inputsig::InputWitness, signed_transaction::SignedTransaction,
     },
     primitives::Amount,
 };
@@ -97,10 +97,10 @@ impl TransactionBuilder {
 #[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 fn build_transaction(#[case] seed: test_utils::random::Seed) {
-    use common::chain::signature::inputsig::InputWitness;
     use common::chain::OutPointSourceId;
-    use common::primitives::Id;
+    use common::chain::signature::inputsig::InputWitness;
     use common::primitives::H256;
+    use common::primitives::Id;
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
 

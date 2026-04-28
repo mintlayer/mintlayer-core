@@ -17,12 +17,11 @@ use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
 use common::{
-    amount_sum,
+    Uint256, amount_sum,
     chain::{Block, DelegationId, PoolId, RewardDistributionVersion},
     primitives::{
-        amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand, Amount, Id,
+        Amount, Id, amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand,
     },
-    Uint256,
 };
 use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
 use thiserror::Error;
@@ -50,7 +49,9 @@ pub enum RewardDistributionError {
         "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
     )]
     StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
-    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
+    #[error(
+        "Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}"
+    )]
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
     DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
@@ -317,15 +318,15 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
 #[cfg(test)]
 mod tests {
     use crate::{
-        transaction_verifier::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
         TransactionSource,
+        transaction_verifier::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     };
 
     use super::*;
     use common::{
         amount_sum,
         chain::{DelegationId, Destination, PoolId},
-        primitives::{per_thousand::PerThousand, Amount, H256},
+        primitives::{Amount, H256, per_thousand::PerThousand},
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use pos_accounting::{
@@ -335,7 +336,7 @@ mod tests {
     use randomness::RngExt;
     use rstest::rstest;
     use std::collections::BTreeMap;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     fn new_pool_id(v: u64) -> PoolId {
         PoolId::new(H256::from_low_u64_be(v))
@@ -534,33 +535,39 @@ mod tests {
             ),
             Err(RewardDistributionError::InvariantPoolBalanceIsZero(pool_id))
         );
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            staker_balance,
-            Amount::ZERO,
-            mpt_zero,
-            pool_id
-        )
-        .is_ok());
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            staker_balance,
-            Amount::ZERO,
-            mpt,
-            pool_id
-        )
-        .is_ok());
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            Amount::ZERO,
-            Amount::ZERO,
-            mpt,
-            pool_id
-        )
-        .is_ok());
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                staker_balance,
+                Amount::ZERO,
+                mpt_zero,
+                pool_id
+            )
+            .is_ok()
+        );
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                staker_balance,
+                Amount::ZERO,
+                mpt,
+                pool_id
+            )
+            .is_ok()
+        );
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                Amount::ZERO,
+                Amount::ZERO,
+                mpt,
+                pool_id
+            )
+            .is_ok()
+        );
         // negative amount
         assert_eq!(
             calculate_staker_reward_v1(
@@ -586,15 +593,17 @@ mod tests {
             Ok(reward)
         );
         // overflow
-        assert!(calculate_staker_reward_v1(
-            Amount::MAX,
-            pool_balance,
-            staker_balance,
-            cost_per_block,
-            mpt_more_than_one,
-            pool_id
-        )
-        .is_ok());
+        assert!(
+            calculate_staker_reward_v1(
+                Amount::MAX,
+                pool_balance,
+                staker_balance,
+                cost_per_block,
+                mpt_more_than_one,
+                pool_id
+            )
+            .is_ok()
+        );
 
         // arbitrary values
         assert_eq!(

@@ -18,22 +18,22 @@ use chainstate::{
 };
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
-    primitives::{id::WithId, Idable},
+    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    primitives::{Idable, id::WithId},
 };
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use randomness::{Rng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
-    transaction_verifier::{
-        error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, TransactionSourceForConnect, TransactionVerifier,
-        TransactionVerifierDelta,
-    },
     TransactionSource,
+    transaction_verifier::{
+        TransactionSourceForConnect, TransactionVerifier, TransactionVerifierDelta,
+        error::ConnectTransactionError, flush::flush_to_storage,
+        storage::TransactionVerifierStorageRef,
+    },
 };
 use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;

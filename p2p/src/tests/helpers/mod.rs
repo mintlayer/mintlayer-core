@@ -25,7 +25,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
 use networking::transport::TransportSocket;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::Rng;
 use test_utils::BasicTestTimeGetter;
 
@@ -35,7 +35,7 @@ use crate::{
         default_backend::types::{BackendObserver, Message},
         types::{PeerInfo, PeerManagerMessageExtTag, PeerRole},
     },
-    peer_manager::{self, dns_seed::DnsSeed, PeerManagerObserver},
+    peer_manager::{self, PeerManagerObserver, dns_seed::DnsSeed},
 };
 
 pub mod test_node;

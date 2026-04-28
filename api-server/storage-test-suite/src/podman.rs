@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{make_pseudo_rng, RngExt as _};
+use randomness::{RngExt as _, make_pseudo_rng};
 
 pub enum Container {
     PostgresFromDockerHub,

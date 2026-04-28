@@ -19,7 +19,7 @@ use common::{
 };
 use randomness::{Rng, RngExt as _};
 
-use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
+use crate::{PoSAccountingUndo, pool::operations::DelegateStakingUndo};
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> PoSAccountingUndo {
     let delegation_target: DelegationId = H256::random_using(rng).into();

@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use common::{
-    chain::{output_value::OutputValue, Destination, GenBlock, OutPointSourceId, UtxoOutPoint},
-    primitives::Id,
     Uint256,
+    chain::{Destination, GenBlock, OutPointSourceId, UtxoOutPoint, output_value::OutputValue},
+    primitives::Id,
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::*;
 

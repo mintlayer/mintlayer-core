@@ -16,39 +16,38 @@
 use std::{borrow::Cow, sync::Arc};
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, make_chainstate, BlockError,
-    BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource, ChainstateConfig,
-    ChainstateError, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-    DefaultTransactionVerificationStrategy, OrphanCheckError,
+    BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
+    ChainstateConfig, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, DefaultTransactionVerificationStrategy, OrphanCheckError,
+    chainstate_interface::ChainstateInterface, make_chainstate,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, get_output_value, TestFramework, TestStore,
-    TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
+    get_output_value,
 };
 use chainstate_types::{
     BlockStatus, BlockValidationStage, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
+    Uint256,
     chain::{
-        self,
-        block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
-        config::{create_unit_test_config, Builder as ConfigBuilder},
+        self, Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
+        block::{ConsensusData, consensus_data::PoWData, timestamp::BlockTimestamp},
+        config::{Builder as ConfigBuilder, create_unit_test_config},
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
     },
     primitives::{
-        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Compact, Id, Idable, H256,
+        Amount, BlockCount, BlockHeight, Compact, H256, Id, Idable, per_thousand::PerThousand,
     },
-    Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::{
@@ -60,7 +59,7 @@ use rstest::rstest;
 use test_utils::{
     assert_matches, assert_matches_return_val,
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TimelockError},

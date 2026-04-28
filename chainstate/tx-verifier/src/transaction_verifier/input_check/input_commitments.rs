@@ -15,19 +15,18 @@
 
 use common::{
     chain::{
+        ChainConfig, OrderId, PoolId, SignedTransaction,
         block::BlockRewardTransactable,
         signature::{
+            Signable,
             sighash::{
                 self,
                 input_commitments::{
-                    make_sighash_input_commitments_for_kernel_inputs,
+                    SighashInputCommitment, make_sighash_input_commitments_for_kernel_inputs,
                     make_sighash_input_commitments_for_transaction_inputs_at_height,
-                    SighashInputCommitment,
                 },
             },
-            Signable,
         },
-        ChainConfig, OrderId, PoolId, SignedTransaction,
     },
     primitives::BlockHeight,
 };

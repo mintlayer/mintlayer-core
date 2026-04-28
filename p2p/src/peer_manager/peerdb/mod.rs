@@ -33,7 +33,7 @@ pub mod storage_impl;
 mod storage_load;
 
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     sync::Arc,
     time::Duration,
 };
@@ -41,7 +41,7 @@ use std::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, Rng, RngExt as _, SliceRandom};
+use randomness::{Rng, RngExt as _, SliceRandom, seq::IteratorRandom};
 
 use crate::{config::P2pConfig, net::types::OutboundPeerRole};
 
@@ -58,7 +58,7 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
-pub use storage_load::{open_storage, CURRENT_STORAGE_VERSION};
+pub use storage_load::{CURRENT_STORAGE_VERSION, open_storage};
 
 pub struct PeerDb<S> {
     /// P2P configuration
@@ -166,7 +166,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
             if let Entry::Vacant(entry) = addresses.entry(*addr) {
                 let discarded_addr = address_tables.force_add_to_new(addr);
                 if let Some(discarded_addr) = discarded_addr {
-                    log::info!("Previously loaded 'new' address {discarded_addr} replaced with boot address {addr} when loading PeerDb");
+                    log::info!(
+                        "Previously loaded 'new' address {discarded_addr} replaced with boot address {addr} when loading PeerDb"
+                    );
                 }
 
                 entry.insert(AddressData::new(false, false, now));

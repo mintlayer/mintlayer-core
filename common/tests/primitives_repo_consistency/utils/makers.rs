@@ -20,6 +20,10 @@ use strum::IntoEnumIterator as _;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        AccountCommand, AccountCommandTag, AccountNonce, AccountOutPoint, AccountSpending,
+        AccountSpendingTag, Destination, DestinationTag, OrderAccountCommand,
+        OrderAccountCommandTag, OrderData, OutPointSourceId, OutPointSourceIdTag, TxInput,
+        TxInputTag, TxOutput, TxOutputTag, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::{OutputValue, OutputValueTag},
@@ -33,12 +37,8 @@ use common::{
             NftIssuanceV0, TokenCreator, TokenIssuance, TokenIssuanceTag, TokenIssuanceV1,
             TokenTotalSupply, TokenTotalSupplyTag,
         },
-        AccountCommand, AccountCommandTag, AccountNonce, AccountOutPoint, AccountSpending,
-        AccountSpendingTag, Destination, DestinationTag, OrderAccountCommand,
-        OrderAccountCommandTag, OrderData, OutPointSourceId, OutPointSourceIdTag, TxInput,
-        TxInputTag, TxOutput, TxOutputTag, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
+    primitives::{Amount, BlockHeight, H256, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},

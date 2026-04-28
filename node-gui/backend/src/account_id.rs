@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::key::hdkd::u31::U31;
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AccountId(U31);

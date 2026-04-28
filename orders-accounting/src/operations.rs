@@ -21,7 +21,7 @@ use common::{
 use serialization::{Decode, Encode};
 use strum::EnumCount;
 
-use crate::{error::Result, OrderData};
+use crate::{OrderData, error::Result};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreateOrderUndo {

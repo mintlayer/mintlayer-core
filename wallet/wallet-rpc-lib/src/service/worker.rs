@@ -28,7 +28,7 @@ use wallet_controller::types::{
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::{scan_blockchain::ScanBlockchain, wallet_type::WalletType};
 
-use crate::{types::RpcError, Event};
+use crate::{Event, types::RpcError};
 
 use super::WalletServiceEvents;
 

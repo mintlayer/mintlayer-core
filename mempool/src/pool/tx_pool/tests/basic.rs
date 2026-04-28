@@ -750,14 +750,16 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     tx_pool.add_transaction_test(child_2_high_fee.clone())?.assert_in_mempool();
 
     assert!(tx_pool.contains_transaction(&child_2_high_fee_id));
-    assert!(tx_pool
-        .chainstate_handle()
-        .call({
-            let outpt = child_2_high_fee_outpt.clone();
-            move |c| c.utxo(&outpt).unwrap().is_none()
-        })
-        .await
-        .unwrap());
+    assert!(
+        tx_pool
+            .chainstate_handle()
+            .call({
+                let outpt = child_2_high_fee_outpt.clone();
+                move |c| c.utxo(&outpt).unwrap().is_none()
+            })
+            .await
+            .unwrap()
+    );
 
     // TODO The commented out part only applies if RBF is active
 
@@ -779,11 +781,13 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     tx_pool.on_new_tip(block_id, BlockHeight::new(1)).unwrap();
 
     assert!(!tx_pool.contains_transaction(&child_2_high_fee_id));
-    assert!(tx_pool
-        .chainstate_handle()
-        .call(move |c| c.utxo(&child_2_high_fee_outpt).unwrap().is_some())
-        .await
-        .unwrap());
+    assert!(
+        tx_pool
+            .chainstate_handle()
+            .call(move |c| c.utxo(&child_2_high_fee_outpt).unwrap().is_some())
+            .await
+            .unwrap()
+    );
 
     // Because the rolling fee is only updated when we attempt to add a tx to the mempool we need
     // to submit a "dummy" tx to trigger these updates.

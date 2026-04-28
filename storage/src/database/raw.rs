@@ -16,11 +16,11 @@
 //! Raw database representation for contents inspection purposes
 
 use crate::{
-    schema::{self, HasDbMap, Schema},
     TransactionRo,
+    schema::{self, HasDbMap, Schema},
 };
 use std::collections::BTreeMap;
-use storage_core::{backend::ReadOps, Backend};
+use storage_core::{Backend, backend::ReadOps};
 
 pub use storage_core::Data;
 

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use randomness::make_pseudo_rng;
 use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;

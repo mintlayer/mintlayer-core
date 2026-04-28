@@ -15,7 +15,7 @@
 
 //! Per-peer work processing schedule queue and related tools.
 
-use std::collections::{btree_map, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map};
 
 use p2p_types::PeerId;
 use randomness::{self, RngExt as _, SliceRandom};

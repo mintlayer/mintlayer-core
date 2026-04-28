@@ -18,11 +18,11 @@ pub mod adapters;
 use std::sync::Mutex;
 
 pub use rand::prelude::{IndexedMutRandom, IndexedRandom, SliceRandom};
-pub use rand::{seq, CryptoRng, Rng, RngExt, SeedableRng, TryCryptoRng, TryRng};
+pub use rand::{CryptoRng, Rng, RngExt, SeedableRng, TryCryptoRng, TryRng, seq};
 
 pub mod distributions {
     pub use rand::distr::{
-        weighted::WeightedIndex, Alphanumeric, Distribution, SampleString, StandardUniform,
+        Alphanumeric, Distribution, SampleString, StandardUniform, weighted::WeightedIndex,
     };
     pub mod uniform {
         pub use rand::distr::uniform::SampleRange;

@@ -16,16 +16,16 @@
 use rstest::rstest;
 
 use common::chain::SighashInputCommitmentVersion;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::signer::tests::{
     generic_fixed_signature_tests::{
-        test_fixed_signatures_generic, test_fixed_signatures_generic2,
-        test_fixed_signatures_generic_htlc_refunding, test_fixed_signatures_generic_no_legacy,
+        test_fixed_signatures_generic, test_fixed_signatures_generic_htlc_refunding,
+        test_fixed_signatures_generic_no_legacy, test_fixed_signatures_generic2,
     },
     generic_tests::{
-        test_sign_message_generic, test_sign_transaction_generic,
-        test_sign_transaction_intent_generic, MessageToSign,
+        MessageToSign, test_sign_message_generic, test_sign_transaction_generic,
+        test_sign_transaction_intent_generic,
     },
     make_deterministic_software_signer, make_software_signer, no_another_signer,
 };

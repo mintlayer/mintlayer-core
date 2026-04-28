@@ -119,7 +119,7 @@ mod tests {
 
     use test_utils::{
         assert_matches,
-        random::{make_seedable_rng, RngExt as _, Seed},
+        random::{RngExt as _, Seed, make_seedable_rng},
     };
 
     use super::*;

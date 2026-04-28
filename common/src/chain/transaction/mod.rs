@@ -20,7 +20,7 @@ use typename::TypeName;
 
 use crate::{
     chain::{output_value::OutputValue, output_values_holder::OutputValuesHolder},
-    primitives::{id::WithId, Id, Idable, H256},
+    primitives::{H256, Id, Idable, id::WithId},
     text_summary::TextSummary,
 };
 

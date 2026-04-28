@@ -19,7 +19,7 @@ use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::ApiServerStorage,
 };
-use common::chain::{config::create_unit_test_config, ChainConfig};
+use common::chain::{ChainConfig, config::create_unit_test_config};
 
 #[must_use]
 #[allow(clippy::unused_async)]

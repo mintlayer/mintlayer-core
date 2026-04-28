@@ -18,11 +18,11 @@ use strum::IntoEnumIterator as _;
 
 use logging::log;
 use randomness::{
+    RngExt as _,
     distributions::{Distribution, WeightedIndex},
     seq::IteratorRandom as _,
-    RngExt as _,
 };
-use test_utils::random::{make_seedable_rng, Seed, StepRng};
+use test_utils::random::{Seed, StepRng, make_seedable_rng};
 
 use super::*;
 
@@ -123,7 +123,9 @@ fn next_connect_time_test_impl(rng: &mut impl Rng) {
 
     for fail_count in [0, u32::MAX] {
         for connections_without_activity_count in [0, u32::MAX] {
-            log::debug!("fail_count = {fail_count}, connections_without_activity_count = {connections_without_activity_count}");
+            log::debug!(
+                "fail_count = {fail_count}, connections_without_activity_count = {connections_without_activity_count}"
+            );
 
             let time = AddressData::next_connect_time(
                 start_time,

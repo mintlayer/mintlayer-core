@@ -21,19 +21,19 @@ use common::{
 };
 use logging::log;
 use utils::{
-    make_seedable_rng, ClientT, JsonValue, Seed, Subscription, SubscriptionClientT, ACCOUNT0_ARG,
-    ACCOUNT1_ARG,
+    ACCOUNT0_ARG, ACCOUNT1_ARG, ClientT, JsonValue, Seed, Subscription, SubscriptionClientT,
+    make_seedable_rng,
 };
 use wallet_rpc_lib::{
+    TxState,
     types::{
         AddressInfo, Balances, BlockInfo, NewAccountInfo, NewSubmittedTransaction, RpcAmountIn,
         RpcUtxoState, TransactionOptions,
     },
-    TxState,
 };
 
 use rstest::*;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 #[rstest]
 #[trace]

@@ -17,7 +17,7 @@ use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
-    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
+    address::{AddressError, hexified::HexifiedAddress, traits::Addressable},
     chain::ChainConfig,
     primitives::Id,
 };

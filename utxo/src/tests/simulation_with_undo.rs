@@ -18,13 +18,13 @@ use std::{collections::BTreeMap, convert::Infallible};
 use rstest::rstest;
 
 use common::{
-    chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
-    primitives::{BlockHeight, Id, Idable, H256},
+    chain::{OutPointSourceId, Transaction, TxInput, UtxoOutPoint, block::BlockReward},
+    primitives::{BlockHeight, H256, Id, Idable},
 };
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{

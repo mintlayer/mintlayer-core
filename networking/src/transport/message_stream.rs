@@ -120,7 +120,7 @@ where
 #[cfg(test)]
 mod tests {
     use randomness::RngExt;
-    use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
+    use test_utils::random::{Seed, gen_random_bytes, make_seedable_rng};
 
     use super::*;
 

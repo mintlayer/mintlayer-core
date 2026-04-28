@@ -21,8 +21,8 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
-        config::{ChainType, MagicBytes},
         Block, ChainConfig,
+        config::{ChainType, MagicBytes},
     },
     primitives::id::WithId,
 };
@@ -262,7 +262,7 @@ mod tests {
     use rstest::rstest;
 
     use randomness::RngExt as _;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 

@@ -16,11 +16,11 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use common::chain::config::{
-    regtest_options::{regtest_chain_config, ChainConfigOptions},
     ChainConfig, ChainType,
+    regtest_options::{ChainConfigOptions, regtest_chain_config},
 };
 use crypto::key::hdkd::u31::U31;
-use rpc::{rpc_creds::RpcCreds, RpcAuthData};
+use rpc::{RpcAuthData, rpc_creds::RpcCreds};
 
 use crate::types::HardwareWalletType;
 

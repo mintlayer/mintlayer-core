@@ -17,24 +17,24 @@
 
 use chainstate::rpc::RpcTypeError;
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
+    TokenDecimalsProvider, TokenDecimalsUnavailableError,
+    address::{Address, AddressError, pubkeyhash::PublicKeyHash},
     chain::{
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
         signature::DestinationSigError,
         timelock::OutputTimeLock,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
-    TokenDecimalsProvider, TokenDecimalsUnavailableError,
+    primitives::{Amount, BlockHeight, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{
+        PublicKey,
         extended::ExtendedPublicKey,
         hdkd::{chain_code::ChainCode, child_number::ChildNumber, u31::U31},
-        PublicKey,
     },
     vrf::VRFPublicKey,
 };
@@ -43,10 +43,10 @@ use utils::ensure;
 use wallet::account::PoolData;
 
 pub use chainstate::{
+    ChainInfo,
     rpc::{
         RpcOutputValueIn, RpcOutputValueOut, RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint,
     },
-    ChainInfo,
 };
 pub use common::{
     address::RpcAddress,
@@ -59,11 +59,11 @@ pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{
     Balances, BlockInfo, InspectTransaction, SignatureStats, ValidatedSignatures,
 };
-use wallet_controller::{types::WalletTypeArgs, UtxoState, UtxoType};
 pub use wallet_controller::{ControllerConfig, NodeInterface};
+use wallet_controller::{UtxoState, UtxoType, types::WalletTypeArgs};
 use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, ImportOrCreate, KeyPurpose,
+    ImportOrCreate, KeyPurpose, partially_signed_transaction::PartiallySignedTransaction,
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus,
 };
 
 use crate::service::SubmitError;
@@ -83,7 +83,9 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid address: {0}")]
     InvalidAddressWithAddr(String),
 
-    #[error("Failed to parse margin_ratio_per_thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
+    #[error(
+        "Failed to parse margin_ratio_per_thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]"
+    )]
     InvalidMarginRatio,
 
     #[error("Invalid pool ID")]
@@ -139,7 +141,9 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Can't compose a transaction without any inputs")]
     ComposeTransactionEmptyInputs,
 
-    #[error("Provided address to create a Multisig address at index {0} is not a valid public key. Only public keys can be used.")]
+    #[error(
+        "Provided address to create a Multisig address at index {0} is not a valid public key. Only public keys can be used."
+    )]
     MultisigNotPublicKey(usize),
 
     #[error("Invalid multisig: {0}")]
@@ -154,9 +158,7 @@ pub enum RpcError<N: NodeInterface> {
     #[error("The specified address {0} is not a multisig address")]
     NotMultisigAddress(String),
 
-    #[error(
-        "There are no UTXOs corresponding to the specified multisig address for tokens: {0:?}"
-    )]
+    #[error("There are no UTXOs corresponding to the specified multisig address for tokens: {0:?}")]
     NoUtxosForMultisigAddressForTokens(Vec<TokenId>),
 
     #[error("No outputs specified")]
@@ -919,7 +921,7 @@ impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
                     multiple_devices_available: Some(MultipleDevicesAvailable::Trezor {
                         devices: devices.into_iter().map(Into::into).collect(),
                     }),
-                }
+                };
             }
         };
         Self {

@@ -17,8 +17,8 @@ use accounting::{DeltaAmountCollection, DeltaDataCollection};
 use common::chain::{DelegationId, PoolId};
 
 use crate::{
-    pool::{delegation::DelegationData, pool_data::PoolData},
     DeltaMergeUndo, Error,
+    pool::{delegation::DelegationData, pool_data::PoolData},
 };
 
 use serialization::{Decode, Encode};

@@ -19,18 +19,19 @@ use rstest::rstest;
 
 use chainstate::ChainstateConfig;
 use chainstate_test_framework::{
+    PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
     create_custom_genesis_with_stake_pool, create_stake_pool_data_with_all_reward_to_staker,
-    empty_witness, PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
+    empty_witness,
 };
 use chainstate_types::TipStorageTag;
 use common::{
     chain::{
-        self, config::ChainType, make_delegation_id, output_value::OutputValue,
-        timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit,
-        ConsensusUpgrade, DelegationId, Destination, NetUpgrades, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        self, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, ConsensusUpgrade,
+        DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TxInput, TxOutput, UtxoOutPoint, config::ChainType, make_delegation_id,
+        output_value::OutputValue, timelock::OutputTimeLock,
     },
-    primitives::{amount::SignedAmount, Amount, BlockCount, BlockHeight, Idable, H256},
+    primitives::{Amount, BlockCount, BlockHeight, H256, Idable, amount::SignedAmount},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -38,8 +39,8 @@ use crypto::{
 };
 use logging::log;
 use pos_accounting::PoSAccountingStorageRead;
-use randomness::{seq::IteratorRandom, CryptoRng, Rng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::{CryptoRng, Rng, RngExt as _, seq::IteratorRandom};
+use test_utils::random::{Seed, make_seedable_rng};
 
 #[rstest]
 #[trace]

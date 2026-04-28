@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use futures::{future::select_all, FutureExt};
+use futures::{FutureExt, future::select_all};
 use itertools::Either;
 use tokio::time;
 
@@ -25,9 +25,9 @@ use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::PeerId;
 use randomness::Rng;
 
-use crate::{message::BlockSyncMessage, PeerManagerEvent};
+use crate::{PeerManagerEvent, message::BlockSyncMessage};
 
-use super::{get_random_hash, TestNode, TestPeer};
+use super::{TestNode, TestPeer, get_random_hash};
 
 struct NodeDataItem {
     node: TestNode,

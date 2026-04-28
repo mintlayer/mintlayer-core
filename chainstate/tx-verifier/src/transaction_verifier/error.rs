@@ -16,10 +16,10 @@
 use chainstate_types::GetAncestorError;
 use common::{
     chain::{
-        block::{Block, GenBlock},
-        tokens::TokenId,
         AccountNonce, AccountType, DelegationId, IdCreationError, OrderId, OutPointSourceId,
         PoolId, Transaction, UtxoOutPoint,
+        block::{Block, GenBlock},
+        tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -119,7 +119,9 @@ pub enum ConnectTransactionError {
     InputCheck(#[from] InputCheckError),
     #[error("Transaction {0} has conclude order input {1} with amounts that don't match the db")]
     ConcludeInputAmountsDontMatch(Id<Transaction>, OrderId),
-    #[error("ProduceBlockFromStake for block {0} modifies staker destination for pool {1}; this is no longer allowed")]
+    #[error(
+        "ProduceBlockFromStake for block {0} modifies staker destination for pool {1}; this is no longer allowed"
+    )]
     ProduceBlockFromStakeChangesStakerDestination(Id<Block>, PoolId),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),

@@ -25,16 +25,16 @@ use std::{ops::Deref, sync::Arc};
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
     chain::{
+        Block, ChainConfig, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput,
         block::{
+            BlockHeader, BlockReward, ConsensusData,
             signed_block_header::{
                 BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader,
             },
             timestamp::BlockTimestamp,
-            BlockHeader, BlockReward, ConsensusData,
         },
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        Block, ChainConfig, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -45,24 +45,24 @@ use utils::atomics::RelaxedAtomicBool;
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{
+        EffectivePoolBalanceError, StakeResult,
         block_sig::BlockSignatureError,
         calc_pos_hash_from_prv_key, check_pos_hash, compact_target_to_target,
         error::ConsensusPoSError,
         find_timestamp_for_staking,
         hash_check::calc_and_check_pos_hash,
         input_data::{
-            generate_pos_consensus_data_and_reward, PoSFinalizeBlockInputData,
-            PoSGenerateBlockInputData, PoSTimestampSearchInputData,
+            PoSFinalizeBlockInputData, PoSGenerateBlockInputData, PoSTimestampSearchInputData,
+            generate_pos_consensus_data_and_reward,
         },
         kernel::get_kernel_output,
         stake,
         target::{calculate_target_required, calculate_target_required_from_block_index},
-        EffectivePoolBalanceError, StakeResult,
     },
     pow::{
-        calculate_work_required, check_proof_of_work,
-        input_data::{generate_pow_consensus_data_and_reward, PoWGenerateBlockInputData},
-        mine, ConsensusPoWError, MiningResult,
+        ConsensusPoWError, MiningResult, calculate_work_required, check_proof_of_work,
+        input_data::{PoWGenerateBlockInputData, generate_pow_consensus_data_and_reward},
+        mine,
     },
     validator::validate_consensus,
 };

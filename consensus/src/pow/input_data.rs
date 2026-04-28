@@ -17,10 +17,10 @@ use crate::pow::{calculate_work_required, error::ConsensusPoWError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward},
+        ChainConfig, Destination, PoWStatus, TxOutput,
+        block::{BlockReward, consensus_data::PoWData, timestamp::BlockTimestamp},
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        ChainConfig, Destination, PoWStatus, TxOutput,
     },
     primitives::BlockHeight,
 };

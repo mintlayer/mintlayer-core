@@ -15,7 +15,7 @@
 
 use thiserror::Error;
 
-use crate::utils::{get_from_env, GetFromEnvError};
+use crate::utils::{GetFromEnvError, get_from_env};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextColoring {

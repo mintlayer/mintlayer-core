@@ -15,7 +15,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use randomness::{adapters::Rng08Adapter, CryptoRng};
+use randomness::{CryptoRng, adapters::Rng08Adapter};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
@@ -88,7 +88,7 @@ mod tests {
     use rstest::rstest;
 
     use randomness::SeedableRng;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 

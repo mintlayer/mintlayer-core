@@ -21,12 +21,12 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        ChainConfig,
         classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
         signature::{
-            inputsig::classical_multisig::multisig_partial_signature::PartiallySignedMultisigChallenge,
             DestinationSigError,
+            inputsig::classical_multisig::multisig_partial_signature::PartiallySignedMultisigChallenge,
         },
-        ChainConfig,
     },
     primitives::H256,
 };
@@ -229,7 +229,7 @@ pub fn sign_classical_multisig_spending<AuxP: SigAuxDataProvider + ?Sized>(
                     key_index,
                     challenge.public_keys().len(),
                 ),
-            )
+            );
         }
     };
 
@@ -273,7 +273,7 @@ mod tests {
     use randomness::{RngExt as _, SliceRandom};
     use rstest::rstest;
     use std::cmp::Ordering;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::chain::config::create_mainnet;
 

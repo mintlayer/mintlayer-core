@@ -27,8 +27,8 @@ use std::{
 
 use cli_event_loop::Event;
 use common::chain::{
-    config::{regtest_options::regtest_chain_config, ChainType},
     ChainConfig,
+    config::{ChainType, regtest_options::regtest_chain_config},
 };
 use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
@@ -144,7 +144,7 @@ async fn start_hot_wallet(
         _ => {
             return Err(Box::new(WalletCliError::<ColdWalletClient>::InvalidConfig(
                 "Invalid RPC cookie/username/password combination".to_owned(),
-            )))
+            )));
         }
     };
 

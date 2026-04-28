@@ -20,22 +20,22 @@ use rstest::rstest;
 
 use chainstate::{ChainstateError, PropertyQueryError};
 use chainstate_test_framework::{
-    helpers::{issue_token_from_block, issue_token_from_genesis, make_token_issuance},
     TestFramework, TransactionBuilder,
+    helpers::{issue_token_from_block, issue_token_from_genesis, make_token_issuance},
 };
 use common::{
     chain::{
+        Destination, TxInput, TxOutput, UtxoOutPoint,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenTotalSupply},
-        Destination, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
 use randomness::seq::IteratorRandom as _;
 use test_utils::{
     assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 

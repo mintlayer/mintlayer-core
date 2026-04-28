@@ -20,7 +20,7 @@ use chainstate::{BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
 use common::primitives::Idable;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 // Check processing of a good block.
 #[rstest]

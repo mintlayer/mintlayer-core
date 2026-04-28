@@ -16,16 +16,16 @@
 use std::convert::Infallible;
 
 use common::chain::{
+    ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
     partially_signed_transaction::PartiallySignedTransaction,
     signature::{
-        inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
-        DestinationSigError, Transactable,
+        DestinationSigError, Transactable, inputsig::InputWitness,
+        sighash::input_commitments::SighashInputCommitment,
     },
     tokens::TokenId,
-    ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
 };
 use mintscript::{
-    script::ScriptError, translate::InputInfoProvider, InputInfo, SignatureContext, TranslateInput,
+    InputInfo, SignatureContext, TranslateInput, script::ScriptError, translate::InputInfoProvider,
 };
 use utils::ensure;
 

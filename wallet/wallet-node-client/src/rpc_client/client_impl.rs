@@ -21,22 +21,22 @@ use std::{
 
 use futures::StreamExt;
 
-use blockprod::{rpc::BlockProductionRpcClient, TimestampSearchData};
-use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
+use blockprod::{TimestampSearchData, rpc::BlockProductionRpcClient};
+use chainstate::{ChainInfo, rpc::ChainstateRpcClient};
 use common::{
     address::Address,
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    rpc::MempoolRpcClient, rpc_event::RpcEvent, tx_accumulator::PackingStrategy,
-    tx_options::TxOptionsOverrides, FeeRate,
+    FeeRate, rpc::MempoolRpcClient, rpc_event::RpcEvent, tx_accumulator::PackingStrategy,
+    tx_options::TxOptionsOverrides,
 };
 use p2p::{
     interface::types::ConnectedPeer,

@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::Uint256;
 use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
-use common::primitives::{BlockHeight, Id, Idable, H256};
-use common::Uint256;
+use common::primitives::{BlockHeight, H256, Id, Idable};
 use serialization::{Decode, Encode};
 use static_assertions::assert_not_impl_any;
 

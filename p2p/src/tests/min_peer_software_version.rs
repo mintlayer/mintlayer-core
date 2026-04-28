@@ -21,25 +21,24 @@ use rstest::rstest;
 use chainstate::ChainstateConfig;
 use common::primitives::{
     semver::SemVer,
-    user_agent::{mintlayer_core_user_agent, UserAgent},
+    user_agent::{UserAgent, mintlayer_core_user_agent},
 };
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{new_message_stream, ConnectedSocketInfo as _, TransportListener, TransportSocket},
+    transport::{ConnectedSocketInfo as _, TransportListener, TransportSocket, new_message_stream},
 };
 use p2p_test_utils::run_with_timeout;
 use p2p_types::socket_address::SocketAddress;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
     config::P2pConfig,
     net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
-    peer_manager::{self, config::PeerManagerConfig, PeerManagerInterface},
+    peer_manager::{self, PeerManagerInterface, config::PeerManagerConfig},
     test_helpers::TEST_PROTOCOL_VERSION,
     tests::helpers::TestNode,
 };

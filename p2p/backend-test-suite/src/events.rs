@@ -26,12 +26,12 @@ use tokio::{
 
 use networking::test_helpers::TestTransportMaker;
 use p2p::{
+    P2pEvent,
     net::{
-        types::services::Service, ConnectivityService, MessagingService, NetworkingService,
-        SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        types::services::Service,
     },
     test_helpers::{connect_and_accept_services, test_p2p_config},
-    P2pEvent,
 };
 use utils::atomics::SeqCstAtomicBool;
 

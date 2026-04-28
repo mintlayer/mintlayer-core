@@ -16,10 +16,17 @@
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
 
 use crate::{
+    Uint256,
     chain::{
+        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
+        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
+        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
+        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+        TokenIssuanceVersion, TokensFeeVersion,
         config::{
-            create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
-            emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
+            ChainConfig, ChainType, EmissionScheduleTabular, create_mainnet_genesis,
+            create_testnet_genesis, create_unit_test_genesis, emission_schedule,
         },
         get_initial_randomness,
         pos::{
@@ -28,25 +35,18 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
-        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
-        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
-        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-        TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
-        BlockHeight, Id, Idable, H256,
+        Amount, BlockCount, BlockDistance, BlockHeight, H256, Id, Idable, id::WithId,
+        per_thousand::PerThousand, semver::SemVer,
     },
-    Uint256,
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
 use super::{
+    MagicBytes,
     checkpoints::Checkpoints,
     checkpoints_data::{MAINNET_CHECKPOINTS, TESTNET_CHECKPOINTS},
-    MagicBytes,
 };
 
 // Note: the names of the "FORK_HEIGHT" constants below only contain the short description
@@ -653,7 +653,7 @@ mod tests {
     use super::*;
     use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::chain::config::{
         DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1, DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,

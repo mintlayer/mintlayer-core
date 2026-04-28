@@ -25,14 +25,14 @@ use p2p::{
 };
 use p2p_test_utils::{expect_no_recv, expect_recv};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{
     crawler_p2p::{
-        crawler::{address_data::SoftwareInfo, BanDuration, BanThreshold},
+        crawler::{BanDuration, BanThreshold, address_data::SoftwareInfo},
         crawler_manager::tests::mock_manager::{
-            advance_time, assert_banned_addresses, assert_known_addresses, test_crawler,
-            ErraticNodeConnectError,
+            ErraticNodeConnectError, advance_time, assert_banned_addresses, assert_known_addresses,
+            test_crawler,
         },
     },
     dns_server::DnsServerCommand,

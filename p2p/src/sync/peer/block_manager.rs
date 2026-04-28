@@ -22,15 +22,15 @@ use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, GenBlockIndex,
-    GenBlockIndexRef, Locator,
+    BlockIndex, BlockSource, GenBlockIndex, GenBlockIndexRef, Locator,
+    chainstate_interface::ChainstateInterface,
 };
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         Block, ChainConfig, GenBlock,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
     },
-    primitives::{time::Time, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id, Idable, time::Time},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -40,16 +40,18 @@ use utils::{
 };
 
 use crate::{
+    MessagingService, PeerManagerEvent, Result,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{P2pError, PeerError, ProtocolError, SyncError},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     net::{
-        types::services::{Service, Services},
         NetworkingService,
+        types::services::{Service, Services},
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
+        LocalEvent,
         chainstate_handle::ChainstateHandle,
         peer_activity::PeerActivity,
         peer_common::{
@@ -57,11 +59,9 @@ use crate::{
             handle_message_processing_result,
         },
         sync_status::PeerBlockSyncStatus,
-        LocalEvent,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, PeerManagerEvent, Result,
 };
 
 // TODO: Take into account the chain work when syncing.
@@ -994,8 +994,11 @@ where
         // Nodes can disconnect each other if all of them are in the initial block download state,
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
-        log::warn!("Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
-            headers_req_stalling, blocks_req_stalling);
+        log::warn!(
+            "Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
+            headers_req_stalling,
+            blocks_req_stalling
+        );
         self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,

@@ -15,14 +15,14 @@
 
 use common::{
     chain::{
-        output_value::OutputValue, Destination, OutPointSourceId, SignedTransaction, TxOutput,
-        UtxoOutPoint,
+        Destination, OutPointSourceId, SignedTransaction, TxOutput, UtxoOutPoint,
+        output_value::OutputValue,
     },
     primitives::{Amount, Idable},
 };
 use randomness::CryptoRng;
 
-use crate::{empty_witness, TransactionBuilder};
+use crate::{TransactionBuilder, empty_witness};
 
 /// A struct that tracks a utxo and amount available for spending.
 pub struct UtxoForSpending {

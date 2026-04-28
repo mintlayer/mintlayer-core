@@ -19,13 +19,13 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
-    output_value::OutputValue, signature::inputsig::InputWitness, Destination, OutPointSourceId,
-    TxInput, TxOutput, UtxoOutPoint,
+    Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue,
+    signature::inputsig::InputWitness,
 };
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use randomness::RngExt as _;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tx_verifier::CheckTransactionError;
 
 #[rstest]

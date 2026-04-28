@@ -20,13 +20,12 @@ use chainstate_storage::{BlockchainStorageRead as _, Transactional};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        make_token_id,
+        Block, Transaction, TxOutput, make_token_id,
         tokens::{
             IsTokenFrozen, Metadata, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo,
             RPCNonFungibleTokenInfo, RPCTokenInfo, TokenAuxiliaryData, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        Block, Transaction, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };

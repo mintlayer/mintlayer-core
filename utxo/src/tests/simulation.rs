@@ -20,8 +20,8 @@ use rstest::rstest;
 use common::chain::UtxoOutPoint;
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};

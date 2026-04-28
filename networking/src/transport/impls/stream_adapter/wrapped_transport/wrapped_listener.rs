@@ -22,9 +22,9 @@ use futures::{
 };
 
 use crate::{
-    transport::{impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket},
-    types::ConnectionDirection,
     Result,
+    transport::{TransportListener, TransportSocket, impls::stream_adapter::traits::StreamAdapter},
+    types::ConnectionDirection,
 };
 
 // TODO: Move this constant to some configuration + should be used

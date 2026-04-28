@@ -15,21 +15,22 @@
 
 use std::sync::Arc;
 
-use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
+use chainstate::{BlockError, ChainstateError, CheckBlockError, ban_score::BanScore};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{create_unit_test_config, Builder as ChainConfigBuilder, ChainType},
         Block, NetUpgrades,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
+        config::{Builder as ChainConfigBuilder, ChainType, create_unit_test_config},
     },
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{Idable, user_agent::mintlayer_core_user_agent},
 };
 use consensus::ConsensusVerificationError;
 use logging::log;
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, random::Seed};
 
 use crate::{
+    P2pError,
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
@@ -37,7 +38,6 @@ use crate::{
     sync::tests::helpers::TestNode,
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pError,
 };
 
 use super::helpers::{make_new_blocks, make_new_top_blocks_return_headers};
@@ -106,10 +106,10 @@ async fn invalid_timestamp() {
             BlockReward::new(Vec::new()),
         )
         .unwrap();
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            block.header().clone(),
+        ])))
+        .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -156,10 +156,10 @@ async fn invalid_consensus_data() {
             BlockReward::new(Vec::new()),
         )
         .unwrap();
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            block.header().clone(),
+        ])))
+        .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -251,10 +251,10 @@ async fn valid_block(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            block.header().clone(),
+        ])))
+        .await;
 
         let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(sent_to, peer.get_id());

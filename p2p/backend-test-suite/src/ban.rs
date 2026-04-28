@@ -17,23 +17,23 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
-use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
+use chainstate::{BlockError, ChainstateError, CheckBlockError, ban_score::BanScore};
 use common::{
-    chain::block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
+    chain::block::{Block, BlockReward, ConsensusData, timestamp::BlockTimestamp},
     primitives::Idable,
     time_getter::TimeGetter,
 };
 use networking::test_helpers::TestTransportMaker;
 use p2p::{
+    PeerManagerEvent,
     error::P2pError,
     message::{BlockSyncMessage, HeaderList},
     net::{
-        types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
-        SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        types::SyncingEvent,
     },
     sync::SyncManager,
     test_helpers::{connect_and_accept_services, test_p2p_config},
-    PeerManagerEvent,
 };
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 

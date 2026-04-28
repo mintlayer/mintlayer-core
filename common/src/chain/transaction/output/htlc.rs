@@ -22,7 +22,7 @@ use crypto::hash::{self, hash};
 use randomness::{CryptoRng, RngExt as _};
 use serialization::{Decode, Encode};
 
-use super::{timelock::OutputTimeLock, Destination};
+use super::{Destination, timelock::OutputTimeLock};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct HashedTimelockContract {

@@ -24,36 +24,37 @@ use rstest::rstest;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
+        AccountNonce, AccountSpending, ChainstateUpgradeBuilder, Currency, Destination, Genesis,
+        OutPointSourceId, TxInput,
+        block::{BlockReward, ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
+        config::{Builder, ChainType, create_mainnet, create_regtest, create_unit_test_config},
         output_value::{OutputValue, RpcOutputValue},
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        AccountNonce, AccountSpending, ChainstateUpgradeBuilder, Currency, Destination, Genesis,
-        OutPointSourceId, TxInput,
     },
-    primitives::{per_thousand::PerThousand, Idable, H256},
+    primitives::{H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{
-        hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
         KeyKind,
+        hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
     },
     vrf::transcript::no_rng::VRFTranscript,
 };
 use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
-use serialization::{extras::non_empty_vec::DataOrNoVec, hex::HexEncode, Encode};
+use serialization::{Encode, extras::non_empty_vec::DataOrNoVec, hex::HexEncode};
 use storage::raw::DbMapId;
 use test_utils::{
     assert_matches, assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
     token_utils::random_token_issuance_v1_with_min_supply,
 };
-use wallet_storage::{schema, WalletStorageEncryptionRead};
+use wallet_storage::{WalletStorageEncryptionRead, schema};
 use wallet_types::{
+    AccountWalletTxId, WalletTx,
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
         OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionError,
@@ -61,11 +62,11 @@ use wallet_types::{
     },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
-    AccountWalletTxId, WalletTx,
 };
 
 use crate::{
-    key_chain::{make_account_path, LOOKAHEAD_SIZE},
+    DefaultWallet,
+    key_chain::{LOOKAHEAD_SIZE, make_account_path},
     send_request::{make_address_output, make_create_delegation_output},
     signer::software_signer::SoftwareSignerProvider,
     wallet::test_helpers::{
@@ -73,7 +74,6 @@ use crate::{
         create_wallet_with_mnemonic_and_named_db, scan_wallet,
     },
     wallet_events::WalletEventsNoOp,
-    DefaultWallet,
 };
 
 use super::*;
@@ -83,8 +83,7 @@ use super::*;
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-const MNEMONIC2: &str =
-    "disease woman cave illness sample crew swamp robust crumble infant news sign liquid rigid alter";
+const MNEMONIC2: &str = "disease woman cave illness sample crew swamp robust crumble infant news sign liquid rigid alter";
 
 const NETWORK_FEE: u128 = 10000;
 
@@ -1415,13 +1414,15 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         );
 
         // check that the kdf challenge has been deleted
-        assert!(wallet
-            .db
-            .transaction_ro()
-            .unwrap()
-            .get_encryption_key_kdf_challenge()
-            .unwrap()
-            .is_none());
+        assert!(
+            wallet
+                .db
+                .transaction_ro()
+                .unwrap()
+                .get_encryption_key_kdf_challenge()
+                .unwrap()
+                .is_none()
+        );
 
         wallet
             .create_transaction_to_addresses(
@@ -1734,7 +1735,7 @@ async fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn wallet_transactions_with_fees(#[case] seed: Seed) {
-    use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
+    use crate::destination_getters::{HtlcSpendingCondition, get_tx_output_destination};
 
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());

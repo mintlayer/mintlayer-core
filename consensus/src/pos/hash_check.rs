@@ -15,9 +15,9 @@
 
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSConsensusVersion},
-    primitives::Amount,
     Uint256, Uint512,
+    chain::{PoSConsensusVersion, block::timestamp::BlockTimestamp, config::EpochIndex},
+    primitives::Amount,
 };
 use crypto::vrf::{VRFPublicKey, VRFReturn};
 use utils::ensure;

@@ -80,11 +80,11 @@ mod test {
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
-            signature::{sighash::signature_hash, StandardInputSignature},
+            Destination,
+            signature::{StandardInputSignature, sighash::signature_hash},
             transaction::signature::tests::utils::{
                 generate_input_commitments, generate_unsigned_tx, sig_hash_types,
             },
-            Destination,
         },
     };
 

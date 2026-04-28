@@ -18,12 +18,12 @@ use common::chain::output_value::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Block, Destination, OutPointSourceId, TxOutput, UtxoOutPoint};
 use common::primitives::Id;
-use common::primitives::{Amount, BlockHeight, Idable, H256};
+use common::primitives::{Amount, BlockHeight, H256, Idable};
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use serialization::Encode;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use utxo::{
     Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite,
     UtxosTxUndoWithSources,
@@ -58,10 +58,10 @@ fn assert_no_block<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block_id: Id<Block
 fn test_storage_manipulation() {
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
             Transaction,
+            block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         },
-        primitives::{Id, H256},
+        primitives::{H256, Id},
     };
 
     // Prepare some test data

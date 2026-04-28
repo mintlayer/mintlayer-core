@@ -17,18 +17,18 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId, Destination,
+        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
         config::ChainType,
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId, Destination,
-        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{
-        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Fee, Id, H256,
+        Amount, BlockCount, BlockHeight, CoinOrTokenId, Fee, H256, Id, per_thousand::PerThousand,
     },
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
@@ -37,7 +37,7 @@ use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, Poo
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 
