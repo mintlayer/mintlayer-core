@@ -26,28 +26,28 @@ use tokio::{
 };
 
 use chainstate::{
-    BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
-    Locator, chainstate_interface::ChainstateInterface, make_chainstate,
+    chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
+    ChainstateHandle, DefaultTransactionVerificationStrategy, Locator,
 };
 use common::{
     chain::{
-        Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
-        TxOutput,
         block::{
-            BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
         },
         config::create_unit_test_config,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
+        Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
+        TxOutput,
     },
-    primitives::{Amount, BlockHeight, H256, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{MempoolConfig, MempoolHandle, MempoolInit, event::TransactionProcessed};
+use mempool::{event::TransactionProcessedEvent, MempoolConfig, MempoolHandle, MempoolInit};
 use networking::transport::TcpTransportSocket;
-use p2p_test_utils::{SHORT_TIMEOUT, expect_future_val, expect_no_recv, expect_recv};
+use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{Rng, RngExt as _};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
@@ -56,14 +56,14 @@ use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
-    MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
-    Result, SyncingEventReceiver,
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
     net::types::SyncingEvent,
-    protocol::{ProtocolVersion, choose_common_protocol_version},
-    sync::{Observer, SyncManager, subscribe_to_new_tip, subscribe_to_tx_processed},
+    protocol::{choose_common_protocol_version, ProtocolVersion},
+    sync::{subscribe_to_new_tip, subscribe_to_tx_processed, Observer, SyncManager},
     test_helpers::test_p2p_config,
     types::peer_id::PeerId,
+    MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
+    Result, SyncingEventReceiver,
 };
 
 pub mod test_node_group;
@@ -86,7 +86,7 @@ pub struct TestNode {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     new_tip_receiver: UnboundedReceiver<Id<GenBlock>>,
-    tx_processed_receiver: UnboundedReceiver<TransactionProcessed>,
+    tx_processed_receiver: UnboundedReceiver<TransactionProcessedEvent>,
     sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
 }
@@ -249,6 +249,15 @@ impl TestNode {
         expect_recv!(self.transaction_sync_msg_receiver)
     }
 
+    pub fn try_get_sent_transaction_sync_message(
+        &mut self,
+    ) -> Option<(PeerId, TransactionSyncMessage)> {
+        match self.transaction_sync_msg_receiver.try_recv() {
+            Ok(message) => Some(message),
+            Err(mpsc::error::TryRecvError::Empty) => None,
+            Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
+        }
+    }
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
         log::debug!("Asserting no error");
@@ -285,7 +294,7 @@ impl TestNode {
 
     pub async fn receive_transaction_processed_event_from_mempool(
         &mut self,
-    ) -> TransactionProcessed {
+    ) -> TransactionProcessedEvent {
         expect_recv!(self.tx_processed_receiver)
     }
 

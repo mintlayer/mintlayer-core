@@ -22,11 +22,11 @@ use common::{
     primitives::Id,
 };
 use mempool::{
-    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+    FeeRate, MempoolInterface, MempoolMaxSize, TransactionDuplicateStatus, TxOptions, TxStatus,
 };
 
 mockall::mock! {
@@ -38,7 +38,7 @@ mockall::mock! {
             tx: SignedTransaction,
             origin: LocalTxOrigin,
             options: TxOptions,
-        ) -> Result<(), Error>;
+        ) -> Result<TransactionDuplicateStatus, Error>;
 
         fn add_transaction_remote(
             &mut self,

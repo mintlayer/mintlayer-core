@@ -29,8 +29,9 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
+use mempool_types::TransactionDuplicateStatus;
 use std::{num::NonZeroUsize, sync::Arc};
-use utils::{const_value::ConstValue, tap_log::TapLog};
+use utils::{const_value::ConstValue, debug_panic_or_log, tap_log::TapLog};
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 
@@ -95,14 +96,28 @@ impl MempoolInterface for Mempool {
         tx: SignedTransaction,
         origin: LocalTxOrigin,
         options: TxOptions,
-    ) -> Result<(), Error> {
+    ) -> Result<TransactionDuplicateStatus, Error> {
         let tx = self.make_entry(tx, origin.into(), options);
         let status = self.add_transaction(tx)?;
 
-        // TODO The following assertion could be avoided by parametrizing the above
-        // `add_transaction` by the origin type and have the return type depend on it.
-        assert!(status.in_mempool());
-        Ok(())
+        // Note: the transaction cannot be an orphan here, since `add_transaction` should return
+        // an error in such a case.
+        // TODO: the panics below could be avoided by parametrizing `add_transaction` by the origin
+        // type and have the return type depend on it.
+        let duplicate_status = match status {
+            TxStatus::InMempool => TransactionDuplicateStatus::New,
+            TxStatus::InMempoolDuplicate => TransactionDuplicateStatus::Duplicate,
+            TxStatus::InOrphanPool => {
+                debug_panic_or_log!("Unexpected local orphan");
+                TransactionDuplicateStatus::New
+            }
+            TxStatus::InOrphanPoolDuplicate => {
+                debug_panic_or_log!("Unexpected local duplicate orphan");
+                TransactionDuplicateStatus::Duplicate
+            }
+        };
+
+        Ok(duplicate_status)
     }
 
     #[tracing::instrument(skip_all, fields(tx_id = %tx.transaction().get_id()))]

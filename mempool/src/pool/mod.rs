@@ -32,7 +32,10 @@ use crate::{
     error::{
         BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxValidationError,
     },
-    event::{self, MempoolEvent},
+    event::{
+        make_local_duplicate_tx_event, make_new_tx_accepted_event, make_tx_rejected_event,
+        MempoolEvent, NewTipEvent,
+    },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
@@ -354,7 +357,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::trace!("Performing orphan processing work");
 
         let orphan = state.work_queue.pick(|peer, orphan_id| {
-            log::debug!("Processing orphan tx {orphan_id:?} coming from peer{peer}");
+            log::debug!("Processing orphan tx {orphan_id:?} coming from peer {peer}");
 
             match state.orphans.entry(&orphan_id) {
                 Some(orphan) if orphan.is_ready() => {
@@ -494,8 +497,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
             }
         };
 
-        let new_tip = event::NewTip::new(block_id, height);
-        let event = new_tip.into();
+        let event = NewTipEvent::new(block_id, height).into();
         self.events_broadcast_mut().broadcast(event);
 
         Ok(())
@@ -571,8 +573,6 @@ impl<'a> TxFinalizer<'a> {
         match outcome {
             TxAdditionOutcome::Added { transaction } => {
                 let tx_id = *transaction.tx_id();
-                let relay_policy = transaction.tx_entry().options().relay_policy();
-                let origin = transaction.tx_entry().origin();
                 log::trace!("Added transaction {tx_id}");
 
                 self.enqueue_children(transaction.tx_entry());
@@ -580,17 +580,36 @@ impl<'a> TxFinalizer<'a> {
                 match &mut self.events_mode {
                     TxFinalizerEventsMode::Silent => {}
                     TxFinalizerEventsMode::Broadcast(events_broadcast) => {
-                        let event =
-                            event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
-                        let event = event.into();
-                        events_broadcast.broadcast(event);
+                        let relay_policy = transaction.tx_entry().options().relay_policy();
+                        let origin = transaction.tx_entry().origin();
+                        let event = make_new_tx_accepted_event(tx_id, relay_policy, origin);
+
+                        events_broadcast.broadcast(event.into());
                     }
                 }
 
                 Ok(TxStatus::InMempool)
             }
             TxAdditionOutcome::Duplicate { transaction } => {
-                log::trace!("Duplicate transaction {}", transaction.tx_id());
+                let tx_id = *transaction.tx_id();
+                log::trace!("Duplicate transaction {tx_id}");
+
+                match &mut self.events_mode {
+                    TxFinalizerEventsMode::Silent => {}
+                    TxFinalizerEventsMode::Broadcast(events_broadcast) => {
+                        let relay_policy = transaction.tx_entry().options().relay_policy();
+                        let origin = transaction.tx_entry().origin();
+
+                        // Even if the tx is duplicate, if it has the local origin, broadcast the event
+                        // anyway (p2p will want to re-relay it if it's relayable).
+                        if let Some(event) =
+                            make_local_duplicate_tx_event(tx_id, relay_policy, origin)
+                        {
+                            events_broadcast.broadcast(event.into());
+                        }
+                    }
+                }
+
                 Ok(TxStatus::InMempoolDuplicate)
             }
             TxAdditionOutcome::Rejected { transaction, error } => {
@@ -604,8 +623,7 @@ impl<'a> TxFinalizer<'a> {
                     .inspect_err(|err| match &mut self.events_mode {
                         TxFinalizerEventsMode::Silent => {}
                         TxFinalizerEventsMode::Broadcast(events_broadcast) => {
-                            let event =
-                                event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
+                            let event = make_tx_rejected_event(tx_id, err.clone(), origin);
                             let event = event.into();
                             events_broadcast.broadcast(event);
                         }

@@ -24,6 +24,7 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
+use mempool_types::TransactionDuplicateStatus;
 use std::{num::NonZeroUsize, sync::Arc};
 
 pub trait MempoolInterface: Send + Sync {
@@ -41,7 +42,7 @@ pub trait MempoolInterface: Send + Sync {
         tx: SignedTransaction,
         origin: LocalTxOrigin,
         options: TxOptions,
-    ) -> Result<(), Error>;
+    ) -> Result<TransactionDuplicateStatus, Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Vec<SignedTransaction>;

@@ -180,7 +180,7 @@ where
 
         match event {
             LocalEvent::ChainstateNewTip(_) => Ok(()),
-            LocalEvent::MempoolNewTx(txid) => {
+            LocalEvent::MempoolRelayableTx(txid) => {
                 if !self.known_transactions.contains(&txid)
                     && self.common_services.has_service(Service::Transactions)
                 {

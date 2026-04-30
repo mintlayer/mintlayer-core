@@ -15,26 +15,30 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use chainstate::{BlockSource, ban_score::BanScore};
-use chainstate_test_framework::{TestFramework, anyonecanspend_address};
+use chainstate::{ban_score::BanScore, BlockSource};
+use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, helpers::split_utxo, TestFramework, TransactionBuilder,
+};
 use common::{
     chain::{
-        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
         config::create_unit_test_config, output_value::OutputValue,
-        signature::inputsig::InputWitness, timelock::OutputTimeLock,
+        signature::inputsig::InputWitness, timelock::OutputTimeLock, GenBlock, OutPointSourceId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
 use mempool::{
-    FeeRate, MempoolConfig,
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
+    FeeRate, MempoolConfig, TxOptions,
 };
 use serialization::Encode;
-use test_utils::{BasicTestTimeGetter, random::Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
-    P2pConfig, P2pError,
     config::NodeType,
     error::ProtocolError,
     message::{TransactionResponse, TransactionSyncMessage},
@@ -45,6 +49,7 @@ use crate::{
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
+    P2pConfig, P2pError,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -589,7 +594,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // The transaction should be held up in the orphan pool for now, so we don't expect it to be
         // propagated at this point
-        assert_eq!(node.try_get_sent_block_sync_message(), None);
+        assert_eq!(node.try_get_sent_transaction_sync_message(), None);
 
         let res = node
             .mempool()
@@ -622,17 +627,173 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
     .await;
 }
 
+// When an duplicate tx is added to the mempool, it should be re-broadcast to peers if it has
+// local origin and not re-broadcast if it's remote.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rebroadcast_transaction(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        use mempool::tx_origin::LocalTxOrigin;
+
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = Arc::new(create_unit_test_config());
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+
+        // This will process a block to finish the initial block download and also create utxos
+        // to spend.
+        let fund_tx_id: Id<Transaction> = split_utxo(
+            &mut rng,
+            &mut tf,
+            UtxoOutPoint::new(chain_config.genesis_block_id().into(), 0),
+            2,
+        )
+        .into();
+
+        let p2p_config = Arc::new(test_p2p_config());
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        let peer1_id = PeerId::new();
+        let peer2_id = PeerId::new();
+        let another_peer_id = PeerId::new();
+
+        // Peer1 connects
+        let _peer1 = node.connect_peer(peer1_id, protocol_version).await;
+
+        let local_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(fund_tx_id.into(), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100_000_000)),
+                common::chain::Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let local_tx_id = local_tx.transaction().get_id();
+
+        let remote_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(fund_tx_id.into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100_000_000)),
+                common::chain::Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let remote_tx_id = remote_tx.transaction().get_id();
+
+        let local_tx_origin = LocalTxOrigin::P2p;
+        let local_tx_options = TxOptions::default_for(local_tx_origin.into());
+
+        let remote_tx_origin = RemoteTxOrigin::new(another_peer_id);
+        let remote_tx_options = TxOptions::default_for(remote_tx_origin.clone().into());
+
+        // Add the local tx. The node should send a NewTransaction message to peer1.
+        {
+            let local_tx = local_tx.clone();
+            let local_tx_options = local_tx_options.clone();
+            let status = node
+                .mempool()
+                .call_mut(move |m| {
+                    m.add_transaction_local(local_tx, local_tx_origin, local_tx_options)
+                })
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(status, mempool::TransactionDuplicateStatus::New);
+
+            let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(peer_id, peer1_id);
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(local_tx_id));
+        }
+
+        // Add the remote tx. The node should send a NewTransaction message to peer1.
+        {
+            let remote_tx = remote_tx.clone();
+            let remote_tx_options = remote_tx_options.clone();
+            let status = node
+                .mempool()
+                .call_mut(move |m| {
+                    m.add_transaction_remote(remote_tx, remote_tx_origin, remote_tx_options)
+                })
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(status, mempool::TxStatus::InMempool);
+
+            let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(peer_id, peer1_id);
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(remote_tx_id));
+        }
+
+        // Peer2 connects
+        let _peer2 = node.connect_peer(peer2_id, protocol_version).await;
+
+        // Add the local tx again. The sync manager should rebroadcast the tx.
+        // Since peer1 has already been offered this tx, the NewTransaction message
+        // should only be sent to peer2.
+        {
+            let status = node
+                .mempool()
+                .call_mut(move |m| {
+                    m.add_transaction_local(local_tx, local_tx_origin, local_tx_options)
+                })
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(status, mempool::TransactionDuplicateStatus::Duplicate);
+
+            let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(peer_id, peer2_id);
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(local_tx_id));
+
+            node.assert_no_sync_message().await;
+        }
+
+        // Add the remote tx again. The sync manager should NOT rebroadcast the tx,
+        // so event peer2 will not be sent the NewTransaction message.
+        {
+            let status = node
+                .mempool()
+                .call_mut(move |m| {
+                    m.add_transaction_remote(remote_tx, remote_tx_origin, remote_tx_options)
+                })
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(status, mempool::TxStatus::InMempoolDuplicate);
+
+            node.assert_no_sync_message().await;
+        }
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
 /// Creates a simple transaction.
-fn transaction_with_amount(out_point: Id<GenBlock>, amount_atoms: u128) -> SignedTransaction {
+fn transaction_with_amount(block_id: Id<GenBlock>, amount_atoms: u128) -> SignedTransaction {
     let tx = Transaction::new(
         0x00,
-        vec![TxInput::from_utxo(OutPointSourceId::from(out_point), 0)],
+        vec![TxInput::from_utxo(OutPointSourceId::from(block_id), 0)],
         vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(amount_atoms)))],
     )
     .unwrap();
     SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
 }
 
-fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
-    transaction_with_amount(out_point, 1)
+fn transaction(block_id: Id<GenBlock>) -> SignedTransaction {
+    transaction_with_amount(block_id, 1)
 }

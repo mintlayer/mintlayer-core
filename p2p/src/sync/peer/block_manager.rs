@@ -329,7 +329,7 @@ where
 
         match event {
             LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
-            LocalEvent::MempoolNewTx(_) => Ok(()),
+            LocalEvent::MempoolRelayableTx(_) => Ok(()),
         }
     }
 

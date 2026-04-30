@@ -33,33 +33,41 @@ use tokio::{
 use tracing::Instrument;
 
 use common::{
-    chain::{GenBlock, Transaction, config::ChainConfig},
+    chain::{config::ChainConfig, GenBlock, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{MempoolHandle, event::TransactionProcessed, tx_origin::TxOrigin};
-use utils::{sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
+use mempool::{
+    event::{MempoolEvent, TransactionProcessedEvent},
+    tx_origin::TxOrigin,
+    MempoolHandle,
+};
+use utils::{debug_panic_or_log, sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
 
 use crate::{
-    PeerManagerEvent, Result,
     config::P2pConfig,
     error::P2pError,
     message::{BlockSyncMessage, TransactionSyncMessage},
     net::{
+        types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
-        types::{SyncingEvent, services::Services},
     },
     protocol::SupportedProtocolVersion,
     types::peer_id::PeerId,
+    PeerManagerEvent, Result,
 };
 
 use self::chainstate_handle::ChainstateHandle;
 
 #[derive(Debug, Clone)]
 pub enum LocalEvent {
+    /// Chainstate got new tip.
     ChainstateNewTip(Id<GenBlock>),
-    MempoolNewTx(Id<Transaction>),
+
+    /// SyncManager got a tx from the mempool that should be relayed to other peers
+    /// (the tx is not necessarily a new one).
+    MempoolRelayableTx(Id<Transaction>),
 }
 
 pub struct PeerContext {
@@ -288,17 +296,47 @@ where
         Ok(())
     }
 
-    fn handle_transaction_processed(&mut self, tx_proc_event: &TransactionProcessed) -> Result<()> {
+    fn handle_transaction_processed(
+        &mut self,
+        tx_proc_event: &TransactionProcessedEvent,
+    ) -> Result<()> {
         let tx_id = *tx_proc_event.tx_id();
         let origin = tx_proc_event.origin();
 
         match tx_proc_event.result() {
-            Ok(()) => {
-                use mempool::tx_options::TxRelayPolicy;
+            Ok(duplicate_status) => {
+                use mempool::{tx_options::TxRelayPolicy, TransactionDuplicateStatus};
                 match tx_proc_event.relay_policy() {
                     TxRelayPolicy::DoRelay => {
-                        log::info!("Broadcasting transaction {tx_id} originating in {origin}");
-                        self.send_local_event(&LocalEvent::MempoolNewTx(tx_id));
+                        let (need_relay, status_str) = match duplicate_status {
+                            TransactionDuplicateStatus::New => (true, "new"),
+
+                            TransactionDuplicateStatus::Duplicate => {
+                                let need_relay = match tx_proc_event.origin() {
+                                    TxOrigin::Local(_) => true,
+                                    TxOrigin::Remote(_) => {
+                                        // The mempool is supposed to only send TransactionProcessedEvent's for duplicate
+                                        // transactions if they have the local origin.
+                                        debug_panic_or_log!(
+                                            "Unexpected TransactionProcessedEvent with non-local duplicate transaction received from mempool"
+                                        );
+                                        false
+                                    }
+                                };
+                                (need_relay, "duplicate")
+                            }
+                        };
+
+                        if need_relay {
+                            log::info!(
+                                "Propagating {status_str} transaction {tx_id} originating in {origin}"
+                            );
+                            self.send_local_event(&LocalEvent::MempoolRelayableTx(tx_id));
+                        } else {
+                            log::trace!(
+                                "Not propagating {status_str} transaction {tx_id} originating in {origin}"
+                            );
+                        }
                     }
                     TxRelayPolicy::DontRelay => {
                         log::trace!("Not propagating transaction {tx_id} originating in {origin}");
@@ -412,14 +450,14 @@ pub async fn subscribe_to_new_tip(
 /// Returns a receiver for the mempool `TransactionProcessed` events.
 pub async fn subscribe_to_tx_processed(
     mempool_handle: &MempoolHandle,
-) -> Result<UnboundedReceiver<TransactionProcessed>> {
+) -> Result<UnboundedReceiver<TransactionProcessedEvent>> {
     let (sender, receiver) = mpsc::unbounded_channel();
 
-    let subscribe_func = move |event: mempool::event::MempoolEvent| match event {
-        mempool::event::MempoolEvent::TransactionProcessed(tpe) => {
+    let subscribe_func = move |event: MempoolEvent| match event {
+        MempoolEvent::TransactionProcessed(tpe) => {
             let _ = sender.send(tpe).log_err_pfx("The tx processed receiver closed");
         }
-        mempool::event::MempoolEvent::NewTip(_) => (),
+        MempoolEvent::NewTip(_) => (),
     };
     let subscribe_func = Arc::new(subscribe_func);
 
