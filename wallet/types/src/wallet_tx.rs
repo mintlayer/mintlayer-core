@@ -164,6 +164,17 @@ impl WalletTx {
         }
     }
 
+    pub fn reset_inmempool_to_inactive(&mut self) {
+        match self {
+            WalletTx::Block(_) => {} // Blocks are never InMempool
+            WalletTx::Tx(tx) => {
+                if let TxState::InMempool(counter) = tx.state {
+                    tx.state = TxState::Inactive(counter);
+                }
+            }
+        }
+    }
+
     pub fn inputs(&self) -> &[TxInput] {
         match self {
             WalletTx::Block(block) => block.kernel_inputs(),

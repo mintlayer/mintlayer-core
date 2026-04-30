@@ -54,7 +54,6 @@ use types::{
     SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
     WalletTypeArgsComputed,
 };
-use utils::set_flag::SetFlag;
 use wallet_storage::DefaultBackend;
 
 use read::ReadOnlyController;
@@ -238,7 +237,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 
     mempool_events: MempoolEvents,
-    finished_initial_sync: SetFlag,
+    should_resecan_mempool_txs: bool,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -261,8 +260,19 @@ where
         wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<N>> {
-        let mut controller =
-            Self::new_unsynced(chain_config, rpc_client, wallet, wallet_events).await?;
+        let mempool_events = rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        let mut controller = Self {
+            chain_config,
+            rpc_client,
+            wallet,
+            staking_started: BTreeSet::new(),
+            wallet_events,
+            mempool_events,
+            should_resecan_mempool_txs: true,
+        };
 
         // In the cold mode, try_sync_once is a no-op, so it doesn't matter whether we call it.
         // We omit the call to avoid printing the "Syncing the wallet" log line, which looks
@@ -299,7 +309,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
-            finished_initial_sync: SetFlag::new(),
+            should_resecan_mempool_txs: true,
         })
     }
 
@@ -1570,7 +1580,7 @@ where
             match self.wallet_mode {
                 WalletControllerMode::Hot => {
                     // after the first successful sync to the tip fetch all mempool transactions
-                    if !self.finished_initial_sync.test() {
+                    if self.should_resecan_mempool_txs {
                         let txs = self.rpc_client.mempool_get_transactions().await;
 
                         match txs {
@@ -1580,7 +1590,7 @@ where
                                 {
                                     log::error!("Error adding mempool transactions: {err}");
                                 } else {
-                                    self.finished_initial_sync.set();
+                                    self.should_resecan_mempool_txs = false
                                 }
                             }
                             Err(err) => {
@@ -1609,8 +1619,11 @@ where
                             Some(e) => e,
                             None => {
                                 log::error!("Mempool notifications channel is closed");
-                                tokio::time::sleep(ERROR_DELAY).await;
+                                // reset in-mempool transactions to inactive so we can rescan them when we connect again
+                                self.wallet.reset_inmempool_txs_to_inactive();
+                                self.should_resecan_mempool_txs = true;
 
+                                tokio::time::sleep(ERROR_DELAY).await;
                                 match self.rpc_client
                                     .mempool_subscribe_to_events()
                                     .await {
