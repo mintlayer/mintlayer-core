@@ -780,6 +780,13 @@ where
         Ok(())
     }
 
+    /// Resets all transactions in all accounts from in-mempool state to inactive.
+    pub fn reset_inmempool_txs_to_inactive(&mut self) {
+        self.accounts
+            .values_mut()
+            .for_each(|account| account.reset_inmempool_txs_to_inactive());
+    }
+
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -939,6 +946,8 @@ where
             .into_iter()
             .map(|account| (account.account_index(), account))
             .collect();
+        // reset all inmempool transactions to inactive so we can set them properly from the current node again
+        accounts.values_mut().for_each(|a| a.reset_inmempool_txs_to_inactive());
 
         let latest_median_time =
             db_tx.get_median_time()?.unwrap_or(chain_config.genesis_block().timestamp());

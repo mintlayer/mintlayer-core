@@ -102,6 +102,16 @@ where
         }
     }
 
+    pub fn reset_inmempool_txs_to_inactive(&mut self) {
+        match self {
+            RuntimeWallet::Software(w) => w.reset_inmempool_txs_to_inactive(),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.reset_inmempool_txs_to_inactive(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.reset_inmempool_txs_to_inactive(),
+        }
+    }
+
     pub fn find_account_destination(&self, acc_outpoint: &AccountOutPoint) -> Option<Destination> {
         match self {
             RuntimeWallet::Software(w) => w.find_account_destination(acc_outpoint),
