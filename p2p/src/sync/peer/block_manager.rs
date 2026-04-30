@@ -64,6 +64,12 @@ use crate::{
     utils::oneshot_nofail,
 };
 
+#[derive(Debug, Clone)]
+pub enum PeerBlockSyncManagerLocalEvent {
+    /// Chainstate got new tip.
+    ChainstateNewTip(Id<GenBlock>),
+}
+
 // TODO: Take into account the chain work when syncing.
 /// Block syncing manager.
 ///
@@ -77,7 +83,7 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_msg_receiver: Receiver<BlockSyncMessage>,
-    local_event_receiver: UnboundedReceiver<LocalEvent>,
+    local_event_receiver: UnboundedReceiver<PeerBlockSyncManagerLocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
@@ -128,7 +134,7 @@ where
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         sync_msg_receiver: Receiver<BlockSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_receiver: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<PeerBlockSyncManagerLocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         Self {
@@ -324,12 +330,13 @@ where
         Ok(())
     }
 
-    async fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
-        log::debug!("Handling local peer mgr event: {event:?}");
+    async fn handle_local_event(&mut self, event: PeerBlockSyncManagerLocalEvent) -> Result<()> {
+        log::debug!("Handling local event: {event:?}");
 
         match event {
-            LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
-            LocalEvent::MempoolRelayableTx(_) => Ok(()),
+            PeerBlockSyncManagerLocalEvent::ChainstateNewTip(new_tip_id) => {
+                self.handle_new_tip(&new_tip_id).await
+            }
         }
     }
 

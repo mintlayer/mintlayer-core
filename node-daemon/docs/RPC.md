@@ -883,8 +883,8 @@ Returns:
 
 Submit a transaction to the mempool.
 
-Note that submitting a transaction to the mempool does not guarantee broadcasting it.
-Use the p2p rpc interface for that.
+Note that transactions submitted to the mempool this way will not be relayed to the peers.
+Use the p2p rpc interface if you need that.
 
 
 Parameters:

@@ -103,7 +103,7 @@ pub struct MempoolStore {
     // Mempool entries sorted by ancestor score.
     // This is used to select the most economically attractive transactions for block production.
     // The ancestor score of an entry is defined as
-    //  min(score/size of entry's tx, score/size with all ancestors).
+    //  min(fee/size of entry's tx, fee/size with all ancestors).
     pub txs_by_ancestor_score: TrackedTxIdMultiMap<AncestorScore>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are

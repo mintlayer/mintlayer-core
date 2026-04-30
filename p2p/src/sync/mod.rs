@@ -22,14 +22,19 @@ mod peer_activity;
 mod peer_common;
 pub mod sync_status;
 
-use std::collections::HashMap;
+use std::{
+    collections::{BTreeSet, HashMap},
+    time::Duration,
+};
 
 use dyn_clone::DynClone;
 use futures::never::Never;
 use networking::types::ConnectionDirection;
+use randomness::{make_pseudo_rng, RngExt as _};
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
+    time::{Instant, MissedTickBehavior},
 };
 use tracing::Instrument;
 
@@ -44,7 +49,10 @@ use mempool::{
     tx_origin::TxOrigin,
     MempoolHandle,
 };
-use utils::{debug_panic_or_log, sync::Arc, tap_log::TapLog, tokio_spawn_in_join_set};
+use utils::{
+    debug_panic_or_log, sender_with_id::MpscUnboundedSenderWithId, sync::Arc, tap_log::TapLog,
+    tokio_spawn_in_join_set,
+};
 
 use crate::{
     config::P2pConfig,
@@ -55,25 +63,26 @@ use crate::{
         MessagingService, NetworkingService, SyncingEventReceiver,
     },
     protocol::SupportedProtocolVersion,
+    sync::peer::{
+        block_manager::PeerBlockSyncManagerLocalEvent,
+        transaction_manager::{
+            PeerTransactionSyncManagerLocalEvent, PeerTransactionSyncManagerLocalNotification,
+        },
+    },
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
 
 use self::chainstate_handle::ChainstateHandle;
 
-#[derive(Debug, Clone)]
-pub enum LocalEvent {
-    /// Chainstate got new tip.
-    ChainstateNewTip(Id<GenBlock>),
-
-    /// SyncManager got a tx from the mempool that should be relayed to other peers
-    /// (the tx is not necessarily a new one).
-    MempoolRelayableTx(Id<Transaction>),
-}
+// 1 to 1.5 average distances between blocks.
+const UNCONFIRMED_TX_REQUEUE_MIN_DELAY: Duration = Duration::from_secs(120);
+const UNCONFIRMED_TX_REQUEUE_MAX_DELAY: Duration = Duration::from_secs(180);
 
 pub struct PeerContext {
     tasks: JoinSet<()>,
-    local_event_senders: Vec<UnboundedSender<LocalEvent>>,
+    block_mgr_event_sender: UnboundedSender<PeerBlockSyncManagerLocalEvent>,
+    tx_mgr_event_sender: UnboundedSender<PeerTransactionSyncManagerLocalEvent>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -91,11 +100,20 @@ pub struct SyncManager<T: NetworkingService> {
     /// A sender for the peer manager events.
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
 
+    tx_mgr_notification_sender:
+        UnboundedSender<(PeerId, PeerTransactionSyncManagerLocalNotification)>,
+    tx_mgr_notification_receiver:
+        UnboundedReceiver<(PeerId, PeerTransactionSyncManagerLocalNotification)>,
+
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
 
     /// The list of connected peers
     peers: HashMap<PeerId, PeerContext>,
+
+    /// Transactions with local origin that were forwarded to peer tasks to be announced to the peers
+    /// and for which the actual sending has not been confirmed yet.
+    unconfirmed_local_transactions: BTreeSet<Id<Transaction>>,
 
     time_getter: TimeGetter,
 
@@ -147,15 +165,20 @@ where
         time_getter: TimeGetter,
         observer: Option<BoxedObserver>,
     ) -> Self {
+        let (tx_mgr_notification_sender, tx_mgr_notification_receiver) = mpsc::unbounded_channel();
+
         Self {
             chain_config,
             p2p_config,
             messaging_handle,
             syncing_event_receiver,
             peer_mgr_event_sender,
+            tx_mgr_notification_sender,
+            tx_mgr_notification_receiver,
             chainstate_handle: ChainstateHandle::new(chainstate_handle),
             mempool_handle,
             peers: Default::default(),
+            unconfirmed_local_transactions: BTreeSet::new(),
             time_getter,
             observer,
         }
@@ -165,8 +188,17 @@ where
     pub async fn run(mut self) -> Result<Never> {
         log::info!("Starting SyncManager");
 
+        let maintenance_interval_duration = Duration::from_secs(1);
+        let mut maintenance_interval = tokio::time::interval_at(
+            Instant::now() + maintenance_interval_duration,
+            maintenance_interval_duration,
+        );
+        maintenance_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
+
+        let mut next_time_to_requeue_unconfirmed_local_txs = Instant::now();
 
         loop {
             tokio::select! {
@@ -184,8 +216,55 @@ where
                 event = self.syncing_event_receiver.poll_next() => {
                     self.handle_peer_event(event?).await;
                 },
+
+                notif_with_id = self.tx_mgr_notification_receiver.recv() => {
+                    if let Some((peer_id, notif)) = notif_with_id {
+                        self.handle_tx_mgr_notification(peer_id, notif).await;
+                    }
+                }
+
+                _ = maintenance_interval.tick() => {}
+            }
+
+            let now = Instant::now();
+
+            if now >= next_time_to_requeue_unconfirmed_local_txs {
+                self.requeue_unconfirmed_local_transactions().await?;
+
+                let delay = make_pseudo_rng().random_range(
+                    UNCONFIRMED_TX_REQUEUE_MIN_DELAY..UNCONFIRMED_TX_REQUEUE_MAX_DELAY,
+                );
+
+                next_time_to_requeue_unconfirmed_local_txs = now + delay;
             }
         }
+    }
+
+    async fn requeue_unconfirmed_local_transactions(&mut self) -> Result<()> {
+        if !self.unconfirmed_local_transactions.is_empty() {
+            // Filter out transactions that are no longer in the mempool.
+            // Note that PeerTransactionSyncManager will check this too, but we have to do
+            // it here as well, to make sure that txs that were removed from the mempool (e.g.
+            // due to having been mined) don't remain in `unconfirmed_local_transactions` forever.
+            let tx_ids = std::mem::take(&mut self.unconfirmed_local_transactions);
+            self.unconfirmed_local_transactions = self
+                .mempool_handle
+                .call(move |m| {
+                    let mut tx_ids = tx_ids;
+                    tx_ids.retain(|tx_id| m.transaction(tx_id).is_some());
+                    tx_ids
+                })
+                .await?;
+        }
+
+        if !self.unconfirmed_local_transactions.is_empty() {
+            let txs = Arc::new(self.unconfirmed_local_transactions.clone());
+            self.send_tx_mgr_event(
+                &PeerTransactionSyncManagerLocalEvent::UnconfirmedLocalTxsReannouncement(txs),
+            );
+        }
+
+        Ok(())
     }
 
     /// Starts a task for the new peer.
@@ -198,12 +277,11 @@ where
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
         transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
     ) {
-        log::debug!("Register peer {peer_id} to sync manager");
+        log::debug!("Registering peer {peer_id} to sync manager");
 
         let mut peer_tasks = JoinSet::new();
-        let mut peer_local_event_senders = Vec::new();
 
-        let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
+        let (block_mgr_event_sender, block_mgr_event_receiver) = mpsc::unbounded_channel();
         let mut mgr = peer::block_manager::PeerBlockSyncManager::<T>::new(
             peer_id,
             common_services,
@@ -213,7 +291,7 @@ where
             self.peer_mgr_event_sender.clone(),
             block_sync_msg_receiver,
             self.messaging_handle.clone(),
-            local_event_receiver,
+            block_mgr_event_receiver,
             self.time_getter.clone(),
         );
 
@@ -226,9 +304,7 @@ where
             &format!("Peer[id={peer_id}] block sync mgr"),
         );
 
-        peer_local_event_senders.push(local_event_sender);
-
-        let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
+        let (tx_mgr_event_sender, tx_mgr_event_receiver) = mpsc::unbounded_channel();
         let mut mgr = peer::transaction_manager::PeerTransactionSyncManager::<T>::new(
             peer_id,
             common_services,
@@ -239,7 +315,8 @@ where
             self.peer_mgr_event_sender.clone(),
             transaction_sync_msg_receiver,
             self.messaging_handle.clone(),
-            local_event_receiver,
+            tx_mgr_event_receiver,
+            MpscUnboundedSenderWithId::new(peer_id, self.tx_mgr_notification_sender.clone()),
             self.time_getter.clone(),
             self.observer.clone(),
         );
@@ -253,11 +330,10 @@ where
             &format!("Peer[id={peer_id}] tx sync mgr"),
         );
 
-        peer_local_event_senders.push(local_event_sender);
-
         let peer_context = PeerContext {
             tasks: peer_tasks,
-            local_event_senders: peer_local_event_senders,
+            block_mgr_event_sender,
+            tx_mgr_event_sender,
         };
 
         let prev_task = self.peers.insert(peer_id, peer_context);
@@ -275,11 +351,15 @@ where
         peer.tasks.abort_all();
     }
 
-    fn send_local_event(&mut self, event: &LocalEvent) {
+    fn send_block_mgr_event(&mut self, event: &PeerBlockSyncManagerLocalEvent) {
         for peer_ctx in self.peers.values_mut() {
-            for sender in &peer_ctx.local_event_senders {
-                let _ = sender.send(event.clone());
-            }
+            let _ = peer_ctx.block_mgr_event_sender.send(event.clone());
+        }
+    }
+
+    fn send_tx_mgr_event(&mut self, event: &PeerTransactionSyncManagerLocalEvent) {
+        for peer_ctx in self.peers.values_mut() {
+            let _ = peer_ctx.tx_mgr_event_sender.send(event.clone());
         }
     }
 
@@ -294,7 +374,7 @@ where
         }
 
         log::debug!("Broadcasting a new tip {}", block_id);
-        self.send_local_event(&LocalEvent::ChainstateNewTip(block_id));
+        self.send_block_mgr_event(&PeerBlockSyncManagerLocalEvent::ChainstateNewTip(block_id));
 
         Ok(())
     }
@@ -334,7 +414,17 @@ where
                             log::info!(
                                 "Propagating {status_str} transaction {tx_id} originating in {origin}"
                             );
-                            self.send_local_event(&LocalEvent::MempoolRelayableTx(tx_id));
+
+                            self.send_tx_mgr_event(
+                                &PeerTransactionSyncManagerLocalEvent::MempoolRelayableTx(tx_id),
+                            );
+
+                            match tx_proc_event.origin() {
+                                TxOrigin::Local(_) => {
+                                    self.unconfirmed_local_transactions.insert(tx_id);
+                                }
+                                TxOrigin::Remote(_) => {}
+                            }
                         } else {
                             log::trace!(
                                 "Not propagating {status_str} transaction {tx_id} originating in {origin}"
@@ -405,6 +495,18 @@ where
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);
+            }
+        }
+    }
+
+    async fn handle_tx_mgr_notification(
+        &mut self,
+        _peer_id: PeerId,
+        notif: PeerTransactionSyncManagerLocalNotification,
+    ) {
+        match notif {
+            PeerTransactionSyncManagerLocalNotification::TransactionSent(id) => {
+                self.unconfirmed_local_transactions.remove(&id);
             }
         }
     }

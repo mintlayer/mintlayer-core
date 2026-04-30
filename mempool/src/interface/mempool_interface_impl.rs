@@ -30,7 +30,7 @@ use common::{
 };
 use logging::log;
 use mempool_types::TransactionDuplicateStatus;
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
 use utils::{const_value::ConstValue, debug_panic_or_log, tap_log::TapLog};
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
@@ -163,6 +163,15 @@ impl MempoolInterface for Mempool {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         self.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, Error> {
+        Ok(self.get_best_tx_ids_by_score_and_ancestry(tx_ids, tx_count)?)
     }
 
     fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

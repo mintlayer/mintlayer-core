@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
 
 use chainstate::{ChainstateError, ChainstateEvent};
 use common::{
@@ -30,7 +30,8 @@ use utils_networking::broadcaster;
 use crate::{
     MempoolConfig, MempoolMaxSize, TxStatus, config,
     error::{
-        BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxValidationError,
+        BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxCollectionError,
+        TxValidationError,
     },
     event::{
         make_local_duplicate_tx_event, make_new_tx_accepted_event, make_tx_rejected_event,
@@ -443,6 +444,27 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             MempoolState::InIbd(_) => Ok(None),
             MempoolState::AfterIbd(state) => {
                 state.tx_pool.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
+            }
+        }
+    }
+
+    pub fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+        match &self.0 {
+            MempoolState::InIbd(_) => {
+                // The mempool is empty during IBD; return an error if `tx_ids` is non-empty,
+                // so that the function's contract is the same in and out of IBD.
+                if let Some(tx_id) = tx_ids.first() {
+                    Err(TxCollectionError::SpecifiedTxNotFound(*tx_id))
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            MempoolState::AfterIbd(state) => {
+                state.tx_pool.get_best_tx_ids_by_score_and_ancestry(tx_ids, tx_count)
             }
         }
     }

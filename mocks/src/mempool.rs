@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -60,6 +60,12 @@ mockall::mock! {
             transaction_ids: Vec<Id<Transaction>>,
             packing_strategy: PackingStrategy,
         ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
+
+        fn get_best_tx_ids_by_score_and_ancestry(
+            &self,
+            tx_ids: &BTreeSet<Id<Transaction>>,
+            tx_count: usize,
+        ) -> Result<Vec<Id<Transaction>>, Error>;
 
         fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
         fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<MempoolEvent>;

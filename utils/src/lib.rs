@@ -43,6 +43,7 @@ pub mod once_destructor;
 pub mod qrcode;
 pub mod root_user;
 pub mod rust_backtrace;
+pub mod sender_with_id;
 pub mod set_flag;
 pub mod shallow_clone;
 pub mod sorted;

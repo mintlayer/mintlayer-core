@@ -54,7 +54,7 @@ use crate::{
     config::{self, MempoolConfig, MempoolMaxSize},
     error::{
         BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
-        ReorgError, TxValidationError,
+        ReorgError, TxCollectionError, TxValidationError,
     },
     pool::{
         entry::{TxEntry, TxEntryWithFee},
@@ -874,6 +874,14 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
+    }
+
+    pub fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+        collect_txs::get_best_tx_ids_by_score_and_ancestry(self, tx_ids, tx_count)
     }
 
     pub fn reorg(
