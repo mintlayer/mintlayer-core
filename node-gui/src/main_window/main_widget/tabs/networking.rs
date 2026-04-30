@@ -20,6 +20,7 @@ use iced::{
     widget::{Text, column, container},
 };
 use iced_aw::{Grid, GridRow, tab_bar::TabLabel};
+use networking::types::ConnectionDirection;
 
 use crate::main_window::NodeState;
 
@@ -65,11 +66,15 @@ impl Tab for NetworkingTab {
             .connected_peers
             .iter()
             .map(|(peer_id, peer)| {
-                let inbound_str = if peer.inbound { "Inbound" } else { "Outbound" };
+                let direction_str = match peer.direction {
+                    ConnectionDirection::Inbound => "Inbound",
+                    ConnectionDirection::Outbound => "Outbound",
+                };
+
                 GridRow::new()
                     .push(field(peer_id.to_string()))
                     .push(field(peer.address.clone()))
-                    .push(field(inbound_str.to_string()))
+                    .push(field(direction_str.to_string()))
                     .push(field(peer.user_agent.to_string()))
                     .push(field(peer.version.to_string()))
             })

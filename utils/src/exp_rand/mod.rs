@@ -13,18 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use randomness::{Rng, RngExt as _};
+use randomness::{distributions::Open01, Rng, RngExt as _};
 
 /// Returns a value sampled from an exponential distribution with a mean of 1.0.
 ///
-/// The result will be in the range (0, max], where max = -ln(f64::MIN_POSITIVE) ~= 708.396418532264.
+/// The result will be in the range (0, max], where max = -ln(f64::EPSILON/2) ~= 36.7368.
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
-    let mut random_f64 = rng.random::<f64>();
-    // The generated number will be in the range [0, 1). Turn it into (0, 1) to avoid
-    // infinity when taking the logarithm.
-    if random_f64 == 0.0 {
-        random_f64 = f64::MIN_POSITIVE;
-    }
+    // This generates a number uniformly distributed in (0, 1) and having the form `n * ε + ε/2`,
+    // where n is a 52-bit number and ε is f64::EPSILON, which is roughly 1/2^52.
+    let random_f64: f64 = rng.sample(Open01);
 
     #[allow(clippy::float_arithmetic)]
     -random_f64.ln()

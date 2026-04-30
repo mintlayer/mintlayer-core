@@ -26,6 +26,7 @@ use std::collections::HashMap;
 
 use dyn_clone::DynClone;
 use futures::never::Never;
+use networking::types::ConnectionDirection;
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
@@ -192,6 +193,7 @@ where
         &mut self,
         peer_id: PeerId,
         common_services: Services,
+        direction: ConnectionDirection,
         _protocol_version: SupportedProtocolVersion,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
         transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
@@ -230,6 +232,7 @@ where
         let mut mgr = peer::transaction_manager::PeerTransactionSyncManager::<T>::new(
             peer_id,
             common_services,
+            direction,
             Arc::clone(&self.p2p_config),
             self.chainstate_handle.clone(),
             self.mempool_handle.clone(),
@@ -387,12 +390,14 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services,
+                direction,
                 protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,
             } => self.register_peer(
                 peer_id,
                 common_services,
+                direction,
                 protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,

@@ -97,7 +97,7 @@ where
             id,
             services,
             address: _,
-            inbound: _,
+            direction: _,
             user_agent: _,
             software_version: _,
         }) => {

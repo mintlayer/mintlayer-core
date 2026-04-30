@@ -103,6 +103,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            direction: _,
             protocol_version: _,
             block_sync_msg_receiver,
             transaction_sync_msg_receiver: _,
@@ -140,6 +141,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            direction: _,
             protocol_version: _,
             block_sync_msg_receiver,
             transaction_sync_msg_receiver: _,

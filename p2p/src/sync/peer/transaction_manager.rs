@@ -15,12 +15,13 @@
 
 use std::time::Duration;
 
-use randomness::make_pseudo_rng;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::{Instant, MissedTickBehavior},
 };
 
+use networking::types::ConnectionDirection;
+use randomness::make_pseudo_rng;
 use common::{
     chain::Transaction,
     primitives::{Id, Idable},
@@ -52,8 +53,8 @@ use super::{
     pending_transactions::PendingTransactions, requested_transactions::RequestedTransactions,
 };
 
-// TODO: add smaller interval for outbound connections
-pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_INBOUND: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_OUTBOUND: Duration = Duration::from_secs(2);
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
@@ -63,6 +64,7 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
+    direction: ConnectionDirection,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
@@ -90,6 +92,7 @@ where
     pub fn new(
         id: PeerId,
         common_services: Services,
+        direction: ConnectionDirection,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
@@ -106,6 +109,7 @@ where
             id: id.into(),
             p2p_config,
             common_services,
+            direction,
             chainstate_handle,
             mempool_handle,
             peer_mgr_event_sender,
@@ -188,7 +192,11 @@ where
 
                     // TODO: whitelisted peers should get txs without delay
                     let now = Instant::now();
-                    let delay = TX_RELAY_DELAY_INTERVAL
+                    let base_delay = match self.direction {
+                        ConnectionDirection::Inbound => TX_RELAY_DELAY_INTERVAL_INBOUND,
+                        ConnectionDirection::Outbound => TX_RELAY_DELAY_INTERVAL_OUTBOUND,
+                    };
+                    let delay = base_delay
                         .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                     self.pending_transactions.push(txid, now + delay);
                 }
@@ -263,7 +271,7 @@ where
             // because we purge "requested_transactions" from time to time. So it's technically
             // possible for such a response to be "solicited" but forgotten later.
             // So we just ignore the response.
-            log::warn!("Ignoring unsolicited TransactionResponse for tx {id}");
+            log::warn!("Ignoring unsolicited TransactionResponse for tx {id:x}");
             return Ok(());
         }
 
@@ -298,7 +306,7 @@ where
     }
 
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
-        log::debug!("Handling transaction announcement: {tx}");
+        log::debug!("Handling transaction announcement: {tx:x}");
 
         self.add_known_transaction(tx);
 
@@ -332,9 +340,11 @@ where
             // In our case, this is not that important, at least not until we implement a similar
             // kind of tx request de-duplication.
             // But still, it doesn't make sense to request an already requested tx again.
-            // Also, we don't punish the peer, mainly for consistency with other places, where
-            // we handle requested_transactions-related mischiefs leniently.
-            log::warn!("Ignoring duplicate announcement for tx {tx}");
+            // Also, we don't punish the peer, because there are valid scenarios where a node may
+            // want to re-broadcast a tx; and since the rolling bloom filter used to track known
+            // txs can have false negatives, it's possible for a well-functioning peer to announce
+            // the same tx twice.
+            log::info!("Ignoring duplicate announcement for tx {tx:x}");
             return Ok(());
         }
 
@@ -350,9 +360,7 @@ where
             // in such a situation. Note that after certain time, older requests will be purged
             // from requested_transactions, after which we'll start to handle peer's tx
             // announcements again.
-            log::warn!(
-                "Ignoring announcement for tx {tx} because requested_transactions is over the limit"
-            );
+            log::warn!("Ignoring announcement for tx {tx:x} because requested_transactions is over the limit");
             return Ok(());
         }
 

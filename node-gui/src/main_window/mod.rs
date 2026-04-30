@@ -25,6 +25,7 @@ use iced::{
     widget::{Stack, Text, center, container},
 };
 use logging::log;
+use networking::types::ConnectionDirection;
 use node_gui_backend::{
     BackendSender, InitializedNode,
     messages::{
@@ -122,7 +123,7 @@ fn print_block_timestamp(timestamp: BlockTimestamp) -> String {
 #[derive(Debug)]
 pub struct Peer {
     address: String,
-    inbound: bool,
+    direction: ConnectionDirection,
     _services: Services,
     user_agent: UserAgent,
     version: SemVer,
@@ -394,7 +395,7 @@ impl MainWindow {
                     id,
                     services,
                     address,
-                    inbound,
+                    direction,
                     user_agent,
                     software_version: version,
                 }) => {
@@ -402,7 +403,7 @@ impl MainWindow {
                         id,
                         Peer {
                             address,
-                            inbound,
+                            direction,
                             _services: services,
                             user_agent,
                             version,

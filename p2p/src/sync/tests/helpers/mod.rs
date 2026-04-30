@@ -46,7 +46,7 @@ use common::{
 };
 use logging::log;
 use mempool::{event::TransactionProcessedEvent, MempoolConfig, MempoolHandle, MempoolInit};
-use networking::transport::TcpTransportSocket;
+use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{Rng, RngExt as _};
@@ -203,6 +203,7 @@ impl TestNode {
             .send(SyncingEvent::Connected {
                 peer_id,
                 common_services: (*self.p2p_config.node_type).into(),
+                direction: ConnectionDirection::Outbound,
                 protocol_version: common_protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,

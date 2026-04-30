@@ -114,8 +114,11 @@ fn reachable_reconnects(#[case] seed: Seed) {
 }
 
 fn next_connect_time_test_impl(rng: &mut impl Rng) {
-    let limit_reserved = MAX_DELAY_RESERVED * MAX_DELAY_FACTOR;
-    let limit_reachable = MAX_DELAY_REACHABLE * MAX_DELAY_FACTOR;
+    // Factors are produced by exponential_rand, which can't generate numbers bigger than this.
+    let max_delay_factor = 37;
+
+    let limit_reserved = MAX_DELAY_RESERVED * max_delay_factor;
+    let limit_reachable = MAX_DELAY_REACHABLE * max_delay_factor;
 
     let start_time = Time::from_secs_since_epoch(0);
     let max_time_reserved = (start_time + limit_reserved).unwrap();

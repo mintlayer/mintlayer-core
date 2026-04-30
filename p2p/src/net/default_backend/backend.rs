@@ -32,7 +32,10 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use networking::transport::{ConnectedSocketInfo, TransportListener, TransportSocket};
+use networking::{
+    transport::{ConnectedSocketInfo, TransportListener, TransportSocket},
+    types::ConnectionDirection,
+};
 use p2p_types::socket_address::SocketAddress;
 use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{
@@ -90,7 +93,7 @@ struct PeerContext {
 
     peer_address: SocketAddress,
 
-    inbound: bool,
+    direction: ConnectionDirection,
 
     protocol_version: SupportedProtocolVersion,
 
@@ -277,6 +280,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services: peer.common_services,
+                direction: peer.direction,
                 protocol_version: peer.protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,
@@ -287,7 +291,7 @@ where
             id: peer_id,
             services: peer.common_services,
             address: peer.peer_address.to_string(),
-            inbound: peer.inbound,
+            direction: peer.direction,
             user_agent: peer.user_agent.clone(),
             software_version: peer.software_version,
         });
@@ -474,7 +478,6 @@ where
 
         let common_services = peer_info.common_services;
         let protocol_version = peer_info.protocol_version;
-        let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
 
@@ -505,7 +508,7 @@ where
             PeerContext {
                 handle,
                 peer_address,
-                inbound,
+                direction: connection_info.as_direction(),
                 protocol_version,
                 user_agent,
                 software_version,
