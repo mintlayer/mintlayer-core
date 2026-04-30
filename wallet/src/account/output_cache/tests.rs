@@ -1608,6 +1608,28 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
     assert!(!output_cache.orders[&order_id].is_concluded);
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reset_inmempool_txs_to_inactive(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = create_unit_test_config();
+    let mut output_cache = OutputCache::empty();
+
+    // add 10 random txs
+    for _ in 0..10 {
+        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+    }
+
+    // Reset
+    output_cache.reset_inmempool_txs_to_inactive();
+
+    // Check none of the txs are InMempool state
+    for tx in output_cache.txs.values() {
+        assert!(!matches!(tx.state(), TxState::InMempool(_)));
+    }
+}
+
 fn add_random_transfer_tx(
     output_cache: &mut OutputCache,
     chain_config: &ChainConfig,
