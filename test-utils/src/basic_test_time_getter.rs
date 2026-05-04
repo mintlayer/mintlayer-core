@@ -17,14 +17,17 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::time_getter::TimeGetter;
+use common::time_getter::{MonotonicTimeGetter, TimeGetter};
 use utils::atomics::SeqCstAtomicU64;
 
-use crate::mock_time_getter::mocked_time_getter_milliseconds;
+use crate::mock_time_getter::{
+    mocked_monotonic_time_getter_milliseconds, mocked_time_getter_milliseconds,
+};
 
 #[derive(Clone)]
 pub struct BasicTestTimeGetter {
     current_time_millis: Arc<SeqCstAtomicU64>,
+    initial_instant_for_monotonic_time_getter: std::time::Instant,
 }
 
 impl BasicTestTimeGetter {
@@ -33,13 +36,22 @@ impl BasicTestTimeGetter {
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
         let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
+        let initial_instant_for_monotonic_time_getter = std::time::Instant::now();
         Self {
             current_time_millis,
+            initial_instant_for_monotonic_time_getter,
         }
     }
 
     pub fn get_time_getter(&self) -> TimeGetter {
         mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
+    }
+
+    pub fn get_monotonic_time_getter(&self) -> MonotonicTimeGetter {
+        mocked_monotonic_time_getter_milliseconds(
+            self.initial_instant_for_monotonic_time_getter,
+            Arc::clone(&self.current_time_millis),
+        )
     }
 
     pub fn advance_time(&self, duration: Duration) {

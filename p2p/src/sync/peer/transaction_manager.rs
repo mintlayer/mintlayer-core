@@ -17,7 +17,7 @@ use std::{collections::BTreeSet, time::Duration};
 
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
-    time::{Instant, MissedTickBehavior},
+    time::MissedTickBehavior,
 };
 
 use networking::types::ConnectionDirection;
@@ -25,7 +25,7 @@ use randomness::make_pseudo_rng;
 use common::{
     chain::Transaction,
     primitives::{Id, Idable},
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{MempoolHandle, TxOptions};
@@ -51,8 +51,8 @@ use crate::{
 
 use super::requested_transactions::RequestedTransactions;
 
-const TX_RELAY_DELAY_INTERVAL_INBOUND: Duration = Duration::from_secs(5);
-const TX_RELAY_DELAY_INTERVAL_OUTBOUND: Duration = Duration::from_secs(2);
+pub const TX_RELAY_DELAY_INTERVAL_INBOUND: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_OUTBOUND: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 pub enum PeerTransactionSyncManagerLocalEvent {
@@ -89,6 +89,7 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     sync_msg_receiver: Receiver<TransactionSyncMessage>,
     local_event_receiver: UnboundedReceiver<PeerTransactionSyncManagerLocalEvent>,
     local_notification_sender: PeerTransactionSyncManagerLocalNotificationSender,
+    monotonic_time_getter: MonotonicTimeGetter,
 
     /// A rolling filter of all known transactions (sent to us or sent by us)
     known_transactions: KnownTransactions,
@@ -125,6 +126,7 @@ where
         local_event_receiver: UnboundedReceiver<PeerTransactionSyncManagerLocalEvent>,
         local_notification_sender: PeerTransactionSyncManagerLocalNotificationSender,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         observer: Option<BoxedObserver>,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
@@ -141,6 +143,7 @@ where
             sync_msg_receiver,
             local_event_receiver,
             local_notification_sender,
+            monotonic_time_getter,
             known_transactions,
             requested_transactions: RequestedTransactions::new(time_getter),
             transactions_to_announce: BTreeSet::new(),
@@ -167,18 +170,14 @@ where
 
         let maintenance_interval_duration = Duration::from_secs(1);
         let mut maintenance_interval = tokio::time::interval_at(
-            Instant::now() + maintenance_interval_duration,
+            tokio::time::Instant::now() + maintenance_interval_duration,
             maintenance_interval_duration,
         );
         maintenance_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        let mut next_time_to_announce_txs = Instant::now();
+        let mut next_time_to_announce_txs = self.monotonic_time_getter.get_time();
 
         loop {
-            if let Some(o) = self.observer.as_mut() {
-                o.on_new_transaction_sync_mgr_main_loop_iteration(peer_id);
-            }
-
             tokio::select! {
                 message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
@@ -195,7 +194,7 @@ where
 
             self.requested_transactions.purge_if_needed();
 
-            let now = Instant::now();
+            let now = self.monotonic_time_getter.get_time();
 
             if now >= next_time_to_announce_txs {
                 self.announce_transactions().await?;
@@ -210,6 +209,10 @@ where
                     base_delay.mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
 
                 next_time_to_announce_txs = now + delay;
+            }
+
+            if let Some(o) = self.observer.as_mut() {
+                o.on_transaction_sync_mgr_main_loop_iteration_completed(peer_id);
             }
         }
     }

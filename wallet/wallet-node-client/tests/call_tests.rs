@@ -103,6 +103,7 @@ pub async fn start_subsystems(
         chainstate_handle.clone(),
         mempool_handle.clone(),
         Default::default(),
+        Default::default(),
         peerdb_storage,
     )
     .unwrap()

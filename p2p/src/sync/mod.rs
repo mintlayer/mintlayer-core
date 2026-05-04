@@ -34,14 +34,14 @@ use randomness::{make_pseudo_rng, RngExt as _};
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
-    time::{Instant, MissedTickBehavior},
+    time::MissedTickBehavior,
 };
 use tracing::Instrument;
 
 use common::{
     chain::{config::ChainConfig, GenBlock, Transaction},
     primitives::Id,
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{
@@ -115,7 +115,11 @@ pub struct SyncManager<T: NetworkingService> {
     /// and for which the actual sending has not been confirmed yet.
     unconfirmed_local_transactions: BTreeSet<Id<Transaction>>,
 
+    // TODO: most (or maybe all) places in the sync mgr where `time_getter` is currently used
+    // should probably use `monotonic_time_getter` instead (because we're dealing with delays here
+    // and don't need absolute time).
     time_getter: TimeGetter,
+    monotonic_time_getter: MonotonicTimeGetter,
 
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
@@ -139,6 +143,7 @@ where
         mempool_handle: MempoolHandle,
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
     ) -> Self {
         Self::new_generic(
             chain_config,
@@ -149,6 +154,7 @@ where
             mempool_handle,
             peer_mgr_event_sender,
             time_getter,
+            monotonic_time_getter,
             None,
         )
     }
@@ -163,6 +169,7 @@ where
         mempool_handle: MempoolHandle,
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         observer: Option<BoxedObserver>,
     ) -> Self {
         let (tx_mgr_notification_sender, tx_mgr_notification_receiver) = mpsc::unbounded_channel();
@@ -180,6 +187,7 @@ where
             peers: Default::default(),
             unconfirmed_local_transactions: BTreeSet::new(),
             time_getter,
+            monotonic_time_getter,
             observer,
         }
     }
@@ -190,7 +198,7 @@ where
 
         let maintenance_interval_duration = Duration::from_secs(1);
         let mut maintenance_interval = tokio::time::interval_at(
-            Instant::now() + maintenance_interval_duration,
+            tokio::time::Instant::now() + maintenance_interval_duration,
             maintenance_interval_duration,
         );
         maintenance_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -198,7 +206,7 @@ where
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
-        let mut next_time_to_requeue_unconfirmed_local_txs = Instant::now();
+        let mut next_time_to_requeue_unconfirmed_local_txs = self.monotonic_time_getter.get_time();
 
         loop {
             tokio::select! {
@@ -226,7 +234,7 @@ where
                 _ = maintenance_interval.tick() => {}
             }
 
-            let now = Instant::now();
+            let now = self.monotonic_time_getter.get_time();
 
             if now >= next_time_to_requeue_unconfirmed_local_txs {
                 self.requeue_unconfirmed_local_transactions().await?;
@@ -318,6 +326,7 @@ where
             tx_mgr_event_receiver,
             MpscUnboundedSenderWithId::new(peer_id, self.tx_mgr_notification_sender.clone()),
             self.time_getter.clone(),
+            self.monotonic_time_getter.clone(),
             self.observer.clone(),
         );
 
@@ -579,7 +588,7 @@ pub async fn subscribe_to_tx_processed(
 pub trait Observer: DynClone {
     /// This will be called on each iteration of PeerTransactionSyncManager's main loop
     /// (currently only used by Peer V2).
-    fn on_new_transaction_sync_mgr_main_loop_iteration(&mut self, peer_id: PeerId);
+    fn on_transaction_sync_mgr_main_loop_iteration_completed(&mut self, peer_id: PeerId);
 }
 
 pub type BoxedObserver = Box<dyn Observer + Send + Sync>;

@@ -170,7 +170,7 @@ mod tests {
             stakelock::StakePoolData,
         },
         primitives::{Amount, BlockHeight, H256, Idable, per_thousand::PerThousand},
-        time_getter::TimeGetter,
+        time_getter::{MonotonicTimeGetter, TimeGetter},
     };
     use consensus::{calculate_effective_pool_balance, compact_target_to_target};
     use crypto::{
@@ -309,6 +309,7 @@ mod tests {
             subsystem::Handle::clone(&chainstate),
             mempool.clone(),
             time_getter,
+            MonotonicTimeGetter::default(),
             PeerDbStorageImpl::new(InMemory::new()).unwrap(),
         )
         .expect("P2p initialization was successful")

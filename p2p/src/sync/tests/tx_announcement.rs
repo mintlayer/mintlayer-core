@@ -17,7 +17,9 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use chainstate::{ban_score::BanScore, BlockSource};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, helpers::split_utxo, TestFramework, TransactionBuilder,
+    anyonecanspend_address, empty_witness,
+    helpers::{make_simple_coin_tx, split_utxo},
+    TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
@@ -29,11 +31,13 @@ use common::{
 };
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
-    tx_origin::RemoteTxOrigin,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
     FeeRate, MempoolConfig, TxOptions,
 };
+use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use serialization::Encode;
 use test_utils::{
+    assert_matches_return_val,
     random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
 };
@@ -45,6 +49,7 @@ use crate::{
     protocol::ProtocolConfig,
     sync::{
         peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
+        peer::transaction_manager::TX_RELAY_DELAY_INTERVAL_OUTBOUND,
         tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
@@ -112,10 +117,15 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
 // an error or misbehavior.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_block_download() {
+async fn initial_block_download(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
         let chain_config = Arc::new(create_unit_test_config());
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
@@ -124,7 +134,7 @@ async fn initial_block_download() {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let tx = transaction(chain_config.genesis_block_id());
+        let tx = transaction(&mut rng, chain_config.genesis_block_id());
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
             tx.transaction().get_id(),
         ))
@@ -185,7 +195,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let tx = transaction(chain_config.genesis_block_id());
+        let tx = transaction(&mut rng, chain_config.genesis_block_id());
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
             tx.transaction().get_id(),
         ))
@@ -264,7 +274,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         // Respond to node's initial header request (made inside connect_peer)
         peer.send_headers(vec![]).await;
 
-        let tx1 = transaction_with_amount(chain_config.genesis_block_id(), 1);
+        let tx1 = transaction_with_amount(&mut rng, chain_config.genesis_block_id(), 1);
         let tx1_id = tx1.transaction().get_id();
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx1_id))
             .await;
@@ -274,7 +284,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx1_id));
 
         // Do not respond to the tx request, make another announcement
-        let tx2 = transaction_with_amount(chain_config.genesis_block_id(), 2);
+        let tx2 = transaction_with_amount(&mut rng, chain_config.genesis_block_id(), 2);
         let tx2_id = tx2.transaction().get_id();
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
             .await;
@@ -290,9 +300,11 @@ async fn too_many_announcements(#[case] seed: Seed) {
 
         // Make sure that the Peer task has an opportunity to handle expired requests.
         node.clear_notifications().await;
-        node.wait_for_notification(SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
-            peer_id: peer.get_id(),
-        })
+        node.wait_for_notification(
+            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted {
+                peer_id: peer.get_id(),
+            },
+        )
         .await;
 
         // Announce the same tx
@@ -338,7 +350,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let tx = transaction(chain_config.genesis_block_id());
+        let tx = transaction(&mut rng, chain_config.genesis_block_id());
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
             tx.transaction().get_id(),
         ))
@@ -392,7 +404,7 @@ async fn valid_transaction(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let tx = transaction(chain_config.genesis_block_id());
+        let tx = transaction(&mut rng, chain_config.genesis_block_id());
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
             tx.transaction().get_id(),
         ))
@@ -459,19 +471,24 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let estimated_tx_size =
-            transaction_with_amount(block1_id.into(), new_block_reward_amount.into_atoms())
-                .encoded_size();
+        let estimated_tx_size = transaction_with_amount(
+            &mut rng,
+            block1_id.into(),
+            new_block_reward_amount.into_atoms(),
+        )
+        .encoded_size();
         let min_tx_fee = min_fee_rate.compute_fee(estimated_tx_size).unwrap().into_atoms();
 
         // tx1's fee is below the minimum
         let tx1 = transaction_with_amount(
+            &mut rng,
             block1_id.into(),
             new_block_reward_amount.into_atoms() - min_tx_fee / 2,
         );
         let tx1_id = tx1.transaction().get_id();
         // tx2's fee is exactly the minimal one.
         let tx2 = transaction_with_amount(
+            &mut rng,
             block2_id.into(),
             new_block_reward_amount.into_atoms() - min_tx_fee,
         );
@@ -594,7 +611,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // The transaction should be held up in the orphan pool for now, so we don't expect it to be
         // propagated at this point
-        assert_eq!(node.try_get_sent_transaction_sync_message(), None);
+        node.assert_no_sent_transaction_sync_message().await;
 
         let res = node
             .mempool()
@@ -783,17 +800,176 @@ async fn rebroadcast_transaction(#[case] seed: Seed) {
     .await;
 }
 
-/// Creates a simple transaction.
-fn transaction_with_amount(block_id: Id<GenBlock>, amount_atoms: u128) -> SignedTransaction {
-    let tx = Transaction::new(
-        0x00,
-        vec![TxInput::from_utxo(OutPointSourceId::from(block_id), 0)],
-        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(amount_atoms)))],
-    )
-    .unwrap();
-    SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+// Check that the tx sync mgr announces all txs at once after a delay and that the announcements
+// have a specific order.
+// * Create 3 transactions that should have a specific order in the mempool.
+// * Add them to the mempool, expect no announcement.
+// * Advance the mock time, the transactions should now be announced, in the above-mentioned order.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = Arc::new(create_unit_test_config());
+        let time_getter = BasicTestTimeGetter::new();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .with_time_getter(time_getter.get_time_getter())
+            .build();
+
+        let output_amount = 1_000;
+        let funding_tx = {
+            let mut builder = TransactionBuilder::new().add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            );
+
+            for _ in 0..3 {
+                builder = builder.add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(output_amount)),
+                    common::chain::Destination::AnyoneCanSpend,
+                ));
+            }
+
+            builder.build()
+        };
+        let funding_tx_id = funding_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(funding_tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        let p2p_config = Arc::new(test_p2p_config());
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_mempool_config(MempoolConfig {
+                min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+            })
+            .with_chainstate(tf.into_chainstate())
+            .with_common_time_getter(&time_getter)
+            .build()
+            .await;
+
+        let peer_id = PeerId::new();
+        let remote_origin_peer_id = PeerId::new();
+        let _peer = node.connect_peer(peer_id, protocol_version).await;
+
+        // Make sure that the tx sync mgr's main loop had at least one iteration, this ensures
+        // that its `next_time_to_announce_txs` has been updated.
+        node.wait_for_notification(
+            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id },
+        )
+        .await;
+
+        let independent_tx_fee = rng.random_range(100..200);
+        let parent_tx_fee = rng.random_range(10..20);
+        let child_tx_fee = rng.random_range(500..600);
+
+        let independent_tx = make_simple_coin_tx(
+            &mut rng,
+            &[(funding_tx_id.into(), 0)],
+            &[output_amount - independent_tx_fee],
+        );
+        let independent_tx_id = independent_tx.transaction().get_id();
+
+        let parent_tx = make_simple_coin_tx(
+            &mut rng,
+            &[(funding_tx_id.into(), 1)],
+            &[1, output_amount - parent_tx_fee - 1],
+        );
+        let parent_tx_id = parent_tx.transaction().get_id();
+
+        let child_tx = make_simple_coin_tx(
+            &mut rng,
+            &[(funding_tx_id.into(), 2), (parent_tx_id.into(), 0)],
+            &[1, output_amount - child_tx_fee],
+        );
+        let child_tx_id = child_tx.transaction().get_id();
+
+        {
+            let mut txs = [independent_tx, parent_tx, child_tx];
+            txs.shuffle(&mut rng);
+            for tx in txs {
+                mempool_add_new_tx_with_random_origin(&node, tx, remote_origin_peer_id, &mut rng)
+                    .await;
+            }
+        }
+
+        node.assert_no_sent_transaction_sync_message().await;
+
+        // Advance the time sufficiently, so that tx sync mgr would consider announcing the txs.
+        // Note: 37 is the upper bound of what `exponential_rand` can return.
+        time_getter.advance_time(TX_RELAY_DELAY_INTERVAL_OUTBOUND * 37);
+
+        let expected_tx_ids = vec![independent_tx_id, parent_tx_id, child_tx_id];
+        for expected_tx_id in &expected_tx_ids {
+            let (sent_to, msg) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(sent_to, peer_id);
+            let tx_id = assert_matches_return_val!(
+                msg,
+                TransactionSyncMessage::NewTransaction(tx_id),
+                tx_id
+            );
+            assert_eq!(&tx_id, expected_tx_id);
+        }
+        node.assert_no_sent_transaction_sync_message().await;
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
 }
 
-fn transaction(block_id: Id<GenBlock>) -> SignedTransaction {
-    transaction_with_amount(block_id, 1)
+async fn mempool_add_new_tx_with_random_origin(
+    node: &TestNode,
+    tx: SignedTransaction,
+    remote_origin_peer_id: PeerId,
+    rng: &mut impl test_utils::random::Rng,
+) {
+    if rng.random_bool(0.5) {
+        let origin = LocalTxOrigin::P2p;
+        let options = TxOptions::default_for(origin.into());
+        let status = node
+            .mempool()
+            .call_mut(move |m| m.add_transaction_local(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(status, mempool::TransactionDuplicateStatus::New);
+    } else {
+        let origin = RemoteTxOrigin::new(remote_origin_peer_id);
+        let options = TxOptions::default_for(origin.into());
+        let status = node
+            .mempool()
+            .call_mut(move |m| m.add_transaction_remote(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(status, mempool::TxStatus::InMempool);
+    }
+}
+
+fn transaction_with_amount(
+    rng: &mut impl CryptoRng,
+    block_id: Id<GenBlock>,
+    amount_atoms: u128,
+) -> SignedTransaction {
+    make_simple_coin_tx(
+        rng,
+        &[(OutPointSourceId::from(block_id), 0)],
+        &[amount_atoms],
+    )
+}
+
+fn transaction(rng: &mut impl CryptoRng, block_id: Id<GenBlock>) -> SignedTransaction {
+    transaction_with_amount(rng, block_id, 1)
 }

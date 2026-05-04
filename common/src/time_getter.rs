@@ -21,7 +21,7 @@ pub trait TimeGetterFn: Send + Sync {
     fn get_time(&self) -> Time;
 }
 
-/// A function wrapper that contains the function that will be used to get the current time in chainstate
+/// A time getter representing the wall clock.
 #[derive(Clone)]
 pub struct TimeGetter {
     f: Arc<dyn TimeGetterFn>,
@@ -64,5 +64,61 @@ impl DefaultTimeGetterFn {
 impl TimeGetterFn for DefaultTimeGetterFn {
     fn get_time(&self) -> Time {
         time::get_time()
+    }
+}
+
+pub trait MonotonicTimeGetterFn: Send + Sync {
+    fn get_time(&self) -> std::time::Instant;
+}
+
+/// A time getter representing a monotonically non-decreasing clock.
+///
+/// Note that mocking this one only makes sense in places where different `Instant` values are
+/// compared explicitly, instead of e.g. relying on tokio's `sleep_until` or `interval_at`. In
+/// the latter case, `tokio::time::advance` and `pause` can be used. But note that they require
+/// the `current_thread` runtime, which is not always possible (e.g. subsystems' `BlockingHandle`
+/// needs a multithreaded one), and this is the reason why we have this `MonotonicTimeGetter`.
+#[derive(Clone)]
+pub struct MonotonicTimeGetter {
+    f: Arc<dyn MonotonicTimeGetterFn>,
+}
+
+impl utils::shallow_clone::ShallowClone for MonotonicTimeGetter {
+    fn shallow_clone(&self) -> Self {
+        Self::clone(self)
+    }
+}
+
+impl MonotonicTimeGetter {
+    pub fn new(f: Arc<dyn MonotonicTimeGetterFn>) -> Self {
+        Self { f }
+    }
+
+    pub fn get_time(&self) -> std::time::Instant {
+        self.f.get_time()
+    }
+
+    pub fn getter(&self) -> &dyn MonotonicTimeGetterFn {
+        &*self.f
+    }
+}
+
+impl Default for MonotonicTimeGetter {
+    fn default() -> Self {
+        Self::new(Arc::new(DefaultMonotonicTimeGetterFn::new()))
+    }
+}
+
+struct DefaultMonotonicTimeGetterFn;
+
+impl DefaultMonotonicTimeGetterFn {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl MonotonicTimeGetterFn for DefaultMonotonicTimeGetterFn {
+    fn get_time(&self) -> std::time::Instant {
+        std::time::Instant::now()
     }
 }

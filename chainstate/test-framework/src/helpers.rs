@@ -17,11 +17,13 @@ use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
-        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint, make_token_id,
+        make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
+        OrdersVersion, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -29,7 +31,7 @@ use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
 use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom as _};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
-use crate::{TestFramework, TransactionBuilder, get_output_value};
+use crate::{empty_witness, get_output_value, TestFramework, TransactionBuilder};
 
 // Note: this function will create 2 blocks
 pub fn issue_and_mint_random_token_from_best_block(
@@ -391,4 +393,21 @@ pub fn output_value_with_amount(output_value: &OutputValue, new_amount: Amount) 
         }
         OutputValue::TokenV1(id, _) => OutputValue::TokenV1(*id, new_amount),
     }
+}
+
+pub fn make_simple_coin_tx(
+    rng: &mut impl CryptoRng,
+    ins: &[(OutPointSourceId, u32)],
+    outs: &[u128],
+) -> SignedTransaction {
+    let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
+        b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(rng))
+    });
+    let builder = outs.iter().fold(builder, |b, a| {
+        b.add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(*a)),
+            Destination::AnyoneCanSpend,
+        ))
+    });
+    builder.build()
 }

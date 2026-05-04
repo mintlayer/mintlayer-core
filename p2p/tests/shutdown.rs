@@ -72,6 +72,7 @@ async fn shutdown_timeout() {
         chainstate.clone(),
         mempool.clone(),
         Default::default(),
+        Default::default(),
         peerdb_storage,
     )
     .unwrap()

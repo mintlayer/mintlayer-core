@@ -42,7 +42,7 @@ use common::{
         TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{event::TransactionProcessedEvent, MempoolConfig, MempoolHandle, MempoolInit};
@@ -51,7 +51,7 @@ use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEO
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{Rng, RngExt as _};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
@@ -111,6 +111,7 @@ impl TestNode {
         shutdown_trigger: ShutdownTrigger,
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         protocol_version: ProtocolVersion,
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
@@ -139,6 +140,7 @@ impl TestNode {
             mempool_handle.clone(),
             peer_manager_event_sender,
             time_getter,
+            monotonic_time_getter,
             Some(sync_mgr_observer),
         );
 
@@ -238,27 +240,14 @@ impl TestNode {
         expect_recv!(self.block_sync_msg_receiver)
     }
 
-    pub fn try_get_sent_block_sync_message(&mut self) -> Option<(PeerId, BlockSyncMessage)> {
-        match self.block_sync_msg_receiver.try_recv() {
-            Ok(message) => Some(message),
-            Err(mpsc::error::TryRecvError::Empty) => None,
-            Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
-        }
-    }
-
     pub async fn get_sent_transaction_sync_message(&mut self) -> (PeerId, TransactionSyncMessage) {
         expect_recv!(self.transaction_sync_msg_receiver)
     }
 
-    pub fn try_get_sent_transaction_sync_message(
-        &mut self,
-    ) -> Option<(PeerId, TransactionSyncMessage)> {
-        match self.transaction_sync_msg_receiver.try_recv() {
-            Ok(message) => Some(message),
-            Err(mpsc::error::TryRecvError::Empty) => None,
-            Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
-        }
+    pub async fn assert_no_sent_transaction_sync_message(&mut self) {
+        expect_no_recv!(self.transaction_sync_msg_receiver);
     }
+
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
         log::debug!("Asserting no error");
@@ -565,6 +554,7 @@ pub struct TestNodeBuilder {
     chainstate_config: Option<ChainstateConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
+    monotonic_time_getter: MonotonicTimeGetter,
     blocks: Vec<Block>,
     protocol_version: ProtocolVersion,
 }
@@ -578,6 +568,7 @@ impl TestNodeBuilder {
             chainstate_config: None,
             chainstate: None,
             time_getter: TimeGetter::default(),
+            monotonic_time_getter: MonotonicTimeGetter::default(),
             blocks: Vec::new(),
             protocol_version,
         }
@@ -613,6 +604,19 @@ impl TestNodeBuilder {
         self
     }
 
+    pub fn with_monotonic_time_getter(
+        mut self,
+        monotonic_time_getter: MonotonicTimeGetter,
+    ) -> Self {
+        self.monotonic_time_getter = monotonic_time_getter;
+        self
+    }
+
+    pub fn with_common_time_getter(self, common_time_getter: &BasicTestTimeGetter) -> Self {
+        self.with_time_getter(common_time_getter.get_time_getter())
+            .with_monotonic_time_getter(common_time_getter.get_monotonic_time_getter())
+    }
+
     pub fn with_blocks(mut self, blocks: Vec<Block>) -> Self {
         self.blocks = blocks;
         self
@@ -626,6 +630,7 @@ impl TestNodeBuilder {
             chainstate_config,
             chainstate,
             time_getter,
+            monotonic_time_getter,
             blocks,
             protocol_version,
         } = self;
@@ -672,6 +677,7 @@ impl TestNodeBuilder {
             shutdown_trigger,
             manager_handle,
             time_getter,
+            monotonic_time_getter,
             protocol_version,
         )
         .await
@@ -851,7 +857,7 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncManagerNotification {
-    NewTxSyncManagerMainLoopIteration { peer_id: PeerId },
+    TxSyncManagerMainLoopIterationCompleted { peer_id: PeerId },
 }
 
 #[derive(Clone)]
@@ -876,10 +882,10 @@ impl SyncManagerObserver {
 }
 
 impl Observer for SyncManagerObserver {
-    fn on_new_transaction_sync_mgr_main_loop_iteration(&mut self, peer_id: PeerId) {
-        self.send_notification(SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
-            peer_id,
-        });
+    fn on_transaction_sync_mgr_main_loop_iteration_completed(&mut self, peer_id: PeerId) {
+        self.send_notification(
+            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id },
+        );
     }
 }
 
