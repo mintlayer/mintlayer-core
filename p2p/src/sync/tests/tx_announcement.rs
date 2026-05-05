@@ -675,8 +675,7 @@ async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
             &mut tf,
             UtxoOutPoint::new(chain_config.genesis_block_id().into(), 0),
             2,
-        )
-        .into();
+        );
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
@@ -721,7 +720,7 @@ async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
         let local_tx_options = TxOptions::default_for(local_tx_origin.into());
 
         let remote_tx_origin = RemoteTxOrigin::new(another_peer_id);
-        let remote_tx_options = TxOptions::default_for(remote_tx_origin.clone().into());
+        let remote_tx_options = TxOptions::default_for(remote_tx_origin.into());
 
         // Add the local tx. The node should send a NewTransaction message to peer1.
         {

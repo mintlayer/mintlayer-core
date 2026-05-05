@@ -318,6 +318,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_p2p<S: PeerDbStorage + 'static>(
     networking_enabled: bool,
     chain_config: Arc<ChainConfig>,

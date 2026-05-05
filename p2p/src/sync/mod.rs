@@ -227,7 +227,7 @@ where
 
                 notif_with_id = self.tx_mgr_notification_receiver.recv() => {
                     if let Some((peer_id, notif)) = notif_with_id {
-                        self.handle_tx_mgr_notification(peer_id, notif).await;
+                        self.handle_tx_mgr_notification(peer_id, notif);
                     }
                 }
 
@@ -508,7 +508,7 @@ where
         }
     }
 
-    async fn handle_tx_mgr_notification(
+    fn handle_tx_mgr_notification(
         &mut self,
         _peer_id: PeerId,
         notif: PeerTransactionSyncManagerLocalNotification,

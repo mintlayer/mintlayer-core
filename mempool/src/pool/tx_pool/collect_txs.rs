@@ -287,8 +287,8 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
             .get_entry(tx_id)
             .ok_or(TxCollectionError::SpecifiedTxNotFound(*tx_id))?;
 
-        collect_selected_ancestors(mempool, entry, &tx_ids, &mut selected_ancestors_map)?;
-        let selected_ancestors = selected_ancestors_map.get(&tx_id).expect("must be present");
+        collect_selected_ancestors(mempool, entry, tx_ids, &mut selected_ancestors_map)?;
+        let selected_ancestors = selected_ancestors_map.get(tx_id).expect("must be present");
 
         if selected_ancestors.is_empty() {
             ready_txs.push(entry.into());
@@ -312,7 +312,7 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
         let tx_id = tx_entry.entry.tx_id();
         result.push(*tx_id);
 
-        if let Some(child_ids) = selected_descendants_map.get(&tx_id) {
+        if let Some(child_ids) = selected_descendants_map.get(tx_id) {
             for child_id in child_ids {
                 match missing_ancestors_count_map.entry(*child_id) {
                     btree_map::Entry::Vacant(_) => {}
@@ -325,13 +325,12 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
                             1 => {
                                 let child_id = *missing_ancestors_count.key();
                                 missing_ancestors_count.remove();
-                                let child =
-                                    mempool.store.get_entry(&child_id).ok_or_else(|| {
-                                        TxCollectionError::TxChildNotFound {
-                                            tx_id: *tx_id,
-                                            child_tx_id: child_id,
-                                        }
-                                    })?;
+                                let child = mempool.store.get_entry(&child_id).ok_or(
+                                    TxCollectionError::TxChildNotFound {
+                                        tx_id: *tx_id,
+                                        child_tx_id: child_id,
+                                    },
+                                )?;
                                 ready_txs.push(child.into());
                             }
                             missing_count => *missing_count -= 1,
@@ -369,12 +368,12 @@ fn collect_selected_ancestors<M>(
             if selected_tx_ids.contains(parent_id) {
                 tx_ancestors.insert(*parent_id);
             } else {
-                let parent_tx_entry = mempool.store.get_entry(parent_id).ok_or_else(|| {
+                let parent_tx_entry = mempool.store.get_entry(parent_id).ok_or(
                     TxCollectionError::TxParentNotFound {
                         tx_id: *tx_id,
                         parent_tx_id: *parent_id,
-                    }
-                })?;
+                    },
+                )?;
                 collect_selected_ancestors(
                     mempool,
                     parent_tx_entry,
