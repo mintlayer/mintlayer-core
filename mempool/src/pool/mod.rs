@@ -23,7 +23,8 @@ use common::{
 };
 use logging::log;
 use utils::{
-    const_value::ConstValue, ensure, eventhandler::EventsController, shallow_clone::ShallowClone,
+    const_value::ConstValue, debug_assert_or_log, ensure, eventhandler::EventsController,
+    shallow_clone::ShallowClone,
 };
 use utils_networking::broadcaster;
 
@@ -612,18 +613,25 @@ impl<'a> TxFinalizer<'a> {
 
                 Ok(TxStatus::InMempool)
             }
-            TxAdditionOutcome::Duplicate { transaction } => {
-                let tx_id = *transaction.tx_id();
+            TxAdditionOutcome::Duplicate {
+                existing_transaction,
+                new_transaction,
+            } => {
+                debug_assert_or_log!(
+                    existing_transaction.tx_id() == new_transaction.tx_id(),
+                    "Duplicate tx is not a duplicate"
+                );
+                let tx_id = *existing_transaction.tx_id();
                 log::trace!("Duplicate transaction {tx_id}");
 
                 match &mut self.events_mode {
                     TxFinalizerEventsMode::Silent => {}
                     TxFinalizerEventsMode::Broadcast(events_broadcast) => {
-                        let relay_policy = transaction.tx_entry().options().relay_policy();
-                        let origin = transaction.tx_entry().origin();
+                        let relay_policy = new_transaction.options().relay_policy();
+                        let origin = new_transaction.origin();
 
-                        // Even if the tx is duplicate, if it has the local origin, broadcast the event
-                        // anyway (p2p will want to re-relay it if it's relayable).
+                        // Even if the new tx is a duplicate, if it has the local origin, broadcast
+                        // the event anyway (p2p will want to re-relay it if it's relayable).
                         if let Some(event) =
                             make_local_duplicate_tx_event(tx_id, relay_policy, origin)
                         {

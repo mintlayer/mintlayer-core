@@ -37,7 +37,7 @@ use logging::log;
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
-    FeeRate, MempoolConfig, TxOptions,
+    FeeRate, MempoolConfig,
 };
 use randomness::{CryptoRng, IndexedRandom as _, RngExt as _, SliceRandom};
 use serialization::Encode;
@@ -650,17 +650,21 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
     .await;
 }
 
-// When an duplicate tx is added to the mempool, it should be re-broadcast to peers if it has
-// local origin and not re-broadcast if it's remote.
+// When a duplicate tx is added to the mempool, it should be re-announced to peers if it has
+// local origin and not re-announced if it's remote.
+// * Connect to a peer.
+// * Add 2 txs to the mempool using a random origin, expect them to be announced to the peer.
+// * Connect to another peer.
+// * Add the txs to the mempool again, this time tx1 always has local origin and tx2 remote.
+// Expected result: tx1 should be announced to the second peer, but tx2 should be not.
+// The first peer shouldn't get any announcements.
 #[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
+async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        use mempool::tx_origin::LocalTxOrigin;
-
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
@@ -687,12 +691,16 @@ async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
 
         let peer1_id = PeerId::new();
         let peer2_id = PeerId::new();
-        let another_peer_id = PeerId::new();
+        let remote_origin_peer_id = PeerId::new();
 
         // Peer1 connects
-        let _peer1 = node.connect_peer(peer1_id, protocol_version).await;
+        let peer1 = node.connect_peer(peer1_id, protocol_version).await;
 
-        let local_tx = TransactionBuilder::new()
+        peer1
+            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
+            .await;
+
+        let tx1 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(fund_tx_id.into(), 0),
                 empty_witness(&mut rng),
@@ -702,9 +710,10 @@ async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
                 common::chain::Destination::AnyoneCanSpend,
             ))
             .build();
-        let local_tx_id = local_tx.transaction().get_id();
+        let tx1_id = tx1.transaction().get_id();
+        log::debug!("tx1_id = {tx1_id:x}");
 
-        let remote_tx = TransactionBuilder::new()
+        let tx2 = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(fund_tx_id.into(), 1),
                 empty_witness(&mut rng),
@@ -714,87 +723,70 @@ async fn rebroadcast_duplicate_transaction(#[case] seed: Seed) {
                 common::chain::Destination::AnyoneCanSpend,
             ))
             .build();
-        let remote_tx_id = remote_tx.transaction().get_id();
+        let tx2_id = tx2.transaction().get_id();
+        log::debug!("tx2_id = {tx2_id:x}");
 
-        let local_tx_origin = LocalTxOrigin::P2p;
-        let local_tx_options = TxOptions::default_for(local_tx_origin.into());
-
-        let remote_tx_origin = RemoteTxOrigin::new(another_peer_id);
-        let remote_tx_options = TxOptions::default_for(remote_tx_origin.into());
-
-        // Add the local tx. The node should send a NewTransaction message to peer1.
+        // Add tx1 with a randomly chosen origin. The node should send a NewTransaction message to peer1.
         {
-            let local_tx = local_tx.clone();
-            let local_tx_options = local_tx_options.clone();
-            let status = node
-                .mempool()
-                .call_mut(move |m| {
-                    m.add_transaction_local(local_tx, local_tx_origin, local_tx_options)
-                })
-                .await
-                .unwrap()
-                .unwrap();
-            assert_eq!(status, mempool::TransactionDuplicateStatus::New);
+            if rng.random_bool(0.5) {
+                log::debug!("Sending tx1 with local origin");
+                let status = node.add_local_tx_to_mempool(tx1.clone()).await;
+                assert_eq!(status, mempool::TransactionDuplicateStatus::New);
+            } else {
+                log::debug!("Sending tx1 with remote origin");
+                let status =
+                    node.add_remote_tx_to_mempool(tx1.clone(), remote_origin_peer_id).await;
+                assert_eq!(status, mempool::TxStatus::InMempool);
+            }
 
             let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
             assert_eq!(peer_id, peer1_id);
-            assert_eq!(msg, TransactionSyncMessage::NewTransaction(local_tx_id));
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(tx1_id));
         }
 
-        // Add the remote tx. The node should send a NewTransaction message to peer1.
+        // Same for tx2.
         {
-            let remote_tx = remote_tx.clone();
-            let remote_tx_options = remote_tx_options.clone();
-            let status = node
-                .mempool()
-                .call_mut(move |m| {
-                    m.add_transaction_remote(remote_tx, remote_tx_origin, remote_tx_options)
-                })
-                .await
-                .unwrap()
-                .unwrap();
-            assert_eq!(status, mempool::TxStatus::InMempool);
+            if rng.random_bool(0.5) {
+                log::debug!("Sending tx2 with local origin");
+                let status = node.add_local_tx_to_mempool(tx2.clone()).await;
+                assert_eq!(status, mempool::TransactionDuplicateStatus::New);
+            } else {
+                log::debug!("Sending tx2 with remote origin");
+                let status =
+                    node.add_remote_tx_to_mempool(tx2.clone(), remote_origin_peer_id).await;
+                assert_eq!(status, mempool::TxStatus::InMempool);
+            }
 
             let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
             assert_eq!(peer_id, peer1_id);
-            assert_eq!(msg, TransactionSyncMessage::NewTransaction(remote_tx_id));
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(tx2_id));
         }
 
         // Peer2 connects
-        let _peer2 = node.connect_peer(peer2_id, protocol_version).await;
+        let peer2 = node.connect_peer(peer2_id, protocol_version).await;
 
-        // Add the local tx again. The sync manager should rebroadcast the tx.
+        peer2
+            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
+            .await;
+
+        // Add tx1 again specifying the local origin. The sync manager should rebroadcast the tx.
         // Since peer1 has already been offered this tx, the NewTransaction message
         // should only be sent to peer2.
         {
-            let status = node
-                .mempool()
-                .call_mut(move |m| {
-                    m.add_transaction_local(local_tx, local_tx_origin, local_tx_options)
-                })
-                .await
-                .unwrap()
-                .unwrap();
+            let status = node.add_local_tx_to_mempool(tx1).await;
             assert_eq!(status, mempool::TransactionDuplicateStatus::Duplicate);
 
             let (peer_id, msg) = node.get_sent_transaction_sync_message().await;
             assert_eq!(peer_id, peer2_id);
-            assert_eq!(msg, TransactionSyncMessage::NewTransaction(local_tx_id));
+            assert_eq!(msg, TransactionSyncMessage::NewTransaction(tx1_id));
 
             node.assert_no_sync_message().await;
         }
 
-        // Add the remote tx again. The sync manager should NOT rebroadcast the tx,
-        // so event peer2 will not be sent the NewTransaction message.
+        // Add tx2 again specifying a remote origin. The sync manager should NOT rebroadcast the tx,
+        // so even peer2 will not be sent the NewTransaction message.
         {
-            let status = node
-                .mempool()
-                .call_mut(move |m| {
-                    m.add_transaction_remote(remote_tx, remote_tx_origin, remote_tx_options)
-                })
-                .await
-                .unwrap()
-                .unwrap();
+            let status = node.add_remote_tx_to_mempool(tx2, remote_origin_peer_id).await;
             assert_eq!(status, mempool::TxStatus::InMempoolDuplicate);
 
             node.assert_no_sync_message().await;
