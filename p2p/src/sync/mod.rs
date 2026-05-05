@@ -206,7 +206,8 @@ where
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
-        let mut next_time_to_requeue_unconfirmed_local_txs = self.monotonic_time_getter.get_time();
+        let mut next_time_to_requeue_unconfirmed_local_txs = self.monotonic_time_getter.get_time()
+            + Self::make_random_unconfirmed_tx_requeue_delay();
 
         loop {
             tokio::select! {
@@ -239,13 +240,15 @@ where
             if now >= next_time_to_requeue_unconfirmed_local_txs {
                 self.requeue_unconfirmed_local_transactions().await?;
 
-                let delay = make_pseudo_rng().random_range(
-                    UNCONFIRMED_TX_REQUEUE_MIN_DELAY..UNCONFIRMED_TX_REQUEUE_MAX_DELAY,
-                );
-
-                next_time_to_requeue_unconfirmed_local_txs = now + delay;
+                next_time_to_requeue_unconfirmed_local_txs =
+                    now + Self::make_random_unconfirmed_tx_requeue_delay();
             }
         }
+    }
+
+    fn make_random_unconfirmed_tx_requeue_delay() -> Duration {
+        make_pseudo_rng()
+            .random_range(UNCONFIRMED_TX_REQUEUE_MIN_DELAY..UNCONFIRMED_TX_REQUEUE_MAX_DELAY)
     }
 
     async fn requeue_unconfirmed_local_transactions(&mut self) -> Result<()> {

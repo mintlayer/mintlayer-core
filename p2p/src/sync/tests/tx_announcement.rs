@@ -865,13 +865,6 @@ async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
         peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
             .await;
 
-        // Make sure that the tx sync mgr's main loop had at least one iteration, this ensures
-        // that its `next_time_to_announce_txs` has been updated.
-        node.wait_for_notification(
-            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id },
-        )
-        .await;
-
         // The child tx has the highest fee, but it has to come after the parent tx, which has the
         // lowest fee, so the resulting order should be independent_tx, parent_tx, child_tx.
         let independent_tx_fee = rng.random_range(100..200);
@@ -1012,13 +1005,6 @@ async fn unconfirmed_local_transactions_reannouncement(
         peer1
             .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
             .await;
-
-        // Make sure that the tx sync mgr's main loop had at least one iteration, this ensures
-        // that its `next_time_to_announce_txs` has been updated.
-        node.wait_for_notification(
-            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id: peer1_id },
-        )
-        .await;
 
         let local_independent_tx_fee = rng.random_range(100..200);
         let local_parent_tx_fee = rng.random_range(10..20);
@@ -1198,12 +1184,6 @@ async fn unconfirmed_local_transactions_reannouncement(
         peer2
             .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
             .await;
-
-        // Again, ensures that peer's `next_time_to_announce_txs` has been updated.
-        node.wait_for_notification(
-            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id: peer2_id },
-        )
-        .await;
 
         // No announcements until we advance the time
         node.assert_no_sent_transaction_sync_message().await;

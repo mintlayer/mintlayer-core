@@ -175,7 +175,8 @@ where
         );
         maintenance_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        let mut next_time_to_announce_txs = self.monotonic_time_getter.get_time();
+        let mut next_time_to_announce_txs =
+            self.monotonic_time_getter.get_time() + self.make_random_tx_announcement_delay();
 
         loop {
             tokio::select! {
@@ -199,22 +200,23 @@ where
             if now >= next_time_to_announce_txs {
                 self.announce_transactions().await?;
 
-                // TODO: whitelisted peers should get txs without delay,
-                // see https://github.com/mintlayer/mintlayer-core/issues/1406.
-                let base_delay = match self.direction {
-                    ConnectionDirection::Inbound => TX_RELAY_DELAY_INTERVAL_INBOUND,
-                    ConnectionDirection::Outbound => TX_RELAY_DELAY_INTERVAL_OUTBOUND,
-                };
-                let delay =
-                    base_delay.mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-
-                next_time_to_announce_txs = now + delay;
+                next_time_to_announce_txs = now + self.make_random_tx_announcement_delay();
             }
 
             if let Some(o) = self.observer.as_mut() {
                 o.on_transaction_sync_mgr_main_loop_iteration_completed(peer_id);
             }
         }
+    }
+
+    // TODO: whitelisted peers should get txs without delay,
+    // see https://github.com/mintlayer/mintlayer-core/issues/1406.
+    fn make_random_tx_announcement_delay(&self) -> Duration {
+        let base_delay = match self.direction {
+            ConnectionDirection::Inbound => TX_RELAY_DELAY_INTERVAL_INBOUND,
+            ConnectionDirection::Outbound => TX_RELAY_DELAY_INTERVAL_OUTBOUND,
+        };
+        base_delay.mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()))
     }
 
     fn send_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
