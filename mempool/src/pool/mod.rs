@@ -596,7 +596,7 @@ impl<'a> TxFinalizer<'a> {
         match outcome {
             TxAdditionOutcome::Added { transaction } => {
                 let tx_id = *transaction.tx_id();
-                log::trace!("Added transaction {tx_id}");
+                log::trace!("Added transaction {tx_id:x}");
 
                 self.enqueue_children(transaction.tx_entry());
 
@@ -619,10 +619,10 @@ impl<'a> TxFinalizer<'a> {
             } => {
                 debug_assert_or_log!(
                     existing_transaction.tx_id() == new_transaction.tx_id(),
-                    "Duplicate tx is not a duplicate"
+                    "Duplicate tx has different id"
                 );
                 let tx_id = *existing_transaction.tx_id();
-                log::trace!("Duplicate transaction {tx_id}");
+                log::trace!("Duplicate transaction {tx_id:x}");
 
                 match &mut self.events_mode {
                     TxFinalizerEventsMode::Silent => {}

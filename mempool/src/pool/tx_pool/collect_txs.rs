@@ -320,15 +320,14 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
                         match missing_ancestors_count.get_mut() {
                             0 => {
                                 // Should not be possible by construction.
-                                panic!("pending child with 0 missing parents");
+                                panic!("Pending child with 0 missing parents");
                             }
                             1 => {
-                                let child_id = *missing_ancestors_count.key();
                                 missing_ancestors_count.remove();
-                                let child = mempool.store.get_entry(&child_id).ok_or(
+                                let child = mempool.store.get_entry(child_id).ok_or(
                                     TxCollectionError::TxChildNotFound {
                                         tx_id: *tx_id,
-                                        child_tx_id: child_id,
+                                        child_tx_id: *child_id,
                                     },
                                 )?;
                                 ready_txs.push(child.into());

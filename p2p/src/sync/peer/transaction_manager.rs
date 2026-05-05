@@ -29,8 +29,9 @@ use common::{
 };
 use logging::log;
 use mempool::{MempoolHandle, TxOptions};
-use utils::sync::Arc;
-use utils::{const_value::ConstValue, sender_with_id::MpscUnboundedSenderWithId};
+use networking::types::ConnectionDirection;
+use randomness::make_pseudo_rng;
+use utils::{const_value::ConstValue, sender_with_id::MpscUnboundedSenderWithId, sync::Arc};
 
 use crate::{
     MessagingService, PeerManagerEvent, Result,

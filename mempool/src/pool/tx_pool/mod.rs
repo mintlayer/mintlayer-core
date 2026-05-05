@@ -678,8 +678,8 @@ pub enum TxAdditionOutcome<'a> {
     /// Transaction already in mempool
     Duplicate {
         existing_transaction: &'a TxMempoolEntry,
-        // Note: the transaction part of the new entry will be the same as the old one (except for
-        // the signatures), but the tx origin and options may be different.
+        // Note: the transaction part of the new entry will be the same as the old one (maybe except
+        // for the signatures), but the tx origin and options may be different.
         new_transaction: TxEntry,
     },
 

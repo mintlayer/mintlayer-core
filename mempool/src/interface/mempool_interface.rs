@@ -13,6 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
+
+use common::{
+    chain::{GenBlock, SignedTransaction, Transaction},
+    primitives::Id,
+};
+use mempool_types::TransactionDuplicateStatus;
+
 use crate::{
     FeeRate, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
@@ -20,13 +28,6 @@ use crate::{
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
 };
-use common::{
-    chain::{GenBlock, SignedTransaction, Transaction},
-    primitives::Id,
-};
-use mempool_types::TransactionDuplicateStatus;
-use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
-
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
     fn add_transaction_remote(

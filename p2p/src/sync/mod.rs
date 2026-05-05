@@ -248,7 +248,7 @@ where
 
     fn make_random_unconfirmed_tx_requeue_delay() -> Duration {
         make_pseudo_rng()
-            .random_range(UNCONFIRMED_TX_REQUEUE_MIN_DELAY..UNCONFIRMED_TX_REQUEUE_MAX_DELAY)
+            .random_range(UNCONFIRMED_TX_REQUEUE_MIN_DELAY..=UNCONFIRMED_TX_REQUEUE_MAX_DELAY)
     }
 
     async fn requeue_unconfirmed_local_transactions(&mut self) -> Result<()> {
@@ -385,7 +385,7 @@ where
             return Ok(());
         }
 
-        log::debug!("Broadcasting a new tip {}", block_id);
+        log::debug!("Broadcasting a new tip {:x}", block_id);
         self.send_block_mgr_event(&PeerBlockSyncManagerLocalEvent::ChainstateNewTip(block_id));
 
         Ok(())
@@ -424,7 +424,7 @@ where
 
                         if need_relay {
                             log::info!(
-                                "Propagating {status_str} transaction {tx_id} originating in {origin}"
+                                "Propagating {status_str} transaction {tx_id:x} originating in {origin}"
                             );
 
                             self.send_tx_mgr_event(
@@ -439,12 +439,14 @@ where
                             }
                         } else {
                             log::trace!(
-                                "Not propagating {status_str} transaction {tx_id} originating in {origin}"
+                                "Not propagating {status_str} transaction {tx_id:x} originating in {origin}"
                             );
                         }
                     }
                     TxRelayPolicy::DontRelay => {
-                        log::trace!("Not propagating transaction {tx_id} originating in {origin}");
+                        log::trace!(
+                            "Not propagating transaction {tx_id:x} originating in {origin}"
+                        );
                     }
                 }
             }

@@ -50,7 +50,7 @@ use utils::exp_rand::EXPONENTIAL_RAND_UPPER_LIMIT;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{BlockSyncMessage, HeaderList, TransactionResponse, TransactionSyncMessage},
+    message::{TransactionResponse, TransactionSyncMessage},
     protocol::ProtocolConfig,
     sync::{
         peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
@@ -672,9 +672,7 @@ async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
 
-        // This will process a block to finish the initial block download and also create utxos
-        // to spend.
-        let fund_tx_id: Id<Transaction> = split_utxo(
+        let funding_tx_id: Id<Transaction> = split_utxo(
             &mut rng,
             &mut tf,
             UtxoOutPoint::new(chain_config.genesis_block_id().into(), 0),
@@ -693,16 +691,13 @@ async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
         let peer2_id = PeerId::new();
         let remote_origin_peer_id = PeerId::new();
 
-        // Peer1 connects
+        // Connect to peer1
         let peer1 = node.connect_peer(peer1_id, protocol_version).await;
-
-        peer1
-            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .await;
+        peer1.send_headers(Vec::new()).await;
 
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(fund_tx_id.into(), 0),
+                TxInput::from_utxo(funding_tx_id.into(), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -715,7 +710,7 @@ async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(fund_tx_id.into(), 1),
+                TxInput::from_utxo(funding_tx_id.into(), 1),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -762,12 +757,9 @@ async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
             assert_eq!(msg, TransactionSyncMessage::NewTransaction(tx2_id));
         }
 
-        // Peer2 connects
+        // Connect to peer2
         let peer2 = node.connect_peer(peer2_id, protocol_version).await;
-
-        peer2
-            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .await;
+        peer2.send_headers(Vec::new()).await;
 
         // Add tx1 again specifying the local origin. The sync manager should rebroadcast the tx.
         // Since peer1 has already been offered this tx, the NewTransaction message
@@ -800,7 +792,7 @@ async fn reannounce_duplicate_transaction(#[case] seed: Seed) {
 // Check that the tx sync mgr announces all txs at once after a delay and that the announcements
 // have a specific order.
 // * Connect to a peer.
-// * Create 3 transactions that should have a specific order in the mempool.
+// * Create 3 transactions that should have a specific order according to the mempool.
 // * Add them to the mempool, expect no announcement.
 // * Advance the mock time, the transactions should now be announced, in the specific order.
 #[tracing::instrument(skip(seed))]
@@ -860,10 +852,9 @@ async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
 
         let peer_id = PeerId::new();
         let remote_origin_peer_id = PeerId::new();
-        let peer = node.connect_peer(peer_id, protocol_version).await;
 
-        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .await;
+        let peer = node.connect_peer(peer_id, protocol_version).await;
+        peer.send_headers(Vec::new()).await;
 
         // The child tx has the highest fee, but it has to come after the parent tx, which has the
         // lowest fee, so the resulting order should be independent_tx, parent_tx, child_tx.
@@ -931,7 +922,7 @@ async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
 //   send those txs.
 // * Optionally, mine a block containing some of the local and remote txs.
 // * Connect to a new peer.
-// * Advance time 2 times - first to make sure that the local event about local tx re-announcement
+// * Advance time twice - first to make sure that the local event about local tx re-announcement
 //   reaches tx sync managers, second to make the txs stored by the tx sync managers due for
 //   announcement.
 // Expected result: tx announcements should be made to the new peer. Only the local txs should
@@ -1000,11 +991,9 @@ async fn unconfirmed_local_transactions_reannouncement(
         let peer1_id = PeerId::new();
         let peer2_id = PeerId::new();
         let remote_origin_peer_id = PeerId::new();
-        let peer1 = node.connect_peer(peer1_id, protocol_version).await;
 
-        peer1
-            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .await;
+        let peer1 = node.connect_peer(peer1_id, protocol_version).await;
+        peer1.send_headers(Vec::new()).await;
 
         let local_independent_tx_fee = rng.random_range(100..200);
         let local_parent_tx_fee = rng.random_range(10..20);
@@ -1075,7 +1064,7 @@ async fn unconfirmed_local_transactions_reannouncement(
         log::debug!("all_tx_ids = {all_tx_ids:?}");
         let all_tx_ids_set = BTreeSet::from(all_tx_ids);
 
-        // No announcements until we advance the time
+        // No announcements until we advance the time.
         node.assert_no_sent_transaction_sync_message().await;
 
         let expected_initial_tx_ids = node
@@ -1180,12 +1169,9 @@ async fn unconfirmed_local_transactions_reannouncement(
         }
 
         let peer2 = node.connect_peer(peer2_id, protocol_version).await;
+        peer2.send_headers(Vec::new()).await;
 
-        peer2
-            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .await;
-
-        // No announcements until we advance the time
+        // No announcements until we advance the time.
         node.assert_no_sent_transaction_sync_message().await;
 
         let expected_reannounced_tx_ids = node
@@ -1213,7 +1199,6 @@ async fn unconfirmed_local_transactions_reannouncement(
 
         // Advance the time, so that the tx announcement can happen.
         time_getter.advance_time(TX_RELAY_DELAY_INTERVAL_OUTBOUND * EXPONENTIAL_RAND_UPPER_LIMIT);
-        node.clear_notifications().await;
 
         for expected_tx_id in &expected_reannounced_tx_ids {
             log::debug!("Expecting re-announcement of tx {expected_tx_id:x}");

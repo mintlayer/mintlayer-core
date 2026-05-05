@@ -77,7 +77,7 @@ async fn tx_ids_by_score_and_ancestry(#[case] seed: Seed) {
     );
     let low_fee_tx_id = low_fee_tx.transaction().get_id();
 
-    // Create a chain of transactions where the parent pays fee event lower than the "low" one
+    // Create a chain of transactions where the parent pays fee even lower than the "low" one
     // above, but descendants pay random fee that may be even higher than the "high" one.
     let tx_chain_root_fee = rng.random_range(1..600);
     let tx_chain_root_tx = make_tx(
