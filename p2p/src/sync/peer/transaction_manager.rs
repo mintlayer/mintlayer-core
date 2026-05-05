@@ -256,6 +256,7 @@ where
 
     async fn announce_transactions(&mut self) -> Result<()> {
         let tx_ids = std::mem::take(&mut self.transactions_to_announce);
+        log::debug!("Announcing {} transactions", tx_ids.len());
 
         let sorted_tx_ids = self
             .mempool_handle

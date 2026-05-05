@@ -76,8 +76,8 @@ use crate::{
 use self::chainstate_handle::ChainstateHandle;
 
 // 1 to 1.5 average distances between blocks.
-const UNCONFIRMED_TX_REQUEUE_MIN_DELAY: Duration = Duration::from_secs(120);
-const UNCONFIRMED_TX_REQUEUE_MAX_DELAY: Duration = Duration::from_secs(180);
+pub const UNCONFIRMED_TX_REQUEUE_MIN_DELAY: Duration = Duration::from_secs(120);
+pub const UNCONFIRMED_TX_REQUEUE_MAX_DELAY: Duration = Duration::from_secs(180);
 
 pub struct PeerContext {
     tasks: JoinSet<()>,

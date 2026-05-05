@@ -45,7 +45,11 @@ use common::{
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
-use mempool::{event::TransactionProcessedEvent, MempoolConfig, MempoolHandle, MempoolInit};
+use mempool::{
+    event::TransactionProcessedEvent,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+    MempoolConfig, MempoolHandle, MempoolInit, TxOptions,
+};
 use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -506,6 +510,33 @@ impl TestNode {
             .await
             .is_ok()
         {}
+    }
+
+    pub async fn add_local_tx_to_mempool(
+        &self,
+        tx: SignedTransaction,
+    ) -> mempool::TransactionDuplicateStatus {
+        let origin = LocalTxOrigin::P2p;
+        let options = TxOptions::default_for(origin.into());
+        self.mempool_handle
+            .call_mut(move |m| m.add_transaction_local(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    pub async fn add_remote_tx_to_mempool(
+        &self,
+        tx: SignedTransaction,
+        remote_origin_peer_id: PeerId,
+    ) -> mempool::TxStatus {
+        let origin = RemoteTxOrigin::new(remote_origin_peer_id);
+        let options = TxOptions::default_for(origin.into());
+        self.mempool_handle
+            .call_mut(move |m| m.add_transaction_remote(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap()
     }
 }
 

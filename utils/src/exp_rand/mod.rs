@@ -27,5 +27,10 @@ pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
     -random_f64.ln()
 }
 
+/// `exponential_rand` will always return values smaller than this.
+///
+/// This is mainly intended for testing.
+pub const EXPONENTIAL_RAND_UPPER_LIMIT: u32 = 37;
+
 #[cfg(test)]
 mod test;

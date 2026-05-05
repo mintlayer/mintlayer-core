@@ -98,7 +98,7 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
 }
 
 struct IncomingDataState {
-    /// A list of headers received via the `HeaderListResponse` message that we haven't yet
+    /// A list of headers received via the `HeaderList` message that we haven't yet
     /// requested the blocks for.
     pending_headers: Vec<SignedBlockHeader>,
     /// A list of blocks that we requested from this peer.

@@ -16,7 +16,8 @@
 use super::*;
 
 use rstest::rstest;
-use test_utils::random::{Seed, StepRng, make_seedable_rng};
+
+use test_utils::random::{make_seedable_rng, Seed, StepRng};
 
 #[rstest]
 #[trace]
@@ -25,7 +26,13 @@ fn test_average_value(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let count = 1000;
-    let sum: f64 = (0..count).map(|_| exponential_rand(&mut rng)).sum();
+    let sum: f64 = (0..count)
+        .map(|_| {
+            let val = exponential_rand(&mut rng);
+            assert!(val < EXPONENTIAL_RAND_UPPER_LIMIT as f64);
+            val
+        })
+        .sum();
     let average = sum / count as f64;
     assert!(0.8 < average && average < 1.2);
 }
@@ -35,8 +42,10 @@ fn expect_finite_values_in_degenerate_cases() {
     let mut always_zero_rng = StepRng::new(0, 0);
     let val = exponential_rand(&mut always_zero_rng);
     assert!(val.is_finite());
+    assert!(val < EXPONENTIAL_RAND_UPPER_LIMIT as f64);
 
     let mut always_max_rng = StepRng::new(u64::MAX, 0);
     let val = exponential_rand(&mut always_max_rng);
     assert!(val.is_finite());
+    assert!(val < EXPONENTIAL_RAND_UPPER_LIMIT as f64);
 }
