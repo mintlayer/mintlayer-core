@@ -22,6 +22,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
+### Changed
+  - P2p:
+    - Various improvements to transaction announcement:
+      - Local transactions that were already announced but never sent to any peer will now be re-announced
+        after a few minutes.
+      - Adding an already existing relayable local transaction to the mempool will cause p2p to re-announce it.
+      - Transactions are now announced in batches at irregular intervals (previously, a random delay was added
+        before each individual transaction announcement).
+
 ### Fixed
   - Wallet:
     - Fixed handling of confirmed and unconfirmed conflicting order transactions in the wallet.
