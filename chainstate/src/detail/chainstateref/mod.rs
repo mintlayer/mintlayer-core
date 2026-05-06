@@ -1002,10 +1002,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         start_from: BlockHeight,
     ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let block_tree_map = self.db_tx.get_block_tree_by_height(start_from)?;
-        let result = block_tree_map
-            .into_iter()
-            .flat_map(|(_height, ids_per_height)| ids_per_height)
-            .collect();
+        let result = block_tree_map.into_values().flatten().collect();
         Ok(result)
     }
 

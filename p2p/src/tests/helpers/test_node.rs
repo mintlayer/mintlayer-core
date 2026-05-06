@@ -393,7 +393,7 @@ where
                 .peers()
                 .values()
                 .map(|ctx| ctx.peer_address)
-                .chain(peer_mgr.pending_outbound_conn_addrs().into_iter())
+                .chain(peer_mgr.pending_outbound_conn_addrs())
                 .collect()
         })
         .await

@@ -268,7 +268,7 @@ impl<P: UtxosView> UtxosCache<P> {
             let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
             inputs
                 .iter()
-                .zip(block_undo.into_inner().into_iter())
+                .zip(block_undo.into_inner())
                 .filter_map(|(tx_in, utxo)| match tx_in {
                     TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
                     TxInput::Account(..)

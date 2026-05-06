@@ -579,7 +579,7 @@ where
         // two versions of incoming.requested_blocks, one for the most recent request and
         // another one for the previous request(s), so that it can distinguish previously
         // requested blocks that were "cancelled" in-flight from unsolicited ones.
-        self.outgoing.blocks_queue.extend(block_ids.into_iter());
+        self.outgoing.blocks_queue.extend(block_ids);
 
         Ok(())
     }
