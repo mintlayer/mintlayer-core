@@ -190,7 +190,7 @@ impl ApiServerInMemoryStorage {
             .address_transactions_table
             .get(address)
             .map_or_else(Vec::new, |transactions| {
-                transactions.iter().flat_map(|(_, txs)| txs.iter()).cloned().collect()
+                transactions.values().flat_map(|txs| txs.iter()).cloned().collect()
             }))
     }
 

@@ -1598,7 +1598,7 @@ impl OutputCache {
             }
 
             if let Some(descendants) = self.unconfirmed_descendants.remove(&outpoint_source_id) {
-                to_update.extend(descendants.into_iter())
+                to_update.extend(descendants)
             }
         }
 

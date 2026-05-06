@@ -23,8 +23,9 @@ pub fn emit_git_env_vars() {
         let git_head_hash = Command::new("git")
             .args(["rev-parse", "HEAD"])
             .output()
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-            .unwrap_or("".to_string());
+            .map_or("".to_string(), |out| {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            });
 
         // Sanity check
         assert!(git_head_hash.is_ascii());
