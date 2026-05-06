@@ -371,11 +371,17 @@ jobs:
           submodules: recursive
           path: ./mintlayer-core
 
+      - name: Extract required info from Cargo.toml
+        id: extract_cargo_info
+        run: |
+          echo "LEDGER_REPO_REV=$(python ./build-tools/cargo-info-extractor/extract.py --ledger-repo-rev)" >> $GITHUB_OUTPUT
+        working-directory: ./mintlayer-core
+
       - name: Checkout mintlayer-ledger-app repository
         uses: actions/checkout@v5
         with:
           repository: mintlayer/mintlayer-ledger-app
-          ref: feature/mintlayer-app
+          ref: ${{ steps.extract_cargo_info.outputs.LEDGER_REPO_REV }}
           path: ./mintlayer-ledger-app
 
       - name: Download archived tests
