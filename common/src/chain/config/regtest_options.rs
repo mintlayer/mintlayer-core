@@ -168,9 +168,10 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
     update_builder!(max_block_size_with_standard_txs);
     update_builder!(max_block_size_with_smart_contracts);
 
-    let chain_initial_difficulty = chain_initial_difficulty
-        .map(primitives::Compact)
-        .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into());
+    let chain_initial_difficulty = chain_initial_difficulty.map_or(
+        pos_initial_difficulty(ChainType::Regtest).into(),
+        primitives::Compact,
+    );
 
     if let Some(upgrade_height) = chain_pos_netupgrades {
         builder = builder

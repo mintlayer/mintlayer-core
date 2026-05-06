@@ -367,7 +367,7 @@ mod test_framework {
                     }
                 })
                 .collect();
-            ids_heights.sort_by(|(_, height1), (_, height2)| height1.cmp(height2));
+            ids_heights.sort_by_key(|(_, height)| *height);
             Ok(ids_heights.iter().map(|(id, _)| *id).collect())
         }
 

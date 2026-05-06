@@ -62,7 +62,7 @@ pub async fn resolve_all_take_first<R: ResolvableName>(
     let mut result = Vec::with_capacity(resolvables.size_hint().0);
 
     for resolvable in resolvables {
-        result.extend(resolvable.resolve().await?.next().into_iter());
+        result.extend(resolvable.resolve().await?.next());
     }
 
     Ok(result)
