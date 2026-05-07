@@ -157,10 +157,8 @@ pub async fn assert_process_block(
 
     let block_index = chainstate
         .call_mut(move |this| {
-            let new_block_index = this
-                .process_block(new_block.clone(), BlockSource::Local)
-                .expect("Failed to process block")
-                .expect("Failed to activate best chain");
+            let new_block_index =
+                this.process_block(new_block.clone(), BlockSource::Local).unwrap().unwrap();
 
             assert_eq!(
                 new_block.header().header().block_id(),
@@ -168,8 +166,7 @@ pub async fn assert_process_block(
                 "The new block's Id is different to the new block index's block Id",
             );
 
-            let best_block_index =
-                this.get_best_block_index().expect("Failed to get best block index");
+            let best_block_index = this.get_best_block_index().unwrap();
 
             assert_eq!(
                 new_block_index.clone().into_gen_block_index().block_id(),
@@ -180,7 +177,7 @@ pub async fn assert_process_block(
             new_block_index
         })
         .await
-        .expect("New block is not the new tip");
+        .unwrap();
 
     tip_rx.await.unwrap();
 
@@ -213,13 +210,13 @@ pub fn setup_blockprod_test(
     let chainstate = chainstate::make_chainstate(
         Arc::clone(&chain_config),
         chainstate_config,
-        Store::new_empty().expect("Error initializing empty store"),
+        Store::new_empty().unwrap(),
         DefaultTransactionVerificationStrategy::new(),
         None,
         time_getter.clone(),
         None,
     )
-    .expect("Error initializing chainstate");
+    .unwrap();
 
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
@@ -245,7 +242,7 @@ pub fn setup_blockprod_test(
         MonotonicTimeGetter::default(),
         PeerDbStorageImpl::new(InMemory::new()).unwrap(),
     )
-    .expect("P2p initialization was successful")
+    .unwrap()
     .add_to_manager("p2p", &mut manager);
 
     (
@@ -268,7 +265,7 @@ pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> B
                 rng.random_range(60 * 60 * 24..60 * 60 * 24 * 14),
                 0,
             ))
-        .expect("No time underflow")
+        .unwrap()
         .as_secs_since_epoch(),
     )
 }
@@ -328,7 +325,7 @@ pub fn create_genesis_for_pos_tests(
                 Destination::PublicKey(stake_public_key.clone()),
                 vrf_public_key,
                 Destination::PublicKey(stake_public_key),
-                PerThousand::new(1000).expect("Valid per thousand"),
+                PerThousand::new(1000).unwrap(),
                 Amount::ZERO,
             )),
         )
@@ -390,7 +387,7 @@ pub fn setup_pos_with_genesis_timestamp(
             },
         ),
     ])
-    .expect("Net upgrades are valid");
+    .unwrap();
 
     let chain_config_builder = chain_config_builder
         .unwrap_or_else(make_chain_config_builder)

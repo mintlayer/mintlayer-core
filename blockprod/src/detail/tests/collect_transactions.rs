@@ -122,7 +122,7 @@ async fn subsystem_error() {
         };
     })
     .await
-    .expect("Subsystem error thread failed");
+    .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

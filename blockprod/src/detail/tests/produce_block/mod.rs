@@ -641,9 +641,9 @@ async fn transaction_source_mempool() {
                     PackingStrategy::FillSpaceFromMempool,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
             blockprod_setup.assert_process_block(new_block).await;
@@ -679,9 +679,9 @@ async fn transaction_source_provided() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
             blockprod_setup.assert_process_block(new_block).await;
@@ -707,7 +707,7 @@ async fn cancel_received(#[case] seed: Seed) {
                 initial_difficulty: Uint256::ZERO.into(),
             },
         )])
-        .expect("Net upgrade is valid");
+        .unwrap();
 
         Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
@@ -792,9 +792,9 @@ async fn solved_ignore_consensus() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
             blockprod_setup.assert_process_block(new_block).await;
@@ -814,7 +814,7 @@ async fn solved_pow_consensus() {
                 initial_difficulty: Uint256::MAX.into(),
             },
         )])
-        .expect("Net upgrade is valid");
+        .unwrap();
 
         Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
@@ -842,9 +842,9 @@ async fn solved_pow_consensus() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
             blockprod_setup.assert_process_block(new_block).await;
@@ -896,9 +896,9 @@ async fn solved_pos_consensus(#[case] seed: Seed) {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
             blockprod_setup.assert_process_block(new_block).await;
@@ -938,7 +938,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                 Destination::PublicKey(genesis_stake_public_key.clone()),
                 genesis_vrf_public_key,
                 Destination::PublicKey(genesis_stake_public_key.clone()),
-                PerThousand::new(1000).expect("Valid per thousand"),
+                PerThousand::new(1000).unwrap(),
                 Amount::ZERO,
             )),
         )
@@ -982,8 +982,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
             next_height_consensus_change += rng.random_range(1..50);
         }
 
-        let net_upgrades =
-            NetUpgrades::initialize(randomized_net_upgrades).expect("Net upgrades are valid");
+        let net_upgrades = NetUpgrades::initialize(randomized_net_upgrades).unwrap();
 
         Arc::new(
             Builder::new(ChainType::Regtest)
@@ -1040,9 +1039,9 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a block: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
                         blockprod_setup.assert_process_block(new_block.clone()).await;
                     }
@@ -1097,9 +1096,9 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a job: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
                         let result = blockprod_setup.assert_process_block(new_block).await;
 
@@ -1166,9 +1165,9 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a block: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
                         blockprod_setup.assert_process_block(new_block.clone()).await;
                     }

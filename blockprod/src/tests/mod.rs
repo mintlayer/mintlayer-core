@@ -36,7 +36,7 @@ async fn test_make_blockproduction() {
         blockprod_setup.p2p.clone(),
         blockprod_setup.time_getter,
     )
-    .expect("Error initializing blockprod");
+    .unwrap();
 
     let blockprod = manager.add_direct_subsystem("blockprod", blockprod);
     let shutdown = manager.make_shutdown_trigger();
@@ -56,7 +56,7 @@ async fn test_make_blockproduction() {
                 })
             })
             .await
-            .expect("Error initializing block production");
+            .unwrap();
     });
 
     manager.main().await;
