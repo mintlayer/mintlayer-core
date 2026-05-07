@@ -634,7 +634,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                 let expired = now.saturating_sub(creation_time) > self.max_tx_age;
                 if expired {
                     log::trace!(
-                        "Evicting tx {} which was created at {:?}. It is now {:?}",
+                        "Evicting tx {:x} which was created at {:?}. It is now {:?}",
                         tx_id,
                         creation_time,
                         now
@@ -665,7 +665,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
 
             log::debug!(
-                "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
+                "Mempool trim: Evicting tx {:x} which has a descendant score of {:?} and has size {}",
                 removed_id,
                 removed.descendant_score(),
                 removed.size()
@@ -697,7 +697,9 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             // dependencies. However, it does not appear to be easy to extract that information
             // from the transaction verifier at the moment. To be addressed in the future.
 
-            log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
+            log::error!(
+                "Disconnecting {disc_id:x} failed with '{err}' during eviction of {tx_id:x}"
+            );
 
             if let Err(refresh_err) = reorg::refresh_mempool(self, |_, _| ()) {
                 log::error!("Refreshing mempool failed: {refresh_err}");
@@ -792,7 +794,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         self.check_preliminary_mempool_policy(&transaction)?;
 
         for attempt_no in 1..=config::MAX_TX_ADDITION_ATTEMPTS {
-            log::trace!("Adding {tx_id:?} attempt #{attempt_no}");
+            log::trace!("Adding {tx_id:x} attempt #{attempt_no}");
             transaction = match self.try_add_transaction(transaction)? {
                 TxAdditionAttemptOutcome::Added => {
                     let transaction = self.store.get_entry(&tx_id).expect("just added");
@@ -809,7 +811,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                     current_tip,
                 } => {
                     log::debug!(
-                        "Tip moved from {start_tip:?} to {current_tip:?} while verifying {tx_id:?}"
+                        "Tip moved from {start_tip:x} to {current_tip:x} while verifying {tx_id:x}"
                     );
                     transaction
                 }
@@ -872,7 +874,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let mut tx_verifier = self.tx_verifier.derive_child();
 
         log::trace!(
-            "Verifying {tx_id:?}, tip = {start_tip:?}, tx_verifier's best block for utxos = {:?}",
+            "Verifying {tx_id:x}, tip = {start_tip:x}, tx_verifier's best block for utxos = {:x}",
             tx_verifier.get_best_block_for_utxos()?
         );
 

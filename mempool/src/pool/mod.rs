@@ -372,7 +372,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::trace!("Performing orphan processing work");
 
         let orphan = state.work_queue.pick(|peer, orphan_id| {
-            log::debug!("Processing orphan tx {orphan_id:?} coming from peer {peer}");
+            log::debug!("Processing orphan tx {orphan_id:x} coming from peer {peer}");
 
             match state.orphans.entry(&orphan_id) {
                 Some(orphan) if orphan.is_ready() => {
@@ -386,7 +386,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 None => {
                     // The orphan may have been kicked out of the pool in the meantime.
                     // Return with `None` in that case to indicate we're not really doing any work.
-                    log::debug!("Orphan tx {orphan_id:?} no longer in the pool");
+                    log::debug!("Orphan tx {orphan_id:x} no longer in the pool");
                     None
                 }
             }
@@ -396,12 +396,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             Some(Ok(orphan)) => {
                 let orphan = orphan.map_origin(TxOrigin::from);
                 let orphan_id = *orphan.tx_id();
-                log::trace!("Re-processing orphan transaction {orphan_id:?}");
+                log::trace!("Re-processing orphan transaction {orphan_id:x}");
                 if let Err(err) = state.add_transaction(orphan) {
-                    log::debug!("Orphan transaction {orphan_id:?} evicted: {err}");
+                    log::debug!("Orphan transaction {orphan_id:x} evicted: {err}");
                 }
             }
-            Some(Err(orphan_id)) => log::trace!("Orphan tx {orphan_id:?} not ready"),
+            Some(Err(orphan_id)) => log::trace!("Orphan tx {orphan_id:x} not ready"),
             None => log::trace!("No orphan processing work left to do"),
         }
     }
@@ -681,7 +681,7 @@ impl<'a> TxFinalizer<'a> {
             let orphan_id = *orphan.tx_id();
             let peer_id = orphan.origin().peer_id();
             if self.work_queue.insert(peer_id, orphan_id) {
-                log::trace!("Added orphan {orphan_id:?} to peer{peer_id}'s work queue");
+                log::trace!("Added orphan {orphan_id:x} to peer{peer_id}'s work queue");
             }
         }
     }

@@ -543,7 +543,7 @@ impl MempoolStore {
         tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
     ) -> Option<TxMempoolEntry> {
-        log::info!("remove_tx: {}", tx_id.to_hash());
+        log::debug!("remove_tx: {:x}", tx_id.to_hash());
         let entry = self.mem_tracker.modify(&mut self.txs_by_id, |by_id, _| by_id.remove(tx_id));
 
         if let Some(entry) = entry {
@@ -773,7 +773,7 @@ impl TxMempoolEntry {
     }
 
     pub fn ancestor_score(&self) -> AncestorScore {
-        log::debug!("ancestor score for {:?}", self.tx_id());
+        log::debug!("ancestor score for {:x}", self.tx_id());
         log::debug!(
             "fees with ancestors: {:?}, size_with_ancestors: {}, fee: {:?}, size: {}",
             self.fees_with_ancestors,
