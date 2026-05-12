@@ -18,11 +18,11 @@
 
 use crate::prelude::*;
 
-use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _};
+use test_utils::random::{RngExt as _, gen_random_bytes, make_seedable_rng};
 
 mod iter_sort_preserving_numbers {
     use serialization::{Decode, Encode};
-    use storage::{decl_schema, MakeMapRef, OrderPreservingValue, Storage};
+    use storage::{MakeMapRef, OrderPreservingValue, Storage, decl_schema};
     use utils::sorted::Sorted;
 
     use crate::with_rng_seed;

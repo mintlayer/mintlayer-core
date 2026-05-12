@@ -16,7 +16,7 @@
 mod known_transactions;
 
 use chainstate::{
-    ban_score::BanScore, chainstate_interface::ChainstateInterface, GenBlockIndex, GenBlockIndexRef,
+    GenBlockIndex, GenBlockIndexRef, ban_score::BanScore, chainstate_interface::ChainstateInterface,
 };
 use common::{chain::GenBlock, primitives::Id};
 use logging::log;
@@ -25,9 +25,9 @@ use p2p_types::PeerId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    PeerManagerEvent, Result,
     error::{P2pError, PeerError},
     utils::oneshot_nofail,
-    PeerManagerEvent, Result,
 };
 
 pub use known_transactions::KnownTransactions;

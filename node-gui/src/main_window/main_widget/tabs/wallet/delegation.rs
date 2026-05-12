@@ -16,8 +16,8 @@
 use std::collections::BTreeMap;
 
 use iced::{
-    widget::{button, column, row, text_input, tooltip, tooltip::Position, Space, Text},
     Element, Length,
+    widget::{Space, Text, button, column, row, text_input, tooltip, tooltip::Position},
 };
 use iced_aw::{Grid, GridRow};
 
@@ -30,7 +30,7 @@ use node_gui_backend::messages::AccountInfo;
 
 use crate::main_window::print_coin_amount;
 
-use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
+use super::{WalletMessage, stake::MATURITY_PERIOD_TOOLTIP_TEXT};
 
 const POOL_ID_TOOLTIP_TEXT: &str =
     "The pool address of the pool that will get the delegation and stake the coins.";
@@ -46,8 +46,7 @@ const SEND_DELEGATION_ID_TOOLTIP_TEXT: &str =
 const CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT: &str = "Before delegating your coins, you create an account that you own, which you can fund with coins (and withdraw from). \
     Once this is created, you can delegate coins to it for staking. If the pool is decommissioned, it is your responsibility to withdraw the coins and move them to another pool.";
 
-const WITHDRAW_BUTTON_TOOLTIP_TEXT: &str =
-    "Withdrawing coins from delegation means they won't be staked anymore. The coins will be locked for the maturity period before they can be normally used.";
+const WITHDRAW_BUTTON_TOOLTIP_TEXT: &str = "Withdrawing coins from delegation means they won't be staked anymore. The coins will be locked for the maturity period before they can be normally used.";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_delegation(

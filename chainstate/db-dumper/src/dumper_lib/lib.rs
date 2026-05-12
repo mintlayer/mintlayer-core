@@ -23,6 +23,6 @@ mod utils;
 pub use dump_blocks::{dump_blocks_generic, dump_blocks_to_file};
 pub use error::Error;
 pub use fields::{
-    parse_block_output_fields_list, BlockOutputField, DEFAULT_BLOCK_OUTPUT_FIELDS_MAINCHAIN_ONLY,
-    DEFAULT_BLOCK_OUTPUT_FIELDS_WITH_STALE_CHAINS,
+    BlockOutputField, DEFAULT_BLOCK_OUTPUT_FIELDS_MAINCHAIN_ONLY,
+    DEFAULT_BLOCK_OUTPUT_FIELDS_WITH_STALE_CHAINS, parse_block_output_fields_list,
 };

@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
 use crate::{
     chain::GenBlock,
-    primitives::{BlockHeight, Id, H256},
+    primitives::{BlockHeight, H256, Id},
 };
 
 mod mainnet;

@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use common::{
     chain::{Block, GenBlock, Transaction},
-    primitives::{time::Time, Id},
+    primitives::{Id, time::Time},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use utils_networking::IpOrSocketAddress;

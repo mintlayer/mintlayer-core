@@ -17,17 +17,17 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use tokio::task::JoinHandle;
 
-use blockprod::{test_blockprod_config, BlockProductionHandle};
+use blockprod::{BlockProductionHandle, test_blockprod_config};
 use chainstate::{
-    make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig, ChainstateHandle,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy, make_chainstate,
+    rpc::ChainstateRpcServer,
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         Block, ChainConfig,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
     },
-    primitives::{Idable, H256},
+    primitives::{H256, Idable},
 };
 use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};

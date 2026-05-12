@@ -18,11 +18,11 @@ use std::str::FromStr;
 use serialization::{Decode, Encode};
 
 use crate::{
-    primitives::{BlockCount, H256},
     Uint256,
+    primitives::{BlockCount, H256},
 };
 
-use super::{config::ChainType, ChainConfig};
+use super::{ChainConfig, config::ChainType};
 
 pub mod config;
 pub mod config_builder;

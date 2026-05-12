@@ -21,20 +21,20 @@ use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
-    TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address,
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness,
 };
 use common::{
     chain::{
-        config::{create_unit_test_config, Builder as ConfigBuilder},
+        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
+        PoolId, TxInput, TxOutput, UtxoOutPoint,
+        config::{Builder as ConfigBuilder, create_unit_test_config},
         make_delegation_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
-        PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
+    primitives::{Amount, H256, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -43,7 +43,7 @@ use crypto::{
 use pos_accounting::PoSAccountingDeltaData;
 use randomness::RngExt;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 // Block `a` and block `c` have stake pool operation.

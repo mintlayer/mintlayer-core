@@ -28,13 +28,13 @@ use p2p_types::socket_address::SocketAddress;
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
 
 use crate::{
-    error::P2pError,
-    net::{default_backend::types::BackendObserver, NetworkingService},
-    protocol::{ProtocolVersion, SupportedProtocolVersion},
     P2pConfig, P2pEventHandler,
+    error::P2pError,
+    net::{NetworkingService, default_backend::types::BackendObserver},
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
 };
 
-use super::{backend::Backend, ConnectivityHandle, MessagingHandle, SyncingEventReceiver};
+use super::{ConnectivityHandle, MessagingHandle, SyncingEventReceiver, backend::Backend};
 
 // The preferred protocol version.
 // Note that we intentionally keep this constant private, because most of the code should

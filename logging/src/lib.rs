@@ -22,15 +22,15 @@ use std::{
     sync::Mutex,
 };
 
-use tracing::{level_filters::LevelFilter, Subscriber};
+use tracing::{Subscriber, level_filters::LevelFilter};
 use tracing_subscriber::{
-    fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer, Registry,
+    EnvFilter, Layer, Registry, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
 pub use log;
-pub use log_style::{get_log_style_from_env, LogStyleParseError};
 pub use log_style::{LogStyle, TextColoring};
-pub use utils::{get_from_env, GetFromEnvError};
+pub use log_style::{LogStyleParseError, get_log_style_from_env};
+pub use utils::{GetFromEnvError, get_from_env};
 
 /// Default value for `RUST_LOG` used by the "simple" log initialization functions.
 ///

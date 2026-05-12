@@ -16,10 +16,10 @@
 use chainstate_types::BlockIndex;
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockHeader},
         Block,
+        block::{BlockHeader, signed_block_header::SignedBlockHeader},
     },
-    primitives::{id::WithId, Id, Idable},
+    primitives::{Id, Idable, id::WithId},
 };
 
 /// A block header together with its (probably pre-computed) id.

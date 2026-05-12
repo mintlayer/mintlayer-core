@@ -20,40 +20,40 @@ use std::{
 };
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address, AddressError, RpcAddress},
+    address::{Address, AddressError, RpcAddress, pubkeyhash::PublicKeyHash},
     chain::{
+        AccountCommand, AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination,
+        GenBlock, IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
+        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
+        TransactionCreationError, TxInput, TxOutput, TxOutputTag, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::{
-            inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
             DestinationSigError,
+            inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         },
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
-        AccountCommand, AccountOutPoint, Block, ChainConfig, Currency, DelegationId, Destination,
-        GenBlock, IdCreationError, OrderAccountCommand, OrderId, OutPointSourceId, PoolId,
-        RpcOrderInfo, SignedTransaction, SignedTransactionIntent, Transaction,
-        TransactionCreationError, TxInput, TxOutput, TxOutputTag, UtxoOutPoint,
     },
     primitives::{
-        id::{hash_encoded, WithId},
-        Amount, BlockHeight, Id, H256,
+        Amount, BlockHeight, H256, Id,
+        id::{WithId, hash_encoded},
     },
     size_estimation::SizeEstimationError,
 };
 use consensus::PoSGenerateBlockInputData;
 use crypto::{
     key::{
+        PrivateKey, PublicKey,
         extended::ExtendedPublicKey,
         hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
-        PrivateKey, PublicKey,
     },
     vrf::VRFPublicKey,
 };
 use mempool::FeeRate;
-use tx_verifier::{check_transaction, error::TokenIssuanceError, CheckTransactionError};
+use tx_verifier::{CheckTransactionError, check_transaction, error::TokenIssuanceError};
 use utils::{debug_panic_or_log, ensure};
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
@@ -61,6 +61,7 @@ use wallet_storage::{
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
     account_info::{StandaloneAddressDetails, StandaloneAddresses},
     chain_info::ChainInfo,
     hw_data::HardwareWalletFullInfo,
@@ -74,28 +75,27 @@ use wallet_types::{
     wallet_tx::{TxData, TxState},
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
-    AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 #[cfg(feature = "trezor")]
 use crate::signer::trezor_signer::{FoundDevice, TrezorError};
 use crate::{
+    Account, SendRequest,
     account::{
-        transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData,
-        OrderData, OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo,
-        UtxoSelectorError,
+        CoinSelectionAlgo, CurrentFeeRate, DelegationData, OrderData,
+        OutputCacheInconsistencyError, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
+        transaction_list::TransactionList,
     },
     destination_getters::HtlcSpendingCondition,
     key_chain::{
-        make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
-        MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
+        AccountKeyChainImplSoftware, KeyChainError, LOOKAHEAD_SIZE, MasterKeyChain, VRF_INDEX,
+        make_account_path, make_path_to_vrf_key,
     },
     send_request::{
-        make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
+        IssueNftArguments, SelectedInputs, StakePoolCreationArguments, make_issue_token_outputs,
     },
     signer::{Signer, SignerError, SignerProvider},
     wallet_events::{WalletEvents, WalletEventsNoOp},
-    Account, SendRequest,
 };
 
 pub use bip39::{Language, Mnemonic};
@@ -122,7 +122,9 @@ pub enum WalletError {
     HardwareWalletOpenedAsSoftwareWallet(WalletType),
     #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
-    #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
+    #[error(
+        "Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}"
+    )]
     UnsupportedWalletVersion(u32),
     #[error("Wallet database error: {0}")]
     DatabaseError(#[from] wallet_storage::Error),
@@ -242,11 +244,15 @@ pub enum WalletError {
     ReducedLookaheadSize(u32, u32),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
-    #[error("Failed to completely sign the decommission transaction. \
+    #[error(
+        "Failed to completely sign the decommission transaction. \
             This wallet does not seem to have the decommission key. \
-            Consider using a decommission-request, and passing it to the wallet that has the decommission key")]
+            Consider using a decommission-request, and passing it to the wallet that has the decommission key"
+    )]
     PartiallySignedTransactionInDecommissionCommand,
-    #[error("Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command.")]
+    #[error(
+        "Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command."
+    )]
     FullySignedTransactionInDecommissionReq,
     #[error("Destination does not belong to this wallet")]
     DestinationNotFromThisWallet,
@@ -299,7 +305,9 @@ pub enum WalletError {
     #[error("HTLC secret provided for non-HTLC UTXO")]
     HtlcSecretProvidedForNonHtlcUtxo,
 
-    #[error("The provided HTLC secret doesn't match the hash (expected: {expected:x}, actual: {actual:x})")]
+    #[error(
+        "The provided HTLC secret doesn't match the hash (expected: {expected:x}, actual: {actual:x})"
+    )]
     HtlcSecretDoesntMatchHash {
         expected: HtlcSecretHash,
         actual: HtlcSecretHash,
@@ -672,7 +680,7 @@ where
                 }
                 CURRENT_WALLET_VERSION => return Ok(signer_provider),
                 unsupported_version => {
-                    return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
+                    return Err(WalletError::UnsupportedWalletVersion(unsupported_version));
                 }
             }
         }
@@ -735,14 +743,14 @@ where
                 return Err(WalletError::CannotChangeWalletType {
                     from: current_wallet_type,
                     to: wallet_type,
-                })
+                });
             }
             #[cfg(all(feature = "trezor", feature = "ledger"))]
             (WalletType::Ledger, WalletType::Trezor) | (WalletType::Trezor, WalletType::Ledger) => {
                 return Err(WalletError::CannotChangeWalletType {
                     from: current_wallet_type,
                     to: wallet_type,
-                })
+                });
             }
             #[cfg(feature = "ledger")]
             (WalletType::Cold | WalletType::Hot, WalletType::Ledger)
@@ -750,7 +758,7 @@ where
                 return Err(WalletError::CannotChangeWalletType {
                     from: current_wallet_type,
                     to: wallet_type,
-                })
+                });
             }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
@@ -1183,13 +1191,13 @@ where
         account_index: U31,
         create_request: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> R,
         sign_request: impl AsyncFnOnce(
-                R,
-                &P::K,
-                &mut StoreTxRwUnlocked<B>,
-                Arc<ChainConfig>,
-                <P as SignerProvider>::S,
-            ) -> WalletResult<T>
-            + Send,
+            R,
+            &P::K,
+            &mut StoreTxRwUnlocked<B>,
+            Arc<ChainConfig>,
+            <P as SignerProvider>::S,
+        ) -> WalletResult<T>
+        + Send,
     ) -> WalletResult<T> {
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
@@ -1220,12 +1228,12 @@ where
         &mut self,
         account_index: U31,
         f: impl AsyncFnOnce(
-                &P::K,
-                &mut StoreTxRwUnlocked<B>,
-                Arc<ChainConfig>,
-                <P as SignerProvider>::S,
-            ) -> WalletResult<T>
-            + Send,
+            &P::K,
+            &mut StoreTxRwUnlocked<B>,
+            Arc<ChainConfig>,
+            <P as SignerProvider>::S,
+        ) -> WalletResult<T>
+        + Send,
     ) -> WalletResult<T> {
         self.async_for_account_rw_unlocked(
             account_index,

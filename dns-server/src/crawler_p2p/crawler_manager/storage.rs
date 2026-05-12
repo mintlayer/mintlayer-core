@@ -24,7 +24,7 @@ use serialization::{Decode, Encode};
 
 use crate::{crawler_p2p::crawler::address_data::SoftwareInfo, error::DnsServerError};
 
-use super::{storage_impl::DnsServerStorageImpl, CURRENT_STORAGE_VERSION};
+use super::{CURRENT_STORAGE_VERSION, storage_impl::DnsServerStorageImpl};
 
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct AddressInfo {

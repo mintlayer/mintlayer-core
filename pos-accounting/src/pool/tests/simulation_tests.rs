@@ -21,15 +21,15 @@ use common::{
     primitives::Amount,
 };
 use randomness::{CryptoRng, Rng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::create_pool_data;
 
 use crate::{
-    pool::{delegation::DelegationData, storage::PoSAccountingDB},
-    storage::in_memory::InMemoryPoSAccounting,
     FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingOperations, PoSAccountingUndo,
     PoSAccountingView,
+    pool::{delegation::DelegationData, storage::PoSAccountingDB},
+    storage::in_memory::InMemoryPoSAccounting,
 };
 
 fn get_random_pool_id(rng: &mut impl Rng, storage: &InMemoryPoSAccounting) -> Option<PoolId> {

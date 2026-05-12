@@ -17,12 +17,12 @@ use std::num::NonZeroU64;
 
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
+    Uint256, Uint512,
     chain::{
-        block::ConsensusData, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
-        RequiredConsensus,
+        ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus, RequiredConsensus,
+        block::ConsensusData,
     },
     primitives::{BlockDistance, BlockHeight, Compact, Id},
-    Uint256, Uint512,
 };
 use utils::ensure;
 
@@ -194,7 +194,9 @@ where
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Prev block's consensus status must be PoS because we are in Ongoing PoS net version")
+            panic!(
+                "Prev block's consensus status must be PoS because we are in Ongoing PoS net version"
+            )
         }
     };
 
@@ -233,17 +235,17 @@ mod tests {
     };
     use common::{
         chain::{
-            block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
-            config::Builder as ConfigBuilder,
             Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoSChainConfigBuilder, PoolId,
+            block::{BlockReward, consensus_data::PoSData, timestamp::BlockTimestamp},
+            config::Builder as ConfigBuilder,
         },
-        primitives::{per_thousand::PerThousand, Idable, H256},
+        primitives::{H256, Idable, per_thousand::PerThousand},
     };
-    use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey, transcript::no_rng::VRFTranscript};
     use itertools::Itertools;
     use randomness::{CryptoRng, RngExt as _};
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 
@@ -918,9 +920,11 @@ mod tests {
         let mut tip_height = BlockHeight::one();
         let pos_status = get_pos_status(&chain_config, tip_height.next_height());
 
-        println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}",
-                                   pos_status.get_chain_config().block_count_to_average_for_blocktime(),
-                                   pos_status.get_chain_config().difficulty_change_limit());
+        println!(
+            "Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}",
+            pos_status.get_chain_config().block_count_to_average_for_blocktime(),
+            pos_status.get_chain_config().difficulty_change_limit()
+        );
 
         for slot in 121..1_000_000 {
             let tip = block_index_handle.get_block_index_by_height(tip_height).unwrap();

@@ -20,33 +20,33 @@ use itertools::Itertools;
 
 use common::{
     chain::{
+        ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
         config::ChainType,
         htlc::HtlcSecret,
         signature::{
+            DestinationSigError,
             inputsig::{
+                InputWitness,
                 arbitrary_message::ArbitraryMessageSignature,
                 classical_multisig::{
                     authorize_classical_multisig::{
-                        sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                        ClassicalMultisigCompletionStatus,
+                        AuthorizedClassicalMultisigSpend, ClassicalMultisigCompletionStatus,
+                        sign_classical_multisig_spending,
                     },
                     encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
                 },
-                InputWitness,
             },
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError,
         },
-        ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::BlockHeight,
 };
 use crypto::key::{
+    PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{derivable::Derivable, u31::U31},
-    PredefinedSigAuxDataProvider, PrivateKey, SigAuxDataProvider,
 };
 use randomness::make_true_rng;
 use utils::ensure;
@@ -54,24 +54,24 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId,
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
     seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
     wallet_type::WalletType,
-    AccountId,
 };
 
 use crate::{
+    Account, WalletError, WalletResult,
     key_chain::{
-        make_account_path, AccountKeyChainImplSoftware, AccountKeyChains, FoundPubKey,
-        MasterKeyChain,
+        AccountKeyChainImplSoftware, AccountKeyChains, FoundPubKey, MasterKeyChain,
+        make_account_path,
     },
     signer::utils::produce_uniparty_signature_for_input,
-    Account, WalletError, WalletResult,
 };
 
-use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
+use super::{Signer, SignerError, SignerProvider, SignerResult, utils::is_htlc_utxo};
 
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,

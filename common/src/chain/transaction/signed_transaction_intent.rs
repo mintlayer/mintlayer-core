@@ -19,16 +19,16 @@ use utils::ensure;
 
 use crate::{
     chain::{
+        ChainConfig, Destination, Transaction,
         signature::inputsig::arbitrary_message::{
             self, ArbitraryMessageSignature, ArbitraryMessageSignatureRef,
         },
-        ChainConfig, Destination, Transaction,
     },
     primitives::{Id, Idable as _},
 };
 
 use super::signature::{
-    inputsig::arbitrary_message::SignArbitraryMessageError, DestinationSigError,
+    DestinationSigError, inputsig::arbitrary_message::SignArbitraryMessageError,
 };
 
 /// `SignedTransactionIntent` acts as a proof that a certain transaction was created with the specific intent in mind.
@@ -274,13 +274,13 @@ mod tests {
     use randomness::RngExt;
     use test_utils::{
         assert_matches,
-        random::{make_seedable_rng, Seed},
+        random::{Seed, make_seedable_rng},
         random_ascii_alphanumeric_string,
     };
 
     use crate::{
         address::pubkeyhash::PublicKeyHash,
-        chain::{config, Destination, OutPointSourceId, Transaction, TxInput},
+        chain::{Destination, OutPointSourceId, Transaction, TxInput, config},
         primitives::H256,
     };
 
@@ -293,8 +293,7 @@ mod tests {
                 .unwrap(),
         );
         let message = SignedTransactionIntent::get_message_to_sign("test intent", &tx_id);
-        let expected_message =
-            "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:test intent>";
+        let expected_message = "<tx_id:dfc2bb0cc4c7f3ed3fe682a48ee9f78bcd4962e55e7bc239bd340ec22aff8657;intent:test intent>";
         assert_eq!(message, expected_message);
     }
 

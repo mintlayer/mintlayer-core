@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    make_order_id, AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand,
-    OrderData, OrdersVersion,
+    AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand, OrderData,
+    OrdersVersion, make_order_id,
 };
 
 use super::*;

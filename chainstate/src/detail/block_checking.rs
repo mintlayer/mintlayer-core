@@ -17,7 +17,7 @@ use super::Chainstate;
 use crate::{BlockError, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorage;
 use common::{
-    chain::{block::signed_block_header::SignedBlockHeader, Block},
+    chain::{Block, block::signed_block_header::SignedBlockHeader},
     primitives::id::WithId,
 };
 use utils::tap_log::TapLog;

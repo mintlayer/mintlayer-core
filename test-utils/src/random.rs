@@ -17,9 +17,9 @@ use std::{convert::Infallible, num::ParseIntError, str::FromStr};
 
 use rand_chacha::ChaChaRng;
 
-use randomness::{rand_core_utils, IndexedRandom as _, TryCryptoRng, TryRng};
+use randomness::{IndexedRandom as _, TryCryptoRng, TryRng, rand_core_utils};
 
-pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngExt, SeedableRng};
+pub use randomness::{self, CryptoRng, Rng, RngExt, SeedableRng, seq::IteratorRandom};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Seed(pub u64);

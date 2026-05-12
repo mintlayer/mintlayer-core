@@ -16,7 +16,7 @@
 pub mod undo;
 use self::undo::*;
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use serialization::{Decode, Encode};
 

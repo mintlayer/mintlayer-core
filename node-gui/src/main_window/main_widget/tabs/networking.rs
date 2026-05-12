@@ -16,10 +16,10 @@
 use std::fmt::Debug;
 
 use iced::{
-    widget::{column, container, Text},
     Element, Length, Task,
+    widget::{Text, column, container},
 };
-use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
+use iced_aw::{Grid, GridRow, tab_bar::TabLabel};
 
 use crate::main_window::NodeState;
 

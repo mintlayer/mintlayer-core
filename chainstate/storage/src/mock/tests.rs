@@ -19,9 +19,9 @@ use crate::{
     TransactionRw, Transactional,
 };
 use common::{
-    chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-    chain::{signed_transaction::SignedTransaction, transaction::Transaction, Block, GenBlock},
-    primitives::{Id, Idable, H256},
+    chain::block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
+    chain::{Block, GenBlock, signed_transaction::SignedTransaction, transaction::Transaction},
+    primitives::{H256, Id, Idable},
 };
 
 type TestStore = crate::inmemory::Store;

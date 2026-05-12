@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use crate::key_chain::with_purpose::WithPurpose;
-use crate::key_chain::{get_purpose_and_index, KeyChainError, KeyChainResult};
-use common::address::pubkeyhash::PublicKeyHash;
+use crate::key_chain::{KeyChainError, KeyChainResult, get_purpose_and_index};
 use common::address::Address;
+use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::{ChainConfig, Destination};
+use crypto::key::PublicKey;
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;

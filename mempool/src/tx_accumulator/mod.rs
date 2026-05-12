@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock, SignedTransaction},
+    chain::{GenBlock, SignedTransaction, block::timestamp::BlockTimestamp},
     primitives::{Amount, Id},
 };
 use rpc::description::HasValueHint;

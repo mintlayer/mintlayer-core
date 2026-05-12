@@ -20,12 +20,12 @@ mod key_holder;
 pub mod secp256k1;
 pub mod signature;
 
-use randomness::{make_true_rng, CryptoRng};
-use serialization::{hex_encoded::HexEncoded, Decode, Encode};
+use randomness::{CryptoRng, make_true_rng};
+use serialization::{Decode, Encode, hex_encoded::HexEncoded};
 
 use crate::key::{
-    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
     Signature::Secp256k1Schnorr,
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
 };
 
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
@@ -176,7 +176,7 @@ mod test {
     use rstest::rstest;
 
     use randomness::RngExt as _;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 

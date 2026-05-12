@@ -21,19 +21,19 @@ use itertools::Itertools;
 
 use chainstate::rpc::RpcOutputValueOut;
 use common::{
-    address::{decode_address, Address, AddressError, RpcAddress},
+    address::{Address, AddressError, RpcAddress, decode_address},
     chain::{
+        ChainConfig, Currency, Destination, OrderId, OutPointSourceId, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, Currency, Destination, OrderId, OutPointSourceId, TxOutput, UtxoOutPoint,
     },
     primitives::{
+        BlockHeight, DecimalAmount, H256, Id,
         amount::decimal::{
-            subtract_decimal_amounts_of_same_currency, DecimalAmountWithIsSameComparison,
+            DecimalAmountWithIsSameComparison, subtract_decimal_amounts_of_same_currency,
         },
         time::Time,
-        BlockHeight, DecimalAmount, Id, H256,
     },
 };
 use utils::ensure;
@@ -121,8 +121,14 @@ pub fn format_pool_info(info: PoolInfo) -> String {
             "Pool Id: {}, Pledge: {}, Balance: {}, Creation Block Height: {}, Creation block timestamp: {}, ",
             "Staker: {}, Decommission Key: {}, VRF Public Key: {}"
         ),
-        info.pool_id, info.pledge.decimal(), info.balance.decimal(), info.height, info.block_timestamp,
-        info.staker, info.decommission_key, info.vrf_public_key
+        info.pool_id,
+        info.pledge.decimal(),
+        info.balance.decimal(),
+        info.height,
+        info.block_timestamp,
+        info.staker,
+        info.decommission_key,
+        info.vrf_public_key
     )
 }
 
@@ -826,12 +832,12 @@ mod tests {
 
     use common::{
         address::pubkeyhash::PublicKeyHash,
-        chain::{self, tokens::TokenId, Destination},
+        chain::{self, Destination, tokens::TokenId},
     };
     use randomness::RngExt;
     use test_utils::{
         assert_matches, assert_matches_return_val,
-        random::{make_seedable_rng, Seed},
+        random::{Seed, make_seedable_rng},
     };
     use wallet_rpc_lib::types::RpcAmountIn;
 

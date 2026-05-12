@@ -15,14 +15,14 @@
 
 use thiserror::Error;
 
-use chainstate::{ban_score::BanScore, ChainstateError};
+use chainstate::{ChainstateError, ban_score::BanScore};
 use common::{
-    chain::{config::MagicBytes, Block, Transaction},
-    primitives::{semver::SemVer, time::Time, Id},
+    chain::{Block, Transaction, config::MagicBytes},
+    primitives::{Id, semver::SemVer, time::Time},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 use networking::error::{MessageCodecError, NetworkingError};
-use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
+use p2p_types::{PeerId, services::Services, socket_address::SocketAddress};
 use utils::try_as::TryAsRef;
 
 use crate::{net::types::PeerRole, peer_manager::peerdb_common, protocol::ProtocolVersion};
@@ -141,7 +141,9 @@ pub enum ConnectionValidationError {
     },
     #[error("Networking disabled")]
     NetworkingDisabled,
-    #[error("Minimum peer software version not satisfied, min version = {min_version}, actual = {actual_version}")]
+    #[error(
+        "Minimum peer software version not satisfied, min version = {min_version}, actual = {actual_version}"
+    )]
     MinPeerSoftwareVersionNotSatisfied {
         min_version: SemVer,
         actual_version: SemVer,

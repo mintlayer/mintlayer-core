@@ -22,7 +22,7 @@ use merkletree_mintlayer::{MerkleTreeFormError, MerkleTreeProofExtractionError};
 use serialization::{Decode, Encode};
 
 use crate::chain::{
-    output_value::OutputValue, output_values_holder::OutputValuesHolder, SignedTransaction,
+    SignedTransaction, output_value::OutputValue, output_values_holder::OutputValuesHolder,
 };
 
 use self::merkle_proxy::BlockBodyMerkleProxy;
@@ -81,19 +81,19 @@ mod tests {
 
     use crypto::key::{KeyKind, PrivateKey};
     use randomness::{CryptoRng, Rng, RngExt as _};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{
         chain::{
+            Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
             block::BlockReward,
             output_value::OutputValue,
             signature::{
-                inputsig::{standard_signature::StandardInputSignature, InputWitness},
+                inputsig::{InputWitness, standard_signature::StandardInputSignature},
                 sighash::sighashtype::SigHashType,
             },
-            Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
         },
-        primitives::{id::Idable, Amount, Id, H256},
+        primitives::{Amount, H256, Id, id::Idable},
     };
 
     use super::*;
@@ -237,20 +237,28 @@ mod tests {
 
         if transactions.is_empty() {
             // If there are no transactions, the block reward is the root
-            assert!(block_reward_inclusion_proof
-                .verify(block_reward_witness_hash, merkle_tree.root())
-                .passed_trivially());
-            assert!(block_reward_witness_inclusion_proof
-                .verify(block_reward_witness_hash, witness_merkle_tree.root())
-                .passed_trivially());
+            assert!(
+                block_reward_inclusion_proof
+                    .verify(block_reward_witness_hash, merkle_tree.root())
+                    .passed_trivially()
+            );
+            assert!(
+                block_reward_witness_inclusion_proof
+                    .verify(block_reward_witness_hash, witness_merkle_tree.root())
+                    .passed_trivially()
+            );
             assert_eq!(merkle_tree.root(), witness_merkle_tree.root());
         } else {
-            assert!(block_reward_inclusion_proof
-                .verify(block_reward_witness_hash, merkle_tree.root())
-                .passed_decisively());
-            assert!(block_reward_witness_inclusion_proof
-                .verify(block_reward_witness_hash, witness_merkle_tree.root())
-                .passed_decisively());
+            assert!(
+                block_reward_inclusion_proof
+                    .verify(block_reward_witness_hash, merkle_tree.root())
+                    .passed_decisively()
+            );
+            assert!(
+                block_reward_witness_inclusion_proof
+                    .verify(block_reward_witness_hash, witness_merkle_tree.root())
+                    .passed_decisively()
+            );
         }
 
         // Verify inclusion proofs for transactions
@@ -259,12 +267,16 @@ mod tests {
             let witness_inclusion_proof =
                 witness_merkle_tree.transaction_witness_inclusion_proof(i as u32).unwrap();
 
-            assert!(inclusion_proof
-                .verify(tx.transaction().get_id().to_hash(), merkle_tree.root())
-                .passed_decisively());
-            assert!(witness_inclusion_proof
-                .verify(tx.serialized_hash(), witness_merkle_tree.root())
-                .passed_decisively());
+            assert!(
+                inclusion_proof
+                    .verify(tx.transaction().get_id().to_hash(), merkle_tree.root())
+                    .passed_decisively()
+            );
+            assert!(
+                witness_inclusion_proof
+                    .verify(tx.serialized_hash(), witness_merkle_tree.root())
+                    .passed_decisively()
+            );
         }
     }
 }

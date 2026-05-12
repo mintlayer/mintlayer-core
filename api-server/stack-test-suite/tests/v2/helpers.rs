@@ -13,18 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, empty_witness};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_delegation_id, make_token_id,
+        AccountCommand, AccountNonce, Block, DelegationId, Destination, OutPointSourceId, PoolId,
+        TxInput, TxOutput, UtxoOutPoint, make_delegation_id, make_token_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountNonce, Block, DelegationId, Destination, OutPointSourceId, PoolId,
-        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},

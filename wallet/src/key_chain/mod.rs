@@ -212,7 +212,7 @@ where
 
     /// Find the corresponding public key for a given public key hash
     fn get_public_key_from_public_key_hash(&self, pubkey_hash: &PublicKeyHash)
-        -> Option<PublicKey>;
+    -> Option<PublicKey>;
 
     /// Derive addresses until there are lookahead unused ones
     fn top_up_all(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> KeyChainResult<()>;

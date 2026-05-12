@@ -20,11 +20,14 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
+        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         make_token_id,
         output_value::OutputValue,
         signature::{
+            DestinationSigError,
             inputsig::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
@@ -38,13 +41,10 @@ use common::{
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
         tokens::{TokenData, TokenIssuance, TokenTransfer},
-        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
-        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };

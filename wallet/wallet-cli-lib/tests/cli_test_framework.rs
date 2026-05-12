@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    sync::{mpsc, Arc},
+    sync::{Arc, mpsc},
     time::Duration,
 };
 
@@ -31,8 +31,8 @@ use wallet_cli_lib::{
 };
 use wallet_rpc_lib::types::NodeInterface;
 use wallet_test_node::{
-    create_chain_config, default_chain_config_options, start_node, COLD_WALLET_MENEMONIC,
-    RPC_PASSWORD, RPC_USERNAME,
+    COLD_WALLET_MENEMONIC, RPC_PASSWORD, RPC_USERNAME, create_chain_config,
+    default_chain_config_options, start_node,
 };
 
 pub use wallet_test_node::MNEMONIC;

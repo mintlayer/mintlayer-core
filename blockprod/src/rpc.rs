@@ -25,7 +25,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use rpc::RpcResult;
 use serialization::hex_encoded::HexEncoded;
 
-use crate::{detail::job_manager::JobKey, TimestampSearchData};
+use crate::{TimestampSearchData, detail::job_manager::JobKey};
 
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "blockprod")]

@@ -17,26 +17,25 @@ use std::sync::Arc;
 
 use rstest::rstest;
 
-use chainstate::{ban_score::BanScore, ChainstateConfig};
+use chainstate::{ChainstateConfig, ban_score::BanScore};
 use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{new_message_stream, TransportSocket},
+    transport::{TransportSocket, new_message_stream},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
     error::{P2pError, ProtocolError},
     net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
     peer_manager::PeerManagerInterface,
-    test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, test_p2p_config},
     tests::helpers::TestNode,
 };
 

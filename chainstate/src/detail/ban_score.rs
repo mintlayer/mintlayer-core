@@ -19,20 +19,20 @@ use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
 };
 use tx_verifier::{
+    CheckTransactionError,
     timelock_check::OutputMaturityError,
     transaction_verifier::{
-        error::SignatureDestinationGetterError, IOPolicyError, RewardDistributionError,
+        IOPolicyError, RewardDistributionError, error::SignatureDestinationGetterError,
     },
-    CheckTransactionError,
 };
 
 use super::{
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     chainstateref::{EpochSealError, InMemoryReorgError},
     transaction_verifier::{
         error::{ConnectTransactionError, TokensError},
         storage::TransactionVerifierStorageError,
     },
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::{BlockError, ChainstateError};
 use chainstate_types::GetAncestorError;

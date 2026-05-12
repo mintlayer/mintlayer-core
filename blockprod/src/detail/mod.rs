@@ -19,34 +19,34 @@ pub mod utils;
 
 use std::{
     cmp,
-    sync::{mpsc, Arc},
+    sync::{Arc, mpsc},
 };
 
 use tokio::sync::oneshot;
 
-use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
-use chainstate_types::{pos_randomness::PoSRandomness, GenBlockIndex};
+use chainstate::{ChainstateHandle, chainstate_interface::ChainstateInterface};
+use chainstate_types::{GenBlockIndex, pos_randomness::PoSRandomness};
 use common::{
     chain::{
-        block::{
-            block_body::BlockBody, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
-        },
         Block, ChainConfig, PoolId, RequiredConsensus, SignedTransaction, Transaction,
+        block::{
+            BlockCreationError, BlockHeader, BlockReward, ConsensusData, block_body::BlockBody,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp,
+        },
     },
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::{
+    ConsensusCreationError, ConsensusPoSError, ConsensusPoWError, FinalizeBlockInputData,
+    GenerateBlockInputData, PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
     generate_consensus_data_and_reward_ignore_consensus, generate_pos_consensus_data_and_reward,
-    generate_pow_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
-    ConsensusPoWError, FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
-    PoSGenerateBlockInputData,
+    generate_pow_consensus_data_and_reward,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
-use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
+use mempool::{MempoolHandle, tx_accumulator::PackingStrategy};
 use p2p::P2pHandle;
-use randomness::{make_true_rng, Rng, RngExt as _};
+use randomness::{Rng, RngExt as _, make_true_rng};
 use serialization::{Decode, Encode};
 
 use ::utils::{
@@ -55,12 +55,12 @@ use ::utils::{
 };
 
 use crate::{
+    BlockProductionError,
     config::BlockProdConfig,
     detail::{
         job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
         utils::collect_transactions,
     },
-    BlockProductionError,
 };
 
 use self::{

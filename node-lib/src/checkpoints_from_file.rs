@@ -21,7 +21,7 @@ use std::{
 
 use common::{
     chain::GenBlock,
-    primitives::{BlockHeight, Id, H256},
+    primitives::{BlockHeight, H256, Id},
 };
 use utils::ensure;
 
@@ -92,7 +92,9 @@ pub enum CheckpontsFromCsvReadError {
     #[error("Error reading a record: {error}")]
     RecordReadError { error: String },
 
-    #[error("Unexpected fields count in record {record_idx}: expected {expected_fields_count}, got {actual_fields_count}")]
+    #[error(
+        "Unexpected fields count in record {record_idx}: expected {expected_fields_count}, got {actual_fields_count}"
+    )]
     UnexpectedFieldsCount {
         record_idx: usize,
         actual_fields_count: usize,

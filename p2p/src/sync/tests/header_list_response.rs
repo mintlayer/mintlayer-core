@@ -20,25 +20,24 @@ use itertools::Itertools as _;
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::create_unit_test_config, GenBlock},
+    chain::{GenBlock, config::create_unit_test_config},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
 use p2p_test_utils::create_n_blocks;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
+    P2pConfig, P2pError,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList},
     sync::{test_helpers::make_new_blocks, tests::helpers::TestNode},
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pConfig, P2pError,
 };
 
 #[tracing::instrument(skip(seed))]

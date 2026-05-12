@@ -18,8 +18,8 @@ use chainstate::ChainstateError;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
         NetUpgrades,
+        config::{Builder as ChainConfigBuilder, ChainType},
     },
     primitives::Id,
 };

@@ -24,10 +24,11 @@ use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{Address, RpcAddress},
     chain::{
+        ChainConfig, Destination, RpcCurrency, SignedTransaction,
         config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, htlc::HtlcSecret,
-        tokens::TokenId, ChainConfig, Destination, RpcCurrency, SignedTransaction,
+        tokens::TokenId,
     },
-    primitives::{Idable as _, H256},
+    primitives::{H256, Idable as _},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
@@ -57,21 +58,21 @@ use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 use crate::{CreateWalletDeviceSelectMenu, OpenWalletDeviceSelectMenu};
 
 use crate::{
+    ManageableWalletCommand, OpenWalletSubCommand, WalletManagementCommand,
     errors::WalletCliCommandError,
     helper_types::{
-        active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info, CliCurrency,
+        CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
     },
-    ManageableWalletCommand, OpenWalletSubCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
 
 use super::{
-    helper_types::{
-        format_active_order_info, format_delegation_info, format_own_order_info, format_pool_info,
-        CliForceReduceLookaheadSize, CliUtxoState,
-    },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
+    helper_types::{
+        CliForceReduceLookaheadSize, CliUtxoState, format_active_order_info,
+        format_delegation_info, format_own_order_info, format_pool_info,
+    },
 };
 
 pub struct CommandHandler<W> {
@@ -477,7 +478,10 @@ where
                     } else {
                         String::new()
                     };
-                    format!("The seed phrase has been deleted, you can store it if you haven't done so yet: \"{}\"{passphrase}", phrase.seed_phrase.join(" "))
+                    format!(
+                        "The seed phrase has been deleted, you can store it if you haven't done so yet: \"{}\"{passphrase}",
+                        phrase.seed_phrase.join(" ")
+                    )
                 } else {
                     "No stored seed phrase for this wallet.".into()
                 };
@@ -743,7 +747,8 @@ where
                             "The transaction has been fully signed and is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\
-                             {qr_code_string}\n\n{summary}")
+                             {qr_code_string}\n\n{summary}"
+                        )
                     }
                     PartialOrSignedTx::Partial(partially_signed_tx) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
@@ -794,7 +799,9 @@ where
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
-                    format!("\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}")
+                    format!(
+                        "\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}"
+                    )
                 };
 
                 Ok(ConsoleCommand::Print(format!(
@@ -813,7 +820,9 @@ where
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
-                    format!("\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}")
+                    format!(
+                        "\n\nThe following qr code also contains the signature for easy transport:\n{qr_code}"
+                    )
                 };
 
                 Ok(ConsoleCommand::Print(format!(
@@ -1066,9 +1075,13 @@ where
                     .await?;
 
                 let output = if no_rescan {
-                    format!("Success. The following new multisig address has been added to the account\n{multisig_address}")
+                    format!(
+                        "Success. The following new multisig address has been added to the account\n{multisig_address}"
+                    )
                 } else {
-                    format!("Success. The following new multisig address has been added to the account\n{multisig_address}\nRescanning the blockchain to detect balance in added new addresses")
+                    format!(
+                        "Success. The following new multisig address has been added to the account\n{multisig_address}\nRescanning the blockchain to detect balance in added new addresses"
+                    )
                 };
 
                 Ok(ConsoleCommand::SetStatus {
@@ -2437,8 +2450,12 @@ fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> Strin
         RpcSignatureStatus::NotSigned => "NotSigned".to_owned(),
         RpcSignatureStatus::InvalidSignature => "InvalidSignature".to_owned(),
         RpcSignatureStatus::UnknownSignature => "UnknownSignature".to_owned(),
-        RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } =>
-            format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
+        RpcSignatureStatus::PartialMultisig {
+            required_signatures,
+            num_signatures,
+        } => format!(
+            "PartialMultisig having {num_signatures} out of {required_signatures} required signatures"
+        ),
     };
 
     format!("Signature for input {idx}: {status}")

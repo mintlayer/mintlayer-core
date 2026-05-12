@@ -38,13 +38,13 @@ use tokio::sync::mpsc;
 use chainstate::ban_score::BanScore;
 use common::{
     chain::ChainConfig,
-    primitives::time::{duration_to_int, Time},
+    primitives::time::{Time, duration_to_int},
     time_getter::TimeGetter,
 };
 use logging::log;
 use networking::types::ConnectionDirection;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
-use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngExt as _};
+use p2p_types::{IsGlobalIp, bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::{BoxedRngMutexWrapper, Rng, RngExt as _, seq::IteratorRandom};
 use utils::{
     bloom_filters::rolling_bloom_filter::RollingBloomFilter, debug_panic_or_log, ensure,
     set_flag::SetFlag,
@@ -52,6 +52,7 @@ use utils::{
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    PeerManagerEvent,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
@@ -61,11 +62,11 @@ use crate::{
         PingResponse, WillDisconnectMessage,
     },
     net::{
-        types::{
-            services::{Service, Services},
-            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
-        },
         ConnectivityService, NetworkingService,
+        types::{
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
+            services::{Service, Services},
+        },
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::sync_status::PeerBlockSyncStatus,
@@ -74,7 +75,6 @@ use crate::{
         peer_id::PeerId,
     },
     utils::{oneshot_nofail, rate_limiter::RateLimiter},
-    PeerManagerEvent,
 };
 
 use self::{
@@ -732,8 +732,12 @@ where
         };
 
         let peer_role: PeerRole = (&outbound_connect_type).into();
-        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
-            address, local_services_override, peer_role);
+        log::debug!(
+            "Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
+            address,
+            local_services_override,
+            peer_role
+        );
         let res = self.try_connect(address, local_services_override, peer_role);
 
         match res {
@@ -886,14 +890,18 @@ where
                     >= *self.p2p_config.peer_manager_config.max_inbound_connections
                 {
                     if self.peerdb.is_address_discouraged(&address.as_bannable()) {
-                        log::info!("Rejecting inbound connection from a discouraged address - too many peers");
+                        log::info!(
+                            "Rejecting inbound connection from a discouraged address - too many peers"
+                        );
                         return Err(P2pError::ConnectionValidationFailed(
                             ConnectionValidationError::TooManyInboundPeersAndThisOneIsDiscouraged,
                         ));
                     }
 
                     if !self.try_evict_random_inbound_connection() {
-                        log::info!("Rejecting inbound connection - too many peers and none of them can be evicted");
+                        log::info!(
+                            "Rejecting inbound connection - too many peers and none of them can be evicted"
+                        );
                         return Err(P2pError::ConnectionValidationFailed(
                             ConnectionValidationError::TooManyInboundPeersAndCannotEvictAnyone,
                         ));
@@ -1840,7 +1848,9 @@ where
                 new_status: status,
             } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("Block sync status update received from peer {peer_id}, new status is {status:?}");
+                    log::debug!(
+                        "Block sync status update received from peer {peer_id}, new status is {status:?}"
+                    );
                     peer.block_sync_status = status;
                 }
             }

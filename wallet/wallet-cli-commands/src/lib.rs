@@ -29,15 +29,15 @@ use common::{
     chain::{Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
-use p2p_types::{bannable_address::BannableAddress, PeerId};
+use crypto::key::{PrivateKey, PublicKey, hdkd::u31::U31};
+use p2p_types::{PeerId, bannable_address::BannableAddress};
 use rpc::description::{Described, Module};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet_controller::types::WalletTypeArgs;
 #[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::FoundDevice;
-use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
+use wallet_rpc_lib::{ColdWalletRpcDescription, WalletRpcDescription, types::NodeInterface};
 
 use crate::helper_types::{
     CliCurrency, CliOutputTimeLock, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer,

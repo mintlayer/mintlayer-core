@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    partially_signed_transaction::PartiallySignedTransaction, SignedTransaction, Transaction,
+    SignedTransaction, Transaction, partially_signed_transaction::PartiallySignedTransaction,
 };
 use serialization::DecodeAll as _;
 
@@ -58,17 +58,17 @@ mod tests {
 
     use common::{
         chain::{
+            OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
             output_value::OutputValue,
             partially_signed_transaction::{
                 PartiallySignedTransactionConsistencyCheck, TxAdditionalInfo,
             },
             signature::inputsig::InputWitness,
-            OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
         },
         primitives::{Amount, Id},
     };
     use serialization::Encode;
-    use test_utils::random::{gen_random_bytes, make_seedable_rng, RngExt as _, Seed};
+    use test_utils::random::{RngExt as _, Seed, gen_random_bytes, make_seedable_rng};
 
     use super::*;
 

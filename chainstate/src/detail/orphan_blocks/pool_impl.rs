@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, GenBlock},
-    primitives::{id::WithId, Id},
+    primitives::{Id, id::WithId},
 };
 
 use super::{OrphanAddError, OrphanBlocksMut, OrphanBlocksPool, OrphanBlocksRef};

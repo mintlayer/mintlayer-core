@@ -31,19 +31,19 @@ use std::{
 use parking_lot::RwLock;
 
 use chainstate::{
+    ConnectTransactionError,
     chainstate_interface::ChainstateInterface,
     tx_verifier::{
-        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
         TransactionSource,
+        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
     },
-    ConnectTransactionError,
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, ChainConfig, GenBlock, SignedTransaction, Transaction,
-        TxInput,
+        ChainConfig, GenBlock, SignedTransaction, Transaction, TxInput,
+        block::timestamp::BlockTimestamp,
     },
-    primitives::{amount::DisplayAmount, time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, amount::DisplayAmount, time::Time},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -781,7 +781,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let (fee, delta) = match self.validate_transaction(&transaction)? {
             TxValidationOutcome::Valid { fee, delta } => (fee, delta),
             TxValidationOutcome::Rejected { error } => {
-                return Ok(TxAdditionAttemptOutcome::Rejected { transaction, error })
+                return Ok(TxAdditionAttemptOutcome::Rejected { transaction, error });
             }
             TxValidationOutcome::TipMoved {
                 start_tip,

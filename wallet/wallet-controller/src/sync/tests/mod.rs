@@ -29,24 +29,24 @@ use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
         Transaction,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount},
+    primitives::{Amount, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use logging::log;
-use mempool::{tx_accumulator::PackingStrategy, FeeRate};
+use mempool::{FeeRate, tx_accumulator::PackingStrategy};
 use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
     node_traits::{ConnectedPeer, MempoolEvents, PeerId},
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, CryptoRng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::{CryptoRng, RngExt as _, seq::IteratorRandom};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletControllerMode};

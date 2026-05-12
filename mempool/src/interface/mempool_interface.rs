@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use crate::{
+    FeeRate, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolMaxSize, TxOptions, TxStatus,
 };
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -93,7 +93,7 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Get the fee rate at multiple uniformly distributed points along the mempool's transactions
     fn get_fee_rate_points(&self, num_points: NonZeroUsize)
-        -> Result<Vec<(usize, FeeRate)>, Error>;
+    -> Result<Vec<(usize, FeeRate)>, Error>;
 
     /// Notify mempool given peer has disconnected
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);

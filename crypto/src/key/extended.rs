@@ -23,7 +23,7 @@ use crate::key::secp256k1::extended_keys::{
     Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey,
 };
 use crate::key::{PrivateKey, PublicKey};
-use randomness::{make_true_rng, CryptoRng};
+use randomness::{CryptoRng, make_true_rng};
 
 use super::hdkd::chain_code::ChainCode;
 
@@ -192,7 +192,7 @@ mod test {
     use rstest::rstest;
 
     use randomness::RngExt as _;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::key::hdkd::derivation_path::DerivationPath;
 

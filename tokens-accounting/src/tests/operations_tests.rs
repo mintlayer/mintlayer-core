@@ -19,17 +19,17 @@ use rstest::rstest;
 
 use common::{
     chain::{
+        Destination,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        Destination,
     },
     primitives::Amount,
 };
 use randomness::{Rng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
 };
 

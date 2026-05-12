@@ -30,7 +30,7 @@ use std::{borrow::Cow, path::PathBuf};
 use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
 use resize_callback::MapResizeCallback;
-use storage_core::{backend, Data, DbDesc, DbMapDesc, DbMapId, DbMapsData};
+use storage_core::{Data, DbDesc, DbMapDesc, DbMapId, DbMapsData, backend};
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 

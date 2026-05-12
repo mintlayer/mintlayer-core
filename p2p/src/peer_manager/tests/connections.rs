@@ -40,28 +40,28 @@ use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
 use randomness::{Rng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    PeerManagerEvent,
     config::{BackendTimeoutsConfig, P2pConfig},
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, DialError, P2pError, ProtocolError},
     message::AddrListRequest,
     net::{
-        self,
+        self, ConnectivityService, NetworkingService,
         default_backend::{
-            types::{Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
+            types::{Command, Message},
         },
-        types::{services::Service, ConnectivityEvent, PeerInfo, PeerRole},
-        ConnectivityService, NetworkingService,
+        types::{ConnectivityEvent, PeerInfo, PeerRole, services::Service},
     },
     peer_manager::{
-        self,
+        self, PeerManager,
         config::{MaxInboundConnections, PeerManagerConfig},
         peerdb::{
             self, config::PeerDbConfig,
@@ -76,17 +76,15 @@ use crate::{
                 query_peer_manager, recv_command_advance_time, start_manually_connecting,
             },
         },
-        PeerManager,
     },
     test_helpers::{
-        connect_and_accept_services, connect_services, get_connectivity_event,
-        make_transport_with_local_addr_in_group, peerdb_inmemory_store, test_p2p_config,
-        test_p2p_config_with_peer_mgr_config, TEST_PROTOCOL_VERSION,
+        TEST_PROTOCOL_VERSION, connect_and_accept_services, connect_services,
+        get_connectivity_event, make_transport_with_local_addr_in_group, peerdb_inmemory_store,
+        test_p2p_config, test_p2p_config_with_peer_mgr_config,
     },
     tests::helpers::TestPeersInfo,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 async fn validate_invalid_connection<A, S>(seed: Seed)
@@ -2071,7 +2069,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
 mod feeler_connections_test_utils {
     use crate::peer_manager::{
         config::PeerManagerConfig,
-        peerdb::{salt::Salt, storage::PeerDbStorage, PeerDb},
+        peerdb::{PeerDb, salt::Salt, storage::PeerDbStorage},
     };
 
     use super::*;

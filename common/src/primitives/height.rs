@@ -315,8 +315,8 @@ mod tests {
     fn blockheight_json() {
         fn check(height: BlockHeight) {
             use serde_test::{
-                assert_tokens,
                 Token::{NewtypeStruct, U64},
+                assert_tokens,
             };
             // Block height serializes to just a number, represented by a newtype struct
             assert_tokens(

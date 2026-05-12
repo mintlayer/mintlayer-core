@@ -109,7 +109,7 @@ mod tests {
     use crypto::symkey::SymmetricKeyKind;
     use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 

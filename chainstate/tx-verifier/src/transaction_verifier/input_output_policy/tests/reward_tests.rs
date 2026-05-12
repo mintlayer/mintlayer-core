@@ -16,19 +16,19 @@
 use super::*;
 use common::{
     chain::{
+        Destination, GenBlock, PoolId, UtxoOutPoint,
         block::consensus_data::{PoSData, PoWData},
         config::ChainType,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        Destination, GenBlock, PoolId, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, CoinOrTokenId, Compact, H256},
+    primitives::{CoinOrTokenId, Compact, H256, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use randomness::RngExt;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 #[rstest]
 #[trace]

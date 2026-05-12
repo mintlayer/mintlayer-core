@@ -14,19 +14,19 @@
 // limitations under the License.
 
 use common::chain::{
+    Destination, Transaction, TxOutput,
     htlc::HtlcSecret,
     signature::{
         inputsig::{
+            InputWitness,
             htlc::{
                 produce_uniparty_signature_for_htlc_refunding,
                 produce_uniparty_signature_for_htlc_spending,
             },
             standard_signature::StandardInputSignature,
-            InputWitness,
         },
         sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
     },
-    Destination, Transaction, TxOutput,
 };
 use crypto::key::{PrivateKey, SigAuxDataProvider};
 use utils::debug_assert_or_log;

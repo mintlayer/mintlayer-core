@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock, OutPointSourceId, Transaction},
+    chain::{GenBlock, OutPointSourceId, Transaction, block::timestamp::BlockTimestamp},
     primitives::{BlockHeight, Id, Idable},
 };
 use crypto::key::hdkd::u31::U31;

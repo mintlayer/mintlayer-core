@@ -26,45 +26,45 @@ use std::{
     time::Duration,
 };
 
-use futures::{stream::FuturesUnordered, TryStreamExt as _};
+use futures::{TryStreamExt as _, stream::FuturesUnordered};
 use itertools::Itertools as _;
 
 use chainstate::{
+    ChainInfo, TokenIssuanceError,
     rpc::{RpcOutputValueIn, RpcOutputValueOut},
     tx_verifier::check_transaction,
-    ChainInfo, TokenIssuanceError,
 };
 use common::{
+    TokenDecimals,
     address::Address,
     chain::{
+        Block, ChainConfig, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
         output_values_holder::collect_token_v1_ids_from_rpc_output_values_holders,
         signature::inputsig::arbitrary_message::{
-            produce_message_challenge, ArbitraryMessageSignature,
+            ArbitraryMessageSignature, produce_message_challenge,
         },
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
         },
-        Block, ChainConfig, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
+        Amount, BlockHeight, Id, Idable, id::WithId, per_thousand::PerThousand, time::Time,
     },
-    TokenDecimals,
 };
 use crypto::{
-    key::{hdkd::u31::U31, PrivateKey, PublicKey},
+    key::{PrivateKey, PublicKey, hdkd::u31::U31},
     vrf::VRFPublicKey,
 };
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
-use serialization::{hex_encoded::HexEncoded, DecodeAll};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
+use serialization::{DecodeAll, hex_encoded::HexEncoded};
 use types::{
     AccountExtendedPublicKey, NewOrderTransaction, NewSubmittedTransaction, NewTokenTransaction,
     RpcHashedTimelockContract, RpcNewTransaction, RpcPreparedTransaction,
@@ -72,29 +72,29 @@ use types::{
 use utils::{ensure, shallow_clone::ShallowClone, sorted::Sorted as _};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
     WalletError,
+    account::{PoolData, TransactionToSign, TxInfo, transaction_list::TransactionList},
 };
 use wallet_controller::{
+    ConnectedPeer, ControllerConfig, ControllerError, DEFAULT_ACCOUNT_INDEX, NodeInterface,
+    UtxoState, UtxoStates, UtxoType, UtxoTypes,
     types::{
         Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, GenericTokenTransfer,
         InspectTransaction, NewTransaction, OpenedWallet, RpcAmountOut, SeedWithPassPhrase,
         SweepFromAddresses, TransactionToInspect, WalletCreationOptions, WalletInfo,
         WalletTypeArgs,
     },
-    ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
-    UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, generic_transaction::GenericTransaction,
+    SignedTxWithFees, account_info::StandaloneAddressDetails,
+    generic_transaction::GenericTransaction,
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
     signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
-    SignedTxWithFees,
 };
 
 use crate::{
-    types::{ActiveOrderInfo, ExistingOwnOrderData},
     WalletHandle, WalletRpcConfig,
+    types::{ActiveOrderInfo, ExistingOwnOrderData},
 };
 
 #[cfg(any(feature = "trezor", feature = "ledger"))]
@@ -112,7 +112,7 @@ pub use interface::{
     ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, WalletEventsRpcServer,
     WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
-pub use rpc::{rpc_creds::RpcCreds, Rpc};
+pub use rpc::{Rpc, rpc_creds::RpcCreds};
 
 pub use self::types::RpcError;
 
@@ -916,7 +916,7 @@ where
             GenericTransaction::Tx(tx) => TransactionToSign::Tx(tx),
             GenericTransaction::Partial(tx) => TransactionToSign::Partial(tx),
             GenericTransaction::Signed(_) => {
-                return Err(RpcError::UnexpectedFullySignedTransaction)
+                return Err(RpcError::UnexpectedFullySignedTransaction);
             }
         };
 

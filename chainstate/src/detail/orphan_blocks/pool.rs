@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, rc::Rc};
 
 use common::{
     chain::{Block, GenBlock},
-    primitives::{id::WithId, Id, Idable},
+    primitives::{Id, Idable, id::WithId},
 };
 use randomness::IndexedRandom as _;
 
@@ -156,7 +156,7 @@ mod tests {
 
     use common::{chain::block::Block, primitives::Id};
     use randomness::{Rng, RngExt as _};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 

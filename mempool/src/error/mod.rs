@@ -17,10 +17,10 @@ mod ban_score;
 
 use thiserror::Error;
 
-use chainstate::{tx_verifier::error::ConnectTransactionError, ChainstateError};
+use chainstate::{ChainstateError, tx_verifier::error::ConnectTransactionError};
 use common::{
     chain::{Block, GenBlock, Transaction},
-    primitives::{amount::DisplayAmount, Id, H256},
+    primitives::{H256, Id, amount::DisplayAmount},
 };
 
 use crate::pool::fee::Fee;
@@ -84,7 +84,9 @@ pub enum MempoolPolicyError {
     #[error("Transaction exceeds the maximum block size.")]
     ExceedsMaxBlockSize,
 
-    #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
+    #[error(
+        "Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}"
+    )]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
         replacement_fee: Fee,
@@ -95,13 +97,17 @@ pub enum MempoolPolicyError {
     #[error("The sum of the fees of this transaction's conflicts overflows.")]
     ConflictsFeeOverflow,
 
-    #[error("Transaction pays a fee that is lower than the fee of its conflicts with their descendants.")]
+    #[error(
+        "Transaction pays a fee that is lower than the fee of its conflicts with their descendants."
+    )]
     TransactionFeeLowerThanConflictsWithDescendants,
 
     #[error("Underflow in computing transaction's additional fees.")]
     AdditionalFeesUnderflow,
 
-    #[error("Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee}, min_relay_fee: {min_relay_fee}).")]
+    #[error(
+        "Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee}, min_relay_fee: {min_relay_fee})."
+    )]
     InsufficientFeesToRelay {
         tx_fee: DisplayAmount,
         min_relay_fee: DisplayAmount,
@@ -182,7 +188,9 @@ pub enum MempoolConflictError {
     #[error("Transaction conflicts with another, irreplaceable transaction.")]
     Irreplacable,
 
-    #[error("Replacement transaction spends an unconfirmed input which was not spent by any of the original transactions.")]
+    #[error(
+        "Replacement transaction spends an unconfirmed input which was not spent by any of the original transactions."
+    )]
     SpendsNewUnconfirmed,
 
     #[error("Transaction would require too many replacements.")]

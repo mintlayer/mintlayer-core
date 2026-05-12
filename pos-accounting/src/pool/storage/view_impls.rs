@@ -21,6 +21,7 @@ use common::{
 };
 
 use crate::{
+    DeltaMergeUndo, PoSAccountingDB, StorageTag,
     pool::{
         delegation::DelegationData,
         delta::data::PoSAccountingDeltaData,
@@ -28,7 +29,6 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
-    DeltaMergeUndo, PoSAccountingDB, StorageTag,
 };
 
 impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAccountingDB<S, T> {

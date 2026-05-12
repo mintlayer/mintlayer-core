@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Uint256;
 use crate::chain::config::ChainType;
 use crate::chain::pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0};
 use crate::chain::pow::limit;
-use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
+use crate::chain::{PoSChainConfig, PoSConsensusVersion, pos_initial_difficulty};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::{BlockHeight, Compact};
-use crate::Uint256;
 
 use super::NetUpgrades;
 

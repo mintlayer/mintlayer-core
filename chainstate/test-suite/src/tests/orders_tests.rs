@@ -23,38 +23,39 @@ use chainstate::{
 };
 use chainstate_storage::Transactional as _;
 use chainstate_test_framework::{
+    TestFramework, TransactionBuilder,
     helpers::{
         calculate_fill_order, issue_and_mint_random_token_from_best_block,
         issue_random_nft_from_best_block, order_min_non_zero_fill_amount,
     },
-    output_value_amount, TestFramework, TransactionBuilder,
+    output_value_amount,
 };
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        make_order_id,
-        output_value::{OutputValue, RpcOutputValue},
-        signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
-            verify_signature, DestinationSigError, EvaluatedInputWitness,
-        },
-        tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
         AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Currency, Destination,
         IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcOrderInfo,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint, make_order_id,
+        output_value::{OutputValue, RpcOutputValue},
+        signature::{
+            DestinationSigError, EvaluatedInputWitness,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
+            verify_signature,
+        },
+        tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use orders_accounting::OrdersAccountingStorageRead as _;
 use randomness::{CryptoRng, RngExt as _, SliceRandom};
-use test_utils::random::{gen_random_bytes, make_seedable_rng, Seed};
+use test_utils::random::{Seed, gen_random_bytes, make_seedable_rng};
 use tx_verifier::{
+    CheckTransactionError,
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},
     input_check::signature_only_check::verify_tx_signature,
-    CheckTransactionError,
 };
 
 fn create_test_framework_with_orders(

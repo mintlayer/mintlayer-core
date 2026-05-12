@@ -19,14 +19,14 @@ use common::chain::SignedTransaction;
 use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
     account_id::{AccountAddress, AccountPublicKey},
     account_info::{
         AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
     },
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 storage::decl_schema! {

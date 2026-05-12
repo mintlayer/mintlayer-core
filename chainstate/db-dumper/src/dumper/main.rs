@@ -19,7 +19,7 @@ use utils::default_data_dir::default_data_dir_for_chain;
 
 use chainstate_db_dumper_lib::{dump_blocks_to_file, parse_block_output_fields_list};
 
-use crate::options::{default_fields, Options};
+use crate::options::{Options, default_fields};
 
 mod options;
 

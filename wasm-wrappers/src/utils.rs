@@ -16,8 +16,9 @@
 use std::str::FromStr as _;
 
 use common::{
-    address::{traits::Addressable, Address},
+    address::{Address, traits::Addressable},
     chain::{
+        ChainConfig, OrderId, PoolId,
         output_value::OutputValue,
         partially_signed_transaction::{
             OrderAdditionalInfo as PtxOrderAdditionalInfo,
@@ -25,13 +26,12 @@ use common::{
         },
         signature::{
             inputsig::{
-                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 InputWitness, InputWitnessTag,
+                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             },
             sighash::sighashtype::SigHashType,
         },
         tokens::TokenId,
-        ChainConfig, OrderId, PoolId,
     },
     primitives::{self},
 };

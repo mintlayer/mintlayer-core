@@ -25,24 +25,24 @@ use randomness::{Rng, RngExt as _};
 
 use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
 use chainstate::{
-    make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, DefaultTransactionVerificationStrategy, make_chainstate,
+    rpc::ChainstateRpcServer,
 };
 use common::{
     chain::{
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
+        TxOutput,
         block::timestamp::BlockTimestamp,
         config::{
-            self, regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions, ChainType,
+            self, ChainType, regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions,
         },
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-        TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
+    primitives::{Amount, BlockHeight, H256, per_thousand::PerThousand},
 };
-use mempool::{rpc::MempoolRpcServer, MempoolConfig, MempoolInit};
+use mempool::{MempoolConfig, MempoolInit, rpc::MempoolRpcServer};
 use p2p::rpc::P2pRpcServer;
 use rpc::rpc_creds::RpcCreds;
 

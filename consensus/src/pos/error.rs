@@ -17,14 +17,14 @@ use thiserror::Error;
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, PoolId},
-    primitives::{Compact, Id},
     UintConversionError,
+    chain::{Block, PoolId, block::timestamp::BlockTimestamp},
+    primitives::{Compact, Id},
 };
 
 use crate::ChainstateError;
 
-use super::{block_sig::BlockSignatureError, EffectivePoolBalanceError};
+use super::{EffectivePoolBalanceError, block_sig::BlockSignatureError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
@@ -39,9 +39,7 @@ pub enum ConsensusPoSError {
     StakeKernelHashTooHigh,
     #[error("Epoch data not provided")]
     NoEpochData,
-    #[error(
-        "Stake block timestamp cannot be smaller than the kernel's (kernel: {0} < stake: {1})"
-    )]
+    #[error("Stake block timestamp cannot be smaller than the kernel's (kernel: {0} < stake: {1})")]
     TimestampViolation(BlockTimestamp, BlockTimestamp),
     #[error("Kernel inputs are empty")]
     NoKernel,

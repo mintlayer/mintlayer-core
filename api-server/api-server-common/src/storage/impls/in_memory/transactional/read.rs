@@ -17,17 +17,17 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        OrderId, PoolId, Transaction, UtxoOutPoint,
+        Block, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead,
-    BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order,
-    PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction, TransactionInfo,
-    TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+    AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
+    PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+    UtxoWithExtraInfo, block_aux_data::BlockAuxData,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;

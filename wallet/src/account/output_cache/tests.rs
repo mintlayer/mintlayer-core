@@ -17,20 +17,20 @@ use rstest::rstest;
 
 use strum::IntoEnumIterator as _;
 
-use chainstate_test_framework::{empty_witness, TransactionBuilder};
+use chainstate_test_framework::{TransactionBuilder, empty_witness};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        AccountOutPoint, ChainstateUpgradeBuilder, OrderData, TokenIdGenerationVersion,
         config::{create_unit_test_config, create_unit_test_config_builder},
         make_token_id_with_version,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::TokenIssuanceV1,
-        AccountOutPoint, ChainstateUpgradeBuilder, OrderData, TokenIdGenerationVersion,
     },
 };
-use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::{Rng, RngExt as _, seq::IteratorRandom as _};
+use test_utils::random::{Seed, make_seedable_rng};
 use wallet_types::wallet_tx::TxStateTag;
 
 use crate::account::output_cache;

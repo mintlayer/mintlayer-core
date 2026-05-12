@@ -25,13 +25,13 @@ use rstest::rstest;
 use strum::IntoEnumIterator as _;
 
 use ::test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
 use networking::test_helpers::TestAddressMaker;
 use p2p_types::socket_addr_ext::SocketAddrExt;
-use randomness::{seq::IteratorRandom as _, Rng, RngExt as _};
+use randomness::{Rng, RngExt as _, seq::IteratorRandom as _};
 
 use crate::{
     ban_config::BanConfig,
@@ -51,13 +51,13 @@ use crate::{
 };
 
 use super::{
+    PeerDb,
     address_tables::{
         table::Table,
         test_utils::{make_non_colliding_addresses, make_random_address},
     },
     config::PeerDbConfig,
     storage::PeerDbStorage,
-    PeerDb,
 };
 
 // Ban the peer, check that it's banned.

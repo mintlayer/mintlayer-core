@@ -18,8 +18,8 @@ use strum::EnumCount;
 use accounting::DataDeltaUndo;
 use common::{
     chain::{
-        tokens::{IsTokenUnfreezable, TokenId},
         Destination,
+        tokens::{IsTokenUnfreezable, TokenId},
     },
     primitives::{Amount, H256},
 };
@@ -110,7 +110,7 @@ pub trait TokensAccountingOperations {
 
     fn mint_tokens(&mut self, id: TokenId, amount_to_add: Amount) -> Result<TokenAccountingUndo>;
     fn unmint_tokens(&mut self, id: TokenId, amount_to_burn: Amount)
-        -> Result<TokenAccountingUndo>;
+    -> Result<TokenAccountingUndo>;
 
     fn lock_circulating_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
 

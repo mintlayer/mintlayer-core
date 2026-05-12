@@ -15,7 +15,7 @@
 
 use std::{borrow::Cow, sync::RwLock};
 
-use api_web_server::{api::json_helpers::amount_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::amount_to_json};
 use common::primitives::time::get_time;
 
 use crate::DummyRPC;
@@ -133,13 +133,14 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .unwrap(),
                 );
 
-                let mut chainstate_block_ids = vec![*tf
-                    .make_block_builder()
-                    .add_transaction(transaction.clone())
-                    .build_and_process(&mut rng)
-                    .unwrap()
-                    .unwrap()
-                    .block_id()];
+                let mut chainstate_block_ids = vec![
+                    *tf.make_block_builder()
+                        .add_transaction(transaction.clone())
+                        .build_and_process(&mut rng)
+                        .unwrap()
+                        .unwrap()
+                        .block_id(),
+                ];
 
                 // Generate two outputs for a single transaction
 
@@ -375,13 +376,14 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
                     .unwrap(),
                 );
 
-                let mut chainstate_block_ids = vec![*tf
-                    .make_block_builder()
-                    .add_transaction(transaction.clone())
-                    .build_and_process(&mut rng)
-                    .unwrap()
-                    .unwrap()
-                    .block_id()];
+                let mut chainstate_block_ids = vec![
+                    *tf.make_block_builder()
+                        .add_transaction(transaction.clone())
+                        .build_and_process(&mut rng)
+                        .unwrap()
+                        .unwrap()
+                        .block_id(),
+                ];
 
                 // Generate two outputs for a single transaction
 
@@ -625,13 +627,14 @@ async fn ok(#[case] seed: Seed) {
                     .unwrap(),
                 );
 
-                let mut chainstate_block_ids = vec![*tf
-                    .make_block_builder()
-                    .add_transaction(transaction.clone())
-                    .build_and_process(&mut rng)
-                    .unwrap()
-                    .unwrap()
-                    .block_id()];
+                let mut chainstate_block_ids = vec![
+                    *tf.make_block_builder()
+                        .add_transaction(transaction.clone())
+                        .build_and_process(&mut rng)
+                        .unwrap()
+                        .unwrap()
+                        .block_id(),
+                ];
 
                 for _ in 0..rng.random_range(1..100) {
                     let random_coin_amount = rng.random_range(1..10);

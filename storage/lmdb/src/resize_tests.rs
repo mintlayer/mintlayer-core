@@ -19,7 +19,7 @@ use rstest::rstest;
 
 use memsize::MemSize;
 use storage_core::backend::{Backend, BackendImpl, ReadOps, SharedBackendImpl, TxRw, WriteOps};
-use test_utils::random::{make_seedable_rng, CryptoRng, RngExt as _, Seed};
+use test_utils::random::{CryptoRng, RngExt as _, Seed, make_seedable_rng};
 
 use super::*;
 
@@ -115,7 +115,10 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             assert_eq!(ro_tx.get(DbMapId::new(0), &key).unwrap().unwrap(), val);
         }
 
-        assert!(resizes_via_commit_count > 0, "Not a single resize was scheduled after a transaction... this is very unlikely based on the test structure");
+        assert!(
+            resizes_via_commit_count > 0,
+            "Not a single resize was scheduled after a transaction... this is very unlikely based on the test structure"
+        );
     })
 }
 
@@ -211,8 +214,8 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         }
 
         assert!(
-        resizes_via_put_count > 0,
-        "Not a single resize was scheduled after a write/put... this is very unlikely based on the test structure"
-    );
+            resizes_via_put_count > 0,
+            "Not a single resize was scheduled after a write/put... this is very unlikely based on the test structure"
+        );
     })
 }

@@ -18,41 +18,41 @@ use std::{borrow::Cow, num::NonZeroU64, time::Duration};
 use rstest::rstest;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
-    CheckBlockError, ConnectTransactionError, SpendStakeError,
+    BlockError, BlockSource, ChainstateError, CheckBlockError, ConnectTransactionError,
+    SpendStakeError, chainstate_interface::ChainstateInterface,
 };
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
-    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
-    TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address,
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness,
 };
 use chainstate_types::{
-    pos_randomness::{PoSRandomness, PoSRandomnessError},
-    vrf_tools::{construct_transcript, ProofOfStakeVRFError},
     EpochStorageRead, TipStorageTag,
+    pos_randomness::{PoSRandomness, PoSRandomnessError},
+    vrf_tools::{ProofOfStakeVRFError, construct_transcript},
 };
 use common::{
+    Uint256,
     chain::{
-        block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
-            ConsensusData,
-        },
-        config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
-        make_delegation_id,
-        output_value::OutputValue,
-        signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
-        },
-        stakelock::StakePoolData,
-        timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
         ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
         PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
         StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
+        block::{
+            BlockRewardTransactable, ConsensusData, consensus_data::PoSData,
+            timestamp::BlockTimestamp,
+        },
+        config::{Builder as ConfigBuilder, ChainType, EpochIndex, create_unit_test_config},
+        make_delegation_id,
+        output_value::OutputValue,
+        signature::{
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
+        },
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
-    Uint256,
+    primitives::{Amount, BlockCount, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
 };
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
 use crypto::{
@@ -63,7 +63,7 @@ use pos_accounting::PoSAccountingStorageRead;
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use utils::const_nz_u64;
 
@@ -2174,12 +2174,11 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         OutputValue::Coin(genesis_pool_balance)
     );
 
-    assert!(PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(
-        &tf.storage,
-        genesis_pool_id
-    )
-    .unwrap()
-    .is_none());
+    assert!(
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, genesis_pool_id)
+            .unwrap()
+            .is_none()
+    );
     assert!(
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, new_pool_id)
             .unwrap()

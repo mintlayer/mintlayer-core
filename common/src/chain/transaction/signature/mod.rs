@@ -24,12 +24,12 @@ use super::{Destination, TxOutput};
 
 use self::{
     inputsig::{
+        InputWitness,
         classical_multisig::{
             authorize_classical_multisig::ClassicalMultisigSigningError,
             multisig_partial_signature::PartiallySignedMultisigStructureError,
         },
         standard_signature::StandardInputSignature,
-        InputWitness,
     },
     sighash::{input_commitments::SighashInputCommitment, signature_hash},
 };
@@ -75,7 +75,9 @@ pub enum DestinationSigError {
     SpendeePrivatePublicKeyMismatch,
     #[error("AnyoneCanSpend should not use standard signatures, this place should be unreachable")]
     AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
-    #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
+    #[error(
+        "AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible"
+    )]
     AttemptedToProduceSignatureForAnyoneCanSpend,
     #[error("Classical multisig signature attempted in uni-party function")]
     AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
@@ -146,7 +148,7 @@ pub fn verify_signature<T: Signable>(
         | Destination::ScriptHash(_)
         | Destination::ClassicMultisig(_) => match input_witness {
             EvaluatedInputWitness::NoSignature(_) => {
-                return Err(DestinationSigError::SignatureNotFound)
+                return Err(DestinationSigError::SignatureNotFound);
             }
             EvaluatedInputWitness::Standard(witness) => {
                 let sighash =
@@ -157,7 +159,7 @@ pub fn verify_signature<T: Signable>(
         Destination::AnyoneCanSpend => match input_witness {
             EvaluatedInputWitness::NoSignature(_) => {}
             EvaluatedInputWitness::Standard(_) => {
-                return Err(DestinationSigError::SignatureNotNeeded)
+                return Err(DestinationSigError::SignatureNotNeeded);
             }
         },
     }

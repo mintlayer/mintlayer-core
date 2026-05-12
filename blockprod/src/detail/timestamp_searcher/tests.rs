@@ -15,29 +15,30 @@
 
 use rstest::rstest;
 
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use logging::{init_logging, log};
 use randomness::{CryptoRng, RngExt as _};
 
-use crate::{detail::timestamp_searcher::SearchDataForHeight, TimestampSearchData};
+use crate::{TimestampSearchData, detail::timestamp_searcher::SearchDataForHeight};
 
 mod collect_search_data {
     use std::num::NonZeroU64;
 
     use chainstate::{ChainstateConfig, NonZeroPoolBalances};
     use chainstate_test_framework::{
+        PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
         create_custom_genesis_with_stake_pool, create_stake_pool_data_with_all_reward_to_staker,
-        empty_witness, PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
+        empty_witness,
     };
     use chainstate_types::pos_randomness::PoSRandomness;
     use common::{
         chain::{
-            self, config::ChainType, make_delegation_id, output_value::OutputValue, CoinUnit,
-            ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
-            PoSConsensusVersion, PoolId, TxOutput, UtxoOutPoint,
+            self, CoinUnit, ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId,
+            PoSChainConfigBuilder, PoSConsensusVersion, PoolId, TxOutput, UtxoOutPoint,
+            config::ChainType, make_delegation_id, output_value::OutputValue,
         },
-        primitives::{Amount, BlockCount, BlockHeight, Idable, H256},
+        primitives::{Amount, BlockCount, BlockHeight, H256, Idable},
     };
     use consensus::calculate_target_required_from_block_index;
     use crypto::{
@@ -91,7 +92,9 @@ mod collect_search_data {
             make_block_builder(&mut tf).build_and_process(&mut rng).unwrap();
         }
 
-        log::debug!("pool_creation_height = {pool_creation_height}, delegation_height = {delegation_height}");
+        log::debug!(
+            "pool_creation_height = {pool_creation_height}, delegation_height = {delegation_height}"
+        );
 
         let seconds_to_check = 1000;
 
@@ -505,9 +508,9 @@ mod search {
         use chainstate::NonZeroPoolBalances;
         use chainstate_types::pos_randomness::PoSRandomness;
         use common::{
+            Uint256,
             chain::PoSConsensusVersion,
             primitives::{Amount, H256},
-            Uint256,
         };
         use consensus::PoSTimestampSearchInputData;
         use crypto::vrf::{VRFKeyKind, VRFPrivateKey};

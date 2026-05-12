@@ -17,9 +17,9 @@ use std::num::NonZeroU64;
 
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
+    Uint256,
     chain::block::timestamp::BlockTimestamp,
     primitives::{BlockHeight, Compact},
-    Uint256,
 };
 
 use crate::pow::error::ConsensusPoWError;

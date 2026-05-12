@@ -16,13 +16,13 @@
 use std::{
     fmt::Write as _,
     sync::Arc,
-    thread::{sleep, JoinHandle},
+    thread::{JoinHandle, sleep},
     time::Duration,
 };
 
 use trezor_client::protos::{
-    debug_link_decision::DebugButton, debug_link_get_state::DebugWaitType, DebugLinkDecision,
-    DebugLinkGetState,
+    DebugLinkDecision, DebugLinkGetState, debug_link_decision::DebugButton,
+    debug_link_get_state::DebugWaitType,
 };
 
 use logging::log;

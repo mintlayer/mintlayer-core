@@ -18,15 +18,15 @@
 
 use crate::{
     address::{
-        hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
-        AddressError,
+        Address, AddressError, hexified::HexifiedAddress, pubkeyhash::PublicKeyHash,
+        traits::Addressable,
     },
     chain::{
+        ChainConfig, DelegationId, PoolId,
         order::OrderData,
         output_value::OutputValue,
         output_values_holder::OutputValuesHolder,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
     text_summary::TextSummary,
@@ -265,8 +265,7 @@ impl TextSummary for TxOutput {
             IsTokenFreezable::No => "No".to_string(),
             IsTokenFreezable::Yes => "Yes".to_string(),
         };
-        let fmt_tkn_iss = |iss: &TokenIssuance| {
-            match iss {
+        let fmt_tkn_iss = |iss: &TokenIssuance| match iss {
             TokenIssuance::V1(iss1) => format!(
                 "TokenIssuance(Ticker({}), Decimals({}), MetadataUri({}), TotalSupply({}), Authority({}), IsFreezable({}))",
                 String::from_utf8_lossy(&iss1.token_ticker),
@@ -276,7 +275,6 @@ impl TextSummary for TxOutput {
                 fmt_dest(&iss1.authority),
                 fmt_tkn_frzble(&iss1.is_freezable)
             ),
-        }
         };
         let fmt_nft_iss = |iss: &NftIssuance| match iss {
             NftIssuance::V0(iss1) => {
@@ -295,11 +293,8 @@ impl TextSummary for TxOutput {
                     String::from_utf8_lossy(
                         md.additional_metadata_uri.as_ref().as_ref().unwrap_or(&vec![])
                     ),
-                    String::from_utf8_lossy(
-                        md.media_uri.as_ref().as_ref().unwrap_or(&vec![])
-                    ),
+                    String::from_utf8_lossy(md.media_uri.as_ref().as_ref().unwrap_or(&vec![])),
                     hex::encode(&md.media_hash),
-
                 )
             }
         };

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::{api::json_helpers::block_header_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::block_header_to_json};
 use common::{
-    chain::{stakelock::StakePoolData, CoinUnit, PoolId},
-    primitives::{per_thousand::PerThousand, time::get_time, H256},
+    chain::{CoinUnit, PoolId, stakelock::StakePoolData},
+    primitives::{H256, per_thousand::PerThousand, time::get_time},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use std::sync::RwLock;

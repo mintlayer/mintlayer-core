@@ -15,22 +15,22 @@
 
 use common::{
     chain::{
+        AccountCommand, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
+        PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         timelock::OutputTimeLock,
         tokens::TokenId,
-        AccountCommand, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
-        PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id},
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use test_utils::random::{
-    make_seedable_rng, randomness::SliceRandom, CryptoRng, RngExt as _, Seed, TestRng,
+    CryptoRng, RngExt as _, Seed, TestRng, make_seedable_rng, randomness::SliceRandom,
 };
 use utxo::{Utxo, UtxoSource};
 

@@ -23,10 +23,10 @@ use chainstate::{
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{Block, GenBlock, Transaction, UtxoOutPoint},
-    primitives::{id::Idable, BlockHeight, Id},
+    primitives::{BlockHeight, Id, id::Idable},
 };
 use randomness::CryptoRng;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 // TODO use EventList from helpers instead.
 type EventList = Arc<Mutex<Vec<(Id<GenBlock>, BlockHeight)>>>;

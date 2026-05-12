@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, ops::Deref};
 
 use common::chain::config::EpochIndex;
 
-use crate::{storage_result, EpochData};
+use crate::{EpochData, storage_result};
 
 pub trait EpochStorageRead {
     fn get_epoch_data(&self, epoch_index: EpochIndex) -> storage_result::Result<Option<EpochData>>;

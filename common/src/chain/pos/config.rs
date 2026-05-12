@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::{
-    primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
+    primitives::{BlockCount, per_thousand::PerThousand},
 };
 
 use super::PoSConsensusVersion;

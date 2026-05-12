@@ -25,9 +25,9 @@ use std::sync::Arc;
 use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageWriteLocked};
+use wallet_types::AccountId;
 use wallet_types::account_info::AccountVrfKeys;
 use wallet_types::keys::KeychainUsageState;
-use wallet_types::AccountId;
 
 /// A child key hierarchy for an AccountKeyChain. This normally implements the receiving and change
 /// addresses key chains. It uses soft derivation to generate addresses (xpub).

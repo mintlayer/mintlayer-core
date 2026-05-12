@@ -19,7 +19,7 @@ use typename::TypeName;
 
 use crate::primitives::id::{Id, Idable};
 
-use super::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData, GenBlock};
+use super::{Block, BlockHeader, ConsensusData, GenBlock, timestamp::BlockTimestamp};
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SignedHeaderError {

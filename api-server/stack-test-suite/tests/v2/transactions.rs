@@ -16,7 +16,7 @@
 use serde_json::Value;
 
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, TransactionInfo, TxAdditionalInfo,
+    TransactionInfo, TxAdditionalInfo, block_aux_data::BlockAuxData,
 };
 use api_web_server::api::json_helpers::to_tx_json_with_block_info;
 

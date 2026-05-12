@@ -19,13 +19,13 @@ use super::db;
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, SealedStorageTag, TipStorageTag};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
-        config::{EpochIndex, MagicBytes},
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        block::{BlockReward, signed_block_header::SignedBlockHeader},
+        config::{EpochIndex, MagicBytes},
+        tokens::{TokenAuxiliaryData, TokenId},
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id},
 };
 use orders_accounting::{OrderData, OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{

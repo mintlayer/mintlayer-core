@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, Block, ChainConfig},
-    primitives::{Id, H256},
+    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp, config::EpochIndex},
+    primitives::{H256, Id},
 };
 use crypto::vrf::{VRFPublicKey, VRFReturn};
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
-use crate::vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
+use crate::vrf_tools::{ProofOfStakeVRFError, verify_vrf_and_get_vrf_output};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoSRandomnessError {

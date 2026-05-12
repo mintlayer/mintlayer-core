@@ -20,31 +20,30 @@ use std::str::FromStr;
 use chainstate::rpc::RpcUtxoOutpoint;
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
-    address::{dehexify, Address},
+    address::{Address, dehexify},
     chain::{
+        Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
         block::timestamp::BlockTimestamp,
         config::{
-            regtest::{genesis_values, GenesisStakingSettings},
             EpochIndex,
+            regtest::{GenesisStakingSettings, genesis_values},
         },
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::{
-            arbitrary_message,
+            InputWitness, arbitrary_message,
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-            InputWitness,
         },
         stakelock::StakePoolData,
         tokens::TokenId,
-        Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Amount, H256, Id, Idable},
 };
 use crypto::key::Signature;
 use serialization::{
+    Encode as _,
     hex::{HexDecode, HexEncode},
     hex_encoded::HexEncoded,
-    Encode as _,
 };
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};

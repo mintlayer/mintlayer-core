@@ -15,12 +15,12 @@
 
 use generic_array::{ArrayLength, GenericArray};
 use schnorrkel::{
-    vrf::{VRFInOut, VRFPreOut, VRFProof},
     PublicKey,
+    vrf::{VRFInOut, VRFPreOut, VRFProof},
 };
-use serialization::{hex_encoded::HexEncoded, Decode, Encode};
+use serialization::{Decode, Encode, hex_encoded::HexEncoded};
 
-use crate::vrf::{transcript::traits::SignableTranscript, VRFError, VRFPublicKey};
+use crate::vrf::{VRFError, VRFPublicKey, transcript::traits::SignableTranscript};
 
 const VRF_OUTPUT_LABEL: &[u8] = b"MintlayerVRFOutput!";
 
@@ -148,9 +148,9 @@ impl SchnorrkelVRFReturn {
 #[cfg(test)]
 mod tests {
     use hex::FromHex;
-    use schnorrkel::{signing_context, Keypair, PublicKey, SecretKey};
+    use schnorrkel::{Keypair, PublicKey, SecretKey, signing_context};
 
-    use randomness::{adapters::Rng08Adapter, make_pseudo_rng, make_true_rng, RngExt as _};
+    use randomness::{RngExt as _, adapters::Rng08Adapter, make_pseudo_rng, make_true_rng};
     use serialization::{DecodeAll, Encode};
 
     use super::*;

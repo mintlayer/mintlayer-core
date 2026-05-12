@@ -16,15 +16,15 @@
 use std::{collections::BTreeMap, ops::Neg};
 
 use accounting::{
-    combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
+    DeltaAmountCollection, DeltaDataUndoCollection, combine_amount_delta, combine_data_with_delta,
 };
 use common::{chain::tokens::TokenId, primitives::Amount};
 use utils::tap_log::TapLog;
 
 use crate::{
+    FlushableTokensAccountingView, TokenData, TokensAccountingView,
     data::{TokensAccountingDeltaData, TokensAccountingDeltaUndoData},
     error::Error,
-    FlushableTokensAccountingView, TokenData, TokensAccountingView,
 };
 
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};

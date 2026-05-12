@@ -22,14 +22,13 @@ use networking::{
     test_helpers::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
-    transport::{new_message_stream, TransportSocket},
+    transport::{TransportSocket, new_message_stream},
 };
 use p2p_test_utils::run_with_timeout;
 use randomness::RngExt as _;
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{

@@ -23,47 +23,47 @@ use chainstate::{
 };
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
+    TestFramework, TransactionBuilder,
     helpers::{
         issue_token_from_block, issue_token_from_genesis, make_token_issuance, mint_tokens_in_block,
     },
-    TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
+        GenBlock, OrderAccountCommand, OrderData, OutPointSourceId, SignedTransaction, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_order_id, make_token_id,
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::input_commitments::SighashInputCommitment,
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::input_commitments::SighashInputCommitment,
         },
         timelock::OutputTimeLock,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
-        GenBlock, OrderAccountCommand, OrderData, OutPointSourceId, SignedTransaction, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, amount::SignedAmount},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, RngExt as _};
 use test_utils::{
     assert_matches_return_val, gen_text_with_non_ascii,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string, split_value,
 };
 use tx_verifier::{
+    CheckTransactionError,
     error::{InputCheckError, ScriptError, TimelockError},
     transaction_verifier::error::TokenIssuanceError,
-    CheckTransactionError,
 };
 
 use crate::tests::helpers::token_checks::{
-    assert_token_missing, check_fungible_token, ExpectedFungibleTokenData,
+    ExpectedFungibleTokenData, assert_token_missing, check_fungible_token,
 };
 
 fn unmint_tokens_in_block(
@@ -6409,7 +6409,7 @@ fn reorg_tokens_tx_with_simple_tx(#[case] seed: Seed) {
 fn issue_same_token_alternative_pos_chain(#[case] seed: Seed) {
     use chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker;
     use common::{
-        chain::{config::create_unit_test_config, PoolId},
+        chain::{PoolId, config::create_unit_test_config},
         primitives::H256,
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};

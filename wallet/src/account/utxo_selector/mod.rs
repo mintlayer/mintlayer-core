@@ -20,9 +20,9 @@ pub use output_group::{OutputGroup, PayFee};
 
 use common::{
     chain::{TxInput, TxOutput},
-    primitives::{amount::SignedAmount, Amount},
+    primitives::{Amount, amount::SignedAmount},
 };
-use randomness::{make_pseudo_rng, Rng, RngExt as _, SliceRandom};
+use randomness::{Rng, RngExt as _, SliceRandom, make_pseudo_rng};
 use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;

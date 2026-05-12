@@ -24,8 +24,8 @@ use chainstate::Locator;
 use common::chain::config::MagicBytes;
 use networking::{
     test_helpers::{
-        get_two_connected_sockets, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        get_two_connected_sockets,
     },
     transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
 };
@@ -39,10 +39,10 @@ use crate::{
     error::ConnectionValidationError,
     message::HeaderListRequest,
     net::{
-        default_backend::types::{peer_event, HandshakeMessage, P2pTimestamp},
+        default_backend::types::{HandshakeMessage, P2pTimestamp, peer_event},
         types::services::Service,
     },
-    test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, test_p2p_config},
 };
 
 use super::*;
@@ -119,19 +119,21 @@ where
     let (mut socket2_reader, mut socket2_writer) =
         new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
     assert!(socket2_reader.recv().now_or_never().is_none());
-    assert!(socket2_writer
-        .send(Message::Handshake(HandshakeMessage::Hello {
-            protocol_version: TEST_PROTOCOL_VERSION.into(),
-            software_version: *chain_config.software_version(),
-            network: *chain_config.magic_bytes(),
-            user_agent: p2p_config.user_agent.clone(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-            receiver_address: None,
-            current_time: P2pTimestamp::from_int_seconds(123456),
-            handshake_nonce: 123,
-        }))
-        .await
-        .is_ok());
+    assert!(
+        socket2_writer
+            .send(Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
+                software_version: *chain_config.software_version(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_int_seconds(123456),
+                handshake_nonce: 123,
+            }))
+            .await
+            .is_ok()
+    );
 
     expect_peer_info_received_event(
         &mut peer_event_receiver,
@@ -208,18 +210,20 @@ where
     let (mut socket2_reader, mut socket2_writer) =
         new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
     socket2_reader.recv().await.unwrap();
-    assert!(socket2_writer
-        .send(Message::Handshake(HandshakeMessage::HelloAck {
-            protocol_version: TEST_PROTOCOL_VERSION.into(),
-            software_version: *chain_config.software_version(),
-            network: *chain_config.magic_bytes(),
-            user_agent: p2p_config.user_agent.clone(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-            receiver_address: None,
-            current_time: P2pTimestamp::from_int_seconds(123456),
-        }))
-        .await
-        .is_ok());
+    assert!(
+        socket2_writer
+            .send(Message::Handshake(HandshakeMessage::HelloAck {
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
+                software_version: *chain_config.software_version(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_int_seconds(123456),
+            }))
+            .await
+            .is_ok()
+    );
 
     expect_peer_info_received_event(
         &mut peer_event_receiver,
@@ -291,19 +295,21 @@ where
     let (mut socket2_reader, mut socket2_writer) =
         new_message_stream(socket2, Some(*p2p_config.protocol_config.max_message_size));
     assert!(socket2_reader.recv().now_or_never().is_none());
-    assert!(socket2_writer
-        .send(Message::Handshake(HandshakeMessage::Hello {
-            protocol_version: TEST_PROTOCOL_VERSION.into(),
-            software_version: *chain_config.software_version(),
-            network: MagicBytes::new([1, 2, 3, 4]),
-            user_agent: p2p_config.user_agent.clone(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-            receiver_address: None,
-            current_time: P2pTimestamp::from_int_seconds(cur_time.load()),
-            handshake_nonce: 123,
-        }))
-        .await
-        .is_ok());
+    assert!(
+        socket2_writer
+            .send(Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
+                software_version: *chain_config.software_version(),
+                network: MagicBytes::new([1, 2, 3, 4]),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_int_seconds(cur_time.load()),
+                handshake_nonce: 123,
+            }))
+            .await
+            .is_ok()
+    );
 
     expect_some_peer_info_received_event(&mut peer_event_receiver).await;
     expect_sync_event(&mut peer_event_receiver).await;

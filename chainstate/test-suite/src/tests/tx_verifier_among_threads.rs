@@ -20,12 +20,12 @@ use common::chain::config::Builder as ConfigBuilder;
 use common::primitives::Amount;
 use common::{
     chain::{DelegationId, OrderId, PoolId, UtxoOutPoint},
-    primitives::{Id, H256},
+    primitives::{H256, Id},
 };
 use orders_accounting::{OrderData, OrdersAccountingView};
 use pos_accounting::PoSAccountingView;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::TransactionVerifier;
 use utxo::{Utxo, UtxosView};

@@ -16,11 +16,11 @@
 use super::*;
 use common::chain::config::{create_mainnet, create_unit_test_config};
 use common::{address::pubkeyhash::PublicKeyHash, chain::Destination};
+use crypto::key::PublicKey;
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::secp256k1::Secp256k1PublicKey;
-use crypto::key::PublicKey;
 use rstest::rstest;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ use wallet_storage::{
     DefaultBackend, Store, TransactionRwLocked, TransactionRwUnlocked, Transactional,
 };
 use wallet_types::seed_phrase::StoreSeedPhrase;
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, AccountInfo};
+use wallet_types::{AccountInfo, account_info::DEFAULT_ACCOUNT_INDEX};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -261,9 +261,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let mut issued_key = key_chain.issue_key(&mut db_tx, purpose).unwrap();
 
     // Mark the last key as used
-    assert!(key_chain
-        .mark_public_key_as_used(&mut db_tx, &issued_key.clone().into_public_key())
-        .unwrap());
+    assert!(
+        key_chain
+            .mark_public_key_as_used(&mut db_tx, &issued_key.clone().into_public_key())
+            .unwrap()
+    );
 
     {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);
@@ -285,9 +287,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     }
 
     // Mark the last key as used
-    assert!(key_chain
-        .mark_public_key_as_used(&mut db_tx, &issued_key.into_public_key())
-        .unwrap());
+    assert!(
+        key_chain
+            .mark_public_key_as_used(&mut db_tx, &issued_key.into_public_key())
+            .unwrap()
+    );
 
     {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);

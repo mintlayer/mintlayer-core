@@ -18,19 +18,19 @@ use chainstate::{
 };
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
-    primitives::{id::WithId, Idable},
+    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    primitives::{Idable, id::WithId},
 };
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
-    transaction_verifier::{
-        error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, TransactionSourceForConnect, TransactionVerifier,
-    },
     TransactionSource,
+    transaction_verifier::{
+        TransactionSourceForConnect, TransactionVerifier, error::ConnectTransactionError,
+        flush::flush_to_storage, storage::TransactionVerifierStorageRef,
+    },
 };
 use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;

@@ -18,12 +18,12 @@ use super::*;
 
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, output_value::OutputValue, ChainConfig, GenBlockId,
-        OutPointSourceId, TxInput, TxOutput,
+        ChainConfig, GenBlockId, OutPointSourceId, TxInput, TxOutput,
+        config::Builder as ConfigBuilder, output_value::OutputValue,
     },
     primitives::{Amount, Idable},
 };
@@ -67,9 +67,11 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             let tx_id = tx.transaction().get_id();
 
             // check if can be disconnected
-            assert!(!verifier
-                .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
-                .unwrap());
+            assert!(
+                !verifier
+                    .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
+                    .unwrap()
+            );
 
             // try to disconnect anyway
             let mut tmp_verifier = verifier.derive_child();
@@ -88,9 +90,11 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let tx = block.transactions().first().unwrap();
         let tx_id = tx.transaction().get_id();
 
-        assert!(verifier
-            .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
-            .unwrap());
+        assert!(
+            verifier
+                .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
+                .unwrap()
+        );
         verifier
             .disconnect_transaction(&TransactionSource::Chain(block_id), tx)
             .unwrap();
@@ -165,12 +169,22 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap();
 
         // disconnect should work in proper order only: tx2 and then tx1
-        assert!(!verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
-            .unwrap());
-        assert!(verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id())
-            .unwrap());
+        assert!(
+            !verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx1.transaction().get_id()
+                )
+                .unwrap()
+        );
+        assert!(
+            verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx2.transaction().get_id()
+                )
+                .unwrap()
+        );
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
@@ -180,9 +194,14 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         );
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();
 
-        assert!(verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
-            .unwrap());
+        assert!(
+            verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx1.transaction().get_id()
+                )
+                .unwrap()
+        );
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1).unwrap();
     });
 }
@@ -257,12 +276,22 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
         // disconnect should work in proper order only: tx2 and then tx1
         let mut child_verifier = verifier.derive_child();
 
-        assert!(!child_verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
-            .unwrap());
-        assert!(child_verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id())
-            .unwrap());
+        assert!(
+            !child_verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx1.transaction().get_id()
+                )
+                .unwrap()
+        );
+        assert!(
+            child_verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx2.transaction().get_id()
+                )
+                .unwrap()
+        );
 
         assert_eq!(
             child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
@@ -279,9 +308,14 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
 
         let mut child_verifier = verifier.derive_child();
 
-        assert!(child_verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
-            .unwrap());
+        assert!(
+            child_verifier
+                .can_disconnect_transaction(
+                    &TransactionSource::Mempool,
+                    &tx1.transaction().get_id()
+                )
+                .unwrap()
+        );
         child_verifier
             .disconnect_transaction(&TransactionSource::Mempool, &tx1)
             .unwrap();

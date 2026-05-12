@@ -15,13 +15,16 @@
 
 use std::{num::NonZeroU8, sync::Arc};
 
-use itertools::{izip, Itertools as _};
+use itertools::{Itertools as _, izip};
 
 use ::secp256k1::schnorr;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        self,
+        self, AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, DelegationId, Destination, NetUpgrades, OrderAccountCommand,
+        OrderData, OrderId, OutPointSourceId, PoolId, SighashInputCommitmentVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         config::ChainType,
@@ -29,11 +32,12 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{
+                InputWitness,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                standard_signature::StandardInputSignature, InputWitness,
+                standard_signature::StandardInputSignature,
             },
             sighash::sighashtype::SigHashType,
         },
@@ -43,45 +47,41 @@ use common::{
             IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
-        ChainstateUpgradeBuilder, DelegationId, Destination, NetUpgrades, OrderAccountCommand,
-        OrderData, OrderId, OutPointSourceId, PoolId, SighashInputCommitmentVersion, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::hash_encoded, per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id, id::hash_encoded, per_thousand::PerThousand},
 };
 use crypto::{
     key::{
+        PrivateKey, PublicKey, Signature,
         hdkd::u31::U31,
         secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
         signature::SignatureKind,
-        PrivateKey, PublicKey, Signature,
     },
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
 use randomness::{CryptoRng, RngExt as _};
-use serialization::{extras::non_empty_vec::DataOrNoVec, Encode as _};
+use serialization::{Encode as _, extras::non_empty_vec::DataOrNoVec};
 use test_utils::{assert_matches_return_val, random_ascii_alphanumeric_string};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
+    BlockInfo, KeyPurpose,
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
         OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
         TokensAdditionalInfo,
     },
     seed_phrase::StoreSeedPhrase,
-    BlockInfo, KeyPurpose,
 };
 
 use crate::{
-    account::PoolData,
-    key_chain::{AccountKeyChains, MasterKeyChain, LOOKAHEAD_SIZE},
-    signer::{
-        tests::{account_from_mnemonic, MNEMONIC},
-        Signer,
-    },
     Account, SendRequest,
+    account::PoolData,
+    key_chain::{AccountKeyChains, LOOKAHEAD_SIZE, MasterKeyChain},
+    signer::{
+        Signer,
+        tests::{MNEMONIC, account_from_mnemonic},
+    },
 };
 
 lazy_static::lazy_static! {
@@ -412,8 +412,14 @@ where
     let expected_sigs = {
         let multisig = {
             let sigs_hex = [
-                (0, "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59"),
-                (2, "0a0a17d71bc98fa5c24ea611c856d0d08c6a765ea3c4c8f068668e0bdff710b82b0d2eead83d059386cd3cbdf4308418d4b81e6f52c001a9141ec477a8d24845"),
+                (
+                    0,
+                    "7a99714dc6cc917faa2afded8028159a5048caf6f8382f67e6b61623fbe62c60423f8f7983f88f40c6f42924594f3de492a232e9e703b241c3b17b130f8daa59",
+                ),
+                (
+                    2,
+                    "0a0a17d71bc98fa5c24ea611c856d0d08c6a765ea3c4c8f068668e0bdff710b82b0d2eead83d059386cd3cbdf4308418d4b81e6f52c001a9141ec477a8d24845",
+                ),
             ];
             make_multisig_spend_sig(challenge, sigs_hex)
         };
@@ -963,16 +969,31 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         SighashInputCommitmentVersion::V0 => {
             let htlc_multisig = {
                 let sigs_hex = [
-                    (0, "0ff63e871249f4b6d8de07216617054c71a4b341e11afd405712cc108cb8e315f4b577444a29a81126aab9b7ad426594c2b39e5bc2e11169b1c64e62524620fe"),
-                    (1, "cd190e9a746aefb9ccec04a178017db55154f6370993139819ab270e988ff2c510b5bbcd95da31dff124f22b323bc3547ec15045e92552f7a951433c064d07f0"),
+                    (
+                        0,
+                        "0ff63e871249f4b6d8de07216617054c71a4b341e11afd405712cc108cb8e315f4b577444a29a81126aab9b7ad426594c2b39e5bc2e11169b1c64e62524620fe",
+                    ),
+                    (
+                        1,
+                        "cd190e9a746aefb9ccec04a178017db55154f6370993139819ab270e988ff2c510b5bbcd95da31dff124f22b323bc3547ec15045e92552f7a951433c064d07f0",
+                    ),
                 ];
                 make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
             };
             let multisig = {
                 let sigs_hex = [
-                    (1, "e94989eddcbb19eb87a02935a6b9e09e0cb0537d5aadf2d8bb37872949176820970c6d69320712be192805ad4609020237e46e461c0aeb42712f5feaceee5fd8"),
-                    (2, "90da875f04bc2db203e5a4c322514bb17d01870a34f40bba5922439580db156c4d9b455ce2b2ceb8e070541fb7a503752dfbc670ac32c858c462044e1ac8e421"),
-                    (3, "1ae75282887fcdca2f9cccbca269db14d368fd29658b92e32af98c9488ab6745cfd54dacafc91fcf63dbce69d196716345fd0d9cbcff25ef251286ab1bea025e")
+                    (
+                        1,
+                        "e94989eddcbb19eb87a02935a6b9e09e0cb0537d5aadf2d8bb37872949176820970c6d69320712be192805ad4609020237e46e461c0aeb42712f5feaceee5fd8",
+                    ),
+                    (
+                        2,
+                        "90da875f04bc2db203e5a4c322514bb17d01870a34f40bba5922439580db156c4d9b455ce2b2ceb8e070541fb7a503752dfbc670ac32c858c462044e1ac8e421",
+                    ),
+                    (
+                        3,
+                        "1ae75282887fcdca2f9cccbca269db14d368fd29658b92e32af98c9488ab6745cfd54dacafc91fcf63dbce69d196716345fd0d9cbcff25ef251286ab1bea025e",
+                    ),
                 ];
                 make_multisig_spend_sig(multisig_challenge, sigs_hex)
             };
@@ -1049,16 +1070,31 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
         SighashInputCommitmentVersion::V1 => {
             let htlc_multisig = {
                 let sigs_hex = [
-                    (0, "dbc526968f2506a1682cff368c2bb805f426dffbf85bcfc175b67f97444c0cb7285d1d80f582ae8192f7c329d895182a454735ffa9debbfbdf8517f9f3b5ddfc"),
-                    (1, "2a9dabb9953ba0b7fb66b0cad67a569f8df8947b07e41a46b640a0addc19b0131b6b2f46d3d784a5ba66d991b3e3af9ac7d6720c7d80cc6040892226a7b41669"),
+                    (
+                        0,
+                        "dbc526968f2506a1682cff368c2bb805f426dffbf85bcfc175b67f97444c0cb7285d1d80f582ae8192f7c329d895182a454735ffa9debbfbdf8517f9f3b5ddfc",
+                    ),
+                    (
+                        1,
+                        "2a9dabb9953ba0b7fb66b0cad67a569f8df8947b07e41a46b640a0addc19b0131b6b2f46d3d784a5ba66d991b3e3af9ac7d6720c7d80cc6040892226a7b41669",
+                    ),
                 ];
                 make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
             };
             let multisig = {
                 let sigs_hex = [
-                    (1, "8aacc97858a80bb779b000f18bf82c984977ca2a4d8560ae72421c9cd9cb7b513d35a62123553e0d24c0249eb2e04d2f99fe38eb41505a1081cd2d684a8a45d2"),
-                    (2, "c13c5bb22e719b5c7966aa9b58c2ae8e6bf3f848e62df19d38c4d41c7acd9d48eda1e13f18a25c9524904c4866143a95fd963606b5a77979a6dfc04cdebc979d"),
-                    (3, "93b5538c13a981dc8d6978361f13627603464de82d45f966de78b829a87eab642087b5bbc5b3aed5a888b8387491fe7fcd27f3e69bf7a70e5d12f004691da173")
+                    (
+                        1,
+                        "8aacc97858a80bb779b000f18bf82c984977ca2a4d8560ae72421c9cd9cb7b513d35a62123553e0d24c0249eb2e04d2f99fe38eb41505a1081cd2d684a8a45d2",
+                    ),
+                    (
+                        2,
+                        "c13c5bb22e719b5c7966aa9b58c2ae8e6bf3f848e62df19d38c4d41c7acd9d48eda1e13f18a25c9524904c4866143a95fd963606b5a77979a6dfc04cdebc979d",
+                    ),
+                    (
+                        3,
+                        "93b5538c13a981dc8d6978361f13627603464de82d45f966de78b829a87eab642087b5bbc5b3aed5a888b8387491fe7fcd27f3e69bf7a70e5d12f004691da173",
+                    ),
                 ];
                 make_multisig_spend_sig(multisig_challenge, sigs_hex)
             };
@@ -1587,80 +1623,95 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
     let expected_sigs = {
         let htlc_multisig = {
             let sigs_hex = [
-                    (0, "3b603dac168db6061361b7352d25a60b1aa6d9d5c270f6a0177158046d0721c8fee6dfd61c9d2c90c66cc578cd963fd89ca7aef068126a34bdd71b839dadd244"),
-                    (1, "da4d613bdd1d3827b11a44af75458f28d9fd2951131967701acf7708219b0ea2cd71b244a639984aeb7f5ef70f7267bf37af5d62953716562bde7f99b19988ac"),
-                ];
+                (
+                    0,
+                    "3b603dac168db6061361b7352d25a60b1aa6d9d5c270f6a0177158046d0721c8fee6dfd61c9d2c90c66cc578cd963fd89ca7aef068126a34bdd71b839dadd244",
+                ),
+                (
+                    1,
+                    "da4d613bdd1d3827b11a44af75458f28d9fd2951131967701acf7708219b0ea2cd71b244a639984aeb7f5ef70f7267bf37af5d62953716562bde7f99b19988ac",
+                ),
+            ];
             make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
         };
         let multisig = {
             let sigs_hex = [
-                    (1, "ade634188ba99611be5ed37d92b4e41df7d7c5b1c82bc7a48d0b767ad2dca7c10eb4dee6592d1a3cbb46d7db3945bb79f1fa3461cda8c8685dc8ffbae2214880"),
-                    (2, "ba2d3986fb2c7e9c283831e35bf9abad1cd3aa16a8490248ac2fc6b56e2117c42c87dcf687ec68f932fa36dc5dc3bc8b9e72aab2c77154c13d3c64d17ef9cd6e"),
-                    (3, "8430765edd8926d5259e8df0a42b24f76d97471213318da81e4f620800766079a2747c6330354eab5e964945a6183e78e58db5bb06d20834969f3a2b359f2f5d")
-                ];
+                (
+                    1,
+                    "ade634188ba99611be5ed37d92b4e41df7d7c5b1c82bc7a48d0b767ad2dca7c10eb4dee6592d1a3cbb46d7db3945bb79f1fa3461cda8c8685dc8ffbae2214880",
+                ),
+                (
+                    2,
+                    "ba2d3986fb2c7e9c283831e35bf9abad1cd3aa16a8490248ac2fc6b56e2117c42c87dcf687ec68f932fa36dc5dc3bc8b9e72aab2c77154c13d3c64d17ef9cd6e",
+                ),
+                (
+                    3,
+                    "8430765edd8926d5259e8df0a42b24f76d97471213318da81e4f620800766079a2747c6330354eab5e964945a6183e78e58db5bb06d20834969f3a2b359f2f5d",
+                ),
+            ];
             make_multisig_spend_sig(multisig_challenge, sigs_hex)
         };
 
         vec![
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&account1_dest4, &account1),
-                    "ee6099727b2ccc20310f4a202b163553717042d8834617273610a617d206e111c702f747161c5e6cf08a29adc0a7d84f42828b9a57115ab68dd7f9ef0652296d",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_spend_sig(
-                    "ba2d3986fb2c7e9c283831e35bf9abad1cd3aa16a8490248ac2fc6b56e2117c42c87dcf687ec68f932fa36dc5dc3bc8b9e72aab2c77154c13d3c64d17ef9cd6e",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&decommission_dest, &account1),
-                    "7db9e5a05b66818b222d01da4793bdf6bc1ff14c2dde434ae63e37f33d95363c81f2fd6ed36a984d5f5cf233e4f9d384f00c42d5619632dbdda4817777d763f7",
-                ))),
-                Some(InputWitness::Standard(make_htlc_pub_key_spend_sig(
-                    htlc_secret,
-                    "7fb4da18ae9927d62ae07513948fa76a655838fc9780287a4062bb9693d477bcfd0788a2c09ea3992ea92df5919e399899645c57d0f064cbb42dbe4577753338",
-                ))),
-                Some(InputWitness::Standard(htlc_multisig)),
-                Some(InputWitness::Standard(multisig)),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[0], &account1),
-                    "89e7f9bd71ac50d5e1bb1427c466807ccbf7848c72517fdefcf94b9e941b1817be394a069e260c1f6831021dd8117f6c39920a3340bcfc798219d1b2d9dc55ff",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[1], &account1),
-                    "03b50188f8f0989ab8831281655c9c27e61b3faf2ad3fe8e143887cccd7e6bf08eb12a8b8d017746c888ef9723a42a3722be985ff93195ac7da833c9f381de3d",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[2], &account1),
-                    "358cc6a6e9502725688b9c71fa2f5801f79dfb8bac0373cacb25574b39134ceedbff20b25f420794999603adb1f84c916834389d7f7c6e36220b00b410e3fc1a",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[3], &account1),
-                    "32d3e7c4906bfeef7bdfe8f59f9a9fc0a56dc0f3f3a3f1a800a6c93a18b53af1596d20f01453bdb1c0e9da84350d41c9ceb759d4486505da7277f088a43cd495",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[4], &account1),
-                    "8a5f0104dd95d4c90a9ab81bf2de6fd8a62b5d47756c6b52c34f036f35740bff5a89024c559656a77011863632e57956097c0f9b2ab62e7741f6272a3b2aedd2",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[5], &account1),
-                    "b939110eb9c76364a7f70bd7ad2549728da081b63155a93f9d073a0316a50996c354ea7d667addd8190775c1f47eb5078696d8476a65eaffffd3f369bb3d416a",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[6], &account1),
-                    "abb20462e7be8fbf7995fa9f71943447795f3f59b04eb067887f714431a48b64fe5bb280b045167c2b78d049bc478be686678974a9f91ea2705d71a99b782f9f",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[7], &account1),
-                    "035af1829e02d003abcb2816680f8ac25b1d4c16ec09852e89bc551cc0f7a4cd1e14d7e840c451d2c6b8113cd90f6162b0ebdb4d21999f5c55ffb174405812fa",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[8], &account1),
-                    "bec8014f5d25ffcc96d186d2e355c1526a2f301efcbcfde82d4e9f7a57f212f0df2be7fc739be8b9de1c5a27e5e76cf47e01117368f6bcb1c2512d0aabb65805",
-                ))),
-                Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
-                    find_pub_key_for_pkh_dest(&acc_dests[9], &account1),
-                    "769435a863811adcacd5593d763c938d488318a2fb664c0e039cf93d9b0d704770214f58edd35d67e1e52b4da37c7c704e852b0d2f620d0a87b312ac5ac46dae",
-                ))),
-                Some(InputWitness::NoSignature(None)),
-            ]
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&account1_dest4, &account1),
+                "ee6099727b2ccc20310f4a202b163553717042d8834617273610a617d206e111c702f747161c5e6cf08a29adc0a7d84f42828b9a57115ab68dd7f9ef0652296d",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_spend_sig(
+                "ba2d3986fb2c7e9c283831e35bf9abad1cd3aa16a8490248ac2fc6b56e2117c42c87dcf687ec68f932fa36dc5dc3bc8b9e72aab2c77154c13d3c64d17ef9cd6e",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&decommission_dest, &account1),
+                "7db9e5a05b66818b222d01da4793bdf6bc1ff14c2dde434ae63e37f33d95363c81f2fd6ed36a984d5f5cf233e4f9d384f00c42d5619632dbdda4817777d763f7",
+            ))),
+            Some(InputWitness::Standard(make_htlc_pub_key_spend_sig(
+                htlc_secret,
+                "7fb4da18ae9927d62ae07513948fa76a655838fc9780287a4062bb9693d477bcfd0788a2c09ea3992ea92df5919e399899645c57d0f064cbb42dbe4577753338",
+            ))),
+            Some(InputWitness::Standard(htlc_multisig)),
+            Some(InputWitness::Standard(multisig)),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[0], &account1),
+                "89e7f9bd71ac50d5e1bb1427c466807ccbf7848c72517fdefcf94b9e941b1817be394a069e260c1f6831021dd8117f6c39920a3340bcfc798219d1b2d9dc55ff",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[1], &account1),
+                "03b50188f8f0989ab8831281655c9c27e61b3faf2ad3fe8e143887cccd7e6bf08eb12a8b8d017746c888ef9723a42a3722be985ff93195ac7da833c9f381de3d",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[2], &account1),
+                "358cc6a6e9502725688b9c71fa2f5801f79dfb8bac0373cacb25574b39134ceedbff20b25f420794999603adb1f84c916834389d7f7c6e36220b00b410e3fc1a",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[3], &account1),
+                "32d3e7c4906bfeef7bdfe8f59f9a9fc0a56dc0f3f3a3f1a800a6c93a18b53af1596d20f01453bdb1c0e9da84350d41c9ceb759d4486505da7277f088a43cd495",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[4], &account1),
+                "8a5f0104dd95d4c90a9ab81bf2de6fd8a62b5d47756c6b52c34f036f35740bff5a89024c559656a77011863632e57956097c0f9b2ab62e7741f6272a3b2aedd2",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[5], &account1),
+                "b939110eb9c76364a7f70bd7ad2549728da081b63155a93f9d073a0316a50996c354ea7d667addd8190775c1f47eb5078696d8476a65eaffffd3f369bb3d416a",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[6], &account1),
+                "abb20462e7be8fbf7995fa9f71943447795f3f59b04eb067887f714431a48b64fe5bb280b045167c2b78d049bc478be686678974a9f91ea2705d71a99b782f9f",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[7], &account1),
+                "035af1829e02d003abcb2816680f8ac25b1d4c16ec09852e89bc551cc0f7a4cd1e14d7e840c451d2c6b8113cd90f6162b0ebdb4d21999f5c55ffb174405812fa",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[8], &account1),
+                "bec8014f5d25ffcc96d186d2e355c1526a2f301efcbcfde82d4e9f7a57f212f0df2be7fc739be8b9de1c5a27e5e76cf47e01117368f6bcb1c2512d0aabb65805",
+            ))),
+            Some(InputWitness::Standard(make_pub_key_hash_spend_sig(
+                find_pub_key_for_pkh_dest(&acc_dests[9], &account1),
+                "769435a863811adcacd5593d763c938d488318a2fb664c0e039cf93d9b0d704770214f58edd35d67e1e52b4da37c7c704e852b0d2f620d0a87b312ac5ac46dae",
+            ))),
+            Some(InputWitness::NoSignature(None)),
+        ]
     };
 
     assert_eq!(ptx.witnesses().len(), expected_sigs.len());
@@ -1958,24 +2009,38 @@ pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
                     find_pub_key_for_pkh_dest(&decommission_dest, &account1),
                     "3ed693bc5fcec032ea40453dd0542a696b9765728cbc279ae73dee69bfec9538ad62a99fe3bf52315c06186e0d60a1a315f5c0856ac0280acc4365e6558ba452",
                 ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
-                    "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
-                    standalone_pk,
-                    "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
-                    "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
-                    account1_pk,
-                    "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
-                ))),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_refund_sig(
+                        "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_hash_refund_sig(
+                        standalone_pk,
+                        "d929e839b1e219039d5b9bfd59b70e18e4da37c4341d137b8c316ed8449a0c7a725f911066524014db257a7d92d2f629f14c71d16a9c577add4a43c9778cbb5e",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_refund_sig(
+                        "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_hash_refund_sig(
+                        account1_pk,
+                        "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
+                    ),
+                )),
                 Some(InputWitness::Standard({
                     let sigs_hex = [
-                        (0, "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae"),
-                        (1, "23f110161a7c9097127812a98b024c599248a53578d35ee3bfac3e723d56011577ccef5be3a7151bb56381b3efc31e72bc9a83f755456f15eb3a044100d14b9b"),
+                        (
+                            0,
+                            "da9982cf034cb550961077a4647d2d6d0398d93cfbce12a223487e7314a5c94b1b8d8f1aca6a071ee4581602621467512e1e98a4160e0a66b67554459641a0ae",
+                        ),
+                        (
+                            1,
+                            "23f110161a7c9097127812a98b024c599248a53578d35ee3bfac3e723d56011577ccef5be3a7151bb56381b3efc31e72bc9a83f755456f15eb3a044100d14b9b",
+                        ),
                     ];
                     make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
                 })),
@@ -1987,24 +2052,38 @@ pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
                     find_pub_key_for_pkh_dest(&decommission_dest, &account1),
                     "da5f561569793b95558e8cdbcd62717223bfc338ef6b638b04cd3bf9143f356a4f8dd511fd3d297d629d58956046e13d9425e1122c14b3966743145a9baf29a0",
                 ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
-                    "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
-                    standalone_pk,
-                    "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_refund_sig(
-                    "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
-                ))),
-                Some(InputWitness::Standard(make_htlc_uniparty_pub_key_hash_refund_sig(
-                    account1_pk,
-                    "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
-                ))),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_refund_sig(
+                        "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_hash_refund_sig(
+                        standalone_pk,
+                        "37c991c15d447d1c9918f3a61c55a8b3231b94e2087ac799f08651ec2f69c940638a0e77c20f479913c2d7059e424089672d20b6d586f27be78598c723eaf999",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_refund_sig(
+                        "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
+                    ),
+                )),
+                Some(InputWitness::Standard(
+                    make_htlc_uniparty_pub_key_hash_refund_sig(
+                        account1_pk,
+                        "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
+                    ),
+                )),
                 Some(InputWitness::Standard({
                     let sigs_hex = [
-                        (0, "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3"),
-                        (1, "f0794522d14c73ae2cba145afac92df27c279b915ff3f6a0709064b23defdb73d8b8a621c96ce6fd045439a1bbb7a85926471537da8590fac35311560eada405"),
+                        (
+                            0,
+                            "1a7017dc145b67099b7fc51b45982a2a8388a366e0c3760471ce5cfe3a02821e2fc8438b41d631fcafb0b1bf0a1a709489064ca166113e648c14b09e214fc9e3",
+                        ),
+                        (
+                            1,
+                            "f0794522d14c73ae2cba145afac92df27c279b915ff3f6a0709064b23defdb73d8b8a621c96ce6fd045439a1bbb7a85926471537da8590fac35311560eada405",
+                        ),
                     ];
                     make_htlc_multisig_refund_sig(htlc_multisig_challenge, sigs_hex)
                 })),

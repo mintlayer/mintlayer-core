@@ -17,15 +17,14 @@ use std::collections::BTreeMap;
 
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        make_token_id,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint, make_token_id,
         output_value::OutputValue,
         tokens::{NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
-        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };

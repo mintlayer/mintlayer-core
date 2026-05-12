@@ -17,47 +17,47 @@ use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, ti
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig},
-    primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
+    chain::{ChainConfig, block::timestamp::BlockTimestamp},
+    primitives::{Amount, per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent},
 };
 use iced::{
-    widget::{center, container, Stack, Text},
     Element, Length, Task,
+    widget::{Stack, Text, center, container},
 };
 use logging::log;
 use node_gui_backend::{
+    BackendSender, InitializedNode,
     messages::{
         BackendEvent, BackendRequest, EncryptionAction, SignedTransactionWrapper, TransactionInfo,
         WalletId, WalletInfo,
     },
-    BackendSender, InitializedNode,
 };
-use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
+use p2p::{P2pEvent, net::types::services::Services, types::peer_id::PeerId};
 use rfd::AsyncFileDialog;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::WalletTypeArgs;
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType, ImportOrCreate};
+use wallet_types::{ImportOrCreate, seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 #[cfg(any(feature = "trezor", feature = "ledger"))]
-use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
-#[cfg(any(feature = "trezor", feature = "ledger"))]
 use crate::widgets::create_hw_wallet::HardwareWalletType;
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
 use crate::{
+    WalletMode,
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
         esc_handler::esc_handler,
         new_wallet_account::new_wallet_account,
         opaque::opaque,
-        popup_dialog::{popup_dialog, Popup},
+        popup_dialog::{Popup, popup_dialog},
         wallet_mnemonic::wallet_mnemonic_dialog,
         wallet_set_password::wallet_set_password_dialog,
         wallet_unlock::wallet_unlock_dialog,
     },
-    WalletMode,
 };
 
-use self::main_widget::tabs::{wallet::WalletMessage, TabsMessage};
+use self::main_widget::tabs::{TabsMessage, wallet::WalletMessage};
 
 mod main_menu;
 mod main_widget;

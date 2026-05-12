@@ -17,8 +17,8 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 
 use common::{
     chain::{
-        output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        AccountType, ChainConfig, OrderAccountCommand, OrderId, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountSpending, AccountType, ChainConfig, OrderAccountCommand, OrderId,
+        TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue, timelock::OutputTimeLock,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
@@ -27,7 +27,7 @@ use pos_accounting::{PoSAccountingOperations, PoSAccountingUndo, PoSAccountingVi
 use tokens_accounting::{TokensAccountingOperations, TokensAccountingView};
 use utils::ensure;
 
-use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
+use super::{Error, accumulated_fee::AccumulatedFee, insert_or_increase};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that

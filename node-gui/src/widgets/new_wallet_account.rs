@@ -32,9 +32,9 @@
 use iced::widget::Component;
 
 use iced::{
-    alignment::Horizontal,
-    widget::{self, container, text_input, Button, Text},
     Element, Length, Theme,
+    alignment::Horizontal,
+    widget::{self, Button, Text, container, text_input},
 };
 use iced_aw::Card;
 
@@ -88,9 +88,11 @@ impl<Message> Component<Message, Theme, iced::Renderer> for NewWalletAccount<Mes
 
         Card::new(
             Text::new("New account"),
-            iced::widget::column![text_input("Account name", &state.name)
-                .on_input(NewAccountEvent::EditName)
-                .padding(15)],
+            iced::widget::column![
+                text_input("Account name", &state.name)
+                    .on_input(NewAccountEvent::EditName)
+                    .padding(15)
+            ],
         )
         .foot(container(button).center_x(Length::Fill))
         .max_width(600.0)
