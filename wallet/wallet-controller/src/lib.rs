@@ -209,6 +209,12 @@ pub enum ControllerError<N: NodeInterface> {
 
     #[error("The number of htlc secrets does not match the number of inputs")]
     InvalidHtlcSecretsCount,
+
+    #[error("Mempool events channel closed unexpectedly")]
+    MempoolEventChannelClosedUnexpectedly,
+
+    #[error("Timeout reached while waiting for a mempool NewTip event with block {expected_tip:x}")]
+    MempoolTipEventWaitTimeout { expected_tip: Id<GenBlock> },
 }
 
 #[derive(Clone, Copy)]
@@ -773,12 +779,23 @@ where
 
     /// Try to generate the `block_count` number of blocks.
     /// The function may return an error early if some attempt fails.
+    ///
+    /// Note that this function is intended to be used on regtest/signet and it assumes that
+    /// no other blocks can enter chainstate during the call. E.g. it expects that each produced
+    /// block becomes a tip; if this is not the case (e.g. because a better block has been received
+    /// via p2p in the meantime), it will fail after a short timeout.
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
         block_count: u32,
     ) -> Result<(), ControllerError<N>> {
-        for _ in 0..block_count {
+        let mut mempool_events = self
+            .rpc_client
+            .mempool_subscribe_to_events()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        for idx in 0..block_count {
             self.sync_once().await?;
             let block = self
                 .generate_block(
@@ -789,10 +806,41 @@ where
                 )
                 .await?;
 
+            let block_id = block.get_id();
+
             self.rpc_client
                 .submit_block(block)
                 .await
                 .map_err(ControllerError::NodeCallError)?;
+
+            if idx < block_count - 1 {
+                // Wait until the new tip reaches the mempool, otherwise producing the next block
+                // may fail with "Recoverable mempool error".
+                let mut event_wait_loop = async || -> Result<(), ControllerError<N>> {
+                    loop {
+                        let event = mempool_events
+                            .next()
+                            .await
+                            .ok_or(ControllerError::MempoolEventChannelClosedUnexpectedly)?;
+
+                        match event {
+                            MempoolEvent::NewTransaction { .. } => {}
+                            MempoolEvent::NewTip { tip_id } => {
+                                if tip_id == block_id {
+                                    break Ok(());
+                                }
+                            }
+                        }
+                    }
+                };
+
+                let timeout = Duration::from_secs(5);
+                tokio::time::timeout(timeout, event_wait_loop()).await.map_err(
+                    |_: tokio::time::error::Elapsed| ControllerError::MempoolTipEventWaitTimeout {
+                        expected_tip: block_id.into(),
+                    },
+                )??;
+            }
         }
 
         self.sync_once().await
@@ -1497,7 +1545,6 @@ where
                                 log::error!("Mempool notifications channel is closed.");
                                 tokio::time::sleep(ERROR_DELAY).await;
 
-
                                 match self.rpc_client
                                     .mempool_subscribe_to_events()
                                     .await {
@@ -1533,6 +1580,7 @@ where
                                     }
                                 }
                             }
+                            MempoolEvent::NewTip { .. } => {},
                         }
                     }
                 }

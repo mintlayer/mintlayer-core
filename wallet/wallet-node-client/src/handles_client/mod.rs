@@ -465,7 +465,9 @@ impl NodeInterface for WalletHandlesClient {
         let subscription =
             res.into_stream().filter_map(|event| {
                 futures::future::ready(match event {
-                    MempoolEvent::NewTip { .. } => None,
+                    MempoolEvent::NewTip(tip) => Some(crate::node_traits::MempoolEvent::NewTip {
+                        tip_id: *tip.block_id(),
+                    }),
 
                     MempoolEvent::TransactionProcessed(tx) => tx.was_accepted().then_some(
                         crate::node_traits::MempoolEvent::NewTransaction { tx_id: *tx.tx_id() },

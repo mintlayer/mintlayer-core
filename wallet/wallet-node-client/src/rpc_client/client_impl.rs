@@ -433,7 +433,7 @@ impl NodeInterface for NodeRpcClient {
 
         let subscription = subscription.filter_map(|item| {
             futures::future::ready(item.ok().and_then(|event| match event {
-                RpcEvent::NewTip { .. } => None,
+                RpcEvent::NewTip { id, height: _ } => Some(MempoolEvent::NewTip { tip_id: id }),
 
                 RpcEvent::TransactionProcessed {
                     tx_id, successful, ..

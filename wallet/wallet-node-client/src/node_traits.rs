@@ -161,5 +161,9 @@ pub trait NodeInterface {
 pub type MempoolEvents = Box<dyn Stream<Item = MempoolEvent> + Sync + Send + Unpin>;
 
 pub enum MempoolEvent {
+    /// Sent whenever a new transaction is added to the mempool.
     NewTransaction { tx_id: Id<Transaction> },
+
+    /// Sent whenever the mempool observes a new tip.
+    NewTip { tip_id: Id<GenBlock> },
 }
