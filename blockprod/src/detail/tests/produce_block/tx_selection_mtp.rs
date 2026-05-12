@@ -37,10 +37,10 @@ use common::{
 use consensus::{PoSGenerateBlockInputData, PoWGenerateBlockInputData};
 use mempool::{TxOptions, tx_accumulator::PackingStrategy, tx_origin::LocalTxOrigin};
 use test_utils::{
-    mock_time_getter::mocked_time_getter_seconds,
+    BasicTestTimeGetter,
     random::{Seed, make_seedable_rng},
 };
-use utils::{atomics::SeqCstAtomicU64, once_destructor::OnceDestructor};
+use utils::once_destructor::OnceDestructor;
 
 use crate::{
     BlockProduction,
@@ -81,8 +81,9 @@ async fn transaction_selection_mtp_test_impl(
     time_getter: TimeGetter,
     genesis_premint_output_index: u32,
 ) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(chain_config), time_getter.clone());
+    let chain_config = Arc::new(chain_config);
+    let (manager, chainstate, mempool, p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), time_getter.clone());
 
     let genesis_timestamp = chain_config.genesis_block().timestamp();
     let expected_median_time_past = genesis_timestamp.add_int_seconds(9).unwrap();
@@ -243,9 +244,7 @@ async fn transaction_selection_mtp_test_impl(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
-    let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
-    let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
     let extra_genesis_txs = [TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
@@ -285,9 +284,7 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_selection_mtp_test_pow(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
-    let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
-    let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
     let extra_genesis_txs = vec![TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
@@ -332,9 +329,7 @@ async fn transaction_selection_mtp_test_pow(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_selection_mtp_test_ignore_consensus(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
-    let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
-    let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
     let extra_genesis_txs = vec![TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),

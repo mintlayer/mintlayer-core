@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common::{
-    chain::block::timestamp::BlockTimestamp,
+    chain::{block::timestamp::BlockTimestamp, config::create_unit_test_config},
     primitives::{H256, Id},
     time_getter::TimeGetter,
 };
@@ -37,8 +39,9 @@ const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_txs_failed() {
-    let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let chain_config = Arc::new(create_unit_test_config());
+    let (mut manager, _chainstate, _mempool, _p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut mock_mempool = MockMempoolInterface::default();
     mock_mempool.expect_collect_txs().return_once(|_, _, _| {
@@ -79,8 +82,9 @@ async fn collect_txs_failed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn subsystem_error() {
-    let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let chain_config = Arc::new(create_unit_test_config());
+    let (mut manager, _chainstate, _mempool, _p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mock_mempool = MockMempoolInterface::default();
     let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
@@ -123,8 +127,9 @@ async fn subsystem_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn succeeded() {
-    let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let chain_config = Arc::new(create_unit_test_config());
+    let (mut manager, _chainstate, _mempool, _p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut mock_mempool = MockMempoolInterface::default();
 

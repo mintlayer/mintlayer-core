@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use rstest::rstest;
 
-use common::time_getter::TimeGetter;
+use common::{chain::config::create_unit_test_config, time_getter::TimeGetter};
 use mempool::tx_accumulator::PackingStrategy;
 use randomness::RngExt as _;
 use test_utils::random::{Seed, make_seedable_rng};
@@ -35,8 +35,9 @@ use crate::{
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let chain_config = Arc::new(create_unit_test_config());
+    let (manager, chainstate, mempool, p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut rng = make_seedable_rng(seed);
 
@@ -95,8 +96,9 @@ async fn multiple_jobs_with_wait(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_without_wait_same_jobkey(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let chain_config = Arc::new(create_unit_test_config());
+    let (manager, chainstate, mempool, p2p) =
+        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut rng = make_seedable_rng(seed);
 

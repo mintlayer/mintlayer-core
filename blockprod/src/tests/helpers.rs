@@ -111,20 +111,12 @@ pub async fn assert_process_block(
 }
 
 pub fn setup_blockprod_test(
-    chain_config: Option<ChainConfig>,
+    chain_config: Arc<ChainConfig>,
     time_getter: TimeGetter,
-) -> (
-    Manager,
-    Arc<ChainConfig>,
-    ChainstateHandle,
-    MempoolHandle,
-    P2pHandle,
-) {
+) -> (Manager, ChainstateHandle, MempoolHandle, P2pHandle) {
     let manager_config =
         subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
     let mut manager = Manager::new_with_config(manager_config);
-
-    let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
     let chainstate_config = ChainstateConfig {
         max_tip_age: Duration::from_secs(60 * 60 * 24 * 365 * 100).into(),
@@ -179,7 +171,7 @@ pub fn setup_blockprod_test(
     .expect("P2p initialization was successful")
     .add_to_manager("p2p", &mut manager);
 
-    (manager, chain_config, chainstate, mempool, p2p)
+    (manager, chainstate, mempool, p2p)
 }
 
 pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> BlockTimestamp {
