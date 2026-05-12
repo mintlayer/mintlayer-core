@@ -105,19 +105,17 @@ async fn initial_block_download() {
                 .with_chainstate(mock_chainstate)
                 .build();
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::FillSpaceFromMempool,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::ChainstateWaitForSync) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(err, BlockProductionError::ChainstateWaitForSync);
         }
     });
 
@@ -147,19 +145,20 @@ async fn below_peer_count() {
                 .with_blockprod_config(blockprod_config)
                 .build();
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::PeerCountBelowRequiredThreshold(0, 100)) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(
+                err,
+                BlockProductionError::PeerCountBelowRequiredThreshold(0, 100)
+            );
         }
     });
 
@@ -213,12 +212,12 @@ async fn pull_best_block_index_error() {
                 )
                 .await;
 
-            match result {
+            assert_matches!(
+                result,
                 Err(BlockProductionError::ChainstateError(
                     consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
-                )) => {}
-                _ => panic!("Unexpected return value"),
-            }
+                ))
+            );
         }
     });
 
@@ -251,21 +250,20 @@ async fn add_job_error() {
 
             block_production.set_job_manager(mock_job_manager);
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::JobManagerError(
-                    JobManagerError::FailedToSendNewJobEvent,
-                )) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(
+                err,
+                BlockProductionError::JobManagerError(JobManagerError::FailedToSendNewJobEvent,)
+            );
         }
     });
 
@@ -487,11 +485,12 @@ async fn try_again_later(#[case] seed: Seed) {
                 vec![pos_setup.create_genesis_pool_utxo],
             )));
 
-            let result = block_production
+            let err = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
-                .await;
+                .await
+                .unwrap_err();
 
-            assert_matches!(result, Err(BlockProductionError::TryAgainLater));
+            assert_eq!(err, BlockProductionError::TryAgainLater);
 
             assert_job_count(&block_production, 0).await;
         }
@@ -603,12 +602,12 @@ async fn transaction_source_mempool_error() {
                 )
                 .await;
 
-            match result {
+            assert_matches!(
+                result,
                 Err(BlockProductionError::MempoolBlockConstruction(
                     BlockConstructionError::Validity(TxValidationError::SubsystemCallError(_)),
-                )) => {}
-                _ => panic!("Unexpected return value: {result:?}"),
-            }
+                ))
+            );
         }
     });
 
@@ -746,7 +745,7 @@ async fn cancel_received(#[case] seed: Seed) {
 
             block_production.set_job_manager(mock_job_manager);
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                         Destination::AnyoneCanSpend,
@@ -755,12 +754,10 @@ async fn cancel_received(#[case] seed: Seed) {
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::Cancelled) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(err, BlockProductionError::Cancelled);
         }
     });
 
@@ -1048,43 +1045,45 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                     RequiredConsensus::PoS(_) => {
                         // Try no input data for PoS consensus
 
-                        let input_data_none_result = block_production
+                        let input_data_none_err = block_production
                             .produce_block(
                                 GenerateBlockInputData::None,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_none_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_none_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::StakingError(
                                     ConsensusPoSError::NoInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoW input data for PoS consensus
 
-                        let input_data_pow_result = block_production
+                        let input_data_pow_err = block_production
                             .produce_block(
                                 input_data_pow,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_pow_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_pow_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::StakingError(
                                     ConsensusPoSError::PoWInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoS input data for PoS consensus
 
@@ -1117,43 +1116,45 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                     RequiredConsensus::PoW(_) => {
                         // Try no input data for PoW consensus
 
-                        let input_data_none_result = block_production
+                        let input_data_none_err = block_production
                             .produce_block(
                                 GenerateBlockInputData::None,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_none_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_none_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::MiningError(
                                     ConsensusPoWError::NoInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoS input data for PoW consensus
 
-                        let input_data_pos_result = block_production
+                        let input_data_pos_err = block_production
                             .produce_block(
                                 input_data_pos,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_pos_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_pos_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::MiningError(
                                     ConsensusPoWError::PoSInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoW input data for PoW consensus
 

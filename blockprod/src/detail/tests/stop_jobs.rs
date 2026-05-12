@@ -19,7 +19,10 @@ use rstest::rstest;
 
 use common::{chain::config::create_unit_test_config, time_getter::TimeGetter};
 use randomness::RngExt as _;
-use test_utils::random::{Seed, make_seedable_rng};
+use test_utils::{
+    assert_matches,
+    random::{Seed, make_seedable_rng},
+};
 
 use crate::{
     BlockProductionError, JobKey,
@@ -52,10 +55,7 @@ mod stop_all_jobs {
 
         let result = block_production.stop_all_jobs().await;
 
-        match result {
-            Err(BlockProductionError::JobManagerError(_)) => {}
-            _ => panic!("Unexpected return value"),
-        }
+        assert_matches!(result, Err(BlockProductionError::JobManagerError(_)));
     }
 
     #[rstest]
@@ -148,10 +148,7 @@ mod stop_job {
 
         let result = block_production.stop_job(job_key).await;
 
-        match result {
-            Err(BlockProductionError::JobManagerError(_)) => {}
-            _ => panic!("Unexpected return value"),
-        }
+        assert_matches!(result, Err(BlockProductionError::JobManagerError(_)));
     }
 
     #[rstest]

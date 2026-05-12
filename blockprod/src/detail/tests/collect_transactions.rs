@@ -26,6 +26,7 @@ use mempool::{
 };
 use mocks::MockMempoolInterface;
 use subsystem::error::ResponseError;
+use test_utils::assert_matches;
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
@@ -67,12 +68,12 @@ async fn collect_txs_failed() {
         )
         .await;
 
-        match transactions {
+        assert_matches!(
+            transactions,
             Err(BlockProductionError::MempoolBlockConstruction(
                 BlockConstructionError::Validity(TxValidationError::SubsystemCallError(_)),
-            )) => {}
-            _ => panic!("Expected collect_tx() to fail"),
-        };
+            ))
+        );
 
         shutdown.initiate();
     });
