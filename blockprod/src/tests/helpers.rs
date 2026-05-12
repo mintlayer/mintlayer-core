@@ -50,6 +50,83 @@ use randomness::{CryptoRng, Rng, RngExt as _};
 use storage_inmemory::InMemory;
 use subsystem::Manager;
 
+use crate::{
+    config::BlockProdConfig, detail::BlockProduction, prepare_thread_pool, test_blockprod_config,
+};
+
+pub struct BlockProdTestSetup {
+    pub chain_config: Arc<ChainConfig>,
+    pub time_getter: TimeGetter,
+    pub chainstate: ChainstateHandle,
+    pub mempool: MempoolHandle,
+    pub p2p: P2pHandle,
+}
+
+impl BlockProdTestSetup {
+    pub async fn assert_process_block(&self, new_block: Block) -> BlockIndex {
+        assert_process_block(&self.chainstate, &self.mempool, new_block).await
+    }
+}
+
+impl BlockProdTestSetup {
+    pub fn make_blockprod_builder(&self) -> TestBlockProdBuilder<'_> {
+        TestBlockProdBuilder {
+            blockprod_setup: self,
+            blockprod_config: None,
+            chainstate: None,
+            mempool: None,
+        }
+    }
+}
+
+pub struct PosTestSetup {
+    pub chain_config: Arc<ChainConfig>,
+    pub genesis_stake_private_key: PrivateKey,
+    pub genesis_vrf_private_key: VRFPrivateKey,
+    pub create_genesis_pool_utxo: TxOutput,
+}
+
+pub struct TestBlockProdBuilder<'a> {
+    blockprod_setup: &'a BlockProdTestSetup,
+    blockprod_config: Option<BlockProdConfig>,
+    chainstate: Option<ChainstateHandle>,
+    mempool: Option<MempoolHandle>,
+}
+
+impl<'a> TestBlockProdBuilder<'a> {
+    pub fn with_blockprod_config(mut self, blockprod_config: BlockProdConfig) -> Self {
+        self.blockprod_config = Some(blockprod_config);
+        self
+    }
+
+    pub fn with_chainstate(mut self, chainstate: ChainstateHandle) -> Self {
+        self.chainstate = Some(chainstate);
+        self
+    }
+
+    pub fn with_mempool(mut self, mempool: MempoolHandle) -> Self {
+        self.mempool = Some(mempool);
+        self
+    }
+
+    pub fn build(self) -> BlockProduction {
+        let blockprod_config = self.blockprod_config.unwrap_or_else(test_blockprod_config);
+        let chainstate = self.chainstate.unwrap_or_else(|| self.blockprod_setup.chainstate.clone());
+        let mempool = self.mempool.unwrap_or_else(|| self.blockprod_setup.mempool.clone());
+
+        BlockProduction::new(
+            Arc::clone(&self.blockprod_setup.chain_config),
+            Arc::new(blockprod_config),
+            chainstate,
+            mempool,
+            self.blockprod_setup.p2p.clone(),
+            self.blockprod_setup.time_getter.clone(),
+            prepare_thread_pool(1),
+        )
+        .unwrap()
+    }
+}
+
 pub async fn assert_process_block(
     chainstate: &ChainstateHandle,
     mempool: &MempoolHandle,
@@ -113,7 +190,7 @@ pub async fn assert_process_block(
 pub fn setup_blockprod_test(
     chain_config: Arc<ChainConfig>,
     time_getter: TimeGetter,
-) -> (Manager, ChainstateHandle, MempoolHandle, P2pHandle) {
+) -> (BlockProdTestSetup, Manager) {
     let manager_config =
         subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
     let mut manager = Manager::new_with_config(manager_config);
@@ -164,14 +241,23 @@ pub fn setup_blockprod_test(
         Arc::new(p2p_config),
         subsystem::Handle::clone(&chainstate),
         mempool.clone(),
-        time_getter,
+        time_getter.clone(),
         MonotonicTimeGetter::default(),
         PeerDbStorageImpl::new(InMemory::new()).unwrap(),
     )
     .expect("P2p initialization was successful")
     .add_to_manager("p2p", &mut manager);
 
-    (manager, chainstate, mempool, p2p)
+    (
+        BlockProdTestSetup {
+            chain_config,
+            time_getter,
+            chainstate,
+            mempool,
+            p2p,
+        },
+        manager,
+    )
 }
 
 pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> BlockTimestamp {
@@ -271,7 +357,7 @@ pub fn setup_pos(
     extra_genesis_txs: &[TxOutput],
     chain_config_builder: Option<chain::config::Builder>,
     rng: &mut impl CryptoRng,
-) -> (Arc<ChainConfig>, PrivateKey, VRFPrivateKey, TxOutput) {
+) -> PosTestSetup {
     let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
     setup_pos_with_genesis_timestamp(
         genesis_timestamp,
@@ -288,10 +374,10 @@ pub fn setup_pos_with_genesis_timestamp(
     extra_genesis_txs: &[TxOutput],
     chain_config_builder: Option<chain::config::Builder>,
     rng: &mut impl CryptoRng,
-) -> (Arc<ChainConfig>, PrivateKey, VRFPrivateKey, TxOutput) {
+) -> PosTestSetup {
     let initial_target = pos_initial_difficulty(ChainType::Regtest);
 
-    let (genesis, genesis_stake_private_key, genesis_vrf_private_key, create_genesis_pool_txoutput) =
+    let (genesis, genesis_stake_private_key, genesis_vrf_private_key, create_genesis_pool_utxo) =
         create_genesis_for_pos_tests(genesis_timestamp, extra_genesis_txs, rng);
 
     let net_upgrades = NetUpgrades::initialize(vec![
@@ -312,12 +398,12 @@ pub fn setup_pos_with_genesis_timestamp(
         .consensus_upgrades(net_upgrades);
     let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
 
-    (
+    PosTestSetup {
         chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    )
+        create_genesis_pool_utxo,
+    }
 }
 
 pub fn build_chain_config_for_pos(builder: chain::config::Builder) -> ChainConfig {

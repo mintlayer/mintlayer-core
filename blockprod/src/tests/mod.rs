@@ -25,16 +25,16 @@ use crate::{make_blockproduction, test_blockprod_config, tests::helpers::setup_b
 async fn test_make_blockproduction() {
     let time_getter = TimeGetter::default();
     let chain_config = Arc::new(create_unit_test_config());
-    let (mut manager, chainstate, mempool, p2p) =
-        setup_blockprod_test(Arc::clone(&chain_config), time_getter.clone());
+    let (blockprod_setup, mut manager) =
+        setup_blockprod_test(Arc::clone(&chain_config), time_getter);
 
     let blockprod = make_blockproduction(
-        Arc::clone(&chain_config),
+        Arc::clone(&blockprod_setup.chain_config),
         Arc::new(test_blockprod_config()),
-        chainstate.clone(),
-        mempool.clone(),
-        p2p.clone(),
-        time_getter,
+        blockprod_setup.chainstate.clone(),
+        blockprod_setup.mempool.clone(),
+        blockprod_setup.p2p.clone(),
+        blockprod_setup.time_getter,
     )
     .expect("Error initializing blockprod");
 

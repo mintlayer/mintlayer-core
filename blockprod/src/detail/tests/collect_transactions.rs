@@ -40,7 +40,7 @@ const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_txs_failed() {
     let chain_config = Arc::new(create_unit_test_config());
-    let (mut manager, _chainstate, _mempool, _p2p) =
+    let (_blockprod_setup, mut manager) =
         setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut mock_mempool = MockMempoolInterface::default();
@@ -83,7 +83,7 @@ async fn collect_txs_failed() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn subsystem_error() {
     let chain_config = Arc::new(create_unit_test_config());
-    let (mut manager, _chainstate, _mempool, _p2p) =
+    let (_blockprod_setup, mut manager) =
         setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mock_mempool = MockMempoolInterface::default();
@@ -128,7 +128,7 @@ async fn subsystem_error() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn succeeded() {
     let chain_config = Arc::new(create_unit_test_config());
-    let (mut manager, _chainstate, _mempool, _p2p) =
+    let (_blockprod_setup, mut manager) =
         setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
     let mut mock_mempool = MockMempoolInterface::default();

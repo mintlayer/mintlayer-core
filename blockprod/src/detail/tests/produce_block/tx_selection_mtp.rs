@@ -43,12 +43,8 @@ use test_utils::{
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    BlockProduction,
     detail::{GenerateBlockInputData, tests::produce_block::assert_job_count},
-    prepare_thread_pool, test_blockprod_config,
-    tests::helpers::{
-        assert_process_block, make_genesis_timestamp, setup_blockprod_test, setup_pos,
-    },
+    tests::helpers::{make_genesis_timestamp, setup_blockprod_test, setup_pos},
 };
 
 // The height at which the transaction_selection_mtp_xxx tests will create their test block.
@@ -80,7 +76,7 @@ async fn transaction_selection_mtp_test_impl(
     time_getter: TimeGetter,
     genesis_premint_output_index: u32,
 ) {
-    let (manager, chainstate, mempool, p2p) =
+    let (blockprod_setup, manager) =
         setup_blockprod_test(Arc::clone(&chain_config), time_getter.clone());
 
     let genesis_timestamp = chain_config.genesis_block().timestamp();
@@ -94,16 +90,7 @@ async fn transaction_selection_mtp_test_impl(
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config.clone(),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .unwrap();
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             for i in 1..TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT {
                 let (new_block, job_finished_receiver) = block_production
@@ -122,10 +109,11 @@ async fn transaction_selection_mtp_test_impl(
                 assert_eq!(new_block.timestamp(), expected_timestamp);
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, &mempool, new_block).await;
+                blockprod_setup.assert_process_block(new_block).await;
             }
 
-            let median_time_past = chainstate
+            let median_time_past = blockprod_setup
+                .chainstate
                 .call(|cs| cs.calculate_median_time_past(&cs.get_best_block_id().unwrap()))
                 .await
                 .unwrap()
@@ -181,7 +169,8 @@ async fn transaction_selection_mtp_test_impl(
                 txs
             };
 
-            mempool
+            blockprod_setup
+                .mempool
                 .call_mut({
                     let dependent_txs = dependent_txs.clone();
                     |mp| {
@@ -220,7 +209,7 @@ async fn transaction_selection_mtp_test_impl(
 
             assert_job_count(&block_production, 0).await;
             // First ensure that the produced block is actually correct.
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
 
             // Now check the transaction ids.
             let expected_tx_ids = dependent_txs[..=timestamp_offsets_count as usize]
@@ -249,12 +238,7 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
         Destination::AnyoneCanSpend,
     )];
 
-    let (
-        chain_config,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos(
+    let pos_setup = setup_pos(
         &time_getter,
         BlockHeight::new(TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT as u64),
         &extra_genesis_txs,
@@ -263,17 +247,17 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
     );
 
     let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
+        pos_setup.genesis_stake_private_key,
+        pos_setup.genesis_vrf_private_key,
         PoolId::new(H256::zero()),
         vec![TxInput::from_utxo(
-            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+            OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
             0,
         )],
-        vec![create_genesis_pool_txoutput],
+        vec![pos_setup.create_genesis_pool_utxo],
     )));
 
-    transaction_selection_mtp_test_impl(chain_config, input_data, time_getter, 1).await;
+    transaction_selection_mtp_test_impl(pos_setup.chain_config, input_data, time_getter, 1).await;
 }
 
 #[rstest]

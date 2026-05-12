@@ -22,12 +22,11 @@ use randomness::RngExt as _;
 use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{
-    BlockProduction, BlockProductionError, JobKey,
+    BlockProductionError, JobKey,
     detail::{
         CustomId,
         job_manager::{JobManagerError, tests::MockJobManager},
     },
-    prepare_thread_pool, test_blockprod_config,
     tests::helpers::setup_blockprod_test,
 };
 
@@ -37,19 +36,10 @@ mod stop_all_jobs {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error() {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate.clone(),
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
 
@@ -74,21 +64,12 @@ mod stop_all_jobs {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
@@ -117,19 +98,10 @@ mod stop_all_jobs {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate.clone(),
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
         let return_value = make_seedable_rng(seed).random_range(0..=usize::MAX);
@@ -157,19 +129,10 @@ mod stop_job {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate.clone(),
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
 
@@ -197,21 +160,12 @@ mod stop_job {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn existing_job_ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
@@ -240,21 +194,12 @@ mod stop_job {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let mut job_keys = Vec::new();
         let jobs_to_create = rng.random_range(1..=20);
@@ -298,21 +243,12 @@ mod stop_job {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn non_existent_job_ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
@@ -336,19 +272,10 @@ mod stop_job {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
-        let (_manager, chainstate, mempool, p2p) =
+        let (blockprod_setup, _manager) =
             setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate.clone(),
-            mempool,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
+        let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
         let mut mock_job_manager = Box::<MockJobManager>::default();
 
