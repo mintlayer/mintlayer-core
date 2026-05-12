@@ -17,7 +17,7 @@
 
 pub use config::MempoolMaxSize;
 pub use interface::{MempoolInit, MempoolInterface};
-pub use mempool_types::{tx_options, tx_origin, TransactionDuplicateStatus, TxOptions, TxStatus};
+pub use mempool_types::{TransactionDuplicateStatus, TxOptions, TxStatus, tx_options, tx_origin};
 
 mod config;
 pub mod error;

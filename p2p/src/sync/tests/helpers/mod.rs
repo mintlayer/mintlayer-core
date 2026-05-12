@@ -26,48 +26,48 @@ use tokio::{
 };
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
-    ChainstateHandle, DefaultTransactionVerificationStrategy, Locator,
+    BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
+    Locator, chainstate_interface::ChainstateInterface, make_chainstate,
 };
 use common::{
     chain::{
+        Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
+        TxOutput,
         block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
-            ConsensusData,
+            BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp,
         },
         config::create_unit_test_config,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
-        TxOutput,
     },
-    primitives::{Amount, BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, H256, Id, Idable},
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{
+    MempoolConfig, MempoolHandle, MempoolInit, TxOptions,
     event::TransactionProcessedEvent,
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    MempoolConfig, MempoolHandle, MempoolInit, TxOptions,
 };
 use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
-use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
+use p2p_test_utils::{SHORT_TIMEOUT, expect_future_val, expect_no_recv, expect_recv};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{Rng, RngExt as _};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, random::Seed};
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
-    message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
-    net::types::SyncingEvent,
-    protocol::{choose_common_protocol_version, ProtocolVersion},
-    sync::{subscribe_to_new_tip, subscribe_to_tx_processed, Observer, SyncManager},
-    test_helpers::test_p2p_config,
-    types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
     Result, SyncingEventReceiver,
+    message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
+    net::types::SyncingEvent,
+    protocol::{ProtocolVersion, choose_common_protocol_version},
+    sync::{Observer, SyncManager, subscribe_to_new_tip, subscribe_to_tx_processed},
+    test_helpers::test_p2p_config,
+    types::peer_id::PeerId,
 };
 
 pub mod test_node_group;

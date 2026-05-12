@@ -26,13 +26,13 @@ use mempool_types::TransactionDuplicateStatus;
 use utils::{const_value::ConstValue, debug_panic_or_log, tap_log::TapLog};
 
 use crate::{
+    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     config::MempoolConfig,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;

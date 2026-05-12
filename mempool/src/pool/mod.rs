@@ -35,8 +35,8 @@ use crate::{
         TxValidationError,
     },
     event::{
-        make_local_duplicate_tx_event, make_new_tx_accepted_event, make_tx_rejected_event,
-        MempoolEvent, NewTipEvent,
+        MempoolEvent, NewTipEvent, make_local_duplicate_tx_event, make_new_tx_accepted_event,
+        make_tx_rejected_event,
     },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},

@@ -15,52 +15,51 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use chainstate::{ban_score::BanScore, BlockSource};
+use chainstate::{BlockSource, ban_score::BanScore};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
     helpers::{make_simple_coin_tx, split_utxo},
-    TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        Block, GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         config::create_unit_test_config,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        Block, GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
 use logging::log;
 use mempool::{
+    FeeRate, MempoolConfig,
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
-    FeeRate, MempoolConfig,
 };
 use randomness::{CryptoRng, IndexedRandom as _, RngExt as _, SliceRandom};
 use serialization::Encode;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 use utils::exp_rand::EXPONENTIAL_RAND_UPPER_LIMIT;
 
 use crate::{
+    P2pConfig, P2pError,
     config::NodeType,
     error::ProtocolError,
     message::{TransactionResponse, TransactionSyncMessage},
     protocol::ProtocolConfig,
     sync::{
+        UNCONFIRMED_TX_REQUEUE_MAX_DELAY,
         peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
         peer::transaction_manager::TX_RELAY_DELAY_INTERVAL_OUTBOUND,
         tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
-        UNCONFIRMED_TX_REQUEUE_MAX_DELAY,
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pConfig, P2pError,
 };
 
 #[tracing::instrument(skip(seed))]

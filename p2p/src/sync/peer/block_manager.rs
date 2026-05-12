@@ -51,7 +51,6 @@ use crate::{
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
-        LocalEvent,
         chainstate_handle::ChainstateHandle,
         peer_activity::PeerActivity,
         peer_common::{

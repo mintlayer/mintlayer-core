@@ -20,8 +20,6 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-use networking::types::ConnectionDirection;
-use randomness::make_pseudo_rng;
 use common::{
     chain::Transaction,
     primitives::{Id, Idable},
@@ -457,7 +455,9 @@ where
             // in such a situation. Note that after certain time, older requests will be purged
             // from requested_transactions, after which we'll start to handle peer's tx
             // announcements again.
-            log::warn!("Ignoring announcement for tx {tx:x} because requested_transactions is over the limit");
+            log::warn!(
+                "Ignoring announcement for tx {tx:x} because requested_transactions is over the limit"
+            );
             return Ok(());
         }
 

@@ -30,7 +30,7 @@ use std::{
 use dyn_clone::DynClone;
 use futures::never::Never;
 use networking::types::ConnectionDirection;
-use randomness::{make_pseudo_rng, RngExt as _};
+use randomness::{RngExt as _, make_pseudo_rng};
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinSet,
@@ -39,15 +39,15 @@ use tokio::{
 use tracing::Instrument;
 
 use common::{
-    chain::{config::ChainConfig, GenBlock, Transaction},
+    chain::{GenBlock, Transaction, config::ChainConfig},
     primitives::Id,
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{
+    MempoolHandle,
     event::{MempoolEvent, TransactionProcessedEvent},
     tx_origin::TxOrigin,
-    MempoolHandle,
 };
 use utils::{
     debug_panic_or_log, sender_with_id::MpscUnboundedSenderWithId, sync::Arc, tap_log::TapLog,
@@ -55,12 +55,13 @@ use utils::{
 };
 
 use crate::{
+    PeerManagerEvent, Result,
     config::P2pConfig,
     error::P2pError,
     message::{BlockSyncMessage, TransactionSyncMessage},
     net::{
-        types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
+        types::{SyncingEvent, services::Services},
     },
     protocol::SupportedProtocolVersion,
     sync::peer::{
@@ -70,7 +71,6 @@ use crate::{
         },
     },
     types::peer_id::PeerId,
-    PeerManagerEvent, Result,
 };
 
 use self::chainstate_handle::ChainstateHandle;
@@ -400,7 +400,7 @@ where
 
         match tx_proc_event.result() {
             Ok(duplicate_status) => {
-                use mempool::{tx_options::TxRelayPolicy, TransactionDuplicateStatus};
+                use mempool::{TransactionDuplicateStatus, tx_options::TxRelayPolicy};
                 match tx_proc_event.relay_policy() {
                     TxRelayPolicy::DoRelay => {
                         let (need_relay, status_str) = match duplicate_status {

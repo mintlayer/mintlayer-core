@@ -29,7 +29,7 @@ impl<Id: Clone, T> MpscUnboundedSenderWithId<Id, T> {
     pub fn send(&self, message: T) -> Result<(), mpsc::error::SendError<T>> {
         self.sender
             .send((self.id.clone(), message))
-            .map_err(|err| mpsc::error::SendError(err.0 .1))
+            .map_err(|err| mpsc::error::SendError(err.0.1))
     }
 
     pub async fn closed(&self) {
