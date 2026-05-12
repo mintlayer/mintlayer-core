@@ -69,8 +69,8 @@ use crate::{
     },
     test_blockprod_config,
     tests::helpers::{
-        BlockprodTestSetupBuilder, make_chain_config_builder, make_genesis_timestamp, setup_pos,
-        setup_pos_with_genesis_timestamp,
+        BlockprodTestSetupBuilder, PoSTestSetupBuilder, make_chain_config_builder,
+        make_genesis_timestamp,
     },
 };
 
@@ -270,13 +270,8 @@ async fn add_job_error() {
 async fn overflow_tip_plus_one(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let pos_setup = setup_pos_with_genesis_timestamp(
-        BlockTimestamp::from_int_seconds(u64::MAX),
-        BlockHeight::new(1),
-        &[],
-        None,
-        &mut rng,
-    );
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(BlockTimestamp::from_int_seconds(u64::MAX), &mut rng);
 
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&pos_setup.chain_config))
@@ -292,17 +287,7 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
             });
 
             let block_production = blockprod_setup.make_blockprod_builder().build();
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                pos_setup.genesis_stake_private_key,
-                pos_setup.genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![pos_setup.create_genesis_pool_utxo],
-            )));
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let result = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
@@ -325,13 +310,11 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
 async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let pos_setup = setup_pos(
-        &time_getter,
-        BlockHeight::new(1),
-        &[],
-        Some(make_chain_config_builder().max_future_block_time_offset(Some(Duration::MAX))),
-        &mut rng,
-    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_chain_config_builder(
+            make_chain_config_builder().max_future_block_time_offset(Some(Duration::MAX)),
+        )
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&pos_setup.chain_config))
@@ -347,17 +330,7 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
             });
 
             let block_production = blockprod_setup.make_blockprod_builder().build();
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                pos_setup.genesis_stake_private_key,
-                pos_setup.genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![pos_setup.create_genesis_pool_utxo],
-            )));
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let result = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
@@ -380,7 +353,8 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
 async fn update_last_used_block_timestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let pos_setup = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&pos_setup.chain_config))
@@ -396,17 +370,7 @@ async fn update_last_used_block_timestamp(#[case] seed: Seed) {
             });
 
             let block_production = blockprod_setup.make_blockprod_builder().build();
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                pos_setup.genesis_stake_private_key,
-                pos_setup.genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![pos_setup.create_genesis_pool_utxo],
-            )));
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let _ = block_production
                 .job_manager_handle
@@ -440,13 +404,8 @@ async fn try_again_later(#[case] seed: Seed) {
     let default_time_getter = TimeGetter::default();
     let genesis_time = default_time_getter.get_time();
 
-    let pos_setup = setup_pos_with_genesis_timestamp(
-        BlockTimestamp::from_time(genesis_time),
-        BlockHeight::new(1),
-        &[],
-        None,
-        &mut rng,
-    );
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(BlockTimestamp::from_time(genesis_time), &mut rng);
 
     let time_getter = {
         let cur_time_secs = genesis_time
@@ -472,17 +431,7 @@ async fn try_again_later(#[case] seed: Seed) {
             });
 
             let block_production = blockprod_setup.make_blockprod_builder().build();
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                pos_setup.genesis_stake_private_key,
-                pos_setup.genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![pos_setup.create_genesis_pool_utxo],
-            )));
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let err = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
@@ -850,7 +799,8 @@ async fn solved_pow_consensus() {
 async fn solved_pos_consensus(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let pos_setup = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&pos_setup.chain_config))
@@ -866,25 +816,10 @@ async fn solved_pos_consensus(#[case] seed: Seed) {
             });
 
             let block_production = blockprod_setup.make_blockprod_builder().build();
-
-            let input_data = Box::new(PoSGenerateBlockInputData::new(
-                pos_setup.genesis_stake_private_key,
-                pos_setup.genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![pos_setup.create_genesis_pool_utxo],
-            ));
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let (new_block, job_finished_receiver) = block_production
-                .produce_block(
-                    GenerateBlockInputData::PoS(input_data),
-                    vec![],
-                    vec![],
-                    PackingStrategy::LeaveEmptySpace,
-                )
+                .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                 .await
                 .unwrap();
 

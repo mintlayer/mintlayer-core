@@ -23,7 +23,7 @@ use common::{
     Uint256,
     chain::{
         ChainConfig, CoinUnit, ConsensusUpgrade, Destination, Genesis, NetUpgrades,
-        OutPointSourceId, PoolId, TxOutput,
+        OutPointSourceId, TxOutput,
         block::timestamp::BlockTimestamp,
         config::{Builder, ChainType},
         output_value::OutputValue,
@@ -31,10 +31,10 @@ use common::{
         timelock::OutputTimeLock,
         transaction::TxInput,
     },
-    primitives::{Amount, BlockHeight, H256, Idable},
+    primitives::{Amount, BlockHeight, Idable},
     time_getter::TimeGetter,
 };
-use consensus::{PoSGenerateBlockInputData, PoWGenerateBlockInputData};
+use consensus::PoWGenerateBlockInputData;
 use mempool::{TxOptions, tx_accumulator::PackingStrategy, tx_origin::LocalTxOrigin};
 use test_utils::{
     BasicTestTimeGetter,
@@ -44,7 +44,7 @@ use utils::once_destructor::OnceDestructor;
 
 use crate::{
     detail::{GenerateBlockInputData, tests::produce_block::assert_job_count},
-    tests::helpers::{BlockprodTestSetupBuilder, make_genesis_timestamp, setup_pos},
+    tests::helpers::{BlockprodTestSetupBuilder, PoSTestSetupBuilder, make_genesis_timestamp},
 };
 
 // The height at which the transaction_selection_mtp_xxx tests will create their test block.
@@ -235,29 +235,19 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
-    let extra_genesis_txs = [TxOutput::Transfer(
+    let extra_genesis_txos = vec![TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
         Destination::AnyoneCanSpend,
     )];
 
-    let pos_setup = setup_pos(
-        &time_getter,
-        BlockHeight::new(TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT as u64),
-        &extra_genesis_txs,
-        None,
-        &mut rng,
-    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_extra_genesis_txos(extra_genesis_txos)
+        .with_pos_switch_height(BlockHeight::new(
+            TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT as u64,
+        ))
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
-    let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-        pos_setup.genesis_stake_private_key,
-        pos_setup.genesis_vrf_private_key,
-        PoolId::new(H256::zero()),
-        vec![TxInput::from_utxo(
-            OutPointSourceId::BlockReward(pos_setup.chain_config.genesis_block_id()),
-            0,
-        )],
-        vec![pos_setup.create_genesis_pool_utxo],
-    )));
+    let input_data = pos_setup.make_first_pos_block_input_data();
 
     transaction_selection_mtp_test_impl(pos_setup.chain_config, input_data, time_getter, 1).await;
 }

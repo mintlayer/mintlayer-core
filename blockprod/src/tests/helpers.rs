@@ -27,8 +27,8 @@ use chainstate_storage::inmemory::Store;
 use common::{
     Uint256, Uint512,
     chain::{
-        self, Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-        TxOutput,
+        self, Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId,
+        PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
         block::timestamp::BlockTimestamp,
         config::{ChainConfig, ChainType, create_unit_test_config},
         pos_initial_difficulty,
@@ -37,7 +37,10 @@ use common::{
     primitives::{Amount, BlockHeight, H256, Idable, per_thousand::PerThousand},
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
-use consensus::{calculate_effective_pool_balance, compact_target_to_target};
+use consensus::{
+    GenerateBlockInputData, PoSGenerateBlockInputData, calculate_effective_pool_balance,
+    compact_target_to_target,
+};
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
@@ -84,113 +87,7 @@ impl BlockprodTestSetup {
     }
 }
 
-pub struct PosTestSetup {
-    pub chain_config: Arc<ChainConfig>,
-    pub genesis_stake_private_key: PrivateKey,
-    pub genesis_vrf_private_key: VRFPrivateKey,
-    pub create_genesis_pool_utxo: TxOutput,
-}
-
-/// A builder that produces `BlockProduction` from `BlockprodTestSetup` with some optional overrides.
-pub struct TestBlockProdBuilder<'a> {
-    test_setup: &'a BlockprodTestSetup,
-    blockprod_config: Option<BlockProdConfig>,
-    chainstate: Option<ChainstateHandle>,
-    mempool: Option<MempoolHandle>,
-}
-
-impl<'a> TestBlockProdBuilder<'a> {
-    pub fn with_blockprod_config(mut self, blockprod_config: BlockProdConfig) -> Self {
-        self.blockprod_config = Some(blockprod_config);
-        self
-    }
-
-    pub fn with_chainstate(mut self, chainstate: ChainstateHandle) -> Self {
-        self.chainstate = Some(chainstate);
-        self
-    }
-
-    pub fn with_mempool(mut self, mempool: MempoolHandle) -> Self {
-        self.mempool = Some(mempool);
-        self
-    }
-
-    pub fn build(self) -> BlockProduction {
-        let blockprod_config = self.blockprod_config.unwrap_or_else(test_blockprod_config);
-        let chainstate = self.chainstate.unwrap_or_else(|| self.test_setup.chainstate.clone());
-        let mempool = self.mempool.unwrap_or_else(|| self.test_setup.mempool.clone());
-
-        BlockProduction::new(
-            Arc::clone(&self.test_setup.chain_config),
-            Arc::new(blockprod_config),
-            chainstate,
-            mempool,
-            self.test_setup.p2p.clone(),
-            self.test_setup.time_getter.clone(),
-            prepare_thread_pool(1),
-        )
-        .unwrap()
-    }
-}
-
-pub async fn assert_process_block(
-    chainstate: &ChainstateHandle,
-    mempool: &MempoolHandle,
-    new_block: Block,
-) -> BlockIndex {
-    let block_id = new_block.get_id();
-
-    // Wait for mempool to be up-to-date with the new block. The subscriptions are not cleaned
-    // up but hopefully it's not too bad just for testing.
-    let (tip_sx, tip_rx) = tokio::sync::oneshot::channel();
-    let tip_sx = utils::sync::Mutex::new(Some(tip_sx));
-    mempool
-        .call_mut(move |m| {
-            m.subscribe_to_subsystem_events(Arc::new({
-                move |evt| match evt {
-                    mempool::event::MempoolEvent::NewTip(tip) => {
-                        if let Some(tip_sx) = tip_sx.lock().unwrap().take() {
-                            assert_eq!(tip.block_id(), &block_id);
-                            tip_sx.send(()).unwrap();
-                        }
-                    }
-                    mempool::event::MempoolEvent::TransactionProcessed(_) => (),
-                }
-            }))
-        })
-        .await
-        .unwrap();
-
-    let block_index = chainstate
-        .call_mut(move |this| {
-            let new_block_index =
-                this.process_block(new_block.clone(), BlockSource::Local).unwrap().unwrap();
-
-            assert_eq!(
-                new_block.header().header().block_id(),
-                *new_block_index.block_id(),
-                "The new block's Id is different to the new block index's block Id",
-            );
-
-            let best_block_index = this.get_best_block_index().unwrap();
-
-            assert_eq!(
-                new_block_index.clone().into_gen_block_index().block_id(),
-                best_block_index.block_id(),
-                "The new block index not the best block index"
-            );
-
-            new_block_index
-        })
-        .await
-        .unwrap();
-
-    tip_rx.await.unwrap();
-
-    block_index
-}
-
-/// A builder that produces `BlockprodTestSetup`.
+/// A builder that produces `BlockprodTestSetup` and the subsystem manager.
 pub struct BlockprodTestSetupBuilder {
     chain_config: Option<Arc<ChainConfig>>,
     time_getter: Option<TimeGetter>,
@@ -288,6 +185,200 @@ impl BlockprodTestSetupBuilder {
     }
 }
 
+/// A builder that produces `BlockProduction` from `BlockprodTestSetup` with some optional overrides.
+pub struct TestBlockProdBuilder<'a> {
+    test_setup: &'a BlockprodTestSetup,
+    blockprod_config: Option<BlockProdConfig>,
+    chainstate: Option<ChainstateHandle>,
+    mempool: Option<MempoolHandle>,
+}
+
+impl<'a> TestBlockProdBuilder<'a> {
+    pub fn with_blockprod_config(mut self, blockprod_config: BlockProdConfig) -> Self {
+        self.blockprod_config = Some(blockprod_config);
+        self
+    }
+
+    pub fn with_chainstate(mut self, chainstate: ChainstateHandle) -> Self {
+        self.chainstate = Some(chainstate);
+        self
+    }
+
+    pub fn with_mempool(mut self, mempool: MempoolHandle) -> Self {
+        self.mempool = Some(mempool);
+        self
+    }
+
+    pub fn build(self) -> BlockProduction {
+        let blockprod_config = self.blockprod_config.unwrap_or_else(test_blockprod_config);
+        let chainstate = self.chainstate.unwrap_or_else(|| self.test_setup.chainstate.clone());
+        let mempool = self.mempool.unwrap_or_else(|| self.test_setup.mempool.clone());
+
+        BlockProduction::new(
+            Arc::clone(&self.test_setup.chain_config),
+            Arc::new(blockprod_config),
+            chainstate,
+            mempool,
+            self.test_setup.p2p.clone(),
+            self.test_setup.time_getter.clone(),
+            prepare_thread_pool(1),
+        )
+        .unwrap()
+    }
+}
+
+/// A bunch of data specific to PoS tests.
+pub struct PoSTestSetup {
+    pub chain_config: Arc<ChainConfig>,
+    pub genesis_stake_private_key: PrivateKey,
+    pub genesis_vrf_private_key: VRFPrivateKey,
+    pub create_genesis_pool_utxo: TxOutput,
+}
+
+impl PoSTestSetup {
+    pub fn make_first_pos_block_input_data(&self) -> GenerateBlockInputData {
+        GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+            self.genesis_stake_private_key.clone(),
+            self.genesis_vrf_private_key.clone(),
+            PoolId::new(H256::zero()),
+            vec![TxInput::from_utxo(
+                OutPointSourceId::BlockReward(self.chain_config.genesis_block_id()),
+                0,
+            )],
+            vec![self.create_genesis_pool_utxo.clone()],
+        )))
+    }
+}
+
+/// A builder that produces `PoSTestSetup`.
+pub struct PoSTestSetupBuilder {
+    chain_config_builder: Option<chain::config::Builder>,
+    extra_genesis_txos: Vec<TxOutput>,
+    pos_switch_height: BlockHeight,
+}
+
+impl PoSTestSetupBuilder {
+    pub fn new() -> Self {
+        Self {
+            chain_config_builder: None,
+            extra_genesis_txos: Vec::new(),
+            pos_switch_height: BlockHeight::new(1),
+        }
+    }
+
+    pub fn with_chain_config_builder(
+        mut self,
+        chain_config_builder: chain::config::Builder,
+    ) -> Self {
+        self.chain_config_builder = Some(chain_config_builder);
+        self
+    }
+
+    pub fn with_extra_genesis_txos(mut self, extra_genesis_txos: Vec<TxOutput>) -> Self {
+        self.extra_genesis_txos = extra_genesis_txos;
+        self
+    }
+
+    pub fn with_pos_switch_height(mut self, pos_switch_height: BlockHeight) -> Self {
+        self.pos_switch_height = pos_switch_height;
+        self
+    }
+
+    pub fn build(
+        self,
+        genesis_timestamp: BlockTimestamp,
+        rng: &mut impl CryptoRng,
+    ) -> PoSTestSetup {
+        let initial_target = pos_initial_difficulty(ChainType::Regtest);
+
+        let (genesis, genesis_stake_private_key, genesis_vrf_private_key, create_genesis_pool_utxo) =
+            create_genesis_for_pos_tests(genesis_timestamp, &self.extra_genesis_txos, rng);
+
+        let net_upgrades = NetUpgrades::initialize(vec![
+            (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+            (
+                self.pos_switch_height,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(initial_target.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
+        ])
+        .unwrap();
+
+        let chain_config_builder = self
+            .chain_config_builder
+            .unwrap_or_else(make_chain_config_builder)
+            .genesis_custom(genesis)
+            .consensus_upgrades(net_upgrades);
+        let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
+
+        PoSTestSetup {
+            chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_utxo,
+        }
+    }
+}
+
+pub async fn assert_process_block(
+    chainstate: &ChainstateHandle,
+    mempool: &MempoolHandle,
+    new_block: Block,
+) -> BlockIndex {
+    let block_id = new_block.get_id();
+
+    // Wait for mempool to be up-to-date with the new block. The subscriptions are not cleaned
+    // up but hopefully it's not too bad just for testing.
+    let (tip_sx, tip_rx) = tokio::sync::oneshot::channel();
+    let tip_sx = utils::sync::Mutex::new(Some(tip_sx));
+    mempool
+        .call_mut(move |m| {
+            m.subscribe_to_subsystem_events(Arc::new({
+                move |evt| match evt {
+                    mempool::event::MempoolEvent::NewTip(tip) => {
+                        if let Some(tip_sx) = tip_sx.lock().unwrap().take() {
+                            assert_eq!(tip.block_id(), &block_id);
+                            tip_sx.send(()).unwrap();
+                        }
+                    }
+                    mempool::event::MempoolEvent::TransactionProcessed(_) => (),
+                }
+            }))
+        })
+        .await
+        .unwrap();
+
+    let block_index = chainstate
+        .call_mut(move |this| {
+            let new_block_index =
+                this.process_block(new_block.clone(), BlockSource::Local).unwrap().unwrap();
+
+            assert_eq!(
+                new_block.header().header().block_id(),
+                *new_block_index.block_id(),
+                "The new block's Id is different to the new block index's block Id",
+            );
+
+            let best_block_index = this.get_best_block_index().unwrap();
+
+            assert_eq!(
+                new_block_index.clone().into_gen_block_index().block_id(),
+                best_block_index.block_id(),
+                "The new block index not the best block index"
+            );
+
+            new_block_index
+        })
+        .await
+        .unwrap();
+
+    tip_rx.await.unwrap();
+
+    block_index
+}
+
 pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> BlockTimestamp {
     BlockTimestamp::from_int_seconds(
         (time_getter.get_time()
@@ -328,7 +419,7 @@ pub fn ensure_reasonable_initial_target_for_pos_tests(
 
 pub fn create_genesis_for_pos_tests(
     timestamp: BlockTimestamp,
-    extra_txs: &[TxOutput],
+    extra_txos: &[TxOutput],
     rng: &mut impl CryptoRng,
 ) -> (
     Genesis,
@@ -362,10 +453,10 @@ pub fn create_genesis_for_pos_tests(
         )
     };
 
-    let mut txs = vec![create_pool_txoutput.clone()];
-    txs.extend_from_slice(extra_txs);
+    let mut txos = vec![create_pool_txoutput.clone()];
+    txos.extend_from_slice(extra_txos);
 
-    let genesis = Genesis::new("blockprod-testing".into(), timestamp, txs);
+    let genesis = Genesis::new("blockprod-testing".into(), timestamp, txos);
 
     (
         genesis,
@@ -377,61 +468,6 @@ pub fn create_genesis_for_pos_tests(
 
 pub fn make_chain_config_builder() -> chain::config::Builder {
     chain::config::Builder::new(ChainType::Regtest)
-}
-
-pub fn setup_pos(
-    time_getter: &TimeGetter,
-    switch_to_pos_at: BlockHeight,
-    extra_genesis_txs: &[TxOutput],
-    chain_config_builder: Option<chain::config::Builder>,
-    rng: &mut impl CryptoRng,
-) -> PosTestSetup {
-    let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
-    setup_pos_with_genesis_timestamp(
-        genesis_timestamp,
-        switch_to_pos_at,
-        extra_genesis_txs,
-        chain_config_builder,
-        rng,
-    )
-}
-
-pub fn setup_pos_with_genesis_timestamp(
-    genesis_timestamp: BlockTimestamp,
-    switch_to_pos_at: BlockHeight,
-    extra_genesis_txs: &[TxOutput],
-    chain_config_builder: Option<chain::config::Builder>,
-    rng: &mut impl CryptoRng,
-) -> PosTestSetup {
-    let initial_target = pos_initial_difficulty(ChainType::Regtest);
-
-    let (genesis, genesis_stake_private_key, genesis_vrf_private_key, create_genesis_pool_utxo) =
-        create_genesis_for_pos_tests(genesis_timestamp, extra_genesis_txs, rng);
-
-    let net_upgrades = NetUpgrades::initialize(vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
-        (
-            switch_to_pos_at,
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(initial_target.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
-        ),
-    ])
-    .unwrap();
-
-    let chain_config_builder = chain_config_builder
-        .unwrap_or_else(make_chain_config_builder)
-        .genesis_custom(genesis)
-        .consensus_upgrades(net_upgrades);
-    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
-
-    PosTestSetup {
-        chain_config,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_utxo,
-    }
 }
 
 pub fn build_chain_config_for_pos(builder: chain::config::Builder) -> ChainConfig {
