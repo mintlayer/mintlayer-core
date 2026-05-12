@@ -161,15 +161,15 @@ struct RwTxState<'a> {
 
 impl RwTxState<'_> {
     fn emit_error(&mut self, eg: &ErrorGeneration) -> storage_core::Result<()> {
-        if self.transaction_failures < self.config.max_failures_per_transaction() {
-            if let Some(err) = eg.generate(&mut self.rng) {
-                if self.total_failures.fetch_add(1) < self.config.max_failures_total() {
-                    self.transaction_failures += 1;
-                    return Err(err.into());
-                } else {
-                    // Correct the previous fetch_add if we reached the max.
-                    self.total_failures.fetch_sub(1);
-                }
+        if self.transaction_failures < self.config.max_failures_per_transaction()
+            && let Some(err) = eg.generate(&mut self.rng)
+        {
+            if self.total_failures.fetch_add(1) < self.config.max_failures_total() {
+                self.transaction_failures += 1;
+                return Err(err.into());
+            } else {
+                // Correct the previous fetch_add if we reached the max.
+                self.total_failures.fetch_sub(1);
             }
         }
         Ok(())

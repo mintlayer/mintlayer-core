@@ -21,6 +21,7 @@ utils-networking = { path = "../utils/networking" }
 anyhow.workspace = true
 async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 directories.workspace = true
 futures = { workspace = true }
 itertools.workspace = true

@@ -111,7 +111,7 @@ impl ReorgData {
 fn fetch_disconnected_txs<M>(
     tx_pool: &TxPool<M>,
     new_tip: Id<GenBlock>,
-) -> Result<impl Iterator<Item = TxEntry>, ReorgError> {
+) -> Result<impl Iterator<Item = TxEntry> + use<M>, ReorgError> {
     let old_tip = tx_pool
         .tx_verifier
         .get_best_block_for_utxos()

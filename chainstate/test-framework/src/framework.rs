@@ -198,10 +198,10 @@ impl TestFramework {
                 // persistence flag set.
                 assert_eq!(was_persisted, is_persisted);
 
-                if let Some(new_block_index) = &new_block_index_opt {
-                    if orig_block_index_opt.is_none() {
-                        assert!(!new_block_index.status().is_ok());
-                    }
+                if let Some(new_block_index) = &new_block_index_opt
+                    && orig_block_index_opt.is_none()
+                {
+                    assert!(!new_block_index.status().is_ok());
                 }
 
                 assert_gen_block_index_identical_to(&new_best_block_index, &orig_best_block_index);

@@ -10,6 +10,7 @@ utils = { path = "../../utils" }
 wallet-cli-lib = { path = "../wallet-cli-lib", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 tokio = { workspace = true, default-features = false, features = [
   "io-util",
   "macros",

@@ -509,13 +509,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     // Note: this function assumes that the address has already been removed from `address_tables`.
     fn remove_from_addresses_if_some_non_reserved(&mut self, address: Option<SocketAddress>) {
-        if let Some(address) = address {
-            if !self.reserved_nodes.contains(&address) {
-                self.addresses.remove(&address);
+        if let Some(address) = address
+            && !self.reserved_nodes.contains(&address)
+        {
+            self.addresses.remove(&address);
 
-                update_db(&self.storage, |tx| tx.del_known_address(&address))
-                    .expect("DB failure when deleting known address {address}");
-            }
+            update_db(&self.storage, |tx| tx.del_known_address(&address))
+                .expect("DB failure when deleting known address {address}");
         }
     }
 

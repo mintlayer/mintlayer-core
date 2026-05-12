@@ -14,6 +14,7 @@ serialization = { path = "../serialization" }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["env", "string", "derive"] }
+ctor.workspace = true
 directories.workspace = true
 fix-hidden-lifetime-bug.workspace = true
 fixed-hash.workspace = true
@@ -29,6 +30,8 @@ tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+serial_test.workspace = true
+
 test-utils = { path = "../test-utils" }
 
 criterion.workspace = true

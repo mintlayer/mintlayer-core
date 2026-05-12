@@ -174,7 +174,7 @@ impl VRFPrivateKey {
 impl VRFPublicKey {
     pub fn from_private_key(private_key: &VRFPrivateKey) -> Self {
         match private_key.internal_key() {
-            VRFPrivateKeyHolder::Schnorrkel(ref k) => VRFPublicKey {
+            VRFPrivateKeyHolder::Schnorrkel(k) => VRFPublicKey {
                 pub_key: VRFPublicKeyHolder::Schnorrkel(SchnorrkelPublicKey::from_private_key(k)),
             },
         }

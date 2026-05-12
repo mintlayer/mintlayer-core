@@ -45,7 +45,7 @@ impl ConsensusData {
     ) -> Option<Uint256> {
         match self {
             ConsensusData::None => Some(1u64.into()),
-            ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
+            ConsensusData::PoW(pow_data) => pow_data.get_block_proof(),
             ConsensusData::PoS(_) => {
                 let timestamp_diff = this_block_timestamp
                     .as_int_seconds()

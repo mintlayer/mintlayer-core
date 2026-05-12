@@ -18,6 +18,7 @@ wallet-cli-lib = { path = "../wallet/wallet-cli-lib", default-features = false }
 wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 tokio = { workspace = true, features = ['full'] }
 
 [dev-dependencies]

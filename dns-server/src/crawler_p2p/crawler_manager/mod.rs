@@ -290,10 +290,10 @@ where
             ConnectivityEvent::Message { peer_id, message } => {
                 let result = self.handle_conn_message(peer_id, message);
 
-                if let Err(error) = result {
-                    if error.ban_score() > 0 {
-                        self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
-                    }
+                if let Err(error) = result
+                    && error.ban_score() > 0
+                {
+                    self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
                 }
             }
             ConnectivityEvent::OutboundAccepted {

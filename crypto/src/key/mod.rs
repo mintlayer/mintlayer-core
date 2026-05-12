@@ -108,7 +108,7 @@ impl PrivateKey {
         aux_data_provider: &mut AuxP,
     ) -> Result<Signature, SignatureError> {
         let signature = match &self.key {
-            PrivateKeyHolder::Secp256k1Schnorr(ref k) => {
+            PrivateKeyHolder::Secp256k1Schnorr(k) => {
                 Secp256k1Schnorr(k.sign_message(msg, aux_data_provider))
             }
         };
@@ -127,9 +127,7 @@ impl From<Secp256k1PrivateKey> for PrivateKey {
 impl PublicKey {
     pub fn from_private_key(private_key: &PrivateKey) -> Self {
         match private_key.get_internal_key() {
-            PrivateKeyHolder::Secp256k1Schnorr(ref k) => {
-                Secp256k1PublicKey::from_private_key(k).into()
-            }
+            PrivateKeyHolder::Secp256k1Schnorr(k) => Secp256k1PublicKey::from_private_key(k).into(),
         }
     }
 
@@ -142,7 +140,7 @@ impl PublicKey {
     #[must_use]
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
         match &self.pub_key {
-            PublicKeyHolder::Secp256k1Schnorr(ref k) => match signature {
+            PublicKeyHolder::Secp256k1Schnorr(k) => match signature {
                 Secp256k1Schnorr(s) => k.verify_message(s, msg),
             },
         }
