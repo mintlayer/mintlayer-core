@@ -47,8 +47,7 @@ use crate::{
     detail::{GenerateBlockInputData, tests::produce_block::assert_job_count},
     prepare_thread_pool, test_blockprod_config,
     tests::helpers::{
-        assert_process_block, build_chain_config_for_pos, make_genesis_timestamp,
-        setup_blockprod_test, setup_pos,
+        assert_process_block, make_genesis_timestamp, setup_blockprod_test, setup_pos,
     },
 };
 
@@ -76,12 +75,11 @@ const_assert!(TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT > chainstate::MEDIAN_
 // b) The block contains the main tx and all dependent txs up to and including the one at
 // the "median time past" time.
 async fn transaction_selection_mtp_test_impl(
-    chain_config: ChainConfig,
+    chain_config: Arc<ChainConfig>,
     input_data: GenerateBlockInputData,
     time_getter: TimeGetter,
     genesis_premint_output_index: u32,
 ) {
-    let chain_config = Arc::new(chain_config);
     let (manager, chainstate, mempool, p2p) =
         setup_blockprod_test(Arc::clone(&chain_config), time_getter.clone());
 
@@ -252,7 +250,7 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
     )];
 
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
@@ -260,9 +258,9 @@ async fn transaction_selection_mtp_test_pos(#[case] seed: Seed) {
         &time_getter,
         BlockHeight::new(TRANSACTION_SELECTION_MTP_TESTS_BLOCK_HEIGHT as u64),
         &extra_genesis_txs,
+        None,
         &mut rng,
     );
-    let chain_config = build_chain_config_for_pos(chain_config_builder);
 
     let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
         genesis_stake_private_key,
@@ -310,10 +308,12 @@ async fn transaction_selection_mtp_test_pow(#[case] seed: Seed) {
         ])
         .unwrap();
 
-        Builder::new(ChainType::Regtest)
-            .genesis_custom(genesis)
-            .consensus_upgrades(net_upgrades)
-            .build()
+        Arc::new(
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis)
+                .consensus_upgrades(net_upgrades)
+                .build(),
+        )
     };
 
     let input_data = GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
@@ -350,10 +350,12 @@ async fn transaction_selection_mtp_test_ignore_consensus(#[case] seed: Seed) {
         )])
         .unwrap();
 
-        Builder::new(ChainType::Regtest)
-            .genesis_custom(genesis)
-            .consensus_upgrades(net_upgrades)
-            .build()
+        Arc::new(
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis)
+                .consensus_upgrades(net_upgrades)
+                .build(),
+        )
     };
 
     transaction_selection_mtp_test_impl(chain_config, GenerateBlockInputData::None, time_getter, 0)

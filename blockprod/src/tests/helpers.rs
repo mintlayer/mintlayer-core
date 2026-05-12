@@ -261,22 +261,34 @@ pub fn create_genesis_for_pos_tests(
     )
 }
 
+pub fn make_chain_config_builder() -> chain::config::Builder {
+    chain::config::Builder::new(ChainType::Regtest)
+}
+
 pub fn setup_pos(
     time_getter: &TimeGetter,
     switch_to_pos_at: BlockHeight,
     extra_genesis_txs: &[TxOutput],
+    chain_config_builder: Option<chain::config::Builder>,
     rng: &mut impl CryptoRng,
-) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
+) -> (Arc<ChainConfig>, PrivateKey, VRFPrivateKey, TxOutput) {
     let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
-    setup_pos_with_genesis_timestamp(genesis_timestamp, switch_to_pos_at, extra_genesis_txs, rng)
+    setup_pos_with_genesis_timestamp(
+        genesis_timestamp,
+        switch_to_pos_at,
+        extra_genesis_txs,
+        chain_config_builder,
+        rng,
+    )
 }
 
 pub fn setup_pos_with_genesis_timestamp(
     genesis_timestamp: BlockTimestamp,
     switch_to_pos_at: BlockHeight,
     extra_genesis_txs: &[TxOutput],
+    chain_config_builder: Option<chain::config::Builder>,
     rng: &mut impl CryptoRng,
-) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
+) -> (Arc<ChainConfig>, PrivateKey, VRFPrivateKey, TxOutput) {
     let initial_target = pos_initial_difficulty(ChainType::Regtest);
 
     let (genesis, genesis_stake_private_key, genesis_vrf_private_key, create_genesis_pool_txoutput) =
@@ -294,12 +306,14 @@ pub fn setup_pos_with_genesis_timestamp(
     ])
     .expect("Net upgrades are valid");
 
-    let chain_config_builder = chain::config::Builder::new(ChainType::Regtest)
+    let chain_config_builder = chain_config_builder
+        .unwrap_or_else(make_chain_config_builder)
         .genesis_custom(genesis)
         .consensus_upgrades(net_upgrades);
+    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
 
     (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,

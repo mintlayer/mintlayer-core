@@ -70,7 +70,7 @@ use crate::{
     },
     prepare_thread_pool, test_blockprod_config,
     tests::helpers::{
-        assert_process_block, build_chain_config_for_pos, make_genesis_timestamp,
+        assert_process_block, make_chain_config_builder, make_genesis_timestamp,
         setup_blockprod_test, setup_pos, setup_pos_with_genesis_timestamp,
     },
 };
@@ -309,7 +309,7 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
@@ -317,10 +317,10 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
         BlockTimestamp::from_int_seconds(u64::MAX),
         BlockHeight::new(1),
         &[],
+        None,
         &mut rng,
     );
 
-    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
     let (manager, chainstate, mempool, p2p) =
         setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
 
@@ -377,14 +377,17 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
-    let chain_config = Arc::new(build_chain_config_for_pos(
-        chain_config_builder.max_future_block_time_offset(Some(Duration::MAX)),
-    ));
+    ) = setup_pos(
+        &time_getter,
+        BlockHeight::new(1),
+        &[],
+        Some(make_chain_config_builder().max_future_block_time_offset(Some(Duration::MAX))),
+        &mut rng,
+    );
 
     let (manager, chainstate, mempool, p2p) =
         setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
@@ -441,13 +444,12 @@ async fn update_last_used_block_timestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
+    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
 
-    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
     let (manager, chainstate, mempool, p2p) =
         setup_blockprod_test(Arc::clone(&chain_config), time_getter);
 
@@ -514,7 +516,7 @@ async fn try_again_later(#[case] seed: Seed) {
     let genesis_time = default_time_getter.get_time();
 
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
@@ -522,10 +524,10 @@ async fn try_again_later(#[case] seed: Seed) {
         BlockTimestamp::from_time(genesis_time),
         BlockHeight::new(1),
         &[],
+        None,
         &mut rng,
     );
 
-    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
     let time_getter = {
         let cur_time_secs = genesis_time
             .saturating_duration_sub(chain_config.max_future_block_time_offset(BlockHeight::zero()))
@@ -1000,13 +1002,12 @@ async fn solved_pos_consensus(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
     let (
-        chain_config_builder,
+        chain_config,
         genesis_stake_private_key,
         genesis_vrf_private_key,
         create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
+    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
 
-    let chain_config = Arc::new(build_chain_config_for_pos(chain_config_builder));
     let (manager, chainstate, mempool, p2p) =
         setup_blockprod_test(Arc::clone(&chain_config), time_getter);
 
