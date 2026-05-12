@@ -17,16 +17,13 @@ pub mod helpers;
 
 use std::sync::Arc;
 
-use common::{chain::config::create_unit_test_config, time_getter::TimeGetter};
-
-use crate::{make_blockproduction, test_blockprod_config, tests::helpers::setup_blockprod_test};
+use crate::{
+    make_blockproduction, test_blockprod_config, tests::helpers::BlockprodTestSetupBuilder,
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_make_blockproduction() {
-    let time_getter = TimeGetter::default();
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), time_getter);
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let blockprod = make_blockproduction(
         Arc::clone(&blockprod_setup.chain_config),

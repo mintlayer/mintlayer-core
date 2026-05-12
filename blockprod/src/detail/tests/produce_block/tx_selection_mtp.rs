@@ -44,7 +44,7 @@ use utils::once_destructor::OnceDestructor;
 
 use crate::{
     detail::{GenerateBlockInputData, tests::produce_block::assert_job_count},
-    tests::helpers::{make_genesis_timestamp, setup_blockprod_test, setup_pos},
+    tests::helpers::{BlockprodTestSetupBuilder, make_genesis_timestamp, setup_pos},
 };
 
 // The height at which the transaction_selection_mtp_xxx tests will create their test block.
@@ -76,8 +76,10 @@ async fn transaction_selection_mtp_test_impl(
     time_getter: TimeGetter,
     genesis_premint_output_index: u32,
 ) {
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), time_getter.clone());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_time_getter(time_getter.clone())
+        .build();
 
     let genesis_timestamp = chain_config.genesis_block().timestamp();
     let expected_median_time_past = genesis_timestamp.add_int_seconds(9).unwrap();

@@ -54,7 +54,12 @@ use crate::{
     config::BlockProdConfig, detail::BlockProduction, prepare_thread_pool, test_blockprod_config,
 };
 
-pub struct BlockProdTestSetup {
+/// A collection of objects needed to run a blockprod test.
+///
+/// Note that the subsystem manager is not a part of it; this is because in most tests
+/// the test setup object will be moved into a separate tokio task where BlockProduction
+/// will be created and tested, while the manager object has to remain outside the task.
+pub struct BlockprodTestSetup {
     pub chain_config: Arc<ChainConfig>,
     pub time_getter: TimeGetter,
     pub chainstate: ChainstateHandle,
@@ -62,16 +67,16 @@ pub struct BlockProdTestSetup {
     pub p2p: P2pHandle,
 }
 
-impl BlockProdTestSetup {
+impl BlockprodTestSetup {
     pub async fn assert_process_block(&self, new_block: Block) -> BlockIndex {
         assert_process_block(&self.chainstate, &self.mempool, new_block).await
     }
 }
 
-impl BlockProdTestSetup {
+impl BlockprodTestSetup {
     pub fn make_blockprod_builder(&self) -> TestBlockProdBuilder<'_> {
         TestBlockProdBuilder {
-            blockprod_setup: self,
+            test_setup: self,
             blockprod_config: None,
             chainstate: None,
             mempool: None,
@@ -86,8 +91,9 @@ pub struct PosTestSetup {
     pub create_genesis_pool_utxo: TxOutput,
 }
 
+/// A builder that produces `BlockProduction` from `BlockprodTestSetup` with some optional overrides.
 pub struct TestBlockProdBuilder<'a> {
-    blockprod_setup: &'a BlockProdTestSetup,
+    test_setup: &'a BlockprodTestSetup,
     blockprod_config: Option<BlockProdConfig>,
     chainstate: Option<ChainstateHandle>,
     mempool: Option<MempoolHandle>,
@@ -111,16 +117,16 @@ impl<'a> TestBlockProdBuilder<'a> {
 
     pub fn build(self) -> BlockProduction {
         let blockprod_config = self.blockprod_config.unwrap_or_else(test_blockprod_config);
-        let chainstate = self.chainstate.unwrap_or_else(|| self.blockprod_setup.chainstate.clone());
-        let mempool = self.mempool.unwrap_or_else(|| self.blockprod_setup.mempool.clone());
+        let chainstate = self.chainstate.unwrap_or_else(|| self.test_setup.chainstate.clone());
+        let mempool = self.mempool.unwrap_or_else(|| self.test_setup.mempool.clone());
 
         BlockProduction::new(
-            Arc::clone(&self.blockprod_setup.chain_config),
+            Arc::clone(&self.test_setup.chain_config),
             Arc::new(blockprod_config),
             chainstate,
             mempool,
-            self.blockprod_setup.p2p.clone(),
-            self.blockprod_setup.time_getter.clone(),
+            self.test_setup.p2p.clone(),
+            self.test_setup.time_getter.clone(),
             prepare_thread_pool(1),
         )
         .unwrap()
@@ -184,77 +190,102 @@ pub async fn assert_process_block(
     block_index
 }
 
-pub fn setup_blockprod_test(
-    chain_config: Arc<ChainConfig>,
-    time_getter: TimeGetter,
-) -> (BlockProdTestSetup, Manager) {
-    let manager_config =
-        subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
-    let mut manager = Manager::new_with_config(manager_config);
+/// A builder that produces `BlockprodTestSetup`.
+pub struct BlockprodTestSetupBuilder {
+    chain_config: Option<Arc<ChainConfig>>,
+    time_getter: Option<TimeGetter>,
+}
 
-    let chainstate_config = ChainstateConfig {
-        max_tip_age: Duration::from_secs(60 * 60 * 24 * 365 * 100).into(),
-        // There is at least one long test in blockprod that gets significantly slowed down
-        // by the heavy checks in chainstate. But since the checks are not very useful in blockprod
-        // tests in general, we disable them globally.
-        enable_heavy_checks: Some(false),
+impl BlockprodTestSetupBuilder {
+    pub fn new() -> Self {
+        Self {
+            chain_config: None,
+            time_getter: None,
+        }
+    }
 
-        max_db_commit_attempts: Default::default(),
-        enable_db_reckless_mode_in_ibd: Default::default(),
-        max_orphan_blocks: Default::default(),
-        allow_checkpoints_mismatch: Default::default(),
-    };
+    pub fn with_chain_config(mut self, chain_config: Arc<ChainConfig>) -> Self {
+        self.chain_config = Some(chain_config);
+        self
+    }
 
-    let mempool_config = MempoolConfig::new();
+    pub fn with_time_getter(mut self, time_getter: TimeGetter) -> Self {
+        self.time_getter = Some(time_getter);
+        self
+    }
 
-    let chainstate = chainstate::make_chainstate(
-        Arc::clone(&chain_config),
-        chainstate_config,
-        Store::new_empty().unwrap(),
-        DefaultTransactionVerificationStrategy::new(),
-        None,
-        time_getter.clone(),
-        None,
-    )
-    .unwrap();
+    pub fn build(self) -> (BlockprodTestSetup, Manager) {
+        let chain_config = self.chain_config.unwrap_or_else(|| Arc::new(create_unit_test_config()));
+        let time_getter = self.time_getter.unwrap_or_else(TimeGetter::default);
 
-    let chainstate = manager.add_subsystem("chainstate", chainstate);
+        let manager_config =
+            subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
+        let mut manager = Manager::new_with_config(manager_config);
 
-    let mempool_init = MempoolInit::new(
-        Arc::clone(&chain_config),
-        mempool_config,
-        subsystem::Handle::clone(&chainstate),
-        time_getter.clone(),
-    )
-    .unwrap();
-    let mempool = manager.add_custom_subsystem("mempool", |hdl, _| mempool_init.init(hdl));
+        let chainstate_config = ChainstateConfig {
+            max_tip_age: Duration::from_secs(60 * 60 * 24 * 365 * 100).into(),
+            // There is at least one long test in blockprod that gets significantly slowed down
+            // by the heavy checks in chainstate. But since the checks are not very useful in blockprod
+            // tests in general, we disable them globally.
+            enable_heavy_checks: Some(false),
 
-    let mut p2p_config = test_p2p_config();
-    p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];
+            max_db_commit_attempts: Default::default(),
+            enable_db_reckless_mode_in_ibd: Default::default(),
+            max_orphan_blocks: Default::default(),
+            allow_checkpoints_mismatch: Default::default(),
+        };
 
-    let p2p = p2p::make_p2p(
-        true,
-        Arc::clone(&chain_config),
-        Arc::new(p2p_config),
-        subsystem::Handle::clone(&chainstate),
-        mempool.clone(),
-        time_getter.clone(),
-        MonotonicTimeGetter::default(),
-        PeerDbStorageImpl::new(InMemory::new()).unwrap(),
-    )
-    .unwrap()
-    .add_to_manager("p2p", &mut manager);
+        let mempool_config = MempoolConfig::new();
 
-    (
-        BlockProdTestSetup {
-            chain_config,
-            time_getter,
-            chainstate,
-            mempool,
-            p2p,
-        },
-        manager,
-    )
+        let chainstate = chainstate::make_chainstate(
+            Arc::clone(&chain_config),
+            chainstate_config,
+            Store::new_empty().unwrap(),
+            DefaultTransactionVerificationStrategy::new(),
+            None,
+            time_getter.clone(),
+            None,
+        )
+        .unwrap();
+
+        let chainstate = manager.add_subsystem("chainstate", chainstate);
+
+        let mempool_init = MempoolInit::new(
+            Arc::clone(&chain_config),
+            mempool_config,
+            subsystem::Handle::clone(&chainstate),
+            time_getter.clone(),
+        )
+        .unwrap();
+        let mempool = manager.add_custom_subsystem("mempool", |hdl, _| mempool_init.init(hdl));
+
+        let mut p2p_config = test_p2p_config();
+        p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];
+
+        let p2p = p2p::make_p2p(
+            true,
+            Arc::clone(&chain_config),
+            Arc::new(p2p_config),
+            subsystem::Handle::clone(&chainstate),
+            mempool.clone(),
+            time_getter.clone(),
+            MonotonicTimeGetter::default(),
+            PeerDbStorageImpl::new(InMemory::new()).unwrap(),
+        )
+        .unwrap()
+        .add_to_manager("p2p", &mut manager);
+
+        (
+            BlockprodTestSetup {
+                chain_config,
+                time_getter,
+                chainstate,
+                mempool,
+                p2p,
+            },
+            manager,
+        )
+    }
 }
 
 pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> BlockTimestamp {

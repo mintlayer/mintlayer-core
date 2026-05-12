@@ -69,16 +69,14 @@ use crate::{
     },
     test_blockprod_config,
     tests::helpers::{
-        make_chain_config_builder, make_genesis_timestamp, setup_blockprod_test, setup_pos,
+        BlockprodTestSetupBuilder, make_chain_config_builder, make_genesis_timestamp, setup_pos,
         setup_pos_with_genesis_timestamp,
     },
 };
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mock_chainstate = {
         let mut mock_chainstate = MockChainstateInterface::new();
@@ -125,9 +123,7 @@ async fn initial_block_download() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn below_peer_count() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -168,9 +164,7 @@ async fn below_peer_count() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pull_best_block_index_error() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mock_chainstate = {
         let mut mock_chainstate = Box::new(MockChainstateInterface::new());
@@ -227,9 +221,7 @@ async fn pull_best_block_index_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_job_error() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -286,8 +278,9 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
         &mut rng,
     );
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&pos_setup.chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -340,8 +333,10 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
         &mut rng,
     );
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&pos_setup.chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -387,8 +382,10 @@ async fn update_last_used_block_timestamp(#[case] seed: Seed) {
     let time_getter = TimeGetter::default();
     let pos_setup = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&pos_setup.chain_config), time_getter);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -461,8 +458,10 @@ async fn try_again_later(#[case] seed: Seed) {
         mocked_time_getter_seconds(time_value)
     };
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&pos_setup.chain_config), time_getter.clone());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -502,9 +501,7 @@ async fn try_again_later(#[case] seed: Seed) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pull_consensus_data_error() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mock_chainstate = {
         let mut mock_chainstate = MockChainstateInterface::new();
@@ -515,7 +512,7 @@ async fn pull_consensus_data_error() {
         mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
         let mut expected_return_values = vec![
-            Ok(GenBlockIndex::genesis(&chain_config)),
+            Ok(GenBlockIndex::genesis(&blockprod_setup.chain_config)),
             Err(ChainstateError::FailedToReadProperty(
                 PropertyQueryError::BestBlockIndexNotFound,
             )),
@@ -566,9 +563,7 @@ async fn pull_consensus_data_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_mempool_error() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mock_mempool = {
         let mut mock_mempool = MockMempoolInterface::default();
@@ -617,9 +612,7 @@ async fn transaction_source_mempool_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_mempool() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -655,9 +648,7 @@ async fn transaction_source_mempool() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_provided() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -711,8 +702,9 @@ async fn cancel_received(#[case] seed: Seed) {
         Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -767,9 +759,7 @@ async fn cancel_received(#[case] seed: Seed) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn solved_ignore_consensus() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -816,8 +806,9 @@ async fn solved_pow_consensus() {
         Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -861,8 +852,10 @@ async fn solved_pos_consensus(#[case] seed: Seed) {
     let time_getter = TimeGetter::default();
     let pos_setup = setup_pos(&time_getter, BlockHeight::new(1), &[], None, &mut rng);
 
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&pos_setup.chain_config), time_getter);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -989,7 +982,10 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
         )
     };
 
-    let (blockprod_setup, manager) = setup_blockprod_test(Arc::clone(&chain_config), time_getter);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1186,9 +1182,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (blockprod_setup, manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();

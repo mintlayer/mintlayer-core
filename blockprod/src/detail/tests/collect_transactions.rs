@@ -13,12 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::create_unit_test_config},
+    chain::block::timestamp::BlockTimestamp,
     primitives::{H256, Id},
-    time_getter::TimeGetter,
 };
 use mempool::{
     error::{BlockConstructionError, TxValidationError},
@@ -30,7 +27,7 @@ use test_utils::assert_matches;
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    BlockProductionError, detail::collect_transactions, tests::helpers::setup_blockprod_test,
+    BlockProductionError, detail::collect_transactions, tests::helpers::BlockprodTestSetupBuilder,
 };
 
 // A dummy timestamp for tests where the block timestamp is irrelevant
@@ -40,9 +37,7 @@ const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_txs_failed() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (_blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mut mock_mempool = MockMempoolInterface::default();
     mock_mempool.expect_collect_txs().return_once(|_, _, _| {
@@ -59,7 +54,7 @@ async fn collect_txs_failed() {
     let tester = tokio::spawn(async move {
         let transactions = collect_transactions(
             &mock_mempool_subsystem,
-            &chain_config,
+            &blockprod_setup.chain_config,
             current_tip,
             DUMMY_TIMESTAMP,
             vec![],
@@ -83,9 +78,7 @@ async fn collect_txs_failed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn subsystem_error() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (_blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mock_mempool = MockMempoolInterface::default();
     let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
@@ -107,7 +100,7 @@ async fn subsystem_error() {
     tokio::spawn(async move {
         let transactions = collect_transactions(
             &mock_mempool_subsystem,
-            &chain_config,
+            &blockprod_setup.chain_config,
             current_tip,
             DUMMY_TIMESTAMP,
             vec![],
@@ -128,9 +121,7 @@ async fn subsystem_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn succeeded() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (_blockprod_setup, mut manager) =
-        setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let mut mock_mempool = MockMempoolInterface::default();
 
@@ -159,7 +150,7 @@ async fn succeeded() {
 
             let transactions = collect_transactions(
                 &mock_mempool_subsystem,
-                &chain_config,
+                &blockprod_setup.chain_config,
                 current_tip,
                 DUMMY_TIMESTAMP,
                 vec![],

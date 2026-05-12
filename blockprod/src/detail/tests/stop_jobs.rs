@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use rstest::rstest;
 
-use common::{chain::config::create_unit_test_config, time_getter::TimeGetter};
 use randomness::RngExt as _;
 use test_utils::{
     assert_matches,
@@ -30,7 +27,7 @@ use crate::{
         CustomId,
         job_manager::{JobManagerError, tests::MockJobManager},
     },
-    tests::helpers::setup_blockprod_test,
+    tests::helpers::BlockprodTestSetupBuilder,
 };
 
 mod stop_all_jobs {
@@ -38,9 +35,7 @@ mod stop_all_jobs {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error() {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
@@ -63,9 +58,7 @@ mod stop_all_jobs {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut rng = make_seedable_rng(seed);
 
@@ -97,9 +90,7 @@ mod stop_all_jobs {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
@@ -128,9 +119,7 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
@@ -156,9 +145,7 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn existing_job_ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut rng = make_seedable_rng(seed);
 
@@ -190,9 +177,7 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut rng = make_seedable_rng(seed);
 
@@ -239,9 +224,7 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn non_existent_job_ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut rng = make_seedable_rng(seed);
 
@@ -268,9 +251,7 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let (blockprod_setup, _manager) =
-            setup_blockprod_test(Arc::clone(&chain_config), TimeGetter::default());
+        let (blockprod_setup, _manager) = BlockprodTestSetupBuilder::new().build();
 
         let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
