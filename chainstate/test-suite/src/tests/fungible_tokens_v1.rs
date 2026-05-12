@@ -6354,10 +6354,10 @@ fn change_authority_fee(#[case] seed: Seed) {
     });
 }
 
-// Produce `genesis -> a` chain, where block `a` transfers coins and issue a token in separate txs.
+// Produce `genesis -> a` chain, where block `a` transfers coins and issues a token in separate txs.
 //
 // It's vital to have 2 txs in that order because on disconnect token undo would be performed first
-// and tokens::BlockUndo object would be erased. But then when transfer tx is disconnected tokens::BlockUndo
+// and the BlockUndo object would be erased. But then when transfer tx is disconnected, BlockUndo
 // is fetched and checked again, which should work fine and just return None.
 //
 // Then produce a parallel `genesis -> b -> c` that should trigger a in-memory reorg for block `a`.
@@ -6371,7 +6371,7 @@ fn reorg_tokens_tx_with_simple_tx(#[case] seed: Seed) {
     let genesis_block_id: Id<GenBlock> = tf.genesis().get_id().into();
     let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
-    // produce block `a` with transfer tx ans issue token tx
+    // produce block `a` with transfer tx and issue token tx
     let transfer_tx = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(genesis_block_id.into(), 0),
@@ -6829,6 +6829,12 @@ fn check_change_metadata_for_frozen_token(#[case] seed: Seed) {
     });
 }
 
+// Produce the chain `genesis -> a -> b -> c`, where `a` issues a token, `b` mints some tokens,
+// and `c` changes the token metadata uri.
+// Then add 2 blocks on top of `b` triggering a reorg.
+// The token metadata uri should be reverted to the original one.
+// Additionally, perform sanity checks on the utxo used to pay the fee for the tx in `c`:
+// after `c` is mined, the utxo is no longer available, and after the reorg it's available again.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -6863,6 +6869,9 @@ fn reorg_metadata_uri_change(#[case] seed: Seed) {
             true,
         );
         assert_eq!(tf.best_block_id(), block_b_id);
+
+        let minting_tx_change_utxo = UtxoOutPoint::new(mint_tokens_tx_id.into(), 1);
+        assert!(tf.chainstate.utxo(&minting_tx_change_utxo).unwrap().is_some());
 
         let issuance_v1 = assert_matches_return_val!(
             token_issuance.clone(),
@@ -6910,13 +6919,16 @@ fn reorg_metadata_uri_change(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_utxo(mint_tokens_tx_id.into(), 1),
+                        minting_tx_change_utxo.clone().into(),
                         InputWitness::NoSignature(None),
                     )
                     .build(),
             )
             .build_and_process(&mut rng)
             .unwrap();
+
+        // Sanity check: the fee utxo has been spent.
+        assert!(tf.chainstate.utxo(&minting_tx_change_utxo).unwrap().is_none());
 
         // Check result
         check_fungible_token(
@@ -6941,9 +6953,15 @@ fn reorg_metadata_uri_change(#[case] seed: Seed) {
             true,
         );
 
-        // Add blocks from genesis to trigger the reorg
-        let block_e_id = tf.create_chain((&block_b_id).into(), 2, &mut rng).unwrap();
+        // Add empty blocks from `b` to trigger the reorg.
+        // Note: can't use `create_chain` here as it would spend utxos from the parent block,
+        // while we want to do the sanity check on `minting_tx_change_utxo`'s availability.
+        let block_e_id =
+            tf.create_chain_with_empty_blocks((&block_b_id).into(), 2, &mut rng).unwrap();
         assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Sanity check: the fee utxo is no longer spent.
+        assert!(tf.chainstate.utxo(&minting_tx_change_utxo).unwrap().is_some());
 
         // Check result
         check_fungible_token(
@@ -6960,6 +6978,137 @@ fn reorg_metadata_uri_change(#[case] seed: Seed) {
             },
             true,
         );
+    });
+}
+
+// Produce the chain `genesis -> a -> b`, where `a` issues a token and `b` changes its authority.
+// Then add 2 blocks on top of `a` triggering a reorg.
+// The token authority should be reverted to the original one.
+// Additionally, perform sanity checks on the utxo used to pay the fee for the tx in `b`:
+// after `b` is mined, the utxo is no longer available, and after the reorg it's available again.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_authority_change(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_block_id = tf.best_block_id();
+
+        // Create block `a` with token issuance
+
+        let (orig_sk, orig_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let orig_authority = Destination::PublicKey(orig_pk);
+        let orig_issuance_v1 = TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.random_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Lockable,
+            authority: orig_authority.clone(),
+            is_freezable: IsTokenFreezable::No,
+        };
+
+        let (token_id, block_a_id, issuance_tx, issuance_tx_change_utxo) = issue_token_from_block(
+            &mut rng,
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            TokenIssuance::V1(orig_issuance_v1.clone()),
+        );
+        assert_eq!(tf.best_block_id(), block_a_id);
+
+        assert!(tf.chainstate.utxo(&issuance_tx_change_utxo).unwrap().is_some());
+
+        let expected_orig_issuance = ExpectedFungibleTokenData {
+            issuance: TokenIssuance::V1(orig_issuance_v1.clone()),
+            issuance_tx: issuance_tx.clone(),
+            issuance_block_id: block_a_id,
+            circulating_supply: None,
+            is_locked: false,
+            is_frozen: IsTokenFrozen::No(IsTokenFreezable::No),
+        };
+        check_fungible_token(&tf, &mut rng, &token_id, &expected_orig_issuance, true);
+
+        // Create block `b` changing the token authority
+
+        let (_, new_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(new_pk);
+        let change_authority_tx = {
+            let tx = Transaction::new(
+                0,
+                vec![
+                    TxInput::from_command(
+                        AccountNonce::new(0),
+                        AccountCommand::ChangeTokenAuthority(token_id, new_authority.clone()),
+                    ),
+                    issuance_tx_change_utxo.clone().into(),
+                ],
+                vec![],
+            )
+            .unwrap();
+
+            let input_commitments = [
+                SighashInputCommitment::None,
+                SighashInputCommitment::Utxo(Cow::Owned(
+                    tf.utxo(&issuance_tx_change_utxo).take_output(),
+                )),
+            ];
+
+            let account_cmd_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &orig_sk,
+                Default::default(),
+                orig_authority,
+                &tx,
+                &input_commitments,
+                0,
+                &mut rng,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_cmd_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        let block_b_id = *tf
+            .make_block_builder()
+            .add_transaction(change_authority_tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap()
+            .block_id();
+        assert_eq!(tf.best_block_id(), block_b_id);
+
+        // Sanity check: the fee utxo has been spent.
+        assert!(tf.chainstate.utxo(&issuance_tx_change_utxo).unwrap().is_none());
+
+        let expected_new_issuance = {
+            let mut new_issuance_v1 = orig_issuance_v1.clone();
+            new_issuance_v1.authority = new_authority;
+
+            ExpectedFungibleTokenData {
+                issuance: TokenIssuance::V1(new_issuance_v1),
+                issuance_tx,
+                issuance_block_id: block_a_id,
+                circulating_supply: None,
+                is_locked: false,
+                is_frozen: IsTokenFrozen::No(IsTokenFreezable::No),
+            }
+        };
+        check_fungible_token(&tf, &mut rng, &token_id, &expected_new_issuance, true);
+
+        // Add empty blocks from `a` to trigger the reorg.
+        // Note: can't use `create_chain` here as it would spend utxos from the parent block,
+        // while we want to do the sanity check on `issuance_tx_change_utxo`'s availability.
+        let new_tip = tf.create_chain_with_empty_blocks(&block_a_id.into(), 2, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), new_tip);
+
+        // Sanity check: the fee utxo is no longer spent.
+        assert!(tf.chainstate.utxo(&issuance_tx_change_utxo).unwrap().is_some());
+
+        check_fungible_token(&tf, &mut rng, &token_id, &expected_orig_issuance, true);
     });
 }
 
