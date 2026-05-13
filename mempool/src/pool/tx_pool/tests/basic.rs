@@ -1266,9 +1266,9 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy())]
 #[case::fail(Seed(1))]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full_real(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -1396,7 +1396,6 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), 300, true)]
 #[case(Seed::from_entropy(), 1_000, true)]
 #[case(Seed::from_entropy(), 10_000, true)]
@@ -1408,6 +1407,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case::just_above(Seed::from_entropy(), 1_047_577, false)]
 #[case::one_below_block_limit(Seed::from_entropy(), 1_048_575, false)]
 #[case::at_block_limit(Seed::from_entropy(), 1_048_576, false)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] accept: bool) {
     let mut rng = make_seedable_rng(seed);

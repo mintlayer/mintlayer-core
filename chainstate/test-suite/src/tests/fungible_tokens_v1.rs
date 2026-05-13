@@ -2575,10 +2575,9 @@ fn check_lockable_supply(#[case] seed: Seed) {
 // Issue a token.
 // Check that Unlimited and Fixed supplies cannot be locked.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), TokenTotalSupply::Unlimited)]
-#[trace]
 #[case(Seed::from_entropy(), TokenTotalSupply::Fixed(Amount::from_atoms(1)))]
+#[trace]
 fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSupply) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);

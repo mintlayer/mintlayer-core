@@ -21,10 +21,9 @@ use common::chain::{
 use super::*;
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 #[tokio::test]
 async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersVersion) {
     use common::chain::config::create_unit_test_config_builder;

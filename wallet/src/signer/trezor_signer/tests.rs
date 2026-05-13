@@ -110,12 +110,11 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction(
     #[case] seed: Seed,
@@ -155,12 +154,11 @@ async fn test_fixed_signatures(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fixed_signatures2(
     #[case] seed: Seed,
@@ -193,12 +191,11 @@ async fn test_fixed_signatures_no_legacy(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fixed_signatures_htlc_refunding(
     #[case] seed: Seed,
@@ -262,12 +259,11 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[serial]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,

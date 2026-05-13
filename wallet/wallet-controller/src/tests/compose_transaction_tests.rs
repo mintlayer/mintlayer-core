@@ -58,10 +58,9 @@ use crate::{
 };
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), false)]
-#[trace]
 #[case(Seed::from_entropy(), true)]
+#[trace]
 #[tokio::test]
 async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let mut rng = make_seedable_rng(seed);

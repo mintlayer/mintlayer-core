@@ -29,10 +29,9 @@ use test_utils::random::{Seed, make_seedable_rng};
 use tx_verifier::CheckTransactionError;
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true)]
-#[trace]
 #[case(Seed::from_entropy(), false)]
+#[trace]
 fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -84,14 +83,11 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true, 1)]
-#[trace]
 #[case(Seed::from_entropy(), false, 1)]
-#[trace]
 #[case(Seed::from_entropy(), true, 2)]
-#[trace]
 #[case(Seed::from_entropy(), false, 2)]
+#[trace]
 fn data_deposit_insufficient_fee(
     #[case] seed: Seed,
     #[case] expect_success: bool,

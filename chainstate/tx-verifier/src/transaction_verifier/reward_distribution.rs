@@ -647,9 +647,9 @@ mod tests {
     // and that pool_b and its delegations were not affected.
     // Then undo everything and check that original state was restored.
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn distribution_basic(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));
@@ -810,9 +810,9 @@ mod tests {
     // Create a pool with 2 delegations and random balances and reward.
     // Check distribution properties.
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn distribution_properties(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));
@@ -959,9 +959,9 @@ mod tests {
 
     // Check that if delegation is present but its balance is 0 then all the reward goes to staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn total_delegations_balance_zero(
         #[case] seed: Seed,
         #[case] version: RewardDistributionVersion,
@@ -1034,9 +1034,9 @@ mod tests {
 
     // Check that staker can set its reward to 100% and the reward goes entirely to the staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn total_delegations_reward_zero(
         #[case] seed: Seed,
         #[case] version: RewardDistributionVersion,
@@ -1109,9 +1109,9 @@ mod tests {
 
     // Check that if there are no delegations then the whole reward goes to the staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn no_delegations(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));

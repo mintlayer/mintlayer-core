@@ -26,6 +26,7 @@ use crate::cli_test_framework::CliTestFramework;
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn wallet_cli_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -42,6 +43,7 @@ async fn wallet_cli_basic(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn wallet_cli_file(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -76,6 +78,7 @@ async fn wallet_cli_file(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn produce_blocks(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -92,6 +95,7 @@ async fn produce_blocks(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);

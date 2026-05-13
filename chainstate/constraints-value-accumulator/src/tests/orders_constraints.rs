@@ -254,10 +254,9 @@ fn create_order_constraints(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -608,10 +607,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
