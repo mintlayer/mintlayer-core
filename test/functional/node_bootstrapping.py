@@ -73,7 +73,7 @@ class NodeBootstrappingTest(BitcoinTestFramework):
         return block_ids
 
     # Need to call this function after the tip has changed, if a new block is to be generated
-    # afterwards. Otherwise the block generation may fail with "Recoverable mempool error".
+    # afterwards. Otherwise the block generation may fail with "Blockprod recoverable mempool error".
     def wait_for_mempool_update(self, tip_id: str):
         node = self.nodes[0]
         self.wait_until(lambda: node.mempool_local_best_block_id() == tip_id, timeout=5)

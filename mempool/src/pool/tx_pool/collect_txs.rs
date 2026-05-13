@@ -247,12 +247,16 @@ pub fn collect_txs<M>(
 
     let final_chainstate_tip =
         utxo::UtxosView::best_block_hash(&chainstate).expect("cannot fetch tip");
-    ensure!(
-        mempool_tip == final_chainstate_tip,
-        BlockConstructionError::TipMoved(mempool_tip, final_chainstate_tip),
-    );
 
-    Ok(Some(tx_accumulator))
+    if mempool_tip == final_chainstate_tip {
+        Ok(Some(tx_accumulator))
+    } else {
+        // The tip has moved, so return "Ok(None)" to signal a recoverable error.
+        // TODO: perhaps the chainstate tip check is redundant here, because the tip change can't
+        // have affected the mempool at this point, so all collected txs are valid for inclusion
+        // in a block that has `tx_accumulator.expected_tip()` as its parent.
+        Ok(None)
+    }
 }
 
 /// Return at most `tx_count` tx ids from `tx_ids`, ordering them by score and ancestry

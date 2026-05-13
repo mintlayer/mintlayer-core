@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use chainstate::{ChainstateError, tx_verifier::error::ConnectTransactionError};
 use common::{
-    chain::{Block, GenBlock, Transaction},
+    chain::{Block, Transaction},
     primitives::{H256, Id, amount::DisplayAmount},
 };
 
@@ -32,9 +32,6 @@ pub use ban_score::MempoolBanScore;
 pub enum BlockConstructionError {
     #[error(transparent)]
     Validity(#[from] TxValidationError),
-
-    #[error("The tip moved during block construction: {0:?} -> {1:?}")]
-    TipMoved(Id<GenBlock>, Id<GenBlock>),
 
     #[error("Subsystem call error: {0}")]
     SubsystemCallError(#[from] subsystem::error::CallError),
