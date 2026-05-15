@@ -2339,6 +2339,11 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    /// Reset all transactions that are currently in-mempool to inactive state
+    pub fn reset_inmempool_txs_to_inactive(&mut self) {
+        self.output_cache.reset_inmempool_txs_to_inactive();
+    }
+
     pub fn update_best_block(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,

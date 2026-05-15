@@ -1431,6 +1431,11 @@ impl OutputCache {
         Ok(())
     }
 
+    /// Reset all transactions that are currently in-mempool to inactive state.
+    pub fn reset_inmempool_txs_to_inactive(&mut self) {
+        self.txs.values_mut().for_each(|tx| tx.reset_inmempool_to_inactive());
+    }
+
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {
         self.consumed
             .get(outpoint)
