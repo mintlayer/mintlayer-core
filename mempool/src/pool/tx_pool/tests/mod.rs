@@ -46,6 +46,7 @@ mod basic;
 mod expiry;
 mod reorg;
 mod replacement;
+mod tx_ids_by_score_and_ancestry;
 pub mod utils;
 
 use self::utils::*;

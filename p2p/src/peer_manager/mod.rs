@@ -2353,6 +2353,7 @@ where
             log::warn!("Starting with networking disabled");
         }
 
+        // TODO: switch to using MonotonicTimeGetter for calculating delays.
         let mut last_time = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
 

@@ -167,11 +167,11 @@ where
     ) -> crate::Result<()> {
         let origin = LocalTxOrigin::P2p;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
-        let res = self
+        let _tx_duplicate_status = self
             .mempool_handle
             .call_mut(move |mempool| mempool.add_transaction_local(tx, origin, options))
             .await??;
-        Ok(res)
+        Ok(())
     }
 
     fn subscribe_to_events(

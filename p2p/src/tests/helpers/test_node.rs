@@ -231,6 +231,7 @@ where
             mempool,
             peer_mgr_event_sender.clone(),
             time_getter.get_time_getter(),
+            time_getter.get_monotonic_time_getter(),
         );
         let sync_mgr_join_handle = tokio_spawn_in_tracing_span(
             async move {

@@ -13,6 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
+
+use chainstate::ChainstateEventTracingWrapper;
+use common::{
+    chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
+    primitives::{Id, Idable},
+    time_getter::TimeGetter,
+};
+use logging::log;
+use mempool_types::TransactionDuplicateStatus;
+use utils::{const_value::ConstValue, debug_panic_or_log, tap_log::TapLog};
+
 use crate::{
     FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     config::MempoolConfig,
@@ -22,15 +34,6 @@ use crate::{
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
 };
-use chainstate::ChainstateEventTracingWrapper;
-use common::{
-    chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{Id, Idable},
-    time_getter::TimeGetter,
-};
-use logging::log;
-use std::{num::NonZeroUsize, sync::Arc};
-use utils::{const_value::ConstValue, tap_log::TapLog};
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 
@@ -95,14 +98,28 @@ impl MempoolInterface for Mempool {
         tx: SignedTransaction,
         origin: LocalTxOrigin,
         options: TxOptions,
-    ) -> Result<(), Error> {
+    ) -> Result<TransactionDuplicateStatus, Error> {
         let tx = self.make_entry(tx, origin.into(), options);
         let status = self.add_transaction(tx)?;
 
-        // TODO The following assertion could be avoided by parametrizing the above
-        // `add_transaction` by the origin type and have the return type depend on it.
-        assert!(status.in_mempool());
-        Ok(())
+        // Note: the transaction cannot be an orphan here, since `add_transaction` should return
+        // an error in such a case.
+        // TODO: the panics below could be avoided by parametrizing `add_transaction` by the origin
+        // type and have the return type depend on it.
+        let duplicate_status = match status {
+            TxStatus::InMempool => TransactionDuplicateStatus::New,
+            TxStatus::InMempoolDuplicate => TransactionDuplicateStatus::Duplicate,
+            TxStatus::InOrphanPool => {
+                debug_panic_or_log!("Unexpected local orphan");
+                TransactionDuplicateStatus::New
+            }
+            TxStatus::InOrphanPoolDuplicate => {
+                debug_panic_or_log!("Unexpected local duplicate orphan");
+                TransactionDuplicateStatus::Duplicate
+            }
+        };
+
+        Ok(duplicate_status)
     }
 
     #[tracing::instrument(skip_all, fields(tx_id = %tx.transaction().get_id()))]
@@ -148,6 +165,15 @@ impl MempoolInterface for Mempool {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         self.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, Error> {
+        Ok(self.get_best_tx_ids_by_score_and_ancestry(tx_ids, tx_count)?)
     }
 
     fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

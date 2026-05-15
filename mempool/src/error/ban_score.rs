@@ -24,7 +24,7 @@ use chainstate::{
 };
 use common::chain::IdCreationError;
 
-use crate::error::{Error, MempoolPolicyError, ReorgError, TxValidationError};
+use crate::error::{Error, MempoolPolicyError, ReorgError, TxCollectionError, TxValidationError};
 
 /// Ban score for transactions
 pub trait MempoolBanScore {
@@ -46,6 +46,7 @@ impl MempoolBanScore for Error {
             // Inspect these errors as well, just in case
             Error::ChainstateError(err) => err.mempool_ban_score(),
             Error::ReorgError(err) => err.mempool_ban_score(),
+            Error::TxCollectionError(err) => err.mempool_ban_score(),
 
             // Internal error
             Error::SubsystemCallError(_) => 0,
@@ -133,6 +134,19 @@ impl MempoolBanScore for ReorgError {
             ReorgError::OldTipIndex => 0,
             ReorgError::NewTipIndex => 0,
             ReorgError::BlockNotFound(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for TxCollectionError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            // This represents a function contract violation by the caller code.
+            TxCollectionError::SpecifiedTxNotFound(_) => 0,
+
+            // These 2 are mempool invariant errors.
+            TxCollectionError::TxParentNotFound { .. }
+            | TxCollectionError::TxChildNotFound { .. } => 0,
         }
     }
 }

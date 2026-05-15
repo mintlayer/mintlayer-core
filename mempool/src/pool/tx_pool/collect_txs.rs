@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    error::{BlockConstructionError, TxValidationError},
+    error::{BlockConstructionError, TxCollectionError, TxValidationError},
     pool::tx_pool::{TxMempoolEntry, TxPool, tx_verifier},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
@@ -198,6 +198,17 @@ pub fn collect_txs<M>(
             tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &unlock_timestamp);
 
         if let Err(err) = verification_result {
+            // TODO: this will fire because "parents" only reflect utxo-based relationships and not:
+            // 1) account-nonce-based ones - token commands and delegation withdrawals.
+            // 2) token creation vs token commands.
+            // 3) order creation vs order commands (though it's not a super useful scenario).
+            // 4) delegation id creation vs the delegation itself.
+            // 5) delegation id creation vs delegation withdrawal (not a super useful scenario).
+            // 6) pool creation vs delegation id creation.
+            // Need to update TxDependency to handle these relationships too and use TxDependency
+            // when determining "parents" for TxMempoolEntry.
+            // The old TODO goes below.
+
             // TODO Narrow down when the critical error is presented. Printing the error may be a
             // false positive if the tip moves during the execution of this function.
             log::error!(
@@ -242,4 +253,140 @@ pub fn collect_txs<M>(
     );
 
     Ok(Some(tx_accumulator))
+}
+
+/// Return at most `tx_count` tx ids from `tx_ids`, ordering them by score and ancestry
+/// (txs with better score will come first, ancestors will come before their descendants).
+///
+/// All txs in `tx_ids` must be present in the mempool.
+///
+/// Note: the ancestry is determined using TxMempoolEntry's `parents` and `children` collections,
+/// which at the moment only reflect utxo-based relationships, see the TODO inside `collect_txs`.
+pub fn get_best_tx_ids_by_score_and_ancestry<M>(
+    mempool: &TxPool<M>,
+    tx_ids: &BTreeSet<Id<Transaction>>,
+    tx_count: usize,
+) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+    if tx_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    // Map from a tx id to all ancestors of the tx that are present in `tx_ids`.
+    let mut selected_ancestors_map = BTreeMap::<Id<Transaction>, BTreeSet<Id<Transaction>>>::new();
+    // Map from a tx id to all descendants of the tx that are present in `tx_ids`.
+    let mut selected_descendants_map =
+        BTreeMap::<Id<Transaction>, BTreeSet<Id<Transaction>>>::new();
+    // Map from a tx id to the number of its ancestors that haven't been emitted so far.
+    let mut missing_ancestors_count_map = BTreeMap::<Id<Transaction>, usize>::new();
+    // Heap of tx entries all of whose ancestors have already been emitted.
+    let mut ready_txs = BinaryHeap::<EntryByScore>::with_capacity(tx_ids.len());
+
+    for tx_id in tx_ids {
+        let entry = mempool
+            .store
+            .get_entry(tx_id)
+            .ok_or(TxCollectionError::SpecifiedTxNotFound(*tx_id))?;
+
+        collect_selected_ancestors(mempool, entry, tx_ids, &mut selected_ancestors_map)?;
+        let selected_ancestors = selected_ancestors_map.get(tx_id).expect("must be present");
+
+        if selected_ancestors.is_empty() {
+            ready_txs.push(entry.into());
+        } else {
+            missing_ancestors_count_map.insert(*tx_id, selected_ancestors.len());
+            for ancestor_id in selected_ancestors {
+                selected_descendants_map.entry(*ancestor_id).or_default().insert(*tx_id);
+            }
+        }
+    }
+
+    let selected_descendants_map = selected_descendants_map;
+    drop(selected_ancestors_map);
+
+    let mut result = Vec::with_capacity(std::cmp::min(tx_count, tx_ids.len()));
+
+    while result.len() < tx_count {
+        let Some(tx_entry) = ready_txs.pop() else {
+            break;
+        };
+        let tx_id = tx_entry.entry.tx_id();
+        result.push(*tx_id);
+
+        if let Some(child_ids) = selected_descendants_map.get(tx_id) {
+            for child_id in child_ids {
+                match missing_ancestors_count_map.entry(*child_id) {
+                    btree_map::Entry::Vacant(_) => {}
+                    btree_map::Entry::Occupied(mut missing_ancestors_count) => {
+                        match missing_ancestors_count.get_mut() {
+                            0 => {
+                                // Should not be possible by construction.
+                                panic!("Pending child with 0 missing parents");
+                            }
+                            1 => {
+                                missing_ancestors_count.remove();
+                                let child = mempool.store.get_entry(child_id).ok_or(
+                                    TxCollectionError::TxChildNotFound {
+                                        tx_id: *tx_id,
+                                        child_tx_id: *child_id,
+                                    },
+                                )?;
+                                ready_txs.push(child.into());
+                            }
+                            missing_count => *missing_count -= 1,
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Collect all ancestors (both direct and indirect) of the specified tx that are present in `selected_tx_ids`.
+///
+/// After the call, `ancestors_map` is guaranteed to contain the id of the tx as a key, and the value
+/// will be the set of ancestors.
+///
+/// Note: it'd be better if the function returned a reference to the collected ancestors set instead
+/// of forcing the caller to do an additional lookup with `expect`, but the borrow checker throws
+/// a tantrum in this case and there doesn't seem to be a way to pacify it without doing extra lookups
+/// or cloning.
+fn collect_selected_ancestors<M>(
+    mempool: &TxPool<M>,
+    tx_entry: &TxMempoolEntry,
+    selected_tx_ids: &BTreeSet<Id<Transaction>>,
+    ancestors_map: &mut BTreeMap<Id<Transaction>, BTreeSet<Id<Transaction>>>,
+) -> Result<(), TxCollectionError> {
+    let tx_id = tx_entry.tx_id();
+
+    if !ancestors_map.contains_key(tx_id) {
+        let mut tx_ancestors = BTreeSet::new();
+
+        for parent_id in tx_entry.parents() {
+            if selected_tx_ids.contains(parent_id) {
+                tx_ancestors.insert(*parent_id);
+            } else {
+                let parent_tx_entry = mempool.store.get_entry(parent_id).ok_or(
+                    TxCollectionError::TxParentNotFound {
+                        tx_id: *tx_id,
+                        parent_tx_id: *parent_id,
+                    },
+                )?;
+                collect_selected_ancestors(
+                    mempool,
+                    parent_tx_entry,
+                    selected_tx_ids,
+                    ancestors_map,
+                )?;
+
+                let parent_ancestors = ancestors_map.get(parent_id).expect("must be present");
+                tx_ancestors.extend(parent_ancestors);
+            }
+        }
+
+        ancestors_map.insert(*tx_id, tx_ancestors);
+    }
+
+    Ok(())
 }

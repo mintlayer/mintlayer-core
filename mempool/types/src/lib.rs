@@ -19,3 +19,9 @@ mod tx_status;
 
 pub use tx_options::TxOptions;
 pub use tx_status::TxStatus;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum TransactionDuplicateStatus {
+    Duplicate,
+    New,
+}

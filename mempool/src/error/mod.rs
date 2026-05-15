@@ -43,6 +43,26 @@ pub enum BlockConstructionError {
     TxNotFound(Id<Transaction>),
 }
 
+/// Error related to the collecting of a transaction sequence for purposes other than
+/// block construction.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum TxCollectionError {
+    #[error("Specified transaction {0:x} not found in mempool")]
+    SpecifiedTxNotFound(Id<Transaction>),
+
+    #[error("Transaction {tx_id:x} has a parent {parent_tx_id:x} that is not in mempool")]
+    TxParentNotFound {
+        tx_id: Id<Transaction>,
+        parent_tx_id: Id<Transaction>,
+    },
+
+    #[error("Transaction {tx_id:x} has a child {child_tx_id:x} that is not in mempool")]
+    TxChildNotFound {
+        tx_id: Id<Transaction>,
+        child_tx_id: Id<Transaction>,
+    },
+}
+
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum Error {
     #[error(transparent)]
@@ -65,6 +85,9 @@ pub enum Error {
 
     #[error("Reorg error: {0}")]
     ReorgError(#[from] ReorgError),
+
+    #[error("Transaction collection error: {0}")]
+    TxCollectionError(#[from] TxCollectionError),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]

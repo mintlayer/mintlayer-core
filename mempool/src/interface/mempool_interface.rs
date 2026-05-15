@@ -13,6 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
+
+use common::{
+    chain::{GenBlock, SignedTransaction, Transaction},
+    primitives::Id,
+};
+use mempool_types::TransactionDuplicateStatus;
+
 use crate::{
     FeeRate, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
@@ -20,12 +28,6 @@ use crate::{
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
 };
-use common::{
-    chain::{GenBlock, SignedTransaction, Transaction},
-    primitives::Id,
-};
-use std::{num::NonZeroUsize, sync::Arc};
-
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
     fn add_transaction_remote(
@@ -41,7 +43,7 @@ pub trait MempoolInterface: Send + Sync {
         tx: SignedTransaction,
         origin: LocalTxOrigin,
         options: TxOptions,
-    ) -> Result<(), Error>;
+    ) -> Result<TransactionDuplicateStatus, Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Vec<SignedTransaction>;
@@ -71,6 +73,16 @@ pub trait MempoolInterface: Send + Sync {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
+
+    /// Return at most `tx_count` transaction ids from `tx_ids`, ordering them by score and ancestry:
+    /// transactions with better score will come first and ancestors will come before their descendants.
+    ///
+    /// All transactions in `tx_ids` must be present in the mempool before the call.
+    fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, Error>;
 
     /// Subscribe to events emitted by mempool subsystem
     fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);

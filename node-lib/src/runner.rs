@@ -167,6 +167,7 @@ async fn initialize(
         subsystem::Handle::clone(&chainstate),
         subsystem::Handle::clone(&mempool),
         Default::default(),
+        Default::default(),
         peerdb_storage,
     )?
     .add_to_manager("p2p", &mut manager);

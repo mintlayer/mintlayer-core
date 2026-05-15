@@ -65,8 +65,8 @@ trait MempoolRpc {
 
     /// Submit a transaction to the mempool.
     ///
-    /// Note that submitting a transaction to the mempool does not guarantee broadcasting it.
-    /// Use the p2p rpc interface for that.
+    /// Note that transactions submitted to the mempool this way will not be relayed to the peers.
+    /// Use the p2p rpc interface if you need that.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(
         &self,
@@ -157,7 +157,7 @@ impl MempoolRpcServer for super::MempoolHandle {
         let origin = LocalTxOrigin::Mempool;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
         let res = self
-            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options))
+            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options).map(|_| ()))
             .await
             .log_err();
         rpc::handle_result(res)

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_test_framework::helpers::make_simple_coin_tx;
 use common::chain::UtxoOutPoint;
 use common::chain::output_value::OutputValue;
 use common::primitives::H256;
@@ -218,21 +219,13 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
     val.coin_amount().unwrap_or(Amount::ZERO)
 }
 
+// TODO: remove it, call make_simple_coin_tx directly
 pub fn make_tx(
     rng: &mut impl CryptoRng,
     ins: &[(OutPointSourceId, u32)],
     outs: &[u128],
 ) -> SignedTransaction {
-    let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
-        b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(rng))
-    });
-    let builder = outs.iter().fold(builder, |b, a| {
-        b.add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(*a)),
-            Destination::AnyoneCanSpend,
-        ))
-    });
-    builder.build()
+    make_simple_coin_tx(rng, ins, outs)
 }
 
 /// Generate a valid transaction graph.

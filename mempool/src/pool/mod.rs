@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
 
 use chainstate::{ChainstateError, ChainstateEvent};
 use common::{
@@ -23,16 +23,21 @@ use common::{
 };
 use logging::log;
 use utils::{
-    const_value::ConstValue, ensure, eventhandler::EventsController, shallow_clone::ShallowClone,
+    const_value::ConstValue, debug_assert_or_log, ensure, eventhandler::EventsController,
+    shallow_clone::ShallowClone,
 };
 use utils_networking::broadcaster;
 
 use crate::{
     MempoolConfig, MempoolMaxSize, TxStatus, config,
     error::{
-        BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxValidationError,
+        BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxCollectionError,
+        TxValidationError,
     },
-    event::{self, MempoolEvent},
+    event::{
+        MempoolEvent, NewTipEvent, make_local_duplicate_tx_event, make_new_tx_accepted_event,
+        make_tx_rejected_event,
+    },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
@@ -354,7 +359,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::trace!("Performing orphan processing work");
 
         let orphan = state.work_queue.pick(|peer, orphan_id| {
-            log::debug!("Processing orphan tx {orphan_id:?} coming from peer{peer}");
+            log::debug!("Processing orphan tx {orphan_id:?} coming from peer {peer}");
 
             match state.orphans.entry(&orphan_id) {
                 Some(orphan) if orphan.is_ready() => {
@@ -443,6 +448,27 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             }
         }
     }
+
+    pub fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+        match &self.0 {
+            MempoolState::InIbd(_) => {
+                // The mempool is empty during IBD; return an error if `tx_ids` is non-empty,
+                // so that the function's contract is the same in and out of IBD.
+                if let Some(tx_id) = tx_ids.first() {
+                    Err(TxCollectionError::SpecifiedTxNotFound(*tx_id))
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            MempoolState::AfterIbd(state) => {
+                state.tx_pool.get_best_tx_ids_by_score_and_ancestry(tx_ids, tx_count)
+            }
+        }
+    }
 }
 
 // Mempool Event Reactions
@@ -494,8 +520,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
             }
         };
 
-        let new_tip = event::NewTip::new(block_id, height);
-        let event = new_tip.into();
+        let event = NewTipEvent::new(block_id, height).into();
         self.events_broadcast_mut().broadcast(event);
 
         Ok(())
@@ -571,26 +596,50 @@ impl<'a> TxFinalizer<'a> {
         match outcome {
             TxAdditionOutcome::Added { transaction } => {
                 let tx_id = *transaction.tx_id();
-                let relay_policy = transaction.tx_entry().options().relay_policy();
-                let origin = transaction.tx_entry().origin();
-                log::trace!("Added transaction {tx_id}");
+                log::trace!("Added transaction {tx_id:x}");
 
                 self.enqueue_children(transaction.tx_entry());
 
                 match &mut self.events_mode {
                     TxFinalizerEventsMode::Silent => {}
                     TxFinalizerEventsMode::Broadcast(events_broadcast) => {
-                        let event =
-                            event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
-                        let event = event.into();
-                        events_broadcast.broadcast(event);
+                        let relay_policy = transaction.tx_entry().options().relay_policy();
+                        let origin = transaction.tx_entry().origin();
+                        let event = make_new_tx_accepted_event(tx_id, relay_policy, origin);
+
+                        events_broadcast.broadcast(event.into());
                     }
                 }
 
                 Ok(TxStatus::InMempool)
             }
-            TxAdditionOutcome::Duplicate { transaction } => {
-                log::trace!("Duplicate transaction {}", transaction.tx_id());
+            TxAdditionOutcome::Duplicate {
+                existing_transaction,
+                new_transaction,
+            } => {
+                debug_assert_or_log!(
+                    existing_transaction.tx_id() == new_transaction.tx_id(),
+                    "Duplicate tx has different id"
+                );
+                let tx_id = *existing_transaction.tx_id();
+                log::trace!("Duplicate transaction {tx_id:x}");
+
+                match &mut self.events_mode {
+                    TxFinalizerEventsMode::Silent => {}
+                    TxFinalizerEventsMode::Broadcast(events_broadcast) => {
+                        let relay_policy = new_transaction.options().relay_policy();
+                        let origin = new_transaction.origin();
+
+                        // Even if the new tx is a duplicate, if it has the local origin, broadcast
+                        // the event anyway (p2p will want to re-relay it if it's relayable).
+                        if let Some(event) =
+                            make_local_duplicate_tx_event(tx_id, relay_policy, origin)
+                        {
+                            events_broadcast.broadcast(event.into());
+                        }
+                    }
+                }
+
                 Ok(TxStatus::InMempoolDuplicate)
             }
             TxAdditionOutcome::Rejected { transaction, error } => {
@@ -604,8 +653,7 @@ impl<'a> TxFinalizer<'a> {
                     .inspect_err(|err| match &mut self.events_mode {
                         TxFinalizerEventsMode::Silent => {}
                         TxFinalizerEventsMode::Broadcast(events_broadcast) => {
-                            let event =
-                                event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
+                            let event = make_tx_rejected_event(tx_id, err.clone(), origin);
                             let event = event.into();
                             events_broadcast.broadcast(event);
                         }

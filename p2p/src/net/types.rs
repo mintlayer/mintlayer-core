@@ -21,6 +21,7 @@ use common::{
     chain::{ChainConfig, config::MagicBytes},
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
+use networking::types::ConnectionDirection;
 use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
@@ -308,6 +309,7 @@ pub enum SyncingEvent {
     Connected {
         peer_id: PeerId,
         common_services: Services,
+        direction: ConnectionDirection,
         protocol_version: SupportedProtocolVersion,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
         transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,

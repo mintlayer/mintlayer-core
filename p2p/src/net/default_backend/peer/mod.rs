@@ -33,6 +33,7 @@ use networking::{
         ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream, TransportSocket,
         new_message_stream,
     },
+    types::ConnectionDirection,
 };
 use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
 use serialization::Encode as _;
@@ -63,6 +64,15 @@ pub enum ConnectionInfo {
         handshake_nonce: HandshakeNonce,
         local_services_override: Option<Services>,
     },
+}
+
+impl ConnectionInfo {
+    pub fn as_direction(&self) -> ConnectionDirection {
+        match self {
+            ConnectionInfo::Inbound => ConnectionDirection::Inbound,
+            ConnectionInfo::Outbound { .. } => ConnectionDirection::Outbound,
+        }
+    }
 }
 
 pub struct Peer<T: TransportSocket> {

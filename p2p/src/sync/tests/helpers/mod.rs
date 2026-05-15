@@ -42,16 +42,20 @@ use common::{
         signature::inputsig::InputWitness,
     },
     primitives::{Amount, BlockHeight, H256, Id, Idable},
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
-use mempool::{MempoolConfig, MempoolHandle, MempoolInit, event::TransactionProcessed};
-use networking::transport::TcpTransportSocket;
+use mempool::{
+    MempoolConfig, MempoolHandle, MempoolInit, TxOptions,
+    event::TransactionProcessedEvent,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+};
+use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
 use p2p_test_utils::{SHORT_TIMEOUT, expect_future_val, expect_no_recv, expect_recv};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use randomness::{Rng, RngExt as _};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::random::Seed;
+use test_utils::{BasicTestTimeGetter, random::Seed};
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_current_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
@@ -86,7 +90,7 @@ pub struct TestNode {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     new_tip_receiver: UnboundedReceiver<Id<GenBlock>>,
-    tx_processed_receiver: UnboundedReceiver<TransactionProcessed>,
+    tx_processed_receiver: UnboundedReceiver<TransactionProcessedEvent>,
     sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
 }
@@ -111,6 +115,7 @@ impl TestNode {
         shutdown_trigger: ShutdownTrigger,
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         protocol_version: ProtocolVersion,
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
@@ -139,6 +144,7 @@ impl TestNode {
             mempool_handle.clone(),
             peer_manager_event_sender,
             time_getter,
+            monotonic_time_getter,
             Some(sync_mgr_observer),
         );
 
@@ -203,6 +209,7 @@ impl TestNode {
             .send(SyncingEvent::Connected {
                 peer_id,
                 common_services: (*self.p2p_config.node_type).into(),
+                direction: ConnectionDirection::Outbound,
                 protocol_version: common_protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,
@@ -237,16 +244,12 @@ impl TestNode {
         expect_recv!(self.block_sync_msg_receiver)
     }
 
-    pub fn try_get_sent_block_sync_message(&mut self) -> Option<(PeerId, BlockSyncMessage)> {
-        match self.block_sync_msg_receiver.try_recv() {
-            Ok(message) => Some(message),
-            Err(mpsc::error::TryRecvError::Empty) => None,
-            Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
-        }
-    }
-
     pub async fn get_sent_transaction_sync_message(&mut self) -> (PeerId, TransactionSyncMessage) {
         expect_recv!(self.transaction_sync_msg_receiver)
+    }
+
+    pub async fn assert_no_sent_transaction_sync_message(&mut self) {
+        expect_no_recv!(self.transaction_sync_msg_receiver);
     }
 
     /// Panics if the sync manager returns an error.
@@ -285,7 +288,7 @@ impl TestNode {
 
     pub async fn receive_transaction_processed_event_from_mempool(
         &mut self,
-    ) -> TransactionProcessed {
+    ) -> TransactionProcessedEvent {
         expect_recv!(self.tx_processed_receiver)
     }
 
@@ -508,6 +511,33 @@ impl TestNode {
             .is_ok()
         {}
     }
+
+    pub async fn add_local_tx_to_mempool(
+        &self,
+        tx: SignedTransaction,
+    ) -> mempool::TransactionDuplicateStatus {
+        let origin = LocalTxOrigin::P2p;
+        let options = TxOptions::default_for(origin.into());
+        self.mempool_handle
+            .call_mut(move |m| m.add_transaction_local(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    pub async fn add_remote_tx_to_mempool(
+        &self,
+        tx: SignedTransaction,
+        remote_origin_peer_id: PeerId,
+    ) -> mempool::TxStatus {
+        let origin = RemoteTxOrigin::new(remote_origin_peer_id);
+        let options = TxOptions::default_for(origin.into());
+        self.mempool_handle
+            .call_mut(move |m| m.add_transaction_remote(tx, origin, options))
+            .await
+            .unwrap()
+            .unwrap()
+    }
 }
 
 // Represents a peer that can send messages to a node it is connected to
@@ -555,6 +585,7 @@ pub struct TestNodeBuilder {
     chainstate_config: Option<ChainstateConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
+    monotonic_time_getter: MonotonicTimeGetter,
     blocks: Vec<Block>,
     protocol_version: ProtocolVersion,
 }
@@ -568,6 +599,7 @@ impl TestNodeBuilder {
             chainstate_config: None,
             chainstate: None,
             time_getter: TimeGetter::default(),
+            monotonic_time_getter: MonotonicTimeGetter::default(),
             blocks: Vec::new(),
             protocol_version,
         }
@@ -603,6 +635,19 @@ impl TestNodeBuilder {
         self
     }
 
+    pub fn with_monotonic_time_getter(
+        mut self,
+        monotonic_time_getter: MonotonicTimeGetter,
+    ) -> Self {
+        self.monotonic_time_getter = monotonic_time_getter;
+        self
+    }
+
+    pub fn with_common_time_getter(self, common_time_getter: &BasicTestTimeGetter) -> Self {
+        self.with_time_getter(common_time_getter.get_time_getter())
+            .with_monotonic_time_getter(common_time_getter.get_monotonic_time_getter())
+    }
+
     pub fn with_blocks(mut self, blocks: Vec<Block>) -> Self {
         self.blocks = blocks;
         self
@@ -616,6 +661,7 @@ impl TestNodeBuilder {
             chainstate_config,
             chainstate,
             time_getter,
+            monotonic_time_getter,
             blocks,
             protocol_version,
         } = self;
@@ -662,6 +708,7 @@ impl TestNodeBuilder {
             shutdown_trigger,
             manager_handle,
             time_getter,
+            monotonic_time_getter,
             protocol_version,
         )
         .await
@@ -841,7 +888,7 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncManagerNotification {
-    NewTxSyncManagerMainLoopIteration { peer_id: PeerId },
+    TxSyncManagerMainLoopIterationCompleted { peer_id: PeerId },
 }
 
 #[derive(Clone)]
@@ -866,10 +913,10 @@ impl SyncManagerObserver {
 }
 
 impl Observer for SyncManagerObserver {
-    fn on_new_transaction_sync_mgr_main_loop_iteration(&mut self, peer_id: PeerId) {
-        self.send_notification(SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
-            peer_id,
-        });
+    fn on_transaction_sync_mgr_main_loop_iteration_completed(&mut self, peer_id: PeerId) {
+        self.send_notification(
+            SyncManagerNotification::TxSyncManagerMainLoopIterationCompleted { peer_id },
+        );
     }
 }
 

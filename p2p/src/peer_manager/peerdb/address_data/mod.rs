@@ -38,14 +38,6 @@ const PURGE_REACHABLE_TIME: Duration = Duration::from_secs(3600 * 24 * 7 * 4);
 pub const PURGE_REACHABLE_FAIL_COUNT: u32 =
     (PURGE_REACHABLE_TIME.as_secs() / MAX_DELAY_REACHABLE.as_secs()) as u32;
 
-/// The maximum value for the random factor by which reconnection delays will be multiplied.
-///
-/// Note that the value was chosen based on bitcoin's implementation of GetExponentialRand
-/// (https://github.com/bitcoin/bitcoin/blob/5bbf735defac20f58133bea95226e13a5d8209bc/src/random.cpp#L689)
-/// which they use to scale delays. In their implementation, the maximum scale factor will be
-/// -ln(0.0000000000000035527136788) which is about 33.
-const MAX_DELAY_FACTOR: u32 = 30;
-
 // Note: AddressState/AddressData only track outbound connections, so if an inbound connection exists
 // from a given address, its AddressState may still be Disconnected or even Unreachable.
 #[derive(Debug, Clone)]
@@ -200,7 +192,7 @@ impl AddressData {
         // so it's possible for both of them to be non-zero.
         let effective_fail_count = std::cmp::max(fail_count, connections_without_activity_count);
 
-        let factor = utils::exp_rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
+        let factor = utils::exp_rand::exponential_rand(rng);
         let offset = Self::next_connect_delay(effective_fail_count, reserved).mul_f64(factor);
         (now + offset).expect("Unexpected time addition overflow")
     }

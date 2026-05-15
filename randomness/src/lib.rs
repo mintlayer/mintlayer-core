@@ -22,7 +22,7 @@ pub use rand::{CryptoRng, Rng, RngExt, SeedableRng, TryCryptoRng, TryRng, seq};
 
 pub mod distributions {
     pub use rand::distr::{
-        Alphanumeric, Distribution, SampleString, StandardUniform, weighted::WeightedIndex,
+        Alphanumeric, Distribution, Open01, SampleString, StandardUniform, weighted::WeightedIndex,
     };
     pub mod uniform {
         pub use rand::distr::uniform::SampleRange;

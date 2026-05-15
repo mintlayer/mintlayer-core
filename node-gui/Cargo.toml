@@ -10,6 +10,7 @@ rust-version.workspace = true
 chainstate = { path = "../chainstate" }
 common = { path = "../common" }
 logging = { path = "../logging" }
+networking = { path = "../networking" }
 node-comm = { path = "../wallet/wallet-node-client", default-features = false }
 node-gui-backend = { path = "./backend", default-features = false }
 node-lib = { path = "../node-lib" }

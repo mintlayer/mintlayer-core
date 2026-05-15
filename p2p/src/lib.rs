@@ -47,7 +47,7 @@ use ::utils::{atomics::SeqCstAtomicBool, ensure, tokio_spawn_in_current_tracing_
 use common::{
     chain::{ChainConfig, config::ChainType},
     primitives::BlockHeight,
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use interface::p2p_interface::P2pInterface;
 use logging::log;
@@ -119,6 +119,7 @@ where
         chainstate_handle: chainstate::ChainstateHandle,
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
         let shutdown = Arc::new(SeqCstAtomicBool::new(false));
@@ -186,6 +187,7 @@ where
             mempool_handle.clone(),
             peer_mgr_event_sender.clone(),
             time_getter,
+            monotonic_time_getter,
         );
         let shutdown_ = Arc::clone(&shutdown);
         let sync_manager_task = tokio_spawn_in_current_tracing_span(
@@ -269,6 +271,7 @@ pub struct P2pInit<S: PeerDbStorage + 'static> {
     chainstate_handle: chainstate::ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
+    monotonic_time_getter: MonotonicTimeGetter,
     peerdb_storage: S,
     bind_addresses: Vec<SocketAddress>,
 }
@@ -290,6 +293,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
             self.chainstate_handle,
             self.mempool_handle,
             self.time_getter,
+            self.monotonic_time_getter,
             self.peerdb_storage,
         )
         .await
@@ -314,6 +318,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_p2p<S: PeerDbStorage + 'static>(
     networking_enabled: bool,
     chain_config: Arc<ChainConfig>,
@@ -321,6 +326,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     chainstate_handle: chainstate::ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
+    monotonic_time_getter: MonotonicTimeGetter,
     peerdb_storage: S,
 ) -> Result<P2pInit<S>> {
     match chain_config.chain_type() {
@@ -396,6 +402,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
         chainstate_handle,
         mempool_handle,
         time_getter,
+        monotonic_time_getter,
         peerdb_storage,
         bind_addresses,
     })

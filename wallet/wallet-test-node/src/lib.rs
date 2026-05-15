@@ -225,6 +225,7 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         chainstate.clone(),
         mempool.clone(),
         Default::default(),
+        Default::default(),
         peerdb_storage,
     )
     .unwrap()

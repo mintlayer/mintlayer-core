@@ -13,23 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
-use randomness::make_pseudo_rng;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
-    time::{Instant, MissedTickBehavior},
+    time::MissedTickBehavior,
 };
 
 use common::{
     chain::Transaction,
     primitives::{Id, Idable},
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use logging::log;
 use mempool::{MempoolHandle, TxOptions};
-use utils::const_value::ConstValue;
-use utils::sync::Arc;
+use networking::types::ConnectionDirection;
+use randomness::make_pseudo_rng;
+use utils::{const_value::ConstValue, sender_with_id::MpscUnboundedSenderWithId, sync::Arc};
 
 use crate::{
     MessagingService, PeerManagerEvent, Result,
@@ -41,19 +41,36 @@ use crate::{
         types::services::{Service, Services},
     },
     sync::{
-        BoxedObserver, LocalEvent,
+        BoxedObserver,
         chainstate_handle::ChainstateHandle,
         peer_common::{KnownTransactions, handle_message_processing_result},
     },
     types::peer_id::PeerId,
 };
 
-use super::{
-    pending_transactions::PendingTransactions, requested_transactions::RequestedTransactions,
-};
+use super::requested_transactions::RequestedTransactions;
 
-// TODO: add smaller interval for outbound connections
-pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_INBOUND: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_OUTBOUND: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone)]
+pub enum PeerTransactionSyncManagerLocalEvent {
+    /// SyncManager got a tx from the mempool that should be relayed to other peers
+    /// (the tx is not necessarily a new one).
+    MempoolRelayableTx(Id<Transaction>),
+
+    /// There are some unconfirmed local txs that need to be re-announced.
+    UnconfirmedLocalTxsReannouncement(Arc<BTreeSet<Id<Transaction>>>),
+}
+
+#[derive(Debug, Clone)]
+pub enum PeerTransactionSyncManagerLocalNotification {
+    /// The transaction has been sent to the peer.
+    TransactionSent(Id<Transaction>),
+}
+
+type PeerTransactionSyncManagerLocalNotificationSender =
+    MpscUnboundedSenderWithId<PeerId, PeerTransactionSyncManagerLocalNotification>;
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
@@ -63,20 +80,28 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
+    direction: ConnectionDirection,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_msg_receiver: Receiver<TransactionSyncMessage>,
-    local_event_receiver: UnboundedReceiver<LocalEvent>,
+    local_event_receiver: UnboundedReceiver<PeerTransactionSyncManagerLocalEvent>,
+    local_notification_sender: PeerTransactionSyncManagerLocalNotificationSender,
+    monotonic_time_getter: MonotonicTimeGetter,
+
     /// A rolling filter of all known transactions (sent to us or sent by us)
     known_transactions: KnownTransactions,
+
     /// This tracks transactions that we've requested from this peer but for which we haven't
     /// received a response yet.
     requested_transactions: RequestedTransactions,
-    /// Txs aren't relayed immediately but rather put into a collection to be propagated later
-    /// with random delay to make tracing transactions' origin harder
-    pending_transactions: PendingTransactions,
+
+    /// Txs aren't announced immediately but rather put into a collection. The announcements
+    /// happen in batches at random time intervals, this makes tracing transactions' origin harder.
+    /// Note that we don't preserve the original order of the announcements, for the same reason.
+    transactions_to_announce: BTreeSet<Id<Transaction>>,
+
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
 }
@@ -90,14 +115,17 @@ where
     pub fn new(
         id: PeerId,
         common_services: Services,
+        direction: ConnectionDirection,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         sync_msg_receiver: Receiver<TransactionSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_receiver: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<PeerTransactionSyncManagerLocalEvent>,
+        local_notification_sender: PeerTransactionSyncManagerLocalNotificationSender,
         time_getter: TimeGetter,
+        monotonic_time_getter: MonotonicTimeGetter,
         observer: Option<BoxedObserver>,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
@@ -106,15 +134,18 @@ where
             id: id.into(),
             p2p_config,
             common_services,
+            direction,
             chainstate_handle,
             mempool_handle,
             peer_mgr_event_sender,
             messaging_handle,
             sync_msg_receiver,
             local_event_receiver,
+            local_notification_sender,
+            monotonic_time_getter,
             known_transactions,
             requested_transactions: RequestedTransactions::new(time_getter),
-            pending_transactions: PendingTransactions::new(),
+            transactions_to_announce: BTreeSet::new(),
             observer,
         }
     }
@@ -135,18 +166,18 @@ where
 
     async fn main_loop(&mut self) -> Result<()> {
         let peer_id = self.id();
+
         let maintenance_interval_duration = Duration::from_secs(1);
         let mut maintenance_interval = tokio::time::interval_at(
-            Instant::now() + maintenance_interval_duration,
+            tokio::time::Instant::now() + maintenance_interval_duration,
             maintenance_interval_duration,
         );
         maintenance_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        loop {
-            if let Some(o) = self.observer.as_mut() {
-                o.on_new_transaction_sync_mgr_main_loop_iteration(peer_id);
-            }
+        let mut next_time_to_announce_txs =
+            self.monotonic_time_getter.get_time() + self.make_random_tx_announcement_delay();
 
+        loop {
             tokio::select! {
                 message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
@@ -158,43 +189,109 @@ where
                     self.handle_local_event(event)?;
                 }
 
-                _ = self.pending_transactions.due() => {
-                    if let Some(new_tx) = self.pending_transactions.pop(){
-                        self.send_message(TransactionSyncMessage::NewTransaction(new_tx))?;
-                    }
-                }
-
                 _ = maintenance_interval.tick() => {}
             }
 
             self.requested_transactions.purge_if_needed();
+
+            let now = self.monotonic_time_getter.get_time();
+
+            if now >= next_time_to_announce_txs {
+                self.announce_transactions().await?;
+
+                next_time_to_announce_txs = now + self.make_random_tx_announcement_delay();
+            }
+
+            if let Some(o) = self.observer.as_mut() {
+                o.on_transaction_sync_mgr_main_loop_iteration_completed(peer_id);
+            }
         }
+    }
+
+    // TODO: whitelisted peers should get txs without delay,
+    // see https://github.com/mintlayer/mintlayer-core/issues/1406.
+    fn make_random_tx_announcement_delay(&self) -> Duration {
+        let base_delay = match self.direction {
+            ConnectionDirection::Inbound => TX_RELAY_DELAY_INTERVAL_INBOUND,
+            ConnectionDirection::Outbound => TX_RELAY_DELAY_INTERVAL_OUTBOUND,
+        };
+        base_delay.mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()))
     }
 
     fn send_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
         self.messaging_handle.send_transaction_sync_message(self.id(), message)
     }
 
-    fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
-        log::debug!("Handling local peer mgr event: {event:?}");
+    fn handle_local_event(&mut self, event: PeerTransactionSyncManagerLocalEvent) -> Result<()> {
+        log::debug!("Handling local event: {event:?}");
 
         match event {
-            LocalEvent::ChainstateNewTip(_) => Ok(()),
-            LocalEvent::MempoolNewTx(txid) => {
-                if !self.known_transactions.contains(&txid)
-                    && self.common_services.has_service(Service::Transactions)
-                {
-                    self.add_known_transaction(txid);
+            PeerTransactionSyncManagerLocalEvent::MempoolRelayableTx(tx_id) => {
+                self.enqueue_transactions_to_announce([tx_id]);
+            }
 
-                    // TODO: whitelisted peers should get txs without delay
-                    let now = Instant::now();
-                    let delay = TX_RELAY_DELAY_INTERVAL
-                        .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-                    self.pending_transactions.push(txid, now + delay);
-                }
-                Ok(())
+            PeerTransactionSyncManagerLocalEvent::UnconfirmedLocalTxsReannouncement(tx_ids) => {
+                // Note: no special handling for this case, i.e. each tx id still has to pass
+                // the `known_transactions` filter for the re-announcement attempt to be made
+                // (the re-announcement mostly targets peers that were not present when the tx
+                // was first announced).
+                self.enqueue_transactions_to_announce(tx_ids.iter().cloned());
             }
         }
+
+        Ok(())
+    }
+
+    fn enqueue_transactions_to_announce(
+        &mut self,
+        tx_ids: impl IntoIterator<Item = Id<Transaction>>,
+    ) {
+        if self.common_services.has_service(Service::Transactions) {
+            for tx_id in tx_ids.into_iter() {
+                if !self.known_transactions.contains(&tx_id) {
+                    self.transactions_to_announce.insert(tx_id);
+                }
+            }
+        }
+    }
+
+    async fn announce_transactions(&mut self) -> Result<()> {
+        let tx_ids = std::mem::take(&mut self.transactions_to_announce);
+        log::debug!("Announcing {} transactions", tx_ids.len());
+
+        let sorted_tx_ids = self
+            .mempool_handle
+            .call(move |m| {
+                let mut tx_ids = tx_ids;
+
+                // Remove transactions that are no longer in the mempool, otherwise the next call may fail.
+                tx_ids.retain(|tx_id| m.transaction(tx_id).is_some());
+
+                // Sort the txs so that they don't become orphans immediately on the peer's side.
+                // Note:
+                // 1) At the moment the mempool tx sorting only reflects utxo-based relationships.
+                //    So, some txs may become orphans on the peer's side, but it shouldn't be a big
+                //    deal, since we announce all txs at once and the peer will normally request them
+                //    immediately.
+                // 2) Ideally, we should limit the number of txs that are sent at a time, to put pressure
+                //    against low-fee transactions during low-fee transaction floods (and this is where
+                //    `get_best_tx_ids_by_score_and_ancestry`'s sorting by tx score will come in handy,
+                //    which is redundant at the moment). But it's better to first improve mempool's
+                //    tx sorting, to avoid creating "long-term" orphans on the peer's side.
+                //    (note that in Bitcoin the max number of txs to announce at a time is
+                //    INVENTORY_BROADCAST_TARGET, which is 70 at the moment, plus some small extra
+                //    number based on the current number of unannounced txs, with the hard cap of
+                //    INVENTORY_BROADCAST_MAX, which is 1000).
+                m.get_best_tx_ids_by_score_and_ancestry(&tx_ids, tx_ids.len())
+            })
+            .await??;
+
+        for tx_id in sorted_tx_ids {
+            self.add_known_transaction(tx_id);
+            self.send_message(TransactionSyncMessage::NewTransaction(tx_id))?;
+        }
+
+        Ok(())
     }
 
     async fn handle_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
@@ -214,7 +311,7 @@ where
         handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
-    async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
+    async fn handle_transaction_request(&mut self, tx_id: Id<Transaction>) -> Result<()> {
         // TODO: should we handle a request if we haven't actually announced the tx?
         // Currently we do.
         // Note that in bitcoin-core they don't answer requests for txs that didn't exist
@@ -228,13 +325,19 @@ where
             )));
         }
 
-        let tx = self.mempool_handle.call(move |m| m.transaction(&id)).await?;
-        let res = match tx {
-            Some(tx) => TransactionResponse::Found(tx),
-            None => TransactionResponse::NotFound(id),
+        let tx = self.mempool_handle.call(move |m| m.transaction(&tx_id)).await?;
+        let (response, will_send_tx) = match tx {
+            Some(tx) => (TransactionResponse::Found(tx), true),
+            None => (TransactionResponse::NotFound(tx_id), false),
         };
 
-        self.send_message(TransactionSyncMessage::TransactionResponse(res))?;
+        self.send_message(TransactionSyncMessage::TransactionResponse(response))?;
+
+        if will_send_tx {
+            let _ = self
+                .local_notification_sender
+                .send(PeerTransactionSyncManagerLocalNotification::TransactionSent(tx_id));
+        }
 
         Ok(())
     }
@@ -263,7 +366,7 @@ where
             // because we purge "requested_transactions" from time to time. So it's technically
             // possible for such a response to be "solicited" but forgotten later.
             // So we just ignore the response.
-            log::warn!("Ignoring unsolicited TransactionResponse for tx {id}");
+            log::warn!("Ignoring unsolicited TransactionResponse for tx {id:x}");
             return Ok(());
         }
 
@@ -298,7 +401,7 @@ where
     }
 
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
-        log::debug!("Handling transaction announcement: {tx}");
+        log::debug!("Handling transaction announcement: {tx:x}");
 
         self.add_known_transaction(tx);
 
@@ -332,9 +435,11 @@ where
             // In our case, this is not that important, at least not until we implement a similar
             // kind of tx request de-duplication.
             // But still, it doesn't make sense to request an already requested tx again.
-            // Also, we don't punish the peer, mainly for consistency with other places, where
-            // we handle requested_transactions-related mischiefs leniently.
-            log::warn!("Ignoring duplicate announcement for tx {tx}");
+            // Also, we don't punish the peer, because there are valid scenarios where a node may
+            // want to re-broadcast a tx; and since the rolling bloom filter used to track known
+            // txs can have false negatives, it's possible for a well-functioning peer to announce
+            // the same tx twice.
+            log::info!("Ignoring duplicate announcement for tx {tx:x}");
             return Ok(());
         }
 
@@ -351,7 +456,7 @@ where
             // from requested_transactions, after which we'll start to handle peer's tx
             // announcements again.
             log::warn!(
-                "Ignoring announcement for tx {tx} because requested_transactions is over the limit"
+                "Ignoring announcement for tx {tx:x} because requested_transactions is over the limit"
             );
             return Ok(());
         }

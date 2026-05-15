@@ -54,7 +54,7 @@ use crate::{
     config::{self, MempoolConfig, MempoolMaxSize},
     error::{
         BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
-        ReorgError, TxValidationError,
+        ReorgError, TxCollectionError, TxValidationError,
     },
     pool::{
         entry::{TxEntry, TxEntryWithFee},
@@ -676,7 +676,12 @@ pub enum TxAdditionOutcome<'a> {
     Added { transaction: &'a TxMempoolEntry },
 
     /// Transaction already in mempool
-    Duplicate { transaction: &'a TxMempoolEntry },
+    Duplicate {
+        existing_transaction: &'a TxMempoolEntry,
+        // Note: the transaction part of the new entry will be the same as the old one (maybe except
+        // for the signatures), but the tx origin and options may be different.
+        new_transaction: TxEntry,
+    },
 
     /// Transaction was rejected from the mempool since it is not valid at the current tip
     Rejected {
@@ -737,8 +742,11 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         }
 
         let tx_id = *transaction.tx_id();
-        if let Some(transaction) = self.store.get_entry(&tx_id) {
-            let outcome = TxAdditionOutcome::Duplicate { transaction };
+        if let Some(existing_transaction) = self.store.get_entry(&tx_id) {
+            let outcome = TxAdditionOutcome::Duplicate {
+                existing_transaction,
+                new_transaction: transaction,
+            };
             return Ok(finalizer(outcome, self));
         }
 
@@ -874,6 +882,14 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
+    }
+
+    pub fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+        collect_txs::get_best_tx_ids_by_score_and_ancestry(self, tx_ids, tx_count)
     }
 
     pub fn reorg(

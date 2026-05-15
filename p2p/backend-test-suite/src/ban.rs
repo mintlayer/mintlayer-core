@@ -21,7 +21,7 @@ use chainstate::{BlockError, ChainstateError, CheckBlockError, ban_score::BanSco
 use common::{
     chain::block::{Block, BlockReward, ConsensusData, timestamp::BlockTimestamp},
     primitives::Idable,
-    time_getter::TimeGetter,
+    time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use networking::test_helpers::TestTransportMaker;
 use p2p::{
@@ -86,6 +86,7 @@ where
         mempool,
         peer_mgr_event_sender,
         time_getter.clone(),
+        MonotonicTimeGetter::default(),
     );
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -126,6 +127,7 @@ where
                 SyncingEvent::Connected {
                     peer_id,
                     common_services: _,
+                    direction: _,
                     protocol_version: _,
                     block_sync_msg_receiver,
                     transaction_sync_msg_receiver: _,

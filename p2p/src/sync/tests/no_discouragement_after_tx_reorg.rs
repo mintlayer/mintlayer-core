@@ -334,7 +334,7 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
 
             let tx_processed_by_mempool =
                 node.receive_transaction_processed_event_from_mempool().await;
-            assert!(tx_processed_by_mempool.was_accepted());
+            assert!(tx_processed_by_mempool.new_tx_accepted());
             assert_eq!(tx_processed_by_mempool.tx_id(), &tx_id);
 
             let tx_in_mempool =

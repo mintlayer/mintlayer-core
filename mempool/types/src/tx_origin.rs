@@ -40,13 +40,16 @@ impl From<RemoteTxOrigin> for TxOrigin {
 /// Signifies transaction originates in our local node
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum LocalTxOrigin {
-    /// Transaction was submitted to local node's mempool. It should not be propagated further.
+    /// Transaction was submitted directly to local node's mempool.
+    /// It should not be propagated further.
     Mempool,
 
-    /// Transaction was submitted via local node's RPC subsystem. It should be propagated if valid.
+    /// Transaction was submitted to the mempool via local node's P2P subsystem.
+    /// It should be propagated if valid.
     P2p,
 
     /// Transaction was in a block but moved into the mempool upon a reorg.
+    /// It should not be propagated further.
     PastBlock,
 }
 

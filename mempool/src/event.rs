@@ -17,6 +17,7 @@ use common::{
     chain::{GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
+use mempool_types::TransactionDuplicateStatus;
 
 use crate::{
     error::{Error, MempoolBanScore},
@@ -26,19 +27,19 @@ use crate::{
 
 /// Event triggered when a transaction has been fully validated
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TransactionProcessed {
+pub struct TransactionProcessedEvent {
     tx_id: Id<Transaction>,
     origin: TxOrigin,
     relay_policy: TxRelayPolicy,
-    result: crate::Result<()>,
+    result: crate::Result<TransactionDuplicateStatus>,
 }
 
-impl TransactionProcessed {
+impl TransactionProcessedEvent {
     fn new(
         tx_id: Id<Transaction>,
         origin: TxOrigin,
         relay_policy: TxRelayPolicy,
-        result: crate::Result<()>,
+        result: crate::Result<TransactionDuplicateStatus>,
     ) -> Self {
         Self {
             tx_id,
@@ -48,20 +49,15 @@ impl TransactionProcessed {
         }
     }
 
-    pub fn accepted(tx_id: Id<Transaction>, relay_policy: TxRelayPolicy, origin: TxOrigin) -> Self {
-        Self::new(tx_id, origin, relay_policy, Ok(()))
-    }
-
-    pub fn rejected(tx_id: Id<Transaction>, err: Error, origin: TxOrigin) -> Self {
-        Self::new(tx_id, origin, TxRelayPolicy::DontRelay, Err(err))
-    }
-
-    pub fn result(&self) -> &crate::Result<()> {
+    pub fn result(&self) -> &crate::Result<TransactionDuplicateStatus> {
         &self.result
     }
 
-    pub fn was_accepted(&self) -> bool {
-        self.result.is_ok()
+    pub fn new_tx_accepted(&self) -> bool {
+        self.result.as_ref().is_ok_and(|duplicate_status| match duplicate_status {
+            TransactionDuplicateStatus::Duplicate => false,
+            TransactionDuplicateStatus::New => true,
+        })
     }
 
     pub fn ban_score(&self) -> u32 {
@@ -81,14 +77,51 @@ impl TransactionProcessed {
     }
 }
 
+pub fn make_new_tx_accepted_event(
+    tx_id: Id<Transaction>,
+    relay_policy: TxRelayPolicy,
+    origin: TxOrigin,
+) -> TransactionProcessedEvent {
+    TransactionProcessedEvent::new(
+        tx_id,
+        origin,
+        relay_policy,
+        Ok(TransactionDuplicateStatus::New),
+    )
+}
+
+pub fn make_local_duplicate_tx_event(
+    tx_id: Id<Transaction>,
+    relay_policy: TxRelayPolicy,
+    origin: TxOrigin,
+) -> Option<TransactionProcessedEvent> {
+    match &origin {
+        TxOrigin::Local(_) => Some(TransactionProcessedEvent::new(
+            tx_id,
+            origin,
+            relay_policy,
+            Ok(TransactionDuplicateStatus::Duplicate),
+        )),
+        TxOrigin::Remote(_) => None,
+    }
+}
+
+pub fn make_tx_rejected_event(
+    tx_id: Id<Transaction>,
+    err: Error,
+    origin: TxOrigin,
+) -> TransactionProcessedEvent {
+    TransactionProcessedEvent::new(tx_id, origin, TxRelayPolicy::DontRelay, Err(err))
+}
+
 /// Event triggered when mempool has synced up to given tip
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewTip {
+pub struct NewTipEvent {
     block_id: Id<GenBlock>,
     height: BlockHeight,
 }
 
-impl NewTip {
+impl NewTipEvent {
     pub fn new(block_id: Id<GenBlock>, height: BlockHeight) -> Self {
         Self { block_id, height }
     }
@@ -105,18 +138,18 @@ impl NewTip {
 /// Events emitted by mempool
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MempoolEvent {
-    NewTip(NewTip),
-    TransactionProcessed(TransactionProcessed),
+    NewTip(NewTipEvent),
+    TransactionProcessed(TransactionProcessedEvent),
 }
 
-impl From<TransactionProcessed> for MempoolEvent {
-    fn from(event: TransactionProcessed) -> Self {
+impl From<TransactionProcessedEvent> for MempoolEvent {
+    fn from(event: TransactionProcessedEvent) -> Self {
         Self::TransactionProcessed(event)
     }
 }
 
-impl From<NewTip> for MempoolEvent {
-    fn from(event: NewTip) -> Self {
+impl From<NewTipEvent> for MempoolEvent {
+    fn from(event: NewTipEvent) -> Self {
         Self::NewTip(event)
     }
 }
