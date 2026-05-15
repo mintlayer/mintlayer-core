@@ -147,7 +147,6 @@ fn check_timelocks(
 }
 
 #[rstest::rstest]
-#[trace]
 #[case(Seed::from_entropy(), tl_until_height(1), (0, 1, 8, 15), true)]
 #[case(Seed::from_entropy(), tl_until_height(2), (0, 1, 3, 19), false)]
 #[case(Seed::from_entropy(), tl_until_height(2), (0, 2, 3, 19), true)]
@@ -178,6 +177,7 @@ fn check_timelocks(
 #[case(Seed::from_entropy(), tl_for_secs(100), (1, 2, 12, 111), false)]
 #[case(Seed::from_entropy(), tl_for_secs(100), (3, 5, 25, 125), true)]
 #[case(Seed::from_entropy(), tl_for_secs(100), (1, 2, 41, 142), true)]
+#[trace]
 fn check_timelocks_corner_cases(
     #[case] seed: Seed,
     #[case] timelock: OutputTimeLock,

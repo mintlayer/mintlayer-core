@@ -254,9 +254,9 @@ fn conclude_order_and_undo(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_entire_order_and_flush(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -308,9 +308,9 @@ fn fill_entire_order_and_flush(#[case] seed: Seed, #[case] version: OrdersVersio
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_partially_and_flush(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -391,9 +391,9 @@ fn fill_order_partially_and_flush(#[case] seed: Seed, #[case] version: OrdersVer
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_partially_and_undo(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -485,9 +485,9 @@ fn fill_order_partially_and_undo(#[case] seed: Seed, #[case] version: OrdersVers
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_partially_and_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -534,10 +534,9 @@ fn fill_order_partially_and_conclude(#[case] seed: Seed, #[case] version: Orders
 // For V0 implementation there should not be any change left.
 // For V1 it is allowed for some dust to be left in the give balance.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_must_converge(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -644,10 +643,9 @@ fn fill_order_commutativity(#[case] seed: Seed, #[case] fills: Vec<u128>) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 

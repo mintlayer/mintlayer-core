@@ -85,6 +85,7 @@ fn check_hashlock_160_ok(#[case] preimage: &str, #[case] hash: &str) {
 
 #[rstest::rstest]
 #[case(Seed::from_entropy())]
+#[trace]
 fn check_hashlock_160_random_values_mismatch(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 

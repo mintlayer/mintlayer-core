@@ -333,10 +333,9 @@ mod tests {
     }
 
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
-    #[trace]
     #[case(Seed::from_entropy(), CoinUnit::from_coins(600_000_000).to_amount_atoms())]
+    #[trace]
     fn calculate_effective_pool_balance_not_saturated(
         #[case] seed: Seed,
         #[case] final_supply: Amount,
@@ -358,10 +357,9 @@ mod tests {
     }
 
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
-    #[trace]
     #[case(Seed::from_entropy(), CoinUnit::from_coins(600_000_000).to_amount_atoms())]
+    #[trace]
     fn calculate_effective_balance_capped(#[case] seed: Seed, #[case] final_supply: Amount) {
         let mut rng = make_seedable_rng(seed);
 

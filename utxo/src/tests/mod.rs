@@ -630,10 +630,10 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), make_burn_output())]
 #[case(Seed::from_entropy(), make_create_delegation_output())]
 #[case(Seed::from_entropy(), make_delegate_staking_output())]
+#[trace]
 fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());

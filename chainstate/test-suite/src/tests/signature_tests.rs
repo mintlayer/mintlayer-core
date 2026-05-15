@@ -499,9 +499,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true)]
 #[case(Seed::from_entropy(), false)]
+#[trace]
 fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
@@ -567,11 +567,11 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true, true)]
 #[case(Seed::from_entropy(), true, false)]
 #[case(Seed::from_entropy(), false, true)]
 #[case(Seed::from_entropy(), false, false)]
+#[trace]
 fn no_sig_data_not_allowed(
     #[case] seed: Seed,
     #[case] data_allowed: bool,
