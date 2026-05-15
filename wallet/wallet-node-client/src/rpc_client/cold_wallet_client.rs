@@ -39,7 +39,7 @@ use p2p::{
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MempoolEvents, NodeInterface};
+use crate::node_traits::{MempoolEvents, NodeInterface, NodeInterfaceError};
 
 use super::ColdWalletClient;
 
@@ -47,6 +47,12 @@ use super::ColdWalletClient;
 pub enum ColdWalletRpcError {
     #[error("Method is not available in cold wallet mode")]
     NotAvailable,
+}
+
+impl NodeInterfaceError for ColdWalletRpcError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]

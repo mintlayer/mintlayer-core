@@ -47,61 +47,92 @@ pub use detail::timestamp_searcher::{TimestampSearchData, find_timestamps_for_st
 pub enum BlockProductionError {
     #[error("Failed to retrieve chainstate info")]
     ChainstateInfoRetrievalError,
+
     #[error("Wait for chainstate to sync before producing blocks")]
     ChainstateWaitForSync,
+
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
+
     #[error("Failed to add transaction {0}: {1}")]
     FailedToAddTransaction(Id<Transaction>, TxAccumulatorError),
+
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
+
     #[error("Initialization of consensus failed: {0}")]
     FailedConsensusInitialization(#[from] ConsensusCreationError),
+
     #[error("Block production cancelled")]
     Cancelled,
+
     #[error("Failed to retrieve peer count: {0}")]
     PeerCountRetrievalError(String),
+
     #[error("Connected peers {0} is below the required peer threshold {0}")]
     PeerCountBelowRequiredThreshold(usize, usize),
+
     #[error("Block not found in this round")]
     TryAgainLater,
+
     #[error("Job already exists")]
     JobAlreadyExists(JobKey),
+
     #[error("Job manager error: {0}")]
     JobManagerError(#[from] JobManagerError),
+
     #[error("Mempool failed to construct block: {0}")]
     MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
+
     #[error("Failed to decrypt generate-block input data: {0}")]
     E2eError(#[from] ephemeral_e2e::error::Error),
+
     #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
     TimestampOverflow(BlockTimestamp, u64),
+
     #[error("Chainstate error: `{0}`")]
     ChainstateError(#[from] consensus::ChainstateError),
+
     #[error("Wrong height range: {0}, {1}")]
     WrongHeightRange(BlockHeight, BlockHeight),
+
     #[error("Block at height {0} doesn't exist")]
     NoBlockForHeight(BlockHeight),
+
     #[error("Block index missing for block {0}")]
     InconsistentDbMissingBlockIndex(Id<GenBlock>),
+
     #[error("Unexpected consensus type: None")]
     UnexpectedConsensusTypeNone,
+
     #[error("Unexpected consensus type: PoW")]
     UnexpectedConsensusTypePoW,
+
     #[error("Pool data for pool {0} not found")]
     PoolDataNotFound(PoolId),
+
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
+
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] detail::utils::PoSAccountingError),
+
     #[error("PoS data provided when consensus is supposed to be ignored")]
     PoSInputDataProvidedWhenIgnoringConsensus,
+
     #[error("PoW data provided when consensus is supposed to be ignored")]
     PoWInputDataProvidedWhenIgnoringConsensus,
-    #[error("Recoverable mempool error")]
+
+    // Note: the string representation of this error is checked on the client side of node RPC,
+    // this is why it was put into a separate constant.
+    #[error("{RECOVERABLE_MEMPOOL_ERROR_MSG}")]
     RecoverableMempoolError,
+
     #[error("Task exited prematurely")]
     TaskExitedPrematurely,
 }
+
+pub const RECOVERABLE_MEMPOOL_ERROR_MSG: &str = "Blockprod recoverable mempool error";
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;
 pub type BlockProductionHandle = subsystem::Handle<dyn BlockProductionInterface>;
