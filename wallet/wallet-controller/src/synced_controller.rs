@@ -1461,7 +1461,7 @@ where
 
         fetch_token_infos_into(
             &self.rpc_client,
-            &token1_id.into_iter().chain(token2_id.into_iter()).collect(),
+            &token1_id.into_iter().chain(token2_id).collect(),
             &mut tx_info.tokens_additional_info,
         )
         .await?;
