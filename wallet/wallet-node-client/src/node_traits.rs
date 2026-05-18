@@ -39,11 +39,31 @@ use wallet_types::wallet_type::WalletControllerMode;
 
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
-#[mockall::automock(type Error = anyhow::Error;)]
+pub trait NodeInterfaceError: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static {
+    /// Return true if this is the so-called "recoverable mempool error", which may happen
+    /// during block production when the chainstate tip moves and the mempool loses track of
+    /// what transactions are eligible for inclusion in the new block.
+    /// When this happens, the caller code may just retry producing a block.
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool;
+}
+
+#[derive(Debug, derive_more::Display)]
+#[display("{error}")]
+pub struct MockNodeInterfaceError {
+    pub error: anyhow::Error,
+    pub is_recoverable_mempool_error_during_block_production: bool,
+}
+
+impl NodeInterfaceError for MockNodeInterfaceError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        self.is_recoverable_mempool_error_during_block_production
+    }
+}
+
+#[mockall::automock(type Error = MockNodeInterfaceError;)]
 #[async_trait::async_trait]
 pub trait NodeInterface {
-    // Note: not requiring the `Error` trait here so that `anyhow::Error` can be used.
-    type Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static;
+    type Error: NodeInterfaceError;
 
     async fn is_cold_wallet_node(&self) -> WalletControllerMode;
 

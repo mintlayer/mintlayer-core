@@ -38,6 +38,7 @@ use helpers::{
     fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
+use node_comm::node_traits::NodeInterfaceError as _;
 use runtime_wallet::RuntimeWallet;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -773,26 +774,116 @@ where
 
     /// Try to generate the `block_count` number of blocks.
     /// The function may return an error early if some attempt fails.
+    ///
+    /// Note that this function is intended to be used on regtest/signet to populate the chainstate
+    /// and it won't work reliably if a large number of blocks enters the chainstate via other means
+    /// at the same time (e.g. via p2p during initial block download).
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
         block_count: u32,
     ) -> Result<(), ControllerError<N>> {
-        for _ in 0..block_count {
-            self.sync_once().await?;
-            let block = self
-                .generate_block(
-                    account_index,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
-                .await?;
+        let mut recoverable_errors_seen_count = 0;
 
-            self.rpc_client
-                .submit_block(block)
-                .await
-                .map_err(ControllerError::NodeCallError)?;
+        for block_idx in 0..block_count {
+            // Perform a few attempts to produce a block, retrying on a "recoverable mempool error",
+            // which indicates that the block production was aborted because the tip has changed
+            // when collecting transactions from the mempool.
+            // This may happen either because the mempool is lagging behind chainstate (so the
+            // new tip is one of the previously produced blocks) or if blocks enter the chainstate
+            // via other means (e.g. p2p).
+            // Note:
+            // 1) Potentially we may see a "recoverable mempool error" for each of the blocks
+            //    we produce here, so the retry count should be at least "the number of blocks we
+            //    produced so far" minus "the number of recoverable errors seen so far". We add
+            //    a small number to that to have some leeway in case blocks are also entering
+            //    the chainstate via other means.
+            // 2) The alternative to retrying is to wait for a NewTip event from the mempool after
+            //    each block; this would make the function more reliable in the case of the mempool
+            //    lagging, but less reliable in the case when blocks enter chainstate via p2p
+            //    (in which case a newly produced block may not become a tip at all).
+            //    I.e. there seems to be no way to make this function 100% reliable.
+            let recoverable_error_retry_count =
+                (block_idx + 1).saturating_sub(recoverable_errors_seen_count) + 5;
+            let mut recoverable_error_retry_idx = 0;
+            loop {
+                self.sync_once().await?;
+                let block_gen_result = self
+                    .generate_block(
+                        account_index,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await;
+
+                match block_gen_result {
+                    Ok(block) => {
+                        self.rpc_client
+                            .submit_block(block)
+                            .await
+                            .map_err(ControllerError::NodeCallError)?;
+                        break;
+                    }
+                    Err(err) => {
+                        let is_recoverable_err = match &err {
+                            ControllerError::NodeCallError(err) => {
+                                err.is_recoverable_mempool_error_during_block_production()
+                            }
+                            ControllerError::SyncError(_)
+                            | ControllerError::NotEnoughBlockHeight(_, _)
+                            | ControllerError::WalletFileError(_, _)
+                            | ControllerError::WalletError(_)
+                            | ControllerError::AddressEncodingError(_)
+                            | ControllerError::NoStakingPool
+                            | ControllerError::FrozenToken(_)
+                            | ControllerError::WalletIsLocked
+                            | ControllerError::StakingRunning
+                            | ControllerError::EndToEndEncryptionError(_)
+                            | ControllerError::NodeNotInSyncYet
+                            | ControllerError::InvalidLookaheadSize
+                            | ControllerError::WalletFileAlreadyOpen
+                            | ControllerError::NoWallet
+                            | ControllerError::SearchForTimestampsFailed(_)
+                            | ControllerError::ExpectingNonEmptyInputs
+                            | ControllerError::ExpectingNonEmptyOutputs
+                            | ControllerError::NoCoinUtxosToPayFeeFrom
+                            | ControllerError::InvalidTxOutput(_)
+                            | ControllerError::NotFungibleToken(_)
+                            | ControllerError::InvalidCoinAmount
+                            | ControllerError::PartiallySignedTransactionError(_)
+                            | ControllerError::InvalidTokenId
+                            | ControllerError::SighashInputCommitmentCreationError(_)
+                            | ControllerError::InvalidHtlcSecretsCount => false,
+                        };
+
+                        if !is_recoverable_err {
+                            return Err(err);
+                        }
+
+                        recoverable_errors_seen_count += 1;
+                        recoverable_error_retry_idx += 1;
+
+                        if recoverable_error_retry_idx >= recoverable_error_retry_count {
+                            log::warn!(
+                                "Too many recoverable mempool errors happened during block production, aborting"
+                            );
+
+                            return Err(err);
+                        }
+
+                        log::info!(
+                            "A recoverable mempool error happened during block production, retrying"
+                        );
+
+                        // Sleep for some amount of time, increasing it as the number of retries grows,
+                        // with the cap of 1 sec.
+                        let delay = Duration::from_millis(100 * recoverable_error_retry_idx as u64);
+                        let delay = std::cmp::min(delay, Duration::from_secs(1));
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
         }
 
         self.sync_once().await

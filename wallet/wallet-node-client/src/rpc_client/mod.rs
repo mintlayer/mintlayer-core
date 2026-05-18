@@ -18,15 +18,12 @@ pub mod cold_wallet_client;
 
 use std::sync::Arc;
 
-use common::address::AddressError;
-use common::chain::ChainConfig;
-use common::primitives::per_thousand::PerThousandParseError;
-use rpc::ClientError;
-use rpc::RpcAuthData;
-use rpc::RpcWsClient;
-use rpc::new_ws_client;
+use common::{
+    address::AddressError, chain::ChainConfig, primitives::per_thousand::PerThousandParseError,
+};
+use rpc::{ClientError, RpcAuthData, RpcWsClient, new_ws_client};
 
-use crate::node_traits::NodeInterface;
+use crate::node_traits::{NodeInterface, NodeInterfaceError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
@@ -42,6 +39,25 @@ pub enum NodeRpcError {
     AddressError(#[from] AddressError),
     #[error("PerThousand parse error: {0}")]
     PerThousandParseError(#[from] PerThousandParseError),
+}
+
+impl NodeInterfaceError for NodeRpcError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        match self {
+            NodeRpcError::ResponseError(err) => match err {
+                rpc::ClientError::Call(err_obj) => {
+                    err_obj.message().contains(blockprod::RECOVERABLE_MEMPOOL_ERROR_MSG)
+                }
+                _ => false,
+            },
+
+            NodeRpcError::InitializationError(_)
+            | NodeRpcError::DecodingError(_)
+            | NodeRpcError::ClientCreationError(_)
+            | NodeRpcError::AddressError(_)
+            | NodeRpcError::PerThousandParseError(_) => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

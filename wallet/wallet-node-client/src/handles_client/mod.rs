@@ -48,7 +48,7 @@ use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MempoolEvents, NodeInterface};
+use crate::node_traits::{MempoolEvents, NodeInterface, NodeInterfaceError};
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
@@ -104,6 +104,51 @@ impl WalletHandlesClient {
         let _best_block = self.chainstate.call(move |this| this.get_best_block_id()).await??;
 
         Ok(())
+    }
+}
+
+impl NodeInterfaceError for WalletHandlesClientError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        match self {
+            WalletHandlesClientError::BlockProduction(err) => match err {
+                BlockProductionError::RecoverableMempoolError => true,
+
+                BlockProductionError::ChainstateInfoRetrievalError
+                | BlockProductionError::ChainstateWaitForSync
+                | BlockProductionError::SubsystemCallError(_)
+                | BlockProductionError::FailedToAddTransaction(_, _)
+                | BlockProductionError::FailedToConstructBlock(_)
+                | BlockProductionError::FailedConsensusInitialization(_)
+                | BlockProductionError::Cancelled
+                | BlockProductionError::PeerCountRetrievalError(_)
+                | BlockProductionError::PeerCountBelowRequiredThreshold(_, _)
+                | BlockProductionError::TryAgainLater
+                | BlockProductionError::JobAlreadyExists(_)
+                | BlockProductionError::JobManagerError(_)
+                | BlockProductionError::MempoolBlockConstruction(_)
+                | BlockProductionError::E2eError(_)
+                | BlockProductionError::TimestampOverflow(_, _)
+                | BlockProductionError::ChainstateError(_)
+                | BlockProductionError::WrongHeightRange(_, _)
+                | BlockProductionError::NoBlockForHeight(_)
+                | BlockProductionError::InconsistentDbMissingBlockIndex(_)
+                | BlockProductionError::UnexpectedConsensusTypeNone
+                | BlockProductionError::UnexpectedConsensusTypePoW
+                | BlockProductionError::PoolDataNotFound(_)
+                | BlockProductionError::PoolBalanceNotFound(_)
+                | BlockProductionError::PoSAccountingError(_)
+                | BlockProductionError::PoSInputDataProvidedWhenIgnoringConsensus
+                | BlockProductionError::PoWInputDataProvidedWhenIgnoringConsensus
+                | BlockProductionError::TaskExitedPrematurely => false,
+            },
+
+            WalletHandlesClientError::CallError(_)
+            | WalletHandlesClientError::Chainstate(_)
+            | WalletHandlesClientError::P2p(_)
+            | WalletHandlesClientError::Hex(_)
+            | WalletHandlesClientError::MempoolError(_)
+            | WalletHandlesClientError::AttemptedExit => false,
+        }
     }
 }
 

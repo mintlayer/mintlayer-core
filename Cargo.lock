@@ -5399,6 +5399,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "derive_more 1.0.0",
  "futures",
  "logging",
  "mempool",
