@@ -1364,7 +1364,7 @@ mod produce_block {
                             let origin = LocalTxOrigin::Mempool;
                             let options = TxOptions::default_for(origin.into());
 
-                            for tx in std::iter::once(main_tx).chain(dependent_txs.into_iter()) {
+                            for tx in std::iter::once(main_tx).chain(dependent_txs) {
                                 mp.add_transaction_local(tx, origin, options.clone()).unwrap();
                             }
                         }

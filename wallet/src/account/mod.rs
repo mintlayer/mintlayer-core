@@ -2073,8 +2073,7 @@ impl<K: AccountKeyChains> Account<K> {
                 median_time,
                 utxo_states,
                 with_locked,
-            )
-            .into_iter(),
+            ),
             |(_, tx_output)| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;

@@ -1912,7 +1912,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         10,
         &mut rng,
     );
-    let mut addresses = BTreeSet::from_iter(addresses.into_iter());
+    let mut addresses = BTreeSet::from_iter(addresses);
     for addr in &addresses {
         peer_mgr.peerdb.peer_discovered(*addr);
     }

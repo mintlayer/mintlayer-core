@@ -60,7 +60,7 @@ fn separate_call_and_result() {
                 assert_eq!(responses.len(), expected.len());
 
                 // Gather and verify results
-                for (response, expected) in responses.into_iter().zip(expected.into_iter()) {
+                for (response, expected) in responses.into_iter().zip(expected) {
                     assert_eq!(response.await.unwrap(), expected);
                 }
 

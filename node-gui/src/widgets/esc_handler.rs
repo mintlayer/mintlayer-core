@@ -124,16 +124,14 @@ where
         viewport: &Rectangle,
     ) -> event::Status {
         let event_captured = match &event {
-            Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
-                if *key == keyboard::Key::Named(keyboard::key::Named::Escape) {
-                    if let Some(msg) = &self.msg_to_emit {
-                        shell.publish(msg.clone());
-                    }
-
-                    true
-                } else {
-                    false
+            Event::Keyboard(keyboard::Event::KeyPressed { key, .. })
+                if *key == keyboard::Key::Named(keyboard::key::Named::Escape) =>
+            {
+                if let Some(msg) = &self.msg_to_emit {
+                    shell.publish(msg.clone());
                 }
+
+                true
             }
             _ => false,
         };
