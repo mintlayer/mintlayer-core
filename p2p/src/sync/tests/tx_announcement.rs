@@ -869,22 +869,22 @@ async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
 
         let independent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 0)],
-            &[output_amount - independent_tx_fee],
+            [(funding_tx_id.into(), 0)],
+            [output_amount - independent_tx_fee],
         );
         let independent_tx_id = independent_tx.transaction().get_id();
 
         let parent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 1)],
-            &[1, output_amount - parent_tx_fee - 1],
+            [(funding_tx_id.into(), 1)],
+            [1, output_amount - parent_tx_fee - 1],
         );
         let parent_tx_id = parent_tx.transaction().get_id();
 
         let child_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 2), (parent_tx_id.into(), 0)],
-            &[1, output_amount - child_tx_fee],
+            [(funding_tx_id.into(), 2), (parent_tx_id.into(), 0)],
+            [1, output_amount - child_tx_fee],
         );
         let child_tx_id = child_tx.transaction().get_id();
 
@@ -1008,22 +1008,22 @@ async fn unconfirmed_local_transactions_reannouncement(
 
         let local_independent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 0)],
-            &[output_amount - local_independent_tx_fee],
+            [(funding_tx_id.into(), 0)],
+            [output_amount - local_independent_tx_fee],
         );
         let local_independent_tx_id = local_independent_tx.transaction().get_id();
 
         let local_parent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 1)],
-            &[1, output_amount - local_parent_tx_fee - 1],
+            [(funding_tx_id.into(), 1)],
+            [1, output_amount - local_parent_tx_fee - 1],
         );
         let local_parent_tx_id = local_parent_tx.transaction().get_id();
 
         let local_child_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 2), (local_parent_tx_id.into(), 0)],
-            &[1, output_amount - local_child_tx_fee],
+            [(funding_tx_id.into(), 2), (local_parent_tx_id.into(), 0)],
+            [1, output_amount - local_child_tx_fee],
         );
         let local_child_tx_id = local_child_tx.transaction().get_id();
 
@@ -1033,22 +1033,22 @@ async fn unconfirmed_local_transactions_reannouncement(
 
         let remote_independent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 3)],
-            &[output_amount - remote_independent_tx_fee],
+            [(funding_tx_id.into(), 3)],
+            [output_amount - remote_independent_tx_fee],
         );
         let remote_independent_tx_id = remote_independent_tx.transaction().get_id();
 
         let remote_parent_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 4)],
-            &[1, output_amount - remote_parent_tx_fee - 1],
+            [(funding_tx_id.into(), 4)],
+            [1, output_amount - remote_parent_tx_fee - 1],
         );
         let remote_parent_tx_id = remote_parent_tx.transaction().get_id();
 
         let remote_child_tx = make_simple_coin_tx(
             &mut rng,
-            &[(funding_tx_id.into(), 5), (remote_parent_tx_id.into(), 0)],
-            &[1, output_amount - remote_child_tx_fee],
+            [(funding_tx_id.into(), 5), (remote_parent_tx_id.into(), 0)],
+            [1, output_amount - remote_child_tx_fee],
         );
         let remote_child_tx_id = remote_child_tx.transaction().get_id();
 
@@ -1225,11 +1225,7 @@ fn transaction_with_amount(
     block_id: Id<GenBlock>,
     amount_atoms: u128,
 ) -> SignedTransaction {
-    make_simple_coin_tx(
-        rng,
-        &[(OutPointSourceId::from(block_id), 0)],
-        &[amount_atoms],
-    )
+    make_simple_coin_tx(rng, [(OutPointSourceId::from(block_id), 0)], [amount_atoms])
 }
 
 fn transaction(rng: &mut impl CryptoRng, block_id: Id<GenBlock>) -> SignedTransaction {

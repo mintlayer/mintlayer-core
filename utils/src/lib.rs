@@ -46,6 +46,7 @@ pub mod rust_backtrace;
 pub mod sender_with_id;
 pub mod set_flag;
 pub mod shallow_clone;
+pub mod shuffled;
 pub mod sorted;
 pub mod tap_log;
 pub mod try_as;

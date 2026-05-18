@@ -164,6 +164,9 @@ pub struct MempoolStore {
 
     /// Memory usage accumulator
     mem_tracker: mem_usage::MemUsageTracker,
+
+    #[cfg(test)]
+    heavy_validity_checks_enabled: bool,
 }
 
 // If a transaction is removed from the mempool for any reason other than inclusion in a block,
@@ -194,6 +197,8 @@ impl MempoolStore {
             seq_nos_by_tx: Tracked::default(),
             next_seq_no: 0,
             mem_tracker: mem_usage::MemUsageTracker::new(),
+            #[cfg(test)]
+            heavy_validity_checks_enabled: true,
         }
     }
 
@@ -244,7 +249,16 @@ impl MempoolStore {
     }
 
     #[cfg(test)]
+    pub fn disable_heavy_validity_checks(&mut self) {
+        self.heavy_validity_checks_enabled = false;
+    }
+
+    #[cfg(test)]
     fn assert_valid_inner(&self) {
+        if !self.heavy_validity_checks_enabled {
+            return;
+        }
+
         use mem_usage::MemoryUsage;
         fn hash_map_size_deep<K: Eq + std::hash::Hash, V: MemoryUsage, D>(
             map: &StoreHashMap<K, Tracked<V, D>>,
@@ -630,7 +644,7 @@ impl MempoolStore {
         tx_id: &Id<Transaction>,
     ) -> Result<Ancestors, MempoolPolicyError> {
         let entry = self.get_existing_entry(tx_id)?;
-        Ok(entry.collect_ancestors(&self))
+        Ok(entry.collect_ancestors(self))
     }
 
     /// Collect all descendants of the specified existing transaction.
@@ -640,14 +654,14 @@ impl MempoolStore {
         tx_id: &Id<Transaction>,
     ) -> Result<Descendants, MempoolPolicyError> {
         let entry = self.get_existing_entry(tx_id)?;
-        Ok(entry.collect_descendants(&self))
+        Ok(entry.collect_descendants(self))
     }
 
     /// Collect the cluster that the specified existing transaction belongs to.
     /// Mainly intended for testing.
     pub fn collect_cluster(&self, tx_id: &Id<Transaction>) -> Result<Cluster, MempoolPolicyError> {
         let entry = self.get_existing_entry(tx_id)?;
-        Ok(entry.collect_cluster(&self)?)
+        entry.collect_cluster(self)
     }
 }
 

@@ -56,7 +56,7 @@ impl MempoolInit {
     ) -> Self {
         Self {
             chain_config,
-            mempool_config: mempool_config.into(),
+            mempool_config,
             chainstate_handle,
             time_getter,
         }

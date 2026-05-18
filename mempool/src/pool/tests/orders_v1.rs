@@ -168,7 +168,7 @@ async fn non_orphans(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone().into(),
+            mempool_config.clone(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,
@@ -531,7 +531,7 @@ async fn orphans_with_missing_utxo(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone().into(),
+            mempool_config.clone(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,
@@ -773,7 +773,7 @@ async fn orphans_with_missing_order(#[case] seed: Seed) {
     let create_mempool = || {
         Mempool::new(
             Arc::clone(&chain_config),
-            mempool_config.clone().into(),
+            mempool_config.clone(),
             chainstate_handle.clone(),
             Default::default(),
             StoreMemoryUsageEstimator,

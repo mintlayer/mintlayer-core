@@ -173,6 +173,11 @@ impl<M> TxPool<M> {
             .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
     }
+
+    #[cfg(test)]
+    pub fn disable_heavy_validity_checks(&mut self) {
+        self.store.disable_heavy_validity_checks()
+    }
 }
 
 // Rolling-fee-related methods

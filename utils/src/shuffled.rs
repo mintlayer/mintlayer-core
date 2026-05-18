@@ -1,4 +1,4 @@
-// Copyright (c) 2024 RBB S.r.l
+// Copyright (c) 2026 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,25 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::config::*;
-use utils::*;
+use std::convert::AsMut;
 
-use common::{
-    chain::{
-        Destination, OutPointSourceId, TxInput, TxOutput, output_value::OutputValue,
-        signature::inputsig::InputWitness,
-    },
-    primitives::{Amount, H256, Id, Idable},
-};
+use randomness::{CryptoRng, SliceRandom as _};
 
-mod basic;
-mod orders_v1;
-mod orphans;
-mod relatives;
-mod utils;
+/// An extension trait allowing to shuffle a container without creating an intermediate mutable
+/// variable.
+pub trait Shuffled<Item>: AsMut<[Item]> {
+    fn shuffled(self, rng: &mut impl CryptoRng) -> Self;
+}
 
-#[ctor::ctor]
-fn init() {
-    logging::init_logging();
+impl<T, Item> Shuffled<Item> for T
+where
+    T: AsMut<[Item]>,
+{
+    fn shuffled(mut self, rng: &mut impl CryptoRng) -> Self {
+        self.as_mut().shuffle(rng);
+        self
+    }
 }

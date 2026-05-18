@@ -677,7 +677,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("before adding parent");
     let mut tx_pool = TxPool::new(
         Arc::clone(&chain_config),
-        create_mempool_config().into(),
+        create_mempool_config(),
         chainstate_interface,
         mock_clock,
         mock_usage,
@@ -1281,7 +1281,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let mut tx_pool = TxPool::new(
         chain_config,
-        create_mempool_config().into(),
+        create_mempool_config(),
         chainstate_handle,
         Default::default(),
         mock_usage,
@@ -1595,4 +1595,120 @@ async fn initial_values(#[case] seed: Seed) {
         .get_fee_rate_points(NonZeroUsize::new(rng.random_range(1..100)).unwrap())
         .unwrap();
     assert_eq!(initial_fee_rate_points, fee_rate_points);
+}
+
+// Originally, when adding a transaction, a recursive function was used to collect its ancestors,
+// which could potentially result in a stack overflow.
+// Here we create a long chain of transactions and use a small stack size, the combination that
+// would crash the original implementation. Two cases exist:
+// a) The default cluster tx count limit is used; adding the tx that violates the limit should fail.
+// b) A huge cluster tx count limit is used; all txs should be added successfully.
+// In either case, the test shouldn't crash.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+fn stack_overflow_on_transaction_addition(
+    #[case] seed: Seed,
+    #[values(false, true)] unlimited_cluster_tx_count: bool,
+) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        // Use a small stack - 256Kb. Note that the underlying OS may have a minimum stack size
+        // (and different OSs have different minimums), so this value is not a guarantee and the
+        // actual stack may be bigger, but it's unlikely that the minimum is more than 128Kb (but
+        // we can't use 128Kb here because in debug builds it's not enough to even start the test).
+        .thread_stack_size(256 * 1024)
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let test_body = move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        // With the original recursive implementation, about 900 txs were enough to crash the test
+        // in debug builds and 2200 in release builds (with 256Kb of stack).
+        // We use bigger values just in case, but not too big, because the test will become too slow
+        // in the unlimited cluster size case.
+        let chain_len: usize = if cfg!(debug_assertions) { 2000 } else { 5_000 };
+
+        let mut amount = 1_000_000;
+        let funding_tx = make_tx(
+            &mut rng,
+            &[(OutPointSourceId::BlockReward(genesis_id.into()), 0)],
+            &[amount],
+        );
+        let funding_tx_id = funding_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(funding_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let max_cluster_tx_count = if unlimited_cluster_tx_count {
+            usize::MAX
+        } else {
+            *MaxClusterTxCount::default()
+        };
+
+        let mut mempool = setup_with_chainstate_generic(
+            tf.chainstate(),
+            MempoolConfig {
+                min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+                max_cluster_size_bytes: usize::MAX.into(),
+                max_cluster_tx_count: max_cluster_tx_count.into(),
+            },
+            Default::default(),
+        );
+
+        if unlimited_cluster_tx_count {
+            // Disable heavy checks because this case is already pretty slow.
+            mempool.disable_heavy_validity_checks();
+        }
+
+        let mut prev_source: OutPointSourceId = funding_tx_id.into();
+        let mut tx_ids = BTreeSet::new();
+
+        for i in 0..chain_len {
+            let tx = make_tx(&mut rng, &[(prev_source, 0)], &[amount - 1]);
+            amount -= 1;
+            let tx_id = tx.transaction().get_id();
+            prev_source = tx_id.into();
+
+            let result = mempool.add_transaction_test(tx);
+
+            if unlimited_cluster_tx_count || i < max_cluster_tx_count {
+                assert_eq!(result, Ok(TxStatus::InMempool));
+                tx_ids.insert(tx_id);
+            } else {
+                assert_eq!(
+                    result,
+                    Err(Error::Policy(
+                        MempoolPolicyError::ClusterMaxTxCountLimitViolated {
+                            limit: max_cluster_tx_count
+                        }
+                    ))
+                );
+                break;
+            }
+        }
+
+        let actual_tx_ids = mempool
+            .get_all()
+            .iter()
+            .map(|tx| tx.transaction().get_id())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(actual_tx_ids, tx_ids);
+    };
+
+    runtime.block_on(async move {
+        // Note: need to use `spawn` or `spawn_blocking` here, to make sure the stack size actually
+        // applies (the `runtime.block_on` itself waits on the test thread, which has the default
+        // stack size).
+        tokio::task::spawn_blocking(move || {
+            test_body();
+        })
+        .await
+        .unwrap();
+    });
 }

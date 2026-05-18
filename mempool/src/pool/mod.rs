@@ -120,7 +120,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
 
         let mut this = Self(MempoolState::InIbd(MempoolStateInIbd {
             chain_config,
-            mempool_config: mempool_config.into(),
+            mempool_config,
             chainstate_handle,
             clock,
             memory_usage_estimator,
@@ -275,6 +275,13 @@ impl<M> Mempool<M> {
         match &self.0 {
             MempoolState::InIbd(_) => None,
             MempoolState::AfterIbd(state) => state.orphans.get(id).map(TxEntry::transaction),
+        }
+    }
+
+    pub fn get_all_orphan_transaction_ids(&self) -> Vec<Id<Transaction>> {
+        match &self.0 {
+            MempoolState::InIbd(_) => Vec::new(),
+            MempoolState::AfterIbd(state) => state.orphans.get_all_transaction_ids(),
         }
     }
 
