@@ -19,20 +19,19 @@ use common::primitives::id::hash_encoded;
 use super::*;
 
 #[rstest]
-#[trace]
 #[case::success(
     Seed::from_entropy(),
     Amount::from_atoms(100_000_000),
     Amount::from_atoms(90_000_000),
     true
 )]
-#[trace]
 #[case::failure(
     Seed::from_entropy(),
     Amount::from_atoms(90_000_000),
     Amount::from_atoms(100_000_000),
     false
 )]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn two_transactions_in_sequence(
     #[case] seed: Seed,
@@ -110,26 +109,23 @@ async fn two_transactions_in_sequence(
 // This is a simple diamond transaction graph but it covers many interesting cases.
 //
 #[rstest]
-#[trace]
 #[case::topological_order(
     Seed::from_entropy(),
     vec![(0, 0b0001, 0b0000), (1, 0b0011, 0b0000), (2, 0b0111, 0b0000), (3, 0b1111, 0b0000)],
 )]
-#[trace]
 #[case::op_branch_released_first(
     Seed::from_entropy(),
     vec![(1, 0b0000, 0b0010), (3, 0b0000, 0b1010), (0, 0b0011, 0b1000), (2, 0b1111, 0b0000)],
 )]
-#[trace]
 #[case::one_orphan_then_mempool(
     Seed::from_entropy(),
     vec![(1, 0b0000, 0b0010), (0, 0b0011, 0b0000), (2, 0b0111, 0b0000), (3, 0b1111, 0b0000)],
 )]
-#[trace]
 #[case::reverse_topological_order(
     Seed::from_entropy(),
     vec![(3, 0b0000, 0b1000), (2, 0b0000, 0b1100), (1, 0b0000, 0b1110), (0, 0b1111, 0b0000)],
 )]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, usize, usize)>) {
     let mut rng = make_seedable_rng(seed);
@@ -279,12 +275,10 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case::p2p(Seed::from_entropy(), LocalTxOrigin::P2p)]
-#[trace]
 #[case::mempool(Seed::from_entropy(), LocalTxOrigin::Mempool)]
-#[trace]
 #[case::block(Seed::from_entropy(), LocalTxOrigin::PastBlock)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigin) {
     let mut rng = make_seedable_rng(seed);

@@ -22,6 +22,7 @@ use crate::cli_test_framework::CliTestFramework;
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn staking_locked_wallet(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);

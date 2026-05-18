@@ -298,10 +298,9 @@ fn pool_decommissioning(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -585,10 +584,9 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 

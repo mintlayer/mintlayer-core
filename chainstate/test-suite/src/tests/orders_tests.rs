@@ -732,10 +732,9 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -822,10 +821,9 @@ fn conclude_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersi
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -921,10 +919,9 @@ fn conclude_order_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersio
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1061,10 +1058,9 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1283,10 +1279,9 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn try_overbid_order_in_multiple_txs(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1396,10 +1391,9 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed, #[case] version: Orders
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1585,10 +1579,9 @@ fn fill_completely_then_conclude(#[case] seed: Seed, #[case] version: OrdersVers
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1720,10 +1713,9 @@ fn conclude_order_check_signature(#[case] seed: Seed, #[case] version: OrdersVer
 // Create a chain with an order which is filled partially.
 // Reorg from a point before the order was created, so that after reorg storage has no information on the order
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -1819,10 +1811,9 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
 // Create a chain with an order which is filled partially or completely and then concluded.
 // Reorg from a point after the order was created, so that after reorg storage has original information on the order
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -2025,10 +2016,9 @@ fn test_activation(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn create_order_with_nft(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -2469,10 +2459,9 @@ fn partially_fill_order_with_nft_v1(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -2554,10 +2543,9 @@ fn fill_order_with_zero(#[case] seed: Seed, #[case] version: OrdersVersion) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_underbid(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         use orders_accounting::calculate_filled_amount;
@@ -3064,10 +3052,9 @@ fn create_order_fill_activate_fork_fill_conclude(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn freeze_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -3497,10 +3484,9 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
 
 // Orders with zero values are not allowed.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn order_with_zero_value(#[case] seed: Seed, #[case] version: OrdersVersion) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -3943,10 +3929,9 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
 // it creates a block with 2 identical inputs among its transactions (which would normally be
 // rejected with the DuplicateInputInBlock error, but v1 FillOrder inputs are an exception).
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_twice_in_same_block(
     #[case] seed: Seed,
     #[case] version: OrdersVersion,

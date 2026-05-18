@@ -58,8 +58,8 @@ fn generate_conds(rng: &mut impl Rng, n_sat: usize, n_dissat: usize) -> Vec<Scri
 #[case(Seed::from_entropy(), 0..=0, 1..=1)]
 #[case(Seed::from_entropy(), 1..=1, 0..=0)]
 #[case(Seed::from_entropy(), 1..=1, 1..=1)]
-#[trace]
 #[case(Seed::from_entropy(), 2..=100, 2..=100)]
+#[trace]
 fn threshold_collect_satisfied(
     #[case] seed: Seed,
     #[case] sat_range: RangeInclusive<usize>,
@@ -94,10 +94,10 @@ fn threshold_collect_satisfied(
 }
 
 #[rstest::rstest]
-#[trace]
 #[case::zero(Seed::from_entropy(), 0..=0)]
 #[case::unit(Seed::from_entropy(), 1..=1)]
 #[case::rand(Seed::from_entropy(), 2..=100)]
+#[trace]
 fn conjunction_matches_explicit(#[case] seed: Seed, #[case] size_range: RangeInclusive<usize>) {
     let mut rng = make_seedable_rng(seed);
     let n = rng.random_range(size_range);

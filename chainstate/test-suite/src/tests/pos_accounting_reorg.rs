@@ -49,7 +49,6 @@ use test_utils::random::{Seed, make_seedable_rng};
 // Block `a` and block `c` have stake pool operation.
 // Check that after reorg all accounting data from block `a` was removed and from block `c` added to storage.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 0)]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 1)]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 2)]
@@ -59,6 +58,7 @@ use test_utils::random::{Seed, make_seedable_rng};
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 0)]
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 1)]
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 2)]
+#[trace]
 fn stake_pool_reorg(
     #[case] seed: Seed,
     #[case] epoch_length: NonZeroU64,
