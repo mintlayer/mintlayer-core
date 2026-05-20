@@ -323,38 +323,76 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Create a tx bigger than `ChainConfig::max_tx_size_for_mempool`.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
+async fn tx_bigger_than_block_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
 
-    let single_output_size = TxOutput::Transfer(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(100)),
         Destination::AnyoneCanSpend,
-    )
-    .encoded_size();
-    let too_many_outputs =
-        tf.chainstate.get_chain_config().max_tx_size_for_mempool() / single_output_size;
-    let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
-        empty_witness(&mut rng),
     );
-    for _ in 0..too_many_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(100)),
-            Destination::AnyoneCanSpend,
-        ))
-    }
-    let tx = tx_builder.build();
+    let output_size = output.encoded_size();
+    let outputs_count =
+        tf.chainstate.get_chain_config().max_tx_size_for_mempool() / output_size + 1;
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output_n_times(outputs_count, &output)
+        .build();
     let mut mempool = setup_with_chainstate(tf.chainstate());
 
     assert_eq!(
         mempool.add_transaction_test(tx),
-        Err(MempoolPolicyError::ExceedsMaxBlockSize.into())
+        Err(MempoolPolicyError::TxSizeExceedsMaxBlockSize.into())
+    );
+    mempool.store.assert_valid();
+    Ok(())
+}
+
+// Create a tx bigger than the cluster size specified in the mempool config.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tx_bigger_than_cluster_size(#[case] seed: Seed) -> anyhow::Result<()> {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
+
+    let max_cluster_size = rng.random_range(10_000..500_000);
+    let output = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(100)),
+        Destination::AnyoneCanSpend,
+    );
+    let output_size = output.encoded_size();
+    let outputs_count = max_cluster_size / output_size + 1;
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output_n_times(outputs_count, &output)
+        .build();
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        max_cluster_size_bytes: max_cluster_size.into(),
+
+        max_cluster_tx_count: Default::default(),
+    };
+    let mut mempool =
+        setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
+
+    assert_eq!(
+        mempool.add_transaction_test(tx),
+        Err(MempoolPolicyError::TxSizeExceedsMaxClusterSize.into())
     );
     mempool.store.assert_valid();
     Ok(())
@@ -464,12 +502,12 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let entry4 = mempool.store.get_entry(ids.get(3).expect("index")).expect("entry");
     let entry5 = mempool.store.get_entry(ids.get(4).expect("index")).expect("entry");
     let entry6 = mempool.store.get_entry(ids.get(5).expect("index")).expect("entry");
-    assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).len(), 0);
-    assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).len(), 0);
-    assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).len(), 2);
-    assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).len(), 3);
-    assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
-    assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
+    assert_eq!(entry1.collect_ancestors(&mempool.store).len(), 0);
+    assert_eq!(entry2.collect_ancestors(&mempool.store).len(), 0);
+    assert_eq!(entry3.collect_ancestors(&mempool.store).len(), 2);
+    assert_eq!(entry4.collect_ancestors(&mempool.store).len(), 3);
+    assert_eq!(entry5.collect_ancestors(&mempool.store).len(), 3);
+    assert_eq!(entry6.collect_ancestors(&mempool.store).len(), 5);
 
     assert_eq!(entry1.fees_with_ancestors(), Amount::from_atoms(1).into());
     assert_eq!(entry2.fees_with_ancestors(), Amount::from_atoms(1).into());
@@ -1285,7 +1323,7 @@ async fn mempool_full_real(#[case] seed: Seed) {
 
     // Get total memory size without memory limit
     let memory_size = {
-        let mut storage = MempoolStore::new();
+        let mut storage = MempoolStore::new(Default::default());
         for entry in &txs {
             storage.add_transaction(entry.clone()).expect("tx insertion to succeed");
             log::trace!("Storage mem usage updated: {}", storage.memory_usage());
@@ -1361,13 +1399,22 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
         ));
     }
     let parent = tx_builder.build();
-    let mut mempool = setup_with_chainstate(tf.chainstate());
+    let num_child_txs = num_outputs;
+
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        // Make sure we don't hit the max cluster tx count limit.
+        max_cluster_tx_count: (num_child_txs + 1).into(),
+        max_cluster_size_bytes: Default::default(),
+    };
+    let mut mempool =
+        setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
 
     let parent_id = parent.transaction().get_id();
 
     let outpoint_source_id = OutPointSourceId::Transaction(parent.transaction().get_id());
     mempool.add_transaction_test(parent)?.assert_in_mempool();
-    let num_child_txs = num_outputs;
+
     let flags = 0;
     let fee = get_relay_fee_from_tx_size(estimate_tx_size(1, num_outputs));
     let mut txs = Vec::new();
@@ -1399,6 +1446,11 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
+// If use_cluster_size_limit is false, the max cluster size will be set to some artificially large
+// value, so the test tx size values will be checked against `ChainConfig::max_tx_size_for_mempool`.
+// Otherwise, `ChainConfig::max_tx_size_for_mempool` will be set to some artificially large value
+// and the max cluster size will be set to the default value of `ChainConfig::max_tx_size_for_mempool`,
+// so the test tx size values will be checked against the max cluster size.
 #[rstest]
 #[case(Seed::from_entropy(), 300, true)]
 #[case(Seed::from_entropy(), 1_000, true)]
@@ -1413,15 +1465,48 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case::at_block_limit(Seed::from_entropy(), 1_048_576, false)]
 #[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] accept: bool) {
+async fn accepted_tx_size(
+    #[case] seed: Seed,
+    #[case] tx_size: usize,
+    #[case] accept: bool,
+    #[values(false, true)] use_cluster_size_limit: bool,
+) {
     let mut rng = make_seedable_rng(seed);
 
+    let default_max_tx_size_from_blocks =
+        chain::config::create_unit_test_config().max_tx_size_for_mempool();
+
+    // Note: we can't modify `max_tx_size_for_mempool` directly, but its value depends on the "max_block_size_"
+    // values, so we modify them instead.
+    let large_limit = default_max_tx_size_from_blocks * 2;
+    let (max_block_size_with_standard_txs, max_block_size_with_smart_contracts, max_cluster_size) =
+        if use_cluster_size_limit {
+            (
+                Some(large_limit),
+                Some(large_limit),
+                default_max_tx_size_from_blocks,
+            )
+        } else {
+            (None, None, large_limit)
+        };
+
     let tf = {
-        let chain_config =
-            common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                .data_deposit_max_size(Some(2_000_000))
-                .build();
-        TestFramework::builder(&mut rng).with_chain_config(chain_config).build()
+        let mut chain_config_builder =
+            chain::config::create_unit_test_config_builder().data_deposit_max_size(Some(2_000_000));
+
+        if let Some(max_block_size_with_standard_txs) = max_block_size_with_standard_txs {
+            chain_config_builder = chain_config_builder
+                .max_block_size_with_standard_txs(max_block_size_with_standard_txs);
+        }
+
+        if let Some(max_block_size_with_smart_contracts) = max_block_size_with_smart_contracts {
+            chain_config_builder = chain_config_builder
+                .max_block_size_with_smart_contracts(max_block_size_with_smart_contracts);
+        }
+
+        TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config_builder.build())
+            .build()
     };
 
     let transaction = {
@@ -1451,18 +1536,29 @@ async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] ac
         transaction
     };
 
-    let max_tx_size = tf.chain_config().max_tx_size_for_mempool();
-    let mut mempool = setup_with_chainstate(tf.chainstate());
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        max_cluster_size_bytes: max_cluster_size.into(),
+
+        max_cluster_tx_count: Default::default(),
+    };
+    let mut mempool =
+        setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
     let result = mempool.add_transaction_test(transaction);
 
+    let expected_err = if use_cluster_size_limit {
+        MempoolPolicyError::TxSizeExceedsMaxClusterSize
+    } else {
+        MempoolPolicyError::TxSizeExceedsMaxBlockSize
+    };
     let expected = match accept {
         true => Ok(TxStatus::InMempool),
-        false => Err(Error::Policy(MempoolPolicyError::ExceedsMaxBlockSize)),
+        false => Err(Error::Policy(expected_err)),
     };
 
     assert_eq!(
         result, expected,
-        "tx_size: {tx_size}, max tx size: {max_tx_size}"
+        "tx_size: {tx_size}, max tx size: {default_max_tx_size_from_blocks}"
     );
 }
 
@@ -1482,6 +1578,8 @@ async fn initial_values(#[case] seed: Seed) {
             rng.random_range(100_000..100_000_000_000_000),
         )
         .into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     };
     let tx_pool =
         setup_with_chainstate_generic(tf.chainstate(), mempool_config.clone(), Default::default());

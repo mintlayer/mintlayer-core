@@ -45,6 +45,8 @@ pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
 pub fn create_mempool_config() -> MempoolConfig {
     MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     }
 }
 
@@ -328,6 +330,8 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: fee_rate.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     };
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(

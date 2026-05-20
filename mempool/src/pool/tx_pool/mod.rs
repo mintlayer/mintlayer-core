@@ -47,7 +47,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{const_value::ConstValue, debug_panic_or_log, ensure, shallow_clone::ShallowClone};
+use utils::{debug_panic_or_log, ensure, shallow_clone::ShallowClone};
 use utxo::UtxosStorageRead;
 
 use crate::{
@@ -76,7 +76,7 @@ use self::{
 
 pub struct TxPool<M> {
     chain_config: Arc<ChainConfig>,
-    mempool_config: ConstValue<MempoolConfig>,
+    mempool_config: Arc<MempoolConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: config::MempoolMaxSize,
@@ -96,22 +96,22 @@ impl<M> std::fmt::Debug for TxPool<M> {
 impl<M> TxPool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: ConstValue<MempoolConfig>,
+        mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
-        log::trace!("Setting up mempool transaction verifier");
         let tx_verifier = tx_verifier::create(
             chain_config.shallow_clone(),
             chainstate_handle.shallow_clone(),
         );
+        let mempool_config = Arc::new(mempool_config);
+        let store = MempoolStore::new(Arc::clone(&mempool_config));
 
-        log::trace!("Creating mempool object");
         Self {
             chain_config,
             mempool_config,
-            store: MempoolStore::new(),
+            store,
             chainstate_handle,
             max_size: Self::initial_max_size(),
             max_tx_age: config::DEFAULT_MEMPOOL_EXPIRY,
@@ -153,7 +153,11 @@ impl<M> TxPool<M> {
             self.chainstate_handle.shallow_clone(),
         );
 
-        std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+        std::mem::replace(
+            &mut self.store,
+            MempoolStore::new(Arc::clone(&self.mempool_config)),
+        )
+        .into_transactions()
     }
 
     pub fn is_ibd(&self) -> bool {
@@ -268,8 +272,18 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         ensure!(has_outputs, MempoolPolicyError::NoOutputs);
 
         let size = entry.size().get();
-        let max_size = self.chain_config.max_tx_size_for_mempool();
-        ensure!(size <= max_size, MempoolPolicyError::ExceedsMaxBlockSize);
+        let absolute_max_size = self.chain_config.max_tx_size_for_mempool();
+        ensure!(
+            size <= absolute_max_size,
+            MempoolPolicyError::TxSizeExceedsMaxBlockSize
+        );
+
+        // A tx cannot be bigger than a cluster.
+        let max_cluster_size = *self.mempool_config.max_cluster_size_bytes;
+        ensure!(
+            size <= max_cluster_size,
+            MempoolPolicyError::TxSizeExceedsMaxClusterSize
+        );
 
         Ok(())
     }
@@ -540,7 +554,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     ) -> StoreHashSet<Id<Transaction>> {
         conflicts
             .iter()
-            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store).take())
+            .flat_map(|conflict| conflict.collect_descendants(&self.store).take())
             .chain(conflicts.iter().map(|conflict| *conflict.tx_id()))
             .collect()
     }
@@ -548,9 +562,17 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
 // Transaction Finalization
 impl<M: MemoryUsageEstimator> TxPool<M> {
-    fn finalize_tx(&mut self, entry: TxEntryWithFee) -> Result<(), Error> {
+    fn finalize_tx(
+        &mut self,
+        entry: TxEntryWithFee,
+        tx_verifier_delta: TransactionVerifierDelta,
+    ) -> Result<(), Error> {
         let tx_id = *entry.tx_id();
         self.store.add_transaction(entry)?;
+
+        // Note: the call to `add_transaction` above can fail e.g. if the cluster-related limits
+        // are violated. So we flush the delta to storage only after `add_transaction` has succeeded.
+        tx_verifier::flush_to_storage(&mut self.tx_verifier, tx_verifier_delta)?;
 
         self.remove_expired_transactions();
         ensure!(
@@ -814,8 +836,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         if config::ENABLE_RBF {
             self.store.drop_conflicts(conflicts);
         }
-        tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
-        self.finalize_tx(tx)?;
+        self.finalize_tx(tx, delta)?;
         self.store.assert_valid();
 
         Ok(TxAdditionAttemptOutcome::Added)

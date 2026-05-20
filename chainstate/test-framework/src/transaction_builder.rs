@@ -72,6 +72,13 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn add_output_n_times(mut self, n: usize, output: &TxOutput) -> Self {
+        for _ in 0..n {
+            self = self.add_output(output.clone())
+        }
+        self
+    }
+
     pub fn outputs(&self) -> &[TxOutput] {
         &self.outputs
     }

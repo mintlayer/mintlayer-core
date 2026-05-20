@@ -24,7 +24,10 @@ use chainstate::{
 };
 use common::chain::IdCreationError;
 
-use crate::error::{Error, MempoolPolicyError, ReorgError, TxCollectionError, TxValidationError};
+use crate::error::{
+    Error, MempoolPolicyError, MempoolStoreError, MempoolStoreInvariantError, ReorgError,
+    TxCollectionError, TxValidationError,
+};
 
 /// Ban score for transactions
 pub trait MempoolBanScore {
@@ -60,8 +63,12 @@ impl MempoolBanScore for MempoolPolicyError {
             // Basic transaction integrity checks failed, ban peer.
             MempoolPolicyError::NoInputs => 100,
             MempoolPolicyError::NoOutputs => 100,
-            MempoolPolicyError::ExceedsMaxBlockSize => 100,
+            MempoolPolicyError::TxSizeExceedsMaxBlockSize => 100,
             MempoolPolicyError::RelayFeeOverflow => 100,
+
+            // Don't punish the peer for this, because max cluster size is technically configurable
+            // and the peer doesn't know the node's mempool configuration.
+            MempoolPolicyError::TxSizeExceedsMaxClusterSize => 0,
 
             // Errors to do with transaction conflicts and replacements are not punished since the
             // peer may not be aware of all the transactions the node has in the mempool.
@@ -72,6 +79,11 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::TransactionFeeLowerThanConflictsWithDescendants => 0,
             MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. } => 0,
             MempoolPolicyError::AdditionalFeesUnderflow => 0,
+
+            // Same as above, cluster size violations are not punished because the peer may not
+            // be aware of the node's mempool contents.
+            MempoolPolicyError::ClusterMaxTxCountLimitViolated { .. }
+            | MempoolPolicyError::ClusterTotalTxSizeLimitViolated { .. } => 0,
 
             // Sending transactions with a fee below the minimum should not be punished.
             MempoolPolicyError::InsufficientFeesToRelay { .. } => 0,
@@ -85,8 +97,28 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::AncestorFeeOverflow => 0,
             MempoolPolicyError::AncestorFeeUpdateOverflow => 0,
             MempoolPolicyError::FeeOverflow => 0,
-            MempoolPolicyError::GetParentError => 0,
             MempoolPolicyError::DescendantOfExpiredTransaction => 0,
+
+            MempoolPolicyError::MempoolStoreInvariantError(err) => err.mempool_ban_score(),
+            MempoolPolicyError::MempoolStoreError(err) => err.mempool_ban_score(),
+        }
+    }
+}
+
+impl MempoolBanScore for MempoolStoreInvariantError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            // This whole enum is supposed to contain only invariant violations, but just in case
+            // we explicitly list its variants here.
+            MempoolStoreInvariantError::SupposedlyExistingEntryNotFound(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for MempoolStoreError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            MempoolStoreError::TxEntryNotFound(_) => 0,
         }
     }
 }
@@ -141,12 +173,8 @@ impl MempoolBanScore for ReorgError {
 impl MempoolBanScore for TxCollectionError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
-            // This represents a function contract violation by the caller code.
-            TxCollectionError::SpecifiedTxNotFound(_) => 0,
-
-            // These 2 are mempool invariant errors.
-            TxCollectionError::TxParentNotFound { .. }
-            | TxCollectionError::TxChildNotFound { .. } => 0,
+            TxCollectionError::MempoolStoreInvariantError(err) => err.mempool_ban_score(),
+            TxCollectionError::MempoolStoreError(err) => err.mempool_ban_score(),
         }
     }
 }

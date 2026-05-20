@@ -141,9 +141,19 @@ make_config_setting!(
     FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000_000))
 );
 
+make_config_setting!(MaxClusterTxCount, usize, 64);
+make_config_setting!(MaxClusterSizeBytes, usize, 100_000);
+
 #[derive(Debug, Clone, Default)]
 pub struct MempoolConfig {
+    /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
     pub min_tx_relay_fee_rate: MinTxRelayFeeRate,
+
+    /// Maximum number of transactions that a single cluster can contain.
+    pub max_cluster_tx_count: MaxClusterTxCount,
+
+    /// Maximum total size of transactions that is allowed in a single cluster.
+    pub max_cluster_size_bytes: MaxClusterSizeBytes,
 }
 
 impl MempoolConfig {

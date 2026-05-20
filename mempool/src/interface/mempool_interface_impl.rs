@@ -23,7 +23,7 @@ use common::{
 };
 use logging::log;
 use mempool_types::TransactionDuplicateStatus;
-use utils::{const_value::ConstValue, debug_panic_or_log, tap_log::TapLog};
+use utils::{debug_panic_or_log, tap_log::TapLog};
 
 use crate::{
     FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
@@ -42,7 +42,7 @@ type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 /// Contains all the information required to spin up the mempool subsystem
 pub struct MempoolInit {
     chain_config: Arc<ChainConfig>,
-    mempool_config: ConstValue<MempoolConfig>,
+    mempool_config: MempoolConfig,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 }

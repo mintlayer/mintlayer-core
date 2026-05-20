@@ -28,7 +28,7 @@ use chainstate::{
 };
 use common::{
     chain::{
-        OutPointSourceId, Transaction, UtxoOutPoint,
+        self, OutPointSourceId, Transaction, UtxoOutPoint,
         block::{Block, BlockReward, ConsensusData, timestamp::BlockTimestamp},
         config::ChainConfig,
         output_value::OutputValue,

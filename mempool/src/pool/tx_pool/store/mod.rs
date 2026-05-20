@@ -20,6 +20,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     num::NonZeroUsize,
     ops::Deref,
+    sync::Arc,
 };
 
 use common::{
@@ -27,13 +28,13 @@ use common::{
     primitives::Id,
 };
 use logging::log;
-use utils::{debug_assert_or_log, newtype};
+use utils::{debug_assert_or_log, ensure, newtype};
 
 use super::{Fee, Time, TxEntry, TxEntryWithFee};
 
 use crate::{
-    FeeRate,
-    error::MempoolPolicyError,
+    FeeRate, MempoolConfig,
+    error::{MempoolPolicyError, MempoolStoreError, MempoolStoreInvariantError},
     pool::{entry::TxDependency, tx_pool::store::mem_usage::MemUsageTracker},
 };
 
@@ -54,19 +55,30 @@ pub type StoreHashMap<K, V> =
 pub type StoreHashSet<K> = hashbrown::hash_set::HashSet<K, std::collections::hash_map::RandomState>;
 
 newtype! {
+    /// A set of ids of in-mempool (or "unconfirmed") ancestors of a certain tx.
     #[derive(Debug)]
     pub struct Ancestors(StoreHashSet<Id<Transaction>>);
 }
 
-impl Ancestors {
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+newtype! {
+    /// A set of ids of descendants of a certain tx.
+    #[derive(Debug)]
+    pub struct Descendants(StoreHashSet<Id<Transaction>>);
 }
 
 newtype! {
+    /// A set of ids of txs that will form a cluster after a certain new tx is added to the mempool
+    /// (the new tx id itself is not included).
+    ///
+    /// A cluster is a connected component of the in-mempool dependency graph.
     #[derive(Debug)]
-    pub struct Descendants(StoreHashSet<Id<Transaction>>);
+    pub struct NewTxCluster(StoreHashSet<Id<Transaction>>);
+}
+
+newtype! {
+    /// A set of ids of txs that currently form a cluster in the mempool.
+    #[derive(Debug)]
+    pub struct Cluster(StoreHashSet<Id<Transaction>>);
 }
 
 newtype! {
@@ -103,6 +115,9 @@ pub type TrackedTxIdMultiMap<K> = TrackedSet<(K, Id<Transaction>)>;
 
 #[derive(Debug)]
 pub struct MempoolStore {
+    /// Mempool config
+    mempool_config: Arc<MempoolConfig>,
+
     // This is the "main" data structure storing Mempool entries. All other structures in the
     // MempoolStore contain ids (hashes) of entries, sorted according to some order of interest.
     // (Note: TxMempoolEntry is boxed, because the hashbrown table stores items directly
@@ -167,8 +182,9 @@ pub enum MempoolRemovalReason {
 }
 
 impl MempoolStore {
-    pub fn new() -> Self {
+    pub fn new(mempool_config: Arc<MempoolConfig>) -> Self {
         Self {
+            mempool_config,
             txs_by_descendant_score: Tracked::default(),
             txs_by_ancestor_score: Tracked::default(),
             txs_by_id: Tracked::default(),
@@ -187,6 +203,31 @@ impl MempoolStore {
 
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
         self.txs_by_id.get(id).map(|tx| tx.as_ref())
+    }
+
+    /// A helper function to reduce the noise of error mapping.
+    ///
+    /// The tx is supposed to be present in the mempool by construction, so it's an invariant
+    /// error if it's not found.
+    pub fn get_existing_entry(
+        &self,
+        id: &Id<Transaction>,
+    ) -> Result<&TxMempoolEntry, MempoolStoreInvariantError> {
+        self.get_entry(id)
+            .ok_or(MempoolStoreInvariantError::SupposedlyExistingEntryNotFound(
+                *id,
+            ))
+    }
+
+    /// A helper function to reduce the noise of error mapping.
+    ///
+    /// The tx id is supposed to come from user code, so it's not an invariant violation if
+    /// the tx can't be found.
+    pub fn get_specified_entry(
+        &self,
+        id: &Id<Transaction>,
+    ) -> Result<&TxMempoolEntry, MempoolStoreError> {
+        self.get_entry(id).ok_or(MempoolStoreError::TxEntryNotFound(*id))
     }
 
     pub fn contains(&self, id: &Id<Transaction>) -> bool {
@@ -317,7 +358,7 @@ impl MempoolStore {
     }
 
     fn update_ancestor_state_for_drop(&mut self, entry: &TxMempoolEntry) {
-        for ancestor in entry.unconfirmed_ancestors(self).0 {
+        for ancestor in entry.collect_ancestors(self).0 {
             self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
                 tracker.modify(
                     txs_by_id.get_mut(&ancestor).expect("ancestor"),
@@ -453,7 +494,7 @@ impl MempoolStore {
     }
 
     fn update_descendant_state_for_drop(&mut self, entry: &TxMempoolEntry) {
-        for descendant_id in entry.unconfirmed_descendants(self).0 {
+        for descendant_id in entry.collect_descendants(self).0 {
             self.mem_tracker.modify(&mut self.txs_by_id, |by_id, tracker| {
                 tracker.modify(
                     by_id.get_mut(&descendant_id).expect("descendant"),
@@ -580,6 +621,33 @@ impl MempoolStore {
         txs_by_seq_no.into_values().map(move |id| {
             MemUsageTracker::forget(txs_by_id.remove(&id).expect("entry must be present")).entry
         })
+    }
+
+    /// Collect all ancestors of the specified existing transaction.
+    /// Mainly intended for testing.
+    pub fn collect_ancestors(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Ancestors, MempoolPolicyError> {
+        let entry = self.get_existing_entry(tx_id)?;
+        Ok(entry.collect_ancestors(&self))
+    }
+
+    /// Collect all descendants of the specified existing transaction.
+    /// Mainly intended for testing.
+    pub fn collect_descendants(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Descendants, MempoolPolicyError> {
+        let entry = self.get_existing_entry(tx_id)?;
+        Ok(entry.collect_descendants(&self))
+    }
+
+    /// Collect the cluster that the specified existing transaction belongs to.
+    /// Mainly intended for testing.
+    pub fn collect_cluster(&self, tx_id: &Id<Transaction>) -> Result<Cluster, MempoolPolicyError> {
+        let entry = self.get_existing_entry(tx_id)?;
+        Ok(entry.collect_cluster(&self)?)
     }
 }
 
@@ -715,7 +783,6 @@ impl TxMempoolEntry {
     }
 
     pub fn size(&self) -> NonZeroUsize {
-        // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
         self.entry.size()
     }
 
@@ -723,7 +790,8 @@ impl TxMempoolEntry {
         self.entry.creation_time()
     }
 
-    // Note: only the parents that are currently in the mempool are included here.
+    // Note: only the parents that are currently in the mempool are included here (i.e. the
+    // "unconfirmed" parents).
     pub fn parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.parents.iter()
     }
@@ -742,40 +810,9 @@ impl TxMempoolEntry {
 
     pub fn is_replaceable(&self, store: &MempoolStore) -> bool {
         self.entry.transaction().is_replaceable()
-            || self.unconfirmed_ancestors(store).0.iter().any(|ancestor| {
+            || self.collect_ancestors(store).0.iter().any(|ancestor| {
                 store.get_entry(ancestor).expect("entry").entry.transaction().is_replaceable()
             })
-    }
-
-    pub fn unconfirmed_ancestors(&self, store: &MempoolStore) -> Ancestors {
-        let mut visited = Ancestors(Default::default());
-        self.unconfirmed_ancestors_inner(&mut visited, store);
-        visited
-    }
-
-    pub fn unconfirmed_ancestors_from_parents(
-        parents: &StoreHashSet<Id<Transaction>>,
-        store: &MempoolStore,
-    ) -> Result<Ancestors, MempoolPolicyError> {
-        let mut ancestors = parents.clone().into();
-        for parent in parents {
-            let parent = store.get_entry(parent).ok_or(MempoolPolicyError::GetParentError)?;
-            parent.unconfirmed_ancestors_inner(&mut ancestors, store);
-        }
-        Ok(ancestors)
-    }
-
-    fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {
-        // TODO: change this from recursive to iterative
-        visited.reserve(self.count_with_ancestors - 1);
-        for parent in self.parents.iter() {
-            if visited.insert(*parent) {
-                store
-                    .get_entry(parent)
-                    .expect("entry")
-                    .unconfirmed_ancestors_inner(visited, store);
-            }
-        }
     }
 
     pub fn depth_postorder_descendants<'a>(
@@ -791,21 +828,60 @@ impl TxMempoolEntry {
         utils::graph_traversals::dag_depth_postorder(self, children_fn)
     }
 
-    pub fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {
-        let mut visited = Descendants(Default::default());
-        self.unconfirmed_descendants_inner(&mut visited, store);
-        visited
-    }
+    /// Collect ancestors of this transaction.
+    ///
+    /// The transaction itself may not be in the store.
+    pub fn collect_ancestors(&self, store: &MempoolStore) -> Ancestors {
+        let result = collect_relatives(
+            store,
+            self.parents.iter().copied(),
+            RelativesKind::Ancestors,
+            |_| Ok::<_, MempoolStoreInvariantError>(()),
+        );
 
-    fn unconfirmed_descendants_inner(&self, visited: &mut Descendants, store: &MempoolStore) {
-        for child in self.children.iter() {
-            if visited.insert(*child) {
-                store
-                    .get_entry(child)
-                    .expect("entry")
-                    .unconfirmed_descendants_inner(visited, store);
+        match result {
+            Ok(ancestors) => Ancestors::new(ancestors),
+            Err(MempoolStoreInvariantError::SupposedlyExistingEntryNotFound(tx_id)) => {
+                // Note: this panic existed here for ages, but in the form of a direct call
+                // of `expect` after `get_entry`.
+                // TODO: it's better to get rid of this panic and all `get_entry().expect()`
+                // calls, which are still abundant.
+                panic!("Tx with id {tx_id:x} not found in mempool");
             }
         }
+    }
+
+    /// Collect descendants of this transaction.
+    ///
+    /// The transaction itself may not be in the store.
+    pub fn collect_descendants(&self, store: &MempoolStore) -> Descendants {
+        let result = collect_relatives(
+            store,
+            self.children.iter().copied(),
+            RelativesKind::Descendants,
+            |_| Ok::<_, MempoolStoreInvariantError>(()),
+        );
+
+        match result {
+            Ok(descendants) => Descendants::new(descendants),
+            Err(MempoolStoreInvariantError::SupposedlyExistingEntryNotFound(tx_id)) => {
+                // Same note/TODO as in collect_ancestors.
+                panic!("Tx with id {tx_id:x} not found in mempool");
+            }
+        }
+    }
+
+    /// Collect the cluster that this transaction belongs to.
+    ///
+    /// The transaction itself *must* be in the store.
+    ///
+    /// This function is mainly intended for testing purposes.
+    pub fn collect_cluster(&self, store: &MempoolStore) -> Result<Cluster, MempoolPolicyError> {
+        let cluster = collect_relatives(store, [*self.tx_id()], RelativesKind::Cluster, |_| {
+            Ok::<_, MempoolPolicyError>(())
+        })?;
+
+        Ok(Cluster::new(cluster))
     }
 }
 
@@ -836,20 +912,30 @@ pub struct TxMempoolEntryWithAncestors {
 
 impl TxMempoolEntryWithAncestors {
     pub fn new(store: &MempoolStore, entry: TxEntryWithFee) -> Result<Self, MempoolPolicyError> {
-        // Genesis transaction has no parent, hence the first filter_map
-        let parents = entry
-            .transaction()
-            .inputs()
-            .iter()
-            .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
-                TxInput::Account(..)
-                | TxInput::AccountCommand(..)
-                | TxInput::OrderAccountCommand(..) => None,
-            })
-            .filter(|id| store.txs_by_id.contains_key(id))
-            .collect::<StoreHashSet<_>>();
-        let ancestors = TxMempoolEntry::unconfirmed_ancestors_from_parents(&parents, store)?;
+        let parents = collect_tx_parents(store, entry.transaction().transaction());
+
+        // Collect the cluster first, checking its size on each iteration.
+        // After that, the ancestors may be collected without the tx count check.
+        // Note: it's technically possible to unite ancestor and cluster collecting, to reduce
+        // the total number of steps during traversal. But it's probably not worth the extra
+        // complexity.
+        let cluster = NewTxCluster::new(collect_relatives(
+            store,
+            parents.iter().copied(),
+            RelativesKind::Cluster,
+            |collected_size| {
+                ensure_cluster_tx_count_limit(&store.mempool_config, 1 + collected_size)
+            },
+        )?);
+        enforce_cluster_size_limit(store, &entry, &cluster)?;
+
+        let ancestors = Ancestors::new(collect_relatives(
+            store,
+            parents.iter().copied(),
+            RelativesKind::Ancestors,
+            |_| Ok::<_, MempoolPolicyError>(()),
+        )?);
+
         let ancestor_entries_iter = ancestors
             .deref()
             .iter()
@@ -861,7 +947,7 @@ impl TxMempoolEntryWithAncestors {
 
     #[cfg(test)]
     pub fn new_from_existing_entry(store: &MempoolStore, entry: TxMempoolEntry) -> Self {
-        let ancestors = entry.unconfirmed_ancestors(store);
+        let ancestors = entry.collect_ancestors(store);
         Self { entry, ancestors }
     }
 
@@ -876,4 +962,115 @@ impl TxMempoolEntryWithAncestors {
     pub fn ancestors(&self) -> &Ancestors {
         &self.ancestors
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum RelativesKind {
+    Ancestors,
+    Descendants,
+    Cluster,
+}
+
+/// Collect relatives of the specified "initial" transactions.
+///
+/// At the end the result will contain the initial tx ids and, depending on `kind`:
+/// a) their ancestors,
+/// b) their descendants,
+/// c) the union of clusters that they belong to (if initial_tx_ids are parents of a new tx,
+///    then it's the cluster that will form after the tx is added to the mempool).
+///
+/// After each tx is added to the result, `on_new_tx_added` is called with the current size
+/// of the result as the argument.
+pub fn collect_relatives<E>(
+    store: &MempoolStore,
+    initial_tx_ids: impl IntoIterator<Item = Id<Transaction>>,
+    kind: RelativesKind,
+    mut on_new_tx_added: impl FnMut(/*cur_result_size:*/ usize) -> Result<(), E>,
+) -> Result<StoreHashSet<Id<Transaction>>, E>
+where
+    E: From<MempoolStoreInvariantError>,
+{
+    let mut stack = Vec::new();
+    let mut result = StoreHashSet::default();
+
+    let mut visit = |stack: &mut Vec<Id<Transaction>>, tx_id: &Id<Transaction>| -> Result<(), E> {
+        if result.insert(*tx_id) {
+            on_new_tx_added(result.len())?;
+            stack.push(*tx_id);
+        }
+        Ok(())
+    };
+
+    for tx_id in initial_tx_ids {
+        visit(&mut stack, &tx_id)?;
+    }
+
+    while let Some(tx_id) = stack.pop() {
+        let entry = store.get_existing_entry(&tx_id)?;
+
+        let (iter1, iter2) = match kind {
+            RelativesKind::Ancestors => (Some(entry.parents()), None),
+            RelativesKind::Descendants => (None, Some(entry.children())),
+            RelativesKind::Cluster => (Some(entry.parents()), Some(entry.children())),
+        };
+        for tx_id in iter1.into_iter().flatten().chain(iter2.into_iter().flatten()) {
+            visit(&mut stack, tx_id)?;
+        }
+    }
+
+    Ok(result)
+}
+
+fn collect_tx_parents(store: &MempoolStore, tx: &Transaction) -> StoreHashSet<Id<Transaction>> {
+    // Genesis transaction has no parent, hence the first filter_map
+    tx.inputs()
+        .iter()
+        .filter_map(|input| match input {
+            TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => None,
+        })
+        .filter(|id| store.txs_by_id.contains_key(id))
+        .collect::<StoreHashSet<_>>()
+}
+
+fn ensure_cluster_tx_count_limit(
+    mempool_config: &MempoolConfig,
+    cluster_size: usize,
+) -> Result<(), MempoolPolicyError> {
+    let limit = *mempool_config.max_cluster_tx_count;
+    ensure!(
+        cluster_size <= limit,
+        MempoolPolicyError::ClusterMaxTxCountLimitViolated { limit }
+    );
+    Ok(())
+}
+
+fn enforce_cluster_size_limit(
+    store: &MempoolStore,
+    new_tx_entry: &TxEntryWithFee,
+    cluster: &NewTxCluster,
+) -> Result<(), MempoolPolicyError> {
+    let cluster_size_bytes = {
+        let mut total_size = new_tx_entry.tx_entry().size().get();
+
+        for tx_id in cluster.iter() {
+            let entry = store.get_existing_entry(tx_id)?;
+            total_size += entry.size().get();
+        }
+
+        total_size
+    };
+
+    let limit = *store.mempool_config.max_cluster_size_bytes;
+    ensure!(
+        cluster_size_bytes <= limit,
+        MempoolPolicyError::ClusterTotalTxSizeLimitViolated {
+            actual_size: cluster_size_bytes,
+            limit
+        }
+    );
+
+    Ok(())
 }

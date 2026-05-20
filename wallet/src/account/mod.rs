@@ -338,6 +338,12 @@ impl<K: AccountKeyChains> Account<K> {
                     // when we allow paying fees with different currency
                     Amount::ZERO,
                     selection_algo,
+                    // FIXME: Get mempool config from the node and use cluster size as the limit
+                    // for the size of 1 tx (or, better, take the minimum with chain_config.max_tx_size_for_mempool,
+                    // just in case).
+                    // Same below.
+                    // Create an issue to make the wallet take the cluster limit into account when
+                    // selecting utxos.
                     self.chain_config.max_tx_size_for_mempool(),
                 )?;
 

@@ -297,10 +297,7 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
     let mut ready_txs = BinaryHeap::<EntryByScore>::with_capacity(selected_tx_ids.len());
 
     for tx_id in selected_tx_ids {
-        let entry = mempool
-            .store
-            .get_entry(tx_id)
-            .ok_or(TxCollectionError::SpecifiedTxNotFound(*tx_id))?;
+        let entry = mempool.store.get_specified_entry(tx_id)?;
 
         collect_nearest_selected_ancestors(
             mempool,
@@ -344,12 +341,7 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
                             }
                             1 => {
                                 missing_selected_ancestors_count.remove();
-                                let child = mempool.store.get_entry(child_id).ok_or(
-                                    TxCollectionError::TxChildNotFound {
-                                        tx_id: *tx_id,
-                                        child_tx_id: *child_id,
-                                    },
-                                )?;
+                                let child = mempool.store.get_existing_entry(child_id)?;
                                 ready_txs.push(child.into());
                             }
                             missing_count => *missing_count -= 1,
@@ -396,12 +388,7 @@ mod get_best_tx_ids_by_score_and_ancestry_impl {
                     // The nearest selected ancestor has been found, no need to go deeper.
                     tx_ancestors.insert(*parent_id);
                 } else {
-                    let parent_tx_entry = mempool.store.get_entry(parent_id).ok_or(
-                        TxCollectionError::TxParentNotFound {
-                            tx_id: *tx_id,
-                            parent_tx_id: *parent_id,
-                        },
-                    )?;
+                    let parent_tx_entry = mempool.store.get_existing_entry(parent_id)?;
                     collect_nearest_selected_ancestors(
                         mempool,
                         parent_tx_entry,
