@@ -48,6 +48,10 @@ impl MempoolConfigFile {
         } = config;
 
         let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
+        let max_cluster_tx_count =
+            max_cluster_tx_count.or(options.mempool_max_cluster_transaction_count);
+        let max_cluster_size_bytes =
+            max_cluster_size_bytes.or(options.mempool_max_cluster_size_bytes);
 
         MempoolConfigFile {
             min_tx_relay_fee_rate,
