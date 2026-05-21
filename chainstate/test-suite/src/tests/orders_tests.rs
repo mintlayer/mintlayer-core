@@ -33,9 +33,10 @@ use chainstate_test_framework::{
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Currency, Destination,
-        IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion, RpcOrderInfo,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint, make_order_id,
+        self, AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Currency,
+        Destination, IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
+        RpcOrderInfo, SignedTransaction, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
+        UtxoOutPoint, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
         signature::{
             DestinationSigError, EvaluatedInputWitness,
@@ -43,7 +44,9 @@ use common::{
             sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             verify_signature,
         },
-        tokens::{IsTokenFreezable, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, TokenData, TokenId, TokenIssuanceV0, TokenTotalSupply, TokenTransfer,
+        },
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Idable},
 };
@@ -51,7 +54,10 @@ use crypto::key::{KeyKind, PrivateKey};
 use logging::log;
 use orders_accounting::OrdersAccountingStorageRead as _;
 use randomness::{CryptoRng, RngExt as _, SliceRandom};
-use test_utils::random::{Seed, gen_random_bytes, make_seedable_rng};
+use test_utils::{
+    random::{Seed, gen_random_bytes, make_seedable_rng},
+    random_ascii_alphanumeric_string,
+};
 use tx_verifier::{
     CheckTransactionError,
     error::{InputCheckError, InputCheckErrorPayload, ScriptError, TranslationError},
@@ -4846,6 +4852,203 @@ fn get_orders_info_for_rpc_by_currencies_test(#[case] seed: Seed) {
 
             // Get all orders that ask for NFT2 and give NFT2
             check_both(Token(nft2_id), Token(nft2_id), BTreeMap::new());
+        }
+    });
+}
+
+// This test ensures that order creation that references a v0 token will be rejected, even if
+// tokens v1 haven't been activated.
+#[rstest]
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
+fn token_v0_in_orders_test(
+    #[case] seed: Seed,
+    #[case] orders_version: OrdersVersion,
+    #[values(false, true)] ask_for_token: bool,
+    #[values(false, true)] transfer_token_before_order_creation: bool,
+    #[values(false, true)] switch_to_tokens_v1: bool,
+) {
+    utils::concurrency::model(move || {
+        let order_creation_height = BlockHeight::new(if transfer_token_before_order_creation {
+            3
+        } else {
+            2
+        });
+
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        chain::NetUpgrades::initialize({
+                            let unitial_upgrade_builder = ChainstateUpgradeBuilder::latest()
+                                .token_issuance_version(TokenIssuanceVersion::V0)
+                                .orders_version(orders_version);
+                            let mut upgrades = vec![(
+                                BlockHeight::zero(),
+                                unitial_upgrade_builder.clone().build(),
+                            )];
+
+                            if switch_to_tokens_v1 {
+                                upgrades.push((
+                                    order_creation_height,
+                                    unitial_upgrade_builder
+                                        .token_issuance_version(TokenIssuanceVersion::V1)
+                                        .build(),
+                                ));
+                            }
+
+                            upgrades
+                        })
+                        .unwrap(),
+                    )
+                    .build(),
+            )
+            .build();
+        let genesis_utxo = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
+        let available_coins = tf.coin_amount_from_utxo(&genesis_utxo);
+
+        let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
+
+        let token_issue_amount = Amount::from_atoms(rng.random_range(1..u128::MAX));
+        let token_issuance = TokenIssuanceV0 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            amount_to_issue: token_issue_amount,
+            number_of_decimals: rng.random_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+        };
+        let change = (available_coins - token_issuance_fee).unwrap();
+        let issuance_tx = TransactionBuilder::new()
+            .add_input(TxInput::Utxo(genesis_utxo), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                token_issuance.clone().into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(change),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let issuance_tx_id = issuance_tx.transaction().get_id();
+        let issuance_outpoint = UtxoOutPoint::new(issuance_tx_id.into(), 0);
+        let change_outpoint = UtxoOutPoint::new(issuance_tx_id.into(), 2);
+        let token_id = make_token_id(
+            tf.chain_config().as_ref(),
+            tf.next_block_height(),
+            issuance_tx.inputs(),
+        )
+        .unwrap();
+
+        tf.make_block_builder()
+            .add_transaction(issuance_tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        let coin_amount = Amount::from_atoms(rng.random_range(1u128..1000));
+
+        let (token_data, token_outpoint) = if transfer_token_before_order_creation {
+            let transfer_amount =
+                Amount::from_atoms(rng.random_range(1..=token_issue_amount.into_atoms()));
+            let new_token_data = TokenData::TokenTransfer(TokenTransfer {
+                token_id,
+                amount: transfer_amount,
+            });
+
+            let transfer_tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::Utxo(issuance_outpoint),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    new_token_data.clone().into(),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let transfer_tx_id = transfer_tx.transaction().get_id();
+            tf.make_block_builder()
+                .add_transaction(transfer_tx)
+                .build_and_process(&mut rng)
+                .unwrap()
+                .unwrap();
+
+            (new_token_data, UtxoOutPoint::new(transfer_tx_id.into(), 0))
+        } else {
+            let token_data = TokenData::TokenIssuance(Box::new(token_issuance));
+            (token_data, issuance_outpoint)
+        };
+
+        // Sanity check
+        assert_eq!(tf.next_block_height(), order_creation_height);
+
+        let order_creation_tx = if ask_for_token {
+            let order_data = OrderData::new(
+                Destination::AnyoneCanSpend,
+                OutputValue::TokenV0(Box::new(token_data)),
+                OutputValue::Coin(coin_amount),
+            );
+
+            TransactionBuilder::new()
+                .add_input(change_outpoint.into(), InputWitness::NoSignature(None))
+                .add_output(TxOutput::CreateOrder(Box::new(order_data)))
+                .build()
+        } else {
+            let order_data = OrderData::new(
+                Destination::AnyoneCanSpend,
+                OutputValue::Coin(coin_amount),
+                OutputValue::TokenV0(Box::new(token_data)),
+            );
+
+            TransactionBuilder::new()
+                .add_input(token_outpoint.into(), InputWitness::NoSignature(None))
+                .add_output(TxOutput::CreateOrder(Box::new(order_data)))
+                .build()
+        };
+        let order_creation_tx_id = order_creation_tx.transaction().get_id();
+
+        let err = tf
+            .make_block_builder()
+            .add_transaction(order_creation_tx)
+            .build_and_process(&mut rng)
+            .unwrap_err();
+
+        if ask_for_token {
+            if switch_to_tokens_v1 {
+                assert_eq!(
+                    err,
+                    ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                        CheckBlockError::CheckTransactionFailed(
+                            CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::DeprecatedTokenOperationVersion(
+                                    TokenIssuanceVersion::V0,
+                                    order_creation_tx_id
+                                )
+                            )
+                        )
+                    ))
+                );
+            } else {
+                assert_eq!(
+                    err,
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::OrdersAccountingError(
+                            orders_accounting::Error::UnsupportedTokenVersion,
+                        )
+                    ))
+                );
+            }
+        } else {
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::UnsupportedTokenVersion,
+                        order_creation_tx_id.into()
+                    )
+                ))
+            );
         }
     });
 }
