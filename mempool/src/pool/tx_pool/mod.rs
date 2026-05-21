@@ -141,6 +141,10 @@ impl<M> TxPool<M> {
             .expect("best block to exist")
     }
 
+    pub fn mempool_config(&self) -> &MempoolConfig {
+        &self.mempool_config
+    }
+
     pub fn max_size(&self) -> config::MempoolMaxSize {
         self.max_size
     }

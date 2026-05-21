@@ -38,6 +38,7 @@ use helpers::{
     fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
+use mempool::MempoolConfig;
 use node_comm::node_traits::NodeInterfaceError as _;
 use runtime_wallet::RuntimeWallet;
 use std::{
@@ -302,6 +303,7 @@ where
 
     pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         best_block: (BlockHeight, Id<GenBlock>),
@@ -328,6 +330,7 @@ where
 
                 wallet::Wallet::create_new_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     best_block,
                     wallet_type,
@@ -349,6 +352,7 @@ where
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor { device_id } => wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                mempool_config,
                 db,
                 best_block,
                 wallet_type,
@@ -366,6 +370,7 @@ where
             #[cfg(feature = "ledger")]
             WalletTypeArgsComputed::Ledger => wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                mempool_config,
                 db,
                 best_block,
                 wallet_type,
@@ -382,6 +387,7 @@ where
 
     pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
@@ -407,6 +413,7 @@ where
 
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |db_tx| {
@@ -428,6 +435,7 @@ where
             WalletTypeArgsComputed::Trezor { device_id } => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |_db_tx| {
@@ -446,6 +454,7 @@ where
             WalletTypeArgsComputed::Ledger => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
@@ -512,6 +521,7 @@ where
 
     pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
         current_controller_mode: WalletControllerMode,
@@ -534,6 +544,7 @@ where
             WalletType::Cold | WalletType::Hot => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -551,6 +562,7 @@ where
             WalletType::Trezor => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -572,6 +584,7 @@ where
             WalletType::Ledger => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -1587,7 +1600,6 @@ where
                             None => {
                                 log::error!("Mempool notifications channel is closed.");
                                 tokio::time::sleep(ERROR_DELAY).await;
-
 
                                 match self.rpc_client
                                     .mempool_subscribe_to_events()

@@ -31,7 +31,9 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{FeeRate, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides};
+use mempool::{
+    FeeRate, MempoolConfig, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
+};
 use p2p::{
     interface::types::ConnectedPeer,
     types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress},
@@ -309,6 +311,10 @@ impl NodeInterface for ColdWalletClient {
 
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        Ok(None)
     }
 
     async fn get_utxo(

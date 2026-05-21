@@ -160,4 +160,42 @@ impl MempoolConfig {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn to_rpc_type(&self) -> RpcMempoolConfig {
+        let MempoolConfig {
+            min_tx_relay_fee_rate,
+            max_cluster_tx_count,
+            max_cluster_size_bytes,
+        } = self;
+
+        RpcMempoolConfig {
+            min_tx_relay_fee_rate: **min_tx_relay_fee_rate,
+            max_cluster_tx_count: **max_cluster_tx_count,
+            max_cluster_size_bytes: **max_cluster_size_bytes,
+        }
+    }
+}
+
+impl From<RpcMempoolConfig> for MempoolConfig {
+    fn from(value: RpcMempoolConfig) -> Self {
+        let RpcMempoolConfig {
+            min_tx_relay_fee_rate,
+            max_cluster_tx_count,
+            max_cluster_size_bytes,
+        } = value;
+
+        Self {
+            min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
+            max_cluster_tx_count: max_cluster_tx_count.into(),
+            max_cluster_size_bytes: max_cluster_size_bytes.into(),
+        }
+    }
+}
+
+/// Same as MempoolConfig but for usage in RPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc::description::HasValueHint)]
+pub struct RpcMempoolConfig {
+    pub min_tx_relay_fee_rate: FeeRate,
+    pub max_cluster_tx_count: usize,
+    pub max_cluster_size_bytes: usize,
 }

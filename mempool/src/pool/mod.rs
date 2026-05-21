@@ -299,6 +299,13 @@ impl<M> Mempool<M> {
         }
     }
 
+    pub fn mempool_config(&self) -> &MempoolConfig {
+        match &self.0 {
+            MempoolState::InIbd(state) => &state.mempool_config,
+            MempoolState::AfterIbd(state) => state.tx_pool.mempool_config(),
+        }
+    }
+
     pub fn has_work(&self) -> bool {
         match &self.0 {
             MempoolState::InIbd(_) => false,

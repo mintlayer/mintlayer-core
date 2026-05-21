@@ -21,6 +21,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
 use crypto::key::hdkd::u31::U31;
+use mempool::MempoolConfig;
 use utils::shallow_clone::ShallowClone;
 
 pub use events::{Event, TxState};
@@ -45,10 +46,15 @@ pub struct WalletService<N> {
 pub enum InitError<N: NodeInterface> {
     #[error(transparent)]
     Wallet(#[from] wallet::WalletError),
+
     #[error(transparent)]
     NodeRpc(#[from] node_comm::rpc_client::NodeRpcError),
+
     #[error(transparent)]
     Controller(#[from] WalletControllerError<N>),
+
+    #[error("Node call error: {0}")]
+    NodeCallError(N::Error),
 }
 
 impl<N> WalletService<N>
@@ -65,12 +71,16 @@ where
         let (wallet_events, events_rx) = WalletServiceEvents::new();
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
 
+        let mempool_config =
+            get_mempool_config(&node_rpc).await.map_err(InitError::NodeCallError)?;
+
         let controller = if let Some((wallet_file, open_as_wallet_type)) = &wallet_file {
             let wallet = {
                 // TODO: Allow user to set password (config file only)
                 let wallet_password = None;
                 WalletController::open_wallet(
                     chain_config.shallow_clone(),
+                    Arc::new(mempool_config),
                     wallet_file,
                     wallet_password,
                     node_rpc.is_cold_wallet_node().await,
@@ -138,4 +148,10 @@ where
     pub async fn join(self) -> Result<(), tokio::task::JoinError> {
         self.task.await
     }
+}
+
+async fn get_mempool_config<N: NodeInterface>(node_rpc: &N) -> Result<MempoolConfig, N::Error> {
+    // If node_rpc.mempool_get_config() returns None (i.e. the wallet is in the cold mode),
+    // use the default mempool config.
+    Ok(node_rpc.mempool_get_config().await?.unwrap_or_default())
 }

@@ -522,7 +522,7 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
-    /// The maximum size of any transaction submitted to the node for the mempool.
+    /// The approximate maximum size of any transaction submitted to the node for the mempool.
     ///
     /// Note that this is just an upper limit - creating a tx bigger than this doesn't make much
     /// sense, because it won't fit into a block. Normally, the cluster size limit (specified in

@@ -32,7 +32,9 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{FeeRate, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides};
+use mempool::{
+    FeeRate, MempoolConfig, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
+};
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -174,6 +176,8 @@ pub trait NodeInterface {
     ) -> Result<Option<SignedTransaction>, Self::Error>;
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error>;
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error>;
+    /// Obtain MempoolConfig from the node. None is returned if the wallet is in the cold mode.
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error>;
 }

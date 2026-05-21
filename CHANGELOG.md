@@ -22,6 +22,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
+  - Node:
+    - New options to control the newly introduced mempool cluster limits: `--mempool-max-cluster-transaction-count`
+      and `--mempool-max-cluster-size-bytes`.
+    - New RPC method `mempool_get_config`, which returns the current mempool configuration.
+
 ### Changed
   - P2p:
     - Various improvements to transaction announcement:
@@ -33,6 +38,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Mempool:
     - Various optimizations were made.
+    - There are now limits on how big a single mempool transaction cluster can be (a cluster is a set of unconfirmed
+      transactions that depend on each other); the mempool will reject transactions that would result in the formation
+      of a cluster that exceeds the limits. The default cluster limits are: max 64 transactions, max 100'000 bytes
+      in total.
 
 ### Fixed
   - Wallet:

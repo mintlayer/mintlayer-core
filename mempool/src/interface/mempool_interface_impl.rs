@@ -157,6 +157,10 @@ impl MempoolInterface for Mempool {
         self.best_block_id()
     }
 
+    fn config(&self) -> &MempoolConfig {
+        self.mempool_config()
+    }
+
     #[tracing::instrument(skip_all)]
     fn collect_txs(
         &self,

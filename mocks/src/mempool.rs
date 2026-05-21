@@ -22,7 +22,8 @@ use common::{
     primitives::Id,
 };
 use mempool::{
-    FeeRate, MempoolInterface, MempoolMaxSize, TransactionDuplicateStatus, TxOptions, TxStatus,
+    FeeRate, MempoolConfig, MempoolInterface, MempoolMaxSize, TransactionDuplicateStatus,
+    TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
@@ -53,6 +54,7 @@ mockall::mock! {
         fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
         fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> bool;
         fn best_block_id(&self) -> Id<GenBlock>;
+        fn config(&self) -> &MempoolConfig;
 
         fn collect_txs(
             &self,
