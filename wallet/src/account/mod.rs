@@ -226,6 +226,7 @@ impl<K: AccountKeyChains> Account<K> {
     // determine tx clusters. But this will be fixed in the (hopefully near) future, and all
     // dependencies will be considered (e.g. the account-based ones and things like order creation
     // vs order commands). The new algorithm will have to take this into account as well.
+    // See https://github.com/mintlayer/mintlayer-core/issues/2066.
     #[allow(clippy::too_many_arguments)]
     pub fn select_inputs_for_send_request(
         &mut self,
@@ -976,6 +977,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_order_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1004,6 +1006,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_conclude_order_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1199,6 +1202,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_spend_utxo_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1398,6 +1402,7 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(request)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn mint_tokens(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1594,6 +1599,7 @@ impl<K: AccountKeyChains> Account<K> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_change_token_transaction(
         &mut self,
         authority: Destination,

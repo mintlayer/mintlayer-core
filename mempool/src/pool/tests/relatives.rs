@@ -312,7 +312,7 @@ async fn test_relatives_and_cluster_tx_count_limit(#[case] seed: Seed) {
         assert_descendants(&mempool, &b5, &[]);
     }
 
-    // A non-orphan subtest with a bigger limit
+    // A non-orphan subtest with a bigger limit
     {
         let mut mempool = create_mempool(5);
 
@@ -388,7 +388,7 @@ async fn test_relatives_and_cluster_tx_count_limit(#[case] seed: Seed) {
         assert_descendants(&mempool, &b2, &[]);
     }
 
-    // A non-orphan subtest with the default limit. All txs will be added and form a single cluster.
+    // A non-orphan subtest with the default limit. All txs will be added and form a single cluster.
     {
         let mut mempool = create_mempool(*MaxClusterTxCount::default());
 

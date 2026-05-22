@@ -23,8 +23,8 @@ use super::UtxoSelectorError;
 /// A group of UTXOs paid to the same output script.
 /// This helps reduce privacy leaks resulting from address reuse.
 // TODO: at this moment, we always create a separate output group for each utxo, i.e. we don't have
-// by-destination grouping.
-// Note that in Bitcoin, transactions are not grouped unconditionally:
+// by-destination grouping. See https://github.com/mintlayer/mintlayer-core/issues/2067.
+// Note that in Bitcoin transactions are not grouped unconditionally:
 // *) They are grouped if either m_avoid_partial_spends or m_avoid_address_reuse is true (both are
 //    false by default).
 // *) Otherwise, if m_max_aps_fee is non-negative (it's zero by default), then a second attempt

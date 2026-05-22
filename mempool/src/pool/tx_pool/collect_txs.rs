@@ -207,6 +207,7 @@ pub fn collect_txs<M>(
             // 6) pool creation vs delegation id creation.
             // Need to update TxDependency to handle these relationships too and use TxDependency
             // when determining "parents" for TxMempoolEntry.
+            // Also see https://github.com/mintlayer/mintlayer-core/issues/2065.
             // The old TODO goes below.
 
             // TODO Narrow down when the critical error is presented. Printing the error may be a

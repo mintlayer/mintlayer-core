@@ -381,6 +381,7 @@ async fn tx_bigger_than_cluster_size(#[case] seed: Seed) -> anyhow::Result<()> {
         )
         .add_output_n_times(outputs_count, &output)
         .build();
+    let tx_size = tx.encoded_size();
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         max_cluster_size_bytes: max_cluster_size.into(),
@@ -392,7 +393,11 @@ async fn tx_bigger_than_cluster_size(#[case] seed: Seed) -> anyhow::Result<()> {
 
     assert_eq!(
         mempool.add_transaction_test(tx),
-        Err(MempoolPolicyError::TxSizeExceedsMaxClusterSize.into())
+        Err(MempoolPolicyError::TxSizeExceedsMaxClusterSize {
+            tx_size,
+            limit: max_cluster_size
+        }
+        .into())
     );
     mempool.store.assert_valid();
     Ok(())
@@ -1547,7 +1552,10 @@ async fn accepted_tx_size(
     let result = mempool.add_transaction_test(transaction);
 
     let expected_err = if use_cluster_size_limit {
-        MempoolPolicyError::TxSizeExceedsMaxClusterSize
+        MempoolPolicyError::TxSizeExceedsMaxClusterSize {
+            tx_size,
+            limit: max_cluster_size,
+        }
     } else {
         MempoolPolicyError::TxSizeExceedsMaxBlockSize
     };

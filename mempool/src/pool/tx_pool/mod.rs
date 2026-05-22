@@ -291,7 +291,10 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let max_cluster_size = *self.mempool_config.max_cluster_size_bytes;
         ensure!(
             size <= max_cluster_size,
-            MempoolPolicyError::TxSizeExceedsMaxClusterSize
+            MempoolPolicyError::TxSizeExceedsMaxClusterSize {
+                tx_size: size,
+                limit: max_cluster_size
+            }
         );
 
         Ok(())

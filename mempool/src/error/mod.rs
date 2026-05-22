@@ -98,8 +98,8 @@ pub enum MempoolPolicyError {
     #[error("Transaction size exceeds the maximum block size")]
     TxSizeExceedsMaxBlockSize,
 
-    #[error("Transaction size exceeds the maximum cluster size")]
-    TxSizeExceedsMaxClusterSize,
+    #[error("Transaction size ({tx_size}) exceeds the maximum cluster size ({limit})")]
+    TxSizeExceedsMaxClusterSize { tx_size: usize, limit: usize },
 
     #[error(
         "Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}"

@@ -329,9 +329,9 @@ pub struct Wallet<B: storage::Backend + 'static, P: SignerProvider> {
     chain_config: Arc<ChainConfig>,
     // Note: unlike the chain config, the mempool config may potentially change, e.g. if the node
     // is restarted with different parameters. At this moment, node restart requires the wallet
-    // to be restarted as well, so it's not an issue for now. But when we implement the automatic
+    // to be restarted as well, so it's not an issue for now. But when we implement automatic
     // reconnection, the mempool config stored here should be updated each time we reconnect to
-    // the node.
+    // the node. See https://github.com/mintlayer/mintlayer-core/issues/2064.
     mempool_config: Arc<MempoolConfig>,
     db: Store<B>,
     accounts: BTreeMap<U31, Account<P::K>>,
@@ -899,6 +899,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
         F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,

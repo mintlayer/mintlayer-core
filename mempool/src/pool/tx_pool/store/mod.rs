@@ -851,6 +851,7 @@ impl TxMempoolEntry {
             self.parents.iter().copied(),
             RelativesKind::Ancestors,
             |_| Ok::<_, MempoolStoreInvariantError>(()),
+            Some(self.count_with_ancestors - 1),
         );
 
         match result {
@@ -874,6 +875,7 @@ impl TxMempoolEntry {
             self.children.iter().copied(),
             RelativesKind::Descendants,
             |_| Ok::<_, MempoolStoreInvariantError>(()),
+            Some(self.count_with_descendants - 1),
         );
 
         match result {
@@ -891,9 +893,13 @@ impl TxMempoolEntry {
     ///
     /// This function is mainly intended for testing purposes.
     pub fn collect_cluster(&self, store: &MempoolStore) -> Result<Cluster, MempoolPolicyError> {
-        let cluster = collect_relatives(store, [*self.tx_id()], RelativesKind::Cluster, |_| {
-            Ok::<_, MempoolPolicyError>(())
-        })?;
+        let cluster = collect_relatives(
+            store,
+            [*self.tx_id()],
+            RelativesKind::Cluster,
+            |_| Ok::<_, MempoolPolicyError>(()),
+            Some(self.count_with_ancestors + self.count_with_descendants - 1),
+        )?;
 
         Ok(Cluster::new(cluster))
     }
@@ -940,6 +946,7 @@ impl TxMempoolEntryWithAncestors {
             |collected_size| {
                 ensure_cluster_tx_count_limit(&store.mempool_config, 1 + collected_size)
             },
+            None,
         )?);
         enforce_cluster_size_limit(store, &entry, &cluster)?;
 
@@ -948,6 +955,7 @@ impl TxMempoolEntryWithAncestors {
             parents.iter().copied(),
             RelativesKind::Ancestors,
             |_| Ok::<_, MempoolPolicyError>(()),
+            None,
         )?);
 
         let ancestor_entries_iter = ancestors
@@ -995,17 +1003,26 @@ pub enum RelativesKind {
 ///
 /// After each tx is added to the result, `on_new_tx_added` is called with the current size
 /// of the result as the argument.
+///
+/// `expected_result_size`, if specified, is used to reserve the needed capacity in the result
+/// to avoid redundant reallocations.
 pub fn collect_relatives<E>(
     store: &MempoolStore,
     initial_tx_ids: impl IntoIterator<Item = Id<Transaction>>,
     kind: RelativesKind,
     mut on_new_tx_added: impl FnMut(/*cur_result_size:*/ usize) -> Result<(), E>,
+    expected_result_size: Option<usize>,
 ) -> Result<StoreHashSet<Id<Transaction>>, E>
 where
     E: From<MempoolStoreInvariantError>,
 {
-    let mut stack = Vec::new();
-    let mut result = StoreHashSet::default();
+    let initial_tx_ids = initial_tx_ids.into_iter();
+    let initial_tx_ids_min_size_hint = initial_tx_ids.size_hint().0;
+    let expected_result_size = expected_result_size.unwrap_or(initial_tx_ids_min_size_hint);
+
+    let mut stack = Vec::with_capacity(initial_tx_ids_min_size_hint);
+    let mut result =
+        StoreHashSet::with_capacity_and_hasher(expected_result_size, Default::default());
 
     let mut visit = |stack: &mut Vec<Id<Transaction>>, tx_id: &Id<Transaction>| -> Result<(), E> {
         if result.insert(*tx_id) {

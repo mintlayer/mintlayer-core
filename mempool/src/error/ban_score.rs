@@ -54,7 +54,7 @@ impl MempoolBanScore for Error {
             // Internal error
             Error::SubsystemCallError(_) => 0,
 
-            // A configuration error is not the peer's fault.
+            // A configuration error is not peer's fault.
             Error::ConfigError(_) => 0,
         }
     }
@@ -71,7 +71,7 @@ impl MempoolBanScore for MempoolPolicyError {
 
             // Don't punish the peer for this, because max cluster size is technically configurable
             // and the peer doesn't know the node's mempool configuration.
-            MempoolPolicyError::TxSizeExceedsMaxClusterSize => 0,
+            MempoolPolicyError::TxSizeExceedsMaxClusterSize { .. } => 0,
 
             // Errors to do with transaction conflicts and replacements are not punished since the
             // peer may not be aware of all the transactions the node has in the mempool.

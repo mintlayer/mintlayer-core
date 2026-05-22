@@ -519,6 +519,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
         mempool_config: Arc<MempoolConfig>,
