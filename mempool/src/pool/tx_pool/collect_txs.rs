@@ -406,18 +406,16 @@ mod get_best_tx_ids_by_score_and_ancestry_impl {
             // We start with a non-empty stack and then check if it's empty at the end of the outer loop.
             let item = stack.last_mut().expect("known to be present");
 
-            while let Some(parent_id) = item.parents_iter.next() {
+            for parent_id in item.parents_iter.by_ref() {
                 if selected_tx_ids.contains(parent_id) {
                     // The nearest selected ancestor has been found, no need to go deeper.
                     item.tx_ancestors.insert(*parent_id);
+                } else if let Some(existing_ancestors) = ancestors_map.get(parent_id) {
+                    item.tx_ancestors.extend(existing_ancestors);
                 } else {
-                    if let Some(existing_ancestors) = ancestors_map.get(parent_id) {
-                        item.tx_ancestors.extend(existing_ancestors);
-                    } else {
-                        let parent_tx_entry = mempool.store.get_existing_entry(parent_id)?;
-                        stack.push(new_stack_item(parent_tx_entry));
-                        continue 'outer;
-                    }
+                    let parent_tx_entry = mempool.store.get_existing_entry(parent_id)?;
+                    stack.push(new_stack_item(parent_tx_entry));
+                    continue 'outer;
                 }
             }
 
