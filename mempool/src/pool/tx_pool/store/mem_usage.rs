@@ -15,7 +15,11 @@
 
 //! Estimate and track memory usage taken by data structures.
 
-use std::{cmp, mem};
+use std::{
+    cmp,
+    hash::{BuildHasher, Hash},
+    mem,
+};
 
 use common::chain::{
     SignedTransaction, TxInput, TxOutput,
@@ -26,7 +30,7 @@ use common::chain::{
 };
 use logging::log;
 
-use super::{TxDependency, TxMempoolEntry};
+use super::{StoreHashMap, StoreHashSet, TxDependency, TxMempoolEntry};
 
 /// Structure that stores the current memory usage and keeps track of its changes
 #[derive(Debug)]
@@ -287,6 +291,46 @@ impl<K> MemoryUsage for std::collections::BTreeSet<K> {
     }
 }
 
+impl<K, V, S> MemoryUsage for hashbrown::hash_map::HashMap<K, V, S>
+where
+    K: Eq + Hash,
+    S: BuildHasher,
+{
+    /// The mem usage for [HashMap].
+    ///
+    /// Same as for the "BTree" case, the return value doesn't include the indirect memory usage
+    /// that keys and values have.
+    fn indirect_memory_usage(&self) -> usize {
+        // Note: `allocation_size` is only exposed by hashbrown containers and not by the standard
+        // ones (even though they use hashbrown under the hood), and this is the reason why we use
+        // the former. Technically we could implement size estimation ourselves, similar to how
+        // it's done in the BTree case:
+        // 1) Determine the "group width" based on the platform, as it's done in
+        //    https://github.com/rust-lang/hashbrown/blob/v0.16.1/src/control/group/mod.rs
+        // 2) Determine the number of buckets given the capacity, like they do it in
+        //    https://github.com/rust-lang/hashbrown/blob/v0.16.1/src/raw/mod.rs#L105
+        // 3) Estimate the memory usage from the number of buckets, as in
+        //    https://github.com/rust-lang/hashbrown/blob/v0.16.1/src/raw/mod.rs#L218
+        // The problem is that the actual capacity of the container is unknown - hashbrown is
+        // a probing table where deleting an item leaves a tombstone, which may be re-used during
+        // insertion, but not always. Because of this, the value returned by `capacity()` doesn't
+        // include the number of slots with tombstones, only the occupied and truly empty ones
+        // are counted. `allocation_size`, on the other hand, uses the actual number of buckets.
+        self.allocation_size()
+    }
+}
+
+impl<K, S> MemoryUsage for hashbrown::hash_set::HashSet<K, S>
+where
+    K: Eq + Hash,
+    S: BuildHasher,
+{
+    fn indirect_memory_usage(&self) -> usize {
+        // Same note as in the HashMap case.
+        self.allocation_size()
+    }
+}
+
 impl<T: MemoryUsage> MemoryUsage for Option<T> {
     fn indirect_memory_usage(&self) -> usize {
         self.as_ref().map_or(0, |x| x.indirect_memory_usage())
@@ -379,6 +423,8 @@ pub trait ZeroUsageDefault: MemoryUsage + Default {}
 
 impl<K, V> ZeroUsageDefault for std::collections::BTreeMap<K, V> {}
 impl<K> ZeroUsageDefault for std::collections::BTreeSet<K> {}
+impl<K: Eq + Hash, V> ZeroUsageDefault for StoreHashMap<K, V> {}
+impl<K: Eq + Hash> ZeroUsageDefault for StoreHashSet<K> {}
 impl<T: MemoryUsage> ZeroUsageDefault for Vec<T> {}
 
 #[cfg(test)]

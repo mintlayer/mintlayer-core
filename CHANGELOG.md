@@ -31,6 +31,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       - Transactions are now announced in batches at irregular intervals (previously, a random delay was added
         before each individual transaction announcement).
 
+  - Mempool:
+    - Various optimizations were made.
+
 ### Fixed
   - Wallet:
     - Fixed handling of confirmed and unconfirmed conflicting order transactions in the wallet.
