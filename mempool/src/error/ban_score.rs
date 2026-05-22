@@ -53,6 +53,9 @@ impl MempoolBanScore for Error {
 
             // Internal error
             Error::SubsystemCallError(_) => 0,
+
+            // A configuration error is not the peer's fault.
+            Error::ConfigError(_) => 0,
         }
     }
 }

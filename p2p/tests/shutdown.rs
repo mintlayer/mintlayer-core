@@ -60,7 +60,8 @@ async fn shutdown_timeout() {
         mempool_config,
         chainstate.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("shutdown-test-mempool", |hdl, _| mempool_init.init(hdl));
 

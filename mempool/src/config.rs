@@ -17,7 +17,7 @@ use std::{str::FromStr, time::Duration};
 
 use common::primitives::{Amount, BlockDistance};
 use rpc::description::HasValueHint;
-use utils::make_config_setting;
+use utils::{ensure, make_config_setting};
 
 use crate::FeeRate;
 
@@ -174,6 +174,22 @@ impl MempoolConfig {
             max_cluster_size_bytes: **max_cluster_size_bytes,
         }
     }
+
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // Note: setting these values to 0 makes no sense (unless the goal is to prevent
+        // any tx from entering the mempool). Also, `max_cluster_tx_count=0` will behave
+        // the same way as `max_cluster_tx_count=1`, because parentless txs currently
+        // skip the cluster tx count check. So we just forbid passing zeros here.
+        ensure!(
+            *self.max_cluster_tx_count > 0,
+            ConfigError::MaxClusterTxCountCannotBeZero
+        );
+        ensure!(
+            *self.max_cluster_size_bytes > 0,
+            ConfigError::MaxClusterSizeBytesCannotBeZero
+        );
+        Ok(())
+    }
 }
 
 impl From<RpcMempoolConfig> for MempoolConfig {
@@ -198,4 +214,13 @@ pub struct RpcMempoolConfig {
     pub min_tx_relay_fee_rate: FeeRate,
     pub max_cluster_tx_count: usize,
     pub max_cluster_size_bytes: usize,
+}
+
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+pub enum ConfigError {
+    #[error("Maximum cluster transaction count cannot be zero")]
+    MaxClusterTxCountCannotBeZero,
+
+    #[error("Maximum cluster size in bytes cannot be zero")]
+    MaxClusterSizeBytesCannotBeZero,
 }

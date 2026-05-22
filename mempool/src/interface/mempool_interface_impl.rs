@@ -53,13 +53,15 @@ impl MempoolInit {
         mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
         time_getter: TimeGetter,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        mempool_config.validate()?;
+
+        Ok(Self {
             chain_config,
             mempool_config,
             chainstate_handle,
             time_getter,
-        }
+        })
     }
 
     pub async fn init(

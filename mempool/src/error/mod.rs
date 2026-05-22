@@ -23,7 +23,7 @@ use common::{
     primitives::{H256, Id, amount::DisplayAmount},
 };
 
-use crate::pool::fee::Fee;
+use crate::{config::ConfigError, pool::fee::Fee};
 
 pub use ban_score::MempoolBanScore;
 
@@ -76,6 +76,9 @@ pub enum Error {
 
     #[error("Transaction collection error: {0}")]
     TxCollectionError(#[from] TxCollectionError),
+
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
