@@ -74,9 +74,7 @@ impl BlockprodTestSetup {
     pub async fn assert_process_block(&self, new_block: Block) -> BlockIndex {
         assert_process_block(&self.chainstate, &self.mempool, new_block).await
     }
-}
 
-impl BlockprodTestSetup {
     pub fn make_blockprod_builder(&self) -> TestBlockProdBuilder<'_> {
         TestBlockProdBuilder {
             test_setup: self,
@@ -113,7 +111,7 @@ impl BlockprodTestSetupBuilder {
 
     pub fn build(self) -> (BlockprodTestSetup, Manager) {
         let chain_config = self.chain_config.unwrap_or_else(|| Arc::new(create_unit_test_config()));
-        let time_getter = self.time_getter.unwrap_or_else(TimeGetter::default);
+        let time_getter = self.time_getter.unwrap_or_default();
 
         let manager_config =
             subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
@@ -329,8 +327,10 @@ pub async fn assert_process_block(
 ) -> BlockIndex {
     let block_id = new_block.get_id();
 
-    // Wait for mempool to be up-to-date with the new block. The subscriptions are not cleaned
-    // up but hopefully it's not too bad just for testing.
+    // Subscribe to mempool events, so that we can wait for it to become up-to-date with
+    // the new block.
+    // Note that currently we don't have a mechanism to remove a subscription, so "dead" event
+    // handlers will accumulate each time this function is called. But it's not a big deal in tests.
     let (tip_sx, tip_rx) = tokio::sync::oneshot::channel();
     let tip_sx = utils::sync::Mutex::new(Some(tip_sx));
     mempool
@@ -340,7 +340,7 @@ pub async fn assert_process_block(
                     mempool::event::MempoolEvent::NewTip(tip) => {
                         if let Some(tip_sx) = tip_sx.lock().unwrap().take() {
                             assert_eq!(tip.block_id(), &block_id);
-                            tip_sx.send(()).unwrap();
+                            let _ = tip_sx.send(());
                         }
                     }
                     mempool::event::MempoolEvent::TransactionProcessed(_) => (),
@@ -358,7 +358,7 @@ pub async fn assert_process_block(
             assert_eq!(
                 new_block.header().header().block_id(),
                 *new_block_index.block_id(),
-                "The new block's Id is different to the new block index's block Id",
+                "The new block's id is different from the new block index's block id",
             );
 
             let best_block_index = this.get_best_block_index().unwrap();
@@ -366,7 +366,7 @@ pub async fn assert_process_block(
             assert_eq!(
                 new_block_index.clone().into_gen_block_index().block_id(),
                 best_block_index.block_id(),
-                "The new block index not the best block index"
+                "The new block index is not the best block index"
             );
 
             new_block_index
