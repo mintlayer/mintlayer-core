@@ -1618,7 +1618,12 @@ fn reset_inmempool_txs_to_inactive(#[case] seed: Seed) {
 
     // add 10 random txs
     for _ in 0..10 {
-        add_random_transfer_tx(&mut output_cache, &chain_config, &mut rng);
+        add_random_transfer_tx_with_state(
+            &mut output_cache,
+            &chain_config,
+            TxStateTag::InMempool,
+            &mut rng,
+        );
     }
 
     // Reset
@@ -1635,6 +1640,16 @@ fn add_random_transfer_tx(
     chain_config: &ChainConfig,
     mut rng: impl Rng,
 ) {
+    let state_tag = TxStateTag::iter().choose(&mut rng).unwrap();
+    add_random_transfer_tx_with_state(output_cache, chain_config, state_tag, rng);
+}
+
+fn add_random_transfer_tx_with_state(
+    output_cache: &mut OutputCache,
+    chain_config: &ChainConfig,
+    state_tag: TxStateTag,
+    mut rng: impl Rng,
+) {
     let random_tx_id = Id::<Transaction>::random_using(&mut rng);
     let random_block_id = Id::<GenBlock>::random_using(&mut rng);
     let tx = TransactionBuilder::new()
@@ -1649,7 +1664,7 @@ fn add_random_transfer_tx(
         .build();
     let tx_id = tx.transaction().get_id();
 
-    let tx_state = match TxStateTag::iter().choose(&mut rng).unwrap() {
+    let tx_state = match state_tag {
         TxStateTag::Confirmed => TxState::Confirmed(
             BlockHeight::new(rng.random_range(0..100)),
             BlockTimestamp::from_int_seconds(rng.random_range(0..100)),

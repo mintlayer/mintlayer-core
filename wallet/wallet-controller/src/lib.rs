@@ -1579,7 +1579,7 @@ where
 
             match self.wallet_mode {
                 WalletControllerMode::Hot => {
-                    // after the first successful sync to the tip fetch all mempool transactions
+                    // fetch all mempool transactions after a broken connection or after the initial sync
                     if self.should_resecan_mempool_txs {
                         let txs = self.rpc_client.mempool_get_transactions().await;
 
