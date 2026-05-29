@@ -13,21 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use rstest::rstest;
 
-use common::time_getter::TimeGetter;
 use mempool::tx_accumulator::PackingStrategy;
 use randomness::RngExt as _;
 use test_utils::random::{Seed, make_seedable_rng};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    BlockProduction, BlockProductionError,
+    BlockProductionError,
     detail::{GenerateBlockInputData, job_manager::JobManagerError},
-    prepare_thread_pool, test_blockprod_config,
-    tests::helpers::setup_blockprod_test,
+    tests::helpers::BlockprodTestSetupBuilder,
 };
 
 #[rstest]
@@ -35,23 +31,13 @@ use crate::{
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let mut rng = make_seedable_rng(seed);
 
     let jobs_to_create = rng.random_range(1..=20);
 
-    let block_production = BlockProduction::new(
-        chain_config,
-        Arc::new(test_blockprod_config()),
-        chainstate,
-        mempool,
-        p2p,
-        Default::default(),
-        prepare_thread_pool(1),
-    )
-    .expect("Error initializing blockprod");
+    let block_production = blockprod_setup.make_blockprod_builder().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -95,23 +81,13 @@ async fn multiple_jobs_with_wait(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_without_wait_same_jobkey(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let mut rng = make_seedable_rng(seed);
 
     let jobs_to_create = 10 + rng.random_range(1..=20);
 
-    let block_production = BlockProduction::new(
-        chain_config,
-        Arc::new(test_blockprod_config()),
-        chainstate,
-        mempool,
-        p2p,
-        Default::default(),
-        prepare_thread_pool(1),
-    )
-    .expect("Error initializing blockprod");
+    let block_production = blockprod_setup.make_blockprod_builder().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();

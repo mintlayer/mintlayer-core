@@ -17,25 +17,23 @@ pub mod helpers;
 
 use std::sync::Arc;
 
-use common::time_getter::TimeGetter;
-
-use crate::{make_blockproduction, test_blockprod_config, tests::helpers::setup_blockprod_test};
+use crate::{
+    make_blockproduction, test_blockprod_config, tests::helpers::BlockprodTestSetupBuilder,
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_make_blockproduction() {
-    let time_getter = TimeGetter::default();
-    let (mut manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, time_getter.clone());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
     let blockprod = make_blockproduction(
-        Arc::clone(&chain_config),
+        Arc::clone(&blockprod_setup.chain_config),
         Arc::new(test_blockprod_config()),
-        chainstate.clone(),
-        mempool.clone(),
-        p2p.clone(),
-        time_getter,
+        blockprod_setup.chainstate.clone(),
+        blockprod_setup.mempool.clone(),
+        blockprod_setup.p2p.clone(),
+        blockprod_setup.time_getter,
     )
-    .expect("Error initializing blockprod");
+    .unwrap();
 
     let blockprod = manager.add_direct_subsystem("blockprod", blockprod);
     let shutdown = manager.make_shutdown_trigger();
@@ -55,7 +53,7 @@ async fn test_make_blockproduction() {
                 })
             })
             .await
-            .expect("Error initializing block production");
+            .unwrap();
     });
 
     manager.main().await;

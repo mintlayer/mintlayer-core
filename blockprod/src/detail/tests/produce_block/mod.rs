@@ -24,8 +24,7 @@ use tokio::{
 };
 
 use chainstate::{
-    ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError,
-    chainstate_interface::ChainstateInterface,
+    ChainstateError, GenBlockIndex, PropertyQueryError, chainstate_interface::ChainstateInterface,
 };
 use common::{
     Uint256,
@@ -68,19 +67,18 @@ use crate::{
         CustomId, GenerateBlockInputData,
         job_manager::{JobManagerError, JobManagerImpl, tests::MockJobManager},
     },
-    prepare_thread_pool, test_blockprod_config,
+    test_blockprod_config,
     tests::helpers::{
-        assert_process_block, build_chain_config_for_pos, make_genesis_timestamp,
-        setup_blockprod_test, setup_pos, setup_pos_with_genesis_timestamp,
+        BlockprodTestSetupBuilder, PoSTestSetupBuilder, make_chain_config_builder,
+        make_genesis_timestamp,
     },
 };
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
-    let (mut manager, chain_config, _, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
-    let chainstate_subsystem: ChainstateHandle = {
+    let mock_chainstate = {
         let mut mock_chainstate = MockChainstateInterface::new();
         mock_chainstate.expect_is_initial_block_download().returning(|| true);
 
@@ -100,30 +98,22 @@ async fn initial_block_download() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate_subsystem,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup
+                .make_blockprod_builder()
+                .with_chainstate(mock_chainstate)
+                .build();
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::FillSpaceFromMempool,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::ChainstateWaitForSync) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(err, BlockProductionError::ChainstateWaitForSync);
         }
     });
 
@@ -133,8 +123,7 @@ async fn initial_block_download() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn below_peer_count() {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -147,30 +136,25 @@ async fn below_peer_count() {
             let mut blockprod_config = test_blockprod_config();
             blockprod_config.min_peers_to_produce_blocks = 100;
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(blockprod_config),
-                chainstate,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup
+                .make_blockprod_builder()
+                .with_blockprod_config(blockprod_config)
+                .build();
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::PeerCountBelowRequiredThreshold(0, 100)) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(
+                err,
+                BlockProductionError::PeerCountBelowRequiredThreshold(0, 100)
+            );
         }
     });
 
@@ -180,10 +164,9 @@ async fn below_peer_count() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pull_best_block_index_error() {
-    let (mut manager, chain_config, _, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
-    let chainstate_subsystem: ChainstateHandle = {
+    let mock_chainstate = {
         let mut mock_chainstate = Box::new(MockChainstateInterface::new());
         mock_chainstate
             .expect_subscribe_to_subsystem_events()
@@ -209,16 +192,10 @@ async fn pull_best_block_index_error() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate_subsystem,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup
+                .make_blockprod_builder()
+                .with_chainstate(mock_chainstate)
+                .build();
 
             let result = block_production
                 .produce_block(
@@ -229,12 +206,12 @@ async fn pull_best_block_index_error() {
                 )
                 .await;
 
-            match result {
+            assert_matches!(
+                result,
                 Err(BlockProductionError::ChainstateError(
                     consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
-                )) => {}
-                _ => panic!("Unexpected return value"),
-            }
+                ))
+            );
         }
     });
 
@@ -244,8 +221,7 @@ async fn pull_best_block_index_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_job_error() {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -255,16 +231,7 @@ async fn add_job_error() {
                 shutdown_trigger.initiate();
             });
 
-            let mut block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
             let mut mock_job_manager = Box::new(MockJobManager::new());
 
@@ -275,21 +242,20 @@ async fn add_job_error() {
 
             block_production.set_job_manager(mock_job_manager);
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::None,
                     vec![],
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::JobManagerError(
-                    JobManagerError::FailedToSendNewJobEvent,
-                )) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(
+                err,
+                BlockProductionError::JobManagerError(JobManagerError::FailedToSendNewJobEvent,)
+            );
         }
     });
 
@@ -304,24 +270,12 @@ async fn add_job_error() {
 async fn overflow_tip_plus_one(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let (
-        chain_config_builder,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos_with_genesis_timestamp(
-        BlockTimestamp::from_int_seconds(u64::MAX),
-        BlockHeight::new(1),
-        &[],
-        &mut rng,
-    );
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(BlockTimestamp::from_int_seconds(u64::MAX), &mut rng);
 
-    let (manager, chain_config, chainstate, mempool, p2p) = {
-        setup_blockprod_test(
-            Some(build_chain_config_for_pos(chain_config_builder)),
-            TimeGetter::default(),
-        )
-    };
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -332,27 +286,8 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                Arc::clone(&chain_config),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                genesis_stake_private_key,
-                genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![create_genesis_pool_txoutput],
-            )));
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let result = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
@@ -375,18 +310,16 @@ async fn overflow_tip_plus_one(#[case] seed: Seed) {
 async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let (
-        chain_config_builder,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
-    let chain_config = build_chain_config_for_pos(
-        chain_config_builder.max_future_block_time_offset(Some(Duration::MAX)),
-    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_chain_config_builder(
+            make_chain_config_builder().max_future_block_time_offset(Some(Duration::MAX)),
+        )
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -396,27 +329,8 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                Arc::clone(&chain_config),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                genesis_stake_private_key,
-                genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![create_genesis_pool_txoutput],
-            )));
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let result = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
@@ -439,17 +353,13 @@ async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
 async fn update_last_used_block_timestamp(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let (
-        chain_config_builder,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
-    let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(
-        Some(build_chain_config_for_pos(chain_config_builder)),
-        time_getter,
-    );
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -459,27 +369,8 @@ async fn update_last_used_block_timestamp(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config.clone(),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                genesis_stake_private_key,
-                genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![create_genesis_pool_txoutput],
-            )));
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let _ = block_production
                 .job_manager_handle
@@ -513,29 +404,23 @@ async fn try_again_later(#[case] seed: Seed) {
     let default_time_getter = TimeGetter::default();
     let genesis_time = default_time_getter.get_time();
 
-    let (
-        chain_config_builder,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos_with_genesis_timestamp(
-        BlockTimestamp::from_time(genesis_time),
-        BlockHeight::new(1),
-        &[],
-        &mut rng,
-    );
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(BlockTimestamp::from_time(genesis_time), &mut rng);
 
-    let chain_config = build_chain_config_for_pos(chain_config_builder);
     let time_getter = {
         let cur_time_secs = genesis_time
-            .saturating_duration_sub(chain_config.max_future_block_time_offset(BlockHeight::zero()))
+            .saturating_duration_sub(
+                pos_setup.chain_config.max_future_block_time_offset(BlockHeight::zero()),
+            )
             .as_secs_since_epoch();
         let time_value = Arc::new(SeqCstAtomicU64::new(cur_time_secs));
         mocked_time_getter_seconds(time_value)
     };
 
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(chain_config), time_getter.clone());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -545,33 +430,15 @@ async fn try_again_later(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                Arc::clone(&chain_config),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool,
-                p2p,
-                time_getter,
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
-            let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
-                genesis_stake_private_key,
-                genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![create_genesis_pool_txoutput],
-            )));
-
-            let result = block_production
+            let err = block_production
                 .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
-                .await;
+                .await
+                .unwrap_err();
 
-            assert_matches!(result, Err(BlockProductionError::TryAgainLater));
+            assert_eq!(err, BlockProductionError::TryAgainLater);
 
             assert_job_count(&block_production, 0).await;
         }
@@ -583,10 +450,9 @@ async fn try_again_later(#[case] seed: Seed) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pull_consensus_data_error() {
-    let (mut manager, chain_config, _, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
-    let chainstate_subsystem: ChainstateHandle = {
+    let mock_chainstate = {
         let mut mock_chainstate = MockChainstateInterface::new();
         mock_chainstate
             .expect_subscribe_to_subsystem_events()
@@ -595,7 +461,7 @@ async fn pull_consensus_data_error() {
         mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
         let mut expected_return_values = vec![
-            Ok(GenBlockIndex::genesis(&chain_config)),
+            Ok(GenBlockIndex::genesis(&blockprod_setup.chain_config)),
             Err(ChainstateError::FailedToReadProperty(
                 PropertyQueryError::BestBlockIndexNotFound,
             )),
@@ -617,16 +483,10 @@ async fn pull_consensus_data_error() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate_subsystem,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup
+                .make_blockprod_builder()
+                .with_chainstate(mock_chainstate)
+                .build();
 
             let result = block_production
                 .produce_block(
@@ -652,18 +512,19 @@ async fn pull_consensus_data_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_mempool_error() {
-    let (mut manager, chain_config, chainstate, _mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();
 
-    let mut mock_mempool = MockMempoolInterface::default();
+    let mock_mempool = {
+        let mut mock_mempool = MockMempoolInterface::default();
 
-    mock_mempool.expect_collect_txs().return_once(|_, _, _| {
-        Err(BlockConstructionError::Validity(
-            TxValidationError::SubsystemCallError(ResponseError::NoResponse.into()),
-        ))
-    });
+        mock_mempool.expect_collect_txs().return_once(|_, _, _| {
+            Err(BlockConstructionError::Validity(
+                TxValidationError::SubsystemCallError(ResponseError::NoResponse.into()),
+            ))
+        });
 
-    let mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
+        manager.add_subsystem("mock-mempool", mock_mempool)
+    };
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -673,16 +534,8 @@ async fn transaction_source_mempool_error() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool_subsystem,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production =
+                blockprod_setup.make_blockprod_builder().with_mempool(mock_mempool).build();
 
             let result = block_production
                 .produce_block(
@@ -693,12 +546,12 @@ async fn transaction_source_mempool_error() {
                 )
                 .await;
 
-            match result {
+            assert_matches!(
+                result,
                 Err(BlockProductionError::MempoolBlockConstruction(
                     BlockConstructionError::Validity(TxValidationError::SubsystemCallError(_)),
-                )) => {}
-                _ => panic!("Unexpected return value: {result:?}"),
-            }
+                ))
+            );
         }
     });
 
@@ -708,8 +561,7 @@ async fn transaction_source_mempool_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_mempool() {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -719,16 +571,7 @@ async fn transaction_source_mempool() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             let (new_block, job_finished_receiver) = block_production
                 // TODO: Add transactions to the mempool
@@ -739,12 +582,12 @@ async fn transaction_source_mempool() {
                     PackingStrategy::FillSpaceFromMempool,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
         }
     });
 
@@ -754,8 +597,7 @@ async fn transaction_source_mempool() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_source_provided() {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -765,16 +607,7 @@ async fn transaction_source_provided() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             let (new_block, job_finished_receiver) = block_production
                 // TODO: Add transactions to the parameters
@@ -785,12 +618,12 @@ async fn transaction_source_provided() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
         }
     });
 
@@ -803,7 +636,7 @@ async fn transaction_source_provided() {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancel_received(#[case] seed: Seed) {
-    let override_chain_config = {
+    let chain_config = {
         let net_upgrades = NetUpgrades::initialize(vec![(
             BlockHeight::new(0),
             ConsensusUpgrade::PoW {
@@ -813,13 +646,14 @@ async fn cancel_received(#[case] seed: Seed) {
                 initial_difficulty: Uint256::ZERO.into(),
             },
         )])
-        .expect("Net upgrade is valid");
+        .unwrap();
 
-        Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
+        Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
 
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -829,16 +663,7 @@ async fn cancel_received(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let mut block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
             let mut mock_job_manager = Box::<MockJobManager>::default();
 
@@ -861,7 +686,7 @@ async fn cancel_received(#[case] seed: Seed) {
 
             block_production.set_job_manager(mock_job_manager);
 
-            let result = block_production
+            let err = block_production
                 .produce_block(
                     GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                         Destination::AnyoneCanSpend,
@@ -870,12 +695,10 @@ async fn cancel_received(#[case] seed: Seed) {
                     vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
-                .await;
+                .await
+                .unwrap_err();
 
-            match result {
-                Err(BlockProductionError::Cancelled) => {}
-                _ => panic!("Unexpected return value"),
-            }
+            assert_eq!(err, BlockProductionError::Cancelled);
         }
     });
 
@@ -885,8 +708,7 @@ async fn cancel_received(#[case] seed: Seed) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn solved_ignore_consensus() {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -896,16 +718,7 @@ async fn solved_ignore_consensus() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             let (new_block, job_finished_receiver) = block_production
                 .produce_block(
@@ -915,12 +728,12 @@ async fn solved_ignore_consensus() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
         }
     });
 
@@ -930,20 +743,21 @@ async fn solved_ignore_consensus() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn solved_pow_consensus() {
-    let override_chain_config = {
+    let chain_config = {
         let net_upgrades = NetUpgrades::initialize(vec![(
             BlockHeight::new(0),
             ConsensusUpgrade::PoW {
                 initial_difficulty: Uint256::MAX.into(),
             },
         )])
-        .expect("Net upgrade is valid");
+        .unwrap();
 
-        Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
+        Arc::new(Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build())
     };
 
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -953,16 +767,7 @@ async fn solved_pow_consensus() {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             let (new_block, job_finished_receiver) = block_production
                 .produce_block(
@@ -974,12 +779,12 @@ async fn solved_pow_consensus() {
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
         }
     });
 
@@ -994,17 +799,13 @@ async fn solved_pow_consensus() {
 async fn solved_pos_consensus(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = TimeGetter::default();
-    let (
-        chain_config_builder,
-        genesis_stake_private_key,
-        genesis_vrf_private_key,
-        create_genesis_pool_txoutput,
-    ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
+    let pos_setup =
+        PoSTestSetupBuilder::new().build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
-    let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(
-        Some(build_chain_config_for_pos(chain_config_builder)),
-        time_getter,
-    );
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&pos_setup.chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1014,42 +815,18 @@ async fn solved_pos_consensus(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config.clone(),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let input_data = Box::new(PoSGenerateBlockInputData::new(
-                genesis_stake_private_key,
-                genesis_vrf_private_key,
-                PoolId::new(H256::zero()),
-                vec![TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                    0,
-                )],
-                vec![create_genesis_pool_txoutput],
-            ));
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+            let input_data = pos_setup.make_first_pos_block_input_data();
 
             let (new_block, job_finished_receiver) = block_production
-                .produce_block(
-                    GenerateBlockInputData::PoS(input_data),
-                    vec![],
-                    vec![],
-                    PackingStrategy::LeaveEmptySpace,
-                )
+                .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                 .await
-                .expect("Failed to produce a block: {:?}");
+                .unwrap();
 
-            job_finished_receiver.await.expect("Job finished receiver closed");
+            job_finished_receiver.await.unwrap();
 
             assert_job_count(&block_production, 0).await;
-            assert_process_block(&chainstate, &mempool, new_block).await;
+            blockprod_setup.assert_process_block(new_block).await;
         }
     });
 
@@ -1086,7 +863,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                 Destination::PublicKey(genesis_stake_public_key.clone()),
                 genesis_vrf_public_key,
                 Destination::PublicKey(genesis_stake_public_key.clone()),
-                PerThousand::new(1000).expect("Valid per thousand"),
+                PerThousand::new(1000).unwrap(),
                 Amount::ZERO,
             )),
         )
@@ -1094,7 +871,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
 
     let blocks_to_generate = rng.random_range(100..=1000);
 
-    let override_chain_config = {
+    let chain_config = {
         let genesis_block = Genesis::new(
             "blockprod-testing".into(),
             make_genesis_timestamp(&time_getter, &mut rng),
@@ -1130,17 +907,20 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
             next_height_consensus_change += rng.random_range(1..50);
         }
 
-        let net_upgrades =
-            NetUpgrades::initialize(randomized_net_upgrades).expect("Net upgrades are valid");
+        let net_upgrades = NetUpgrades::initialize(randomized_net_upgrades).unwrap();
 
-        Builder::new(ChainType::Regtest)
-            .genesis_custom(genesis_block)
-            .consensus_upgrades(net_upgrades)
-            .build()
+        Arc::new(
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis_block)
+                .consensus_upgrades(net_upgrades)
+                .build(),
+        )
     };
 
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(Some(override_chain_config), time_getter);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_time_getter(time_getter)
+        .build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1150,16 +930,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let mut block_production = BlockProduction::new(
-                chain_config.clone(),
-                Arc::new(test_blockprod_config()),
-                chainstate.clone(),
-                mempool.clone(),
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let mut block_production = blockprod_setup.make_blockprod_builder().build();
 
             let no_chainstate_job_manager = Box::new(JobManagerImpl::new(None));
             block_production.set_job_manager(no_chainstate_job_manager);
@@ -1196,52 +967,54 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a block: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
-                        assert_process_block(&chainstate, &mempool, new_block.clone()).await;
+                        blockprod_setup.assert_process_block(new_block.clone()).await;
                     }
                     RequiredConsensus::PoS(_) => {
                         // Try no input data for PoS consensus
 
-                        let input_data_none_result = block_production
+                        let input_data_none_err = block_production
                             .produce_block(
                                 GenerateBlockInputData::None,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_none_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_none_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::StakingError(
                                     ConsensusPoSError::NoInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoW input data for PoS consensus
 
-                        let input_data_pow_result = block_production
+                        let input_data_pow_err = block_production
                             .produce_block(
                                 input_data_pow,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_pow_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_pow_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::StakingError(
                                     ConsensusPoSError::PoWInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoS input data for PoS consensus
 
@@ -1253,11 +1026,11 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a job: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
-                        let result = assert_process_block(&chainstate, &mempool, new_block).await;
+                        let result = blockprod_setup.assert_process_block(new_block).await;
 
                         // Update kernel input parameters for future PoS blocks
 
@@ -1274,43 +1047,45 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                     RequiredConsensus::PoW(_) => {
                         // Try no input data for PoW consensus
 
-                        let input_data_none_result = block_production
+                        let input_data_none_err = block_production
                             .produce_block(
                                 GenerateBlockInputData::None,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_none_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_none_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::MiningError(
                                     ConsensusPoWError::NoInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoS input data for PoW consensus
 
-                        let input_data_pos_result = block_production
+                        let input_data_pos_err = block_production
                             .produce_block(
                                 input_data_pos,
                                 vec![],
                                 vec![],
                                 PackingStrategy::LeaveEmptySpace,
                             )
-                            .await;
+                            .await
+                            .unwrap_err();
 
-                        match input_data_pos_result {
-                            Err(BlockProductionError::FailedConsensusInitialization(
+                        assert_eq!(
+                            input_data_pos_err,
+                            BlockProductionError::FailedConsensusInitialization(
                                 ConsensusCreationError::MiningError(
                                     ConsensusPoWError::PoSInputDataProvided,
                                 ),
-                            )) => {}
-                            _ => panic!("Unexpected return value"),
-                        }
+                            )
+                        );
 
                         // Try PoW input data for PoW consensus
 
@@ -1322,11 +1097,11 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
                                 PackingStrategy::LeaveEmptySpace,
                             )
                             .await
-                            .expect("Failed to produce a block: {:?}");
+                            .unwrap();
 
-                        job_finished_receiver.await.expect("Job finished receiver closed");
+                        job_finished_receiver.await.unwrap();
 
-                        assert_process_block(&chainstate, &mempool, new_block.clone()).await;
+                        blockprod_setup.assert_process_block(new_block.clone()).await;
                     }
                 }
             }
@@ -1342,8 +1117,7 @@ async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool, p2p) =
-        setup_blockprod_test(None, TimeGetter::default());
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new().build();
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1353,16 +1127,7 @@ async fn multiple_jobs_with_wait(#[case] seed: Seed) {
                 shutdown_trigger.initiate();
             });
 
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mempool,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
+            let block_production = blockprod_setup.make_blockprod_builder().build();
 
             let mut rng = make_seedable_rng(seed);
             let jobs_to_create = rng.random_range(1..=20);
