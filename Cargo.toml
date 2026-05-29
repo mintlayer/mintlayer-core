@@ -183,6 +183,7 @@ futures = { version = "0.3", default-features = false }
 # still use the 0.x version, so by upgrading to 1.x we'll end up using both versions of GenericArray
 # and will have to perform convertions between them.
 generic-array = "=0.14.7"
+hashbrown = "0.17"
 heck = "0.5"
 hex = "0.4"
 hex-literal = "0.4"

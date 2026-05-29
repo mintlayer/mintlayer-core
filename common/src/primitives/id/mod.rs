@@ -179,6 +179,12 @@ impl<T: Eq> PartialOrd for Id<T> {
     }
 }
 
+impl<T> std::hash::Hash for Id<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.hash.hash(state);
+    }
+}
+
 impl<T: Eq> From<H256> for Id<T> {
     fn from(hash: H256) -> Self {
         Self::new(hash)

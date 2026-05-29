@@ -60,7 +60,9 @@ use crate::{
         entry::{TxEntry, TxEntryWithFee},
         fee::Fee,
         feerate::FeeRate,
-        tx_pool::store::{StrictDropPolicy, Tracked, TrackedMap, TrackedTxIdMultiMap},
+        tx_pool::store::{
+            StoreHashSet, StrictDropPolicy, Tracked, TrackedHashMap, TrackedTxIdMultiMap,
+        },
     },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::RemoteTxOrigin,
@@ -288,7 +290,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                 self.conflicting_tx_ids(entry.tx_entry()).next().is_none(),
                 MempoolConflictError::Irreplacable
             );
-            Ok(Conflicts::new(BTreeSet::new()))
+            Ok(Conflicts::new(StoreHashSet::default()))
         }
     }
 
@@ -364,7 +366,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             .collect::<Vec<_>>();
 
         if conflicts.is_empty() {
-            Ok(BTreeSet::new().into())
+            Ok(StoreHashSet::default().into())
         } else {
             self.do_rbf_checks(tx, &conflicts)
         }
@@ -455,7 +457,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     fn pays_more_than_conflicts_with_descendants(
         &self,
         tx: &TxEntryWithFee,
-        conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
+        conflicts_with_descendants: &StoreHashSet<Id<Transaction>>,
     ) -> Result<Fee, MempoolPolicyError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
             self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
@@ -535,10 +537,10 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     fn replacements_with_descendants(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> BTreeSet<Id<Transaction>> {
+    ) -> StoreHashSet<Id<Transaction>> {
         conflicts
             .iter()
-            .flat_map(|conflict| BTreeSet::from(conflict.unconfirmed_descendants(&self.store)))
+            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store).take())
             .chain(conflicts.iter().map(|conflict| *conflict.tx_id()))
             .collect()
     }
@@ -586,26 +588,29 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     }
 
     fn remove_expired_transactions(&mut self) {
-        let expired_ids: Vec<_> = self
+        let now = self.clock.get_time();
+
+        let expired_ids = self
             .store
             .txs_by_creation_time
             .iter()
-            .map(|(_time, id)| self.store.txs_by_id.get(id).expect("entry should exist"))
-            .filter(|entry| {
-                let now = self.clock.get_time();
-                let expired = now.saturating_sub(entry.creation_time()) > self.max_tx_age;
+            // Note: entries in txs_by_creation_time are sorted by the creation time in ascending order,
+            // so once we find a tx that is not expired, the rest will not be expired either.
+            .map_while(|&(creation_time, tx_id)| {
+                let expired = now.saturating_sub(creation_time) > self.max_tx_age;
                 if expired {
                     log::trace!(
                         "Evicting tx {} which was created at {:?}. It is now {:?}",
-                        entry.tx_id(),
-                        entry.creation_time(),
+                        tx_id,
+                        creation_time,
                         now
                     );
+                    Some(tx_id)
+                } else {
+                    None
                 }
-                expired
             })
-            .map(|entry| *entry.tx_id())
-            .collect();
+            .collect::<Vec<_>>();
 
         for tx_id in expired_ids.iter() {
             self.remove_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry);
@@ -926,7 +931,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         mempool_config: &MempoolConfig,
         rolling_fee_rate: &RollingFeeRate,
         txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
-        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+        txs_by_id: &TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
     ) -> FeeRate {
         let min_feerate = std::cmp::max(
             rolling_fee_rate.rolling_minimum_fee_rate(),
@@ -973,7 +978,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         mempool_config: &MempoolConfig,
         rolling_fee_rate: &RollingFeeRate,
         txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
-        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+        txs_by_id: &TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
     ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
         let min_feerate = std::cmp::max(
             rolling_fee_rate.rolling_minimum_fee_rate(),

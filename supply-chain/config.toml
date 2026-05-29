@@ -476,10 +476,6 @@ criteria = "safe-to-deploy"
 version = "5.4.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.expect-test]]
-version = "1.5.1"
-criteria = "safe-to-run"
-
 [[exemptions.fallible-streaming-iterator]]
 version = "0.1.9"
 criteria = "safe-to-deploy"
@@ -650,10 +646,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.impl-trait-for-tuples]]
 version = "0.2.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.instant]]
-version = "0.1.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
@@ -1074,14 +1066,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand]]
 version = "0.7.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand]]
-version = "0.8.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand]]
-version = "0.9.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_chacha]]

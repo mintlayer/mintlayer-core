@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::pool::tx_pool::store::{StoreHashSet, TxMempoolEntryWithAncestors};
+
 use super::*;
 
 #[test]
@@ -376,7 +378,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let fee = Amount::from_atoms(1).into();
 
     // Generation 1
-    let tx1_parents = BTreeSet::default();
+    let tx1_parents = StoreHashSet::default();
     let entry_1_ancestors = BTreeSet::default();
     let entry1 = TxMempoolEntry::new_from_data(
         txs.first().unwrap().clone(),
@@ -386,7 +388,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         time::get_time(),
     )
     .unwrap();
-    let tx2_parents = BTreeSet::default();
+    let tx2_parents = StoreHashSet::default();
     let entry_2_ancestors = BTreeSet::default();
     let entry2 = TxMempoolEntry::new_from_data(
         txs.get(1).unwrap().clone(),
@@ -450,7 +452,9 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let ids = entries.iter().map(|entry| *entry.tx_id()).collect::<Vec<_>>();
 
     for entry in entries.into_iter() {
-        mempool.store.add_tx_entry(entry)?;
+        let entry_with_ancestors =
+            TxMempoolEntryWithAncestors::new_from_existing_entry(&mempool.store, entry);
+        mempool.store.add_tx_entry(entry_with_ancestors)?;
     }
 
     #[allow(clippy::get_first)]
@@ -1090,8 +1094,8 @@ fn check_txs_sorted_by_ancestor_score<E>(tx_pool: &TxPool<E>) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_ancestor_score.get(i).unwrap();
         let next_tx_id = txs_by_ancestor_score.get(i + 1).unwrap();
-        let entry_score = tx_pool.store.txs_by_id.get(tx_id).unwrap().descendant_score();
-        let next_entry_score = tx_pool.store.txs_by_id.get(next_tx_id).unwrap().descendant_score();
+        let entry_score = tx_pool.store.txs_by_id.get(*tx_id).unwrap().descendant_score();
+        let next_entry_score = tx_pool.store.txs_by_id.get(*next_tx_id).unwrap().descendant_score();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)
@@ -1210,8 +1214,8 @@ fn check_txs_sorted_by_descendant_sore<M>(tx_pool: &TxPool<M>) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
         let next_tx_id = txs_by_descendant_score.get(i + 1).unwrap();
-        let entry_score = tx_pool.store.txs_by_id.get(tx_id).unwrap().descendant_score();
-        let next_entry_score = tx_pool.store.txs_by_id.get(next_tx_id).unwrap().descendant_score();
+        let entry_score = tx_pool.store.txs_by_id.get(*tx_id).unwrap().descendant_score();
+        let next_entry_score = tx_pool.store.txs_by_id.get(*next_tx_id).unwrap().descendant_score();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)
