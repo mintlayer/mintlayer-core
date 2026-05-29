@@ -67,6 +67,7 @@ impl TestFramework {
 
             let _wallet = wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                Default::default(),
                 db,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,

@@ -42,6 +42,7 @@ pub async fn create_wallet_with_mnemonic(
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config.clone(),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
@@ -78,6 +79,7 @@ pub async fn create_wallet_with_mnemonic_and_named_db(
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config.clone(),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,

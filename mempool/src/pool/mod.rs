@@ -23,16 +23,15 @@ use common::{
 };
 use logging::log;
 use utils::{
-    const_value::ConstValue, debug_assert_or_log, ensure, eventhandler::EventsController,
-    shallow_clone::ShallowClone,
+    debug_assert_or_log, ensure, eventhandler::EventsController, shallow_clone::ShallowClone,
 };
 use utils_networking::broadcaster;
 
 use crate::{
     MempoolConfig, MempoolMaxSize, TxStatus, config,
     error::{
-        BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError, TxCollectionError,
-        TxValidationError,
+        BlockConstructionError, Error, MempoolPolicyError, MempoolStoreError, OrphanPoolError,
+        TxCollectionError, TxValidationError,
     },
     event::{
         MempoolEvent, NewTipEvent, make_local_duplicate_tx_event, make_new_tx_accepted_event,
@@ -86,7 +85,7 @@ enum MempoolState<M> {
 
 struct MempoolStateInIbd<M> {
     chain_config: Arc<ChainConfig>,
-    mempool_config: ConstValue<MempoolConfig>,
+    mempool_config: MempoolConfig,
     chainstate_handle: chainstate::ChainstateHandle,
     clock: TimeGetter,
     memory_usage_estimator: M,
@@ -107,7 +106,7 @@ struct MempoolStateAfterIbd<M> {
 impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: ConstValue<MempoolConfig>,
+        mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
@@ -279,6 +278,13 @@ impl<M> Mempool<M> {
         }
     }
 
+    pub fn get_all_orphan_transaction_ids(&self) -> Vec<Id<Transaction>> {
+        match &self.0 {
+            MempoolState::InIbd(_) => Vec::new(),
+            MempoolState::AfterIbd(state) => state.orphans.get_all_transaction_ids(),
+        }
+    }
+
     pub fn best_block_id(&self) -> Id<GenBlock> {
         match &self.0 {
             MempoolState::InIbd(state) => state.best_block_id,
@@ -290,6 +296,13 @@ impl<M> Mempool<M> {
         match &self.0 {
             MempoolState::InIbd(state) => &state.chainstate_handle,
             MempoolState::AfterIbd(state) => state.tx_pool.chainstate_handle(),
+        }
+    }
+
+    pub fn mempool_config(&self) -> &MempoolConfig {
+        match &self.0 {
+            MempoolState::InIbd(state) => &state.mempool_config,
+            MempoolState::AfterIbd(state) => state.tx_pool.mempool_config(),
         }
     }
 
@@ -459,7 +472,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 // The mempool is empty during IBD; return an error if `tx_ids` is non-empty,
                 // so that the function's contract is the same in and out of IBD.
                 if let Some(tx_id) = tx_ids.first() {
-                    Err(TxCollectionError::SpecifiedTxNotFound(*tx_id))
+                    Err(MempoolStoreError::TxEntryNotFound(*tx_id).into())
                 } else {
                     Ok(Vec::new())
                 }

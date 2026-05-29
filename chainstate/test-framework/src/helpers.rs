@@ -30,7 +30,10 @@ use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
 use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom as _};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
-use crate::{TestFramework, TransactionBuilder, empty_witness, get_output_value};
+use crate::{
+    TestFramework, TransactionBuilder, get_output_value,
+    utils::{EMPTY_WITNESS_DEFAULT_SIZE, empty_witness_with_size},
+};
 
 // Note: this function will create 2 blocks
 pub fn issue_and_mint_random_token_from_best_block(
@@ -396,15 +399,34 @@ pub fn output_value_with_amount(output_value: &OutputValue, new_amount: Amount) 
 
 pub fn make_simple_coin_tx(
     rng: &mut impl CryptoRng,
-    ins: &[(OutPointSourceId, u32)],
-    outs: &[u128],
+    ins: impl IntoIterator<Item = (OutPointSourceId, u32)>,
+    outs: impl IntoIterator<Item = u128>,
 ) -> SignedTransaction {
-    let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
-        b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(rng))
-    });
-    let builder = outs.iter().fold(builder, |b, a| {
-        b.add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(*a)),
+    make_simple_coin_tx_with_witness_sizes(
+        rng,
+        ins.into_iter()
+            .map(|(utxo_src, utxo_idx)| (utxo_src, utxo_idx, EMPTY_WITNESS_DEFAULT_SIZE)),
+        outs,
+    )
+}
+
+pub fn make_simple_coin_tx_with_witness_sizes(
+    rng: &mut impl CryptoRng,
+    ins: impl IntoIterator<Item = (OutPointSourceId, u32, usize)>,
+    outs: impl IntoIterator<Item = u128>,
+) -> SignedTransaction {
+    let builder = ins.into_iter().fold(
+        TransactionBuilder::new(),
+        |tx_builder, (utxo_src, utxo_idx, witness_size)| {
+            tx_builder.add_input(
+                TxInput::from_utxo(utxo_src.clone(), utxo_idx),
+                empty_witness_with_size(rng, witness_size),
+            )
+        },
+    );
+    let builder = outs.into_iter().fold(builder, |tx_builder, output_amount| {
+        tx_builder.add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(output_amount)),
             Destination::AnyoneCanSpend,
         ))
     });

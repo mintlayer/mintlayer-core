@@ -41,7 +41,7 @@ pub fn setup_with_chainstate_and_clock(
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_handle,
         clock,
         StoreMemoryUsageEstimator,

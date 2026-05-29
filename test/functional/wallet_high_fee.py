@@ -42,6 +42,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         self.num_nodes = 1
         self.extra_args = [[
             "--blockprod-min-peers-to-produce-blocks=0",
+            # Note: this test uses test_functions_generate_transactions, which creates a chain
+            # of dependant txs, so they end up in the same cluster. And the number of txs is large,
+            # so the default max cluster size of 100_000 bytes is not enough.
+            "--mempool-max-cluster-size-bytes=250000",
         ]]
 
     def setup_network(self):
@@ -100,7 +104,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             inputs = list(range(5))
             total = 300000//len(inputs)
@@ -141,7 +145,6 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 for encoded_tx in transactions:
                     node.mempool_submit_transaction(encoded_tx, {})
                     total_size_of_txs_in_mempool += len(bytes.fromhex(encoded_tx))
-
 
             self.log.info(f"total size {total_size_of_txs_in_mempool}")
             #check total size of txs are more then 1MB

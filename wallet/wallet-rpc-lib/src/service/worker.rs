@@ -30,7 +30,7 @@ use wallet_types::{scan_blockchain::ScanBlockchain, wallet_type::WalletType};
 
 use crate::{Event, types::RpcError};
 
-use super::WalletServiceEvents;
+use super::{WalletServiceEvents, get_mempool_config};
 
 pub type WalletController<N> = wallet_controller::RpcController<N, super::WalletServiceEvents>;
 pub type WalletControllerError<N> = wallet_controller::ControllerError<N>;
@@ -162,8 +162,13 @@ where
             ControllerError::WalletFileAlreadyOpen
         );
 
+        let mempool_config = get_mempool_config(&self.node_rpc)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
         let wallet = WalletController::open_wallet(
             self.chain_config.clone(),
+            Arc::new(mempool_config),
             wallet_path,
             password,
             self.node_rpc.is_cold_wallet_node().await,
@@ -217,10 +222,15 @@ where
         let (computed_args, wallet_created) =
             args.parse_or_generate_mnemonic_if_needed().map_err(RpcError::InvalidMnemonic)?;
 
+        let mempool_config = get_mempool_config(&self.node_rpc)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
         let wallet = if options.scan_blockchain.skip_scanning_the_blockchain() {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
             WalletController::create_wallet(
                 self.chain_config.clone(),
+                Arc::new(mempool_config),
                 wallet_path,
                 computed_args,
                 (info.best_block_height, info.best_block_id),
@@ -231,6 +241,7 @@ where
         } else {
             WalletController::recover_wallet(
                 self.chain_config.clone(),
+                Arc::new(mempool_config),
                 wallet_path,
                 computed_args,
                 wallet_type,

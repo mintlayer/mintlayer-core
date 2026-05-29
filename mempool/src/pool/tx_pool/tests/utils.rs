@@ -45,6 +45,8 @@ pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
 pub fn create_mempool_config() -> MempoolConfig {
     MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     }
 }
 
@@ -225,7 +227,7 @@ pub fn make_tx(
     ins: &[(OutPointSourceId, u32)],
     outs: &[u128],
 ) -> SignedTransaction {
-    make_simple_coin_tx(rng, ins, outs)
+    make_simple_coin_tx(rng, ins.iter().cloned(), outs.iter().cloned())
 }
 
 /// Generate a valid transaction graph.
@@ -317,7 +319,7 @@ pub fn setup() -> TxPool<StoreMemoryUsageEstimator> {
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        create_mempool_config().into(),
+        create_mempool_config(),
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -328,11 +330,13 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: fee_rate.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     };
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -354,7 +358,7 @@ pub fn setup_with_chainstate_generic(
     let chainstate_handle = start_chainstate(chainstate);
     TxPool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_handle,
         clock,
         StoreMemoryUsageEstimator,
@@ -462,4 +466,35 @@ pub async fn tx_spend_several_inputs<M>(
     let tx = tx?;
     SignedTransaction::new(tx, witnesses.to_vec())
         .map_err(|_| anyhow::Error::msg("invalid witness count"))
+}
+
+/// Assert that the specified txs form a cluster
+pub fn assert_cluster(store: &MempoolStore, tx_ids: &BTreeSet<Id<Transaction>>) {
+    for tx_id in tx_ids {
+        let cluster = store.collect_cluster(tx_id).unwrap();
+        let cluster = cluster.iter().copied().collect::<BTreeSet<_>>();
+        assert_eq!(&cluster, tx_ids, "tx_id = {tx_id:x}");
+    }
+}
+
+/// Assert that the specified tx has the specified ancestors
+pub fn assert_ancestors(
+    store: &MempoolStore,
+    tx_id: &Id<Transaction>,
+    ancestor_tx_ids: &BTreeSet<Id<Transaction>>,
+) {
+    let ancestors = store.collect_ancestors(tx_id).unwrap();
+    let ancestors = ancestors.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(&ancestors, ancestor_tx_ids);
+}
+
+/// Assert that the specified tx has the specified descendants
+pub fn assert_descendants(
+    store: &MempoolStore,
+    tx_id: &Id<Transaction>,
+    descendant_tx_ids: &BTreeSet<Id<Transaction>>,
+) {
+    let descendants = store.collect_descendants(tx_id).unwrap();
+    let descendants = descendants.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(&descendants, descendant_tx_ids);
 }

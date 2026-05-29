@@ -64,7 +64,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use mempool::FeeRate;
+use mempool::{FeeRate, MempoolConfig};
 use serialization::hex_encoded::HexEncoded;
 use utils::{ensure, iter::CloneableExactSizeIterator};
 use wallet_storage::{
@@ -215,6 +215,18 @@ impl<K: AccountKeyChains> Account<K> {
     }
 
     // Note: the default selection algo depends on whether input_utxos are empty.
+    // TODO: utxo selection algorithm must be improved, so that it avoids creating transaction
+    // clusters that violate the corresponding mempool limits. Bitcoin's `AutomaticCoinSelection`
+    // may be used as an inspiration, e.g. we may want to:
+    // *) prefer confirmed utxos is general;
+    // *) prefer utxos that have fewer unconfirmed dependencies;
+    // *) take into account the number of confirmations, especially for utxos coming from a
+    //    different wallet.
+    // Also note that at the moment of writing this mempool only considers utxo-based relations to
+    // determine tx clusters. But this will be fixed in the (hopefully near) future, and all
+    // dependencies will be considered (e.g. the account-based ones and things like order creation
+    // vs order commands). The new algorithm will have to take this into account as well.
+    // See https://github.com/mintlayer/mintlayer-core/issues/2066.
     #[allow(clippy::too_many_arguments)]
     pub fn select_inputs_for_send_request(
         &mut self,
@@ -226,6 +238,7 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         fee_rates: CurrentFeeRate,
         order_info: Option<BTreeMap<OrderId, &RpcOrderInfo>>,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
@@ -314,6 +327,17 @@ impl<K: AccountKeyChains> Account<K> {
             }
         };
 
+        // The maximum possible size for a tx. ChainConfig::max_tx_size_for_mempool() is the
+        // absolute limit, but a transaction cannot be bigger than the cluster size limit.
+        // TODO: currently this value is only passed to select_coins, but the actual tx size
+        // may become bigger after change is added (also, select_coins will ignore the passed value
+        // in the `CoinSelectionAlgo::UsePreselected` case). This should probably be fixed as a part
+        // of a general utxo selection revamp, see the TODO at the top of this function.
+        let max_tx_size = std::cmp::min(
+            self.chain_config.max_tx_size_for_mempool(),
+            *mempool_config.max_cluster_size_bytes,
+        );
+
         let mut selected_inputs: BTreeMap<_, _> = output_currency_amounts
             .iter()
             .map(|(currency, output_amount)| -> WalletResult<_> {
@@ -338,7 +362,7 @@ impl<K: AccountKeyChains> Account<K> {
                     // when we allow paying fees with different currency
                     Amount::ZERO,
                     selection_algo,
-                    self.chain_config.max_tx_size_for_mempool(),
+                    max_tx_size,
                 )?;
 
                 total_tx_size += selection_result.get_weight();
@@ -420,7 +444,7 @@ impl<K: AccountKeyChains> Account<K> {
             PayFee::PayFeeWithThisCurrency,
             cost_of_change,
             selection_algo,
-            self.chain_config.max_tx_size_for_mempool(),
+            max_tx_size,
         )?;
 
         let mut selection_result = selection_result.add_change(
@@ -935,6 +959,7 @@ impl<K: AccountKeyChains> Account<K> {
         htlc: HashedTimelockContract,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let output = TxOutput::Htlc(output_value, Box::new(htlc));
         let request = SendRequest::new().with_outputs([output]);
@@ -948,9 +973,11 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             None,
+            mempool_config,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_order_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -959,6 +986,7 @@ impl<K: AccountKeyChains> Account<K> {
         conclude_address: Address<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let order_data =
             common::chain::OrderData::new(conclude_address.into_object(), ask_value, give_value);
@@ -974,9 +1002,11 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             None,
+            mempool_config,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_conclude_order_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -985,6 +1015,7 @@ impl<K: AccountKeyChains> Account<K> {
         output_address: Option<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let output_destination = if let Some(dest) = output_address {
             dest
@@ -1043,6 +1074,7 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             Some(BTreeMap::from_iter([(order_id, &order_info)])),
+            mempool_config,
         )
     }
 
@@ -1056,6 +1088,7 @@ impl<K: AccountKeyChains> Account<K> {
         output_address: Option<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let output_destination = if let Some(dest) = output_address {
             dest
@@ -1138,6 +1171,7 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             Some(BTreeMap::from_iter([(order_id, &order_info)])),
+            mempool_config,
         )
     }
 
@@ -1148,6 +1182,7 @@ impl<K: AccountKeyChains> Account<K> {
         order_info: RpcOrderInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let request = SendRequest::new().with_inputs_and_destinations([(
             TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
@@ -1163,9 +1198,11 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             Some(BTreeMap::from_iter([(order_id, &order_info)])),
+            mempool_config,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_spend_utxo_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1174,6 +1211,7 @@ impl<K: AccountKeyChains> Account<K> {
         htlc_secret: Option<HtlcSecret>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let utxo = self
             .output_cache
@@ -1292,6 +1330,7 @@ impl<K: AccountKeyChains> Account<K> {
                 median_time,
                 fee_rate,
                 None,
+                mempool_config,
             )
         }
     }
@@ -1302,6 +1341,7 @@ impl<K: AccountKeyChains> Account<K> {
         nft_issue_arguments: IssueNftArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let nft_issuance = NftIssuanceV0 {
             metadata: nft_issue_arguments.metadata,
@@ -1327,6 +1367,7 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             None,
+            mempool_config,
         )?;
 
         let new_token_id = make_token_id(
@@ -1361,6 +1402,7 @@ impl<K: AccountKeyChains> Account<K> {
         Ok(request)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn mint_tokens(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -1369,6 +1411,7 @@ impl<K: AccountKeyChains> Account<K> {
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let token_id = token_info.token_id();
         let outputs = make_mint_token_outputs(token_id, amount, address);
@@ -1386,6 +1429,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1396,6 +1440,7 @@ impl<K: AccountKeyChains> Account<K> {
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let token_id = token_info.token_id();
         let outputs = make_unmint_token_outputs(token_id, amount);
@@ -1413,6 +1458,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1422,6 +1468,7 @@ impl<K: AccountKeyChains> Account<K> {
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let token_id = token_info.token_id();
         token_info.check_can_lock()?;
@@ -1437,6 +1484,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1447,6 +1495,7 @@ impl<K: AccountKeyChains> Account<K> {
         is_token_unfreezable: IsTokenUnfreezable,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         token_info.check_can_freeze()?;
 
@@ -1464,6 +1513,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1473,6 +1523,7 @@ impl<K: AccountKeyChains> Account<K> {
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         token_info.check_can_unfreeze()?;
 
@@ -1488,6 +1539,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1498,6 +1550,7 @@ impl<K: AccountKeyChains> Account<K> {
         address: Address<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let new_authority = address.into_object();
 
@@ -1515,6 +1568,7 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1525,6 +1579,7 @@ impl<K: AccountKeyChains> Account<K> {
         metadata_uri: Vec<u8>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
@@ -1540,9 +1595,11 @@ impl<K: AccountKeyChains> Account<K> {
             db_tx,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_change_token_transaction(
         &mut self,
         authority: Destination,
@@ -1551,6 +1608,7 @@ impl<K: AccountKeyChains> Account<K> {
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> Result<SendRequest, WalletError> {
         let request = SendRequest::new()
             .with_outputs(outputs)
@@ -1565,6 +1623,7 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             None,
+            mempool_config,
         )
     }
 
@@ -1574,6 +1633,7 @@ impl<K: AccountKeyChains> Account<K> {
         mut stake_pool_arguments: StakePoolCreationArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let Some(vrf_public_key) = stake_pool_arguments.vrf_public_key.take() else {
             return Err(WalletError::VrfKeyMustBeProvided);
@@ -1585,6 +1645,7 @@ impl<K: AccountKeyChains> Account<K> {
             vrf_public_key,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 
@@ -1595,6 +1656,7 @@ impl<K: AccountKeyChains> Account<K> {
         vrf_public_key: VRFPublicKey,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> Result<SendRequest, WalletError> {
         let staker = match stake_pool_arguments.staker_key {
             Some(staker) => match staker {
@@ -1639,6 +1701,7 @@ impl<K: AccountKeyChains> Account<K> {
             median_time,
             fee_rate,
             None,
+            mempool_config,
         )?;
 
         let new_pool_id = common::chain::make_pool_id(request.inputs())?;
@@ -2620,6 +2683,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
         mut stake_pool_arguments: StakePoolCreationArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        mempool_config: &MempoolConfig,
     ) -> WalletResult<SendRequest> {
         let vrf_public_key = match stake_pool_arguments.vrf_public_key.take() {
             Some(vrf_public_key) => vrf_public_key,
@@ -2631,6 +2695,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
             vrf_public_key,
             median_time,
             fee_rate,
+            mempool_config,
         )
     }
 }

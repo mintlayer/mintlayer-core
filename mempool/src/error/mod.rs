@@ -23,7 +23,7 @@ use common::{
     primitives::{H256, Id, amount::DisplayAmount},
 };
 
-use crate::pool::fee::Fee;
+use crate::{config::ConfigError, pool::fee::Fee};
 
 pub use ban_score::MempoolBanScore;
 
@@ -44,20 +44,11 @@ pub enum BlockConstructionError {
 /// block construction.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum TxCollectionError {
-    #[error("Specified transaction {0:x} not found in mempool")]
-    SpecifiedTxNotFound(Id<Transaction>),
+    #[error(transparent)]
+    MempoolStoreInvariantError(#[from] MempoolStoreInvariantError),
 
-    #[error("Transaction {tx_id:x} has a parent {parent_tx_id:x} that is not in mempool")]
-    TxParentNotFound {
-        tx_id: Id<Transaction>,
-        parent_tx_id: Id<Transaction>,
-    },
-
-    #[error("Transaction {tx_id:x} has a child {child_tx_id:x} that is not in mempool")]
-    TxChildNotFound {
-        tx_id: Id<Transaction>,
-        child_tx_id: Id<Transaction>,
-    },
+    #[error(transparent)]
+    MempoolStoreError(#[from] MempoolStoreError),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -85,6 +76,9 @@ pub enum Error {
 
     #[error("Transaction collection error: {0}")]
     TxCollectionError(#[from] TxCollectionError),
+
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -95,14 +89,17 @@ pub enum MempoolPolicyError {
     #[error("Mempool is full")]
     MempoolFull,
 
-    #[error("Transaction has no inputs.")]
+    #[error("Transaction has no inputs")]
     NoInputs,
 
-    #[error("Transaction has no outputs.")]
+    #[error("Transaction has no outputs")]
     NoOutputs,
 
-    #[error("Transaction exceeds the maximum block size.")]
-    ExceedsMaxBlockSize,
+    #[error("Transaction size exceeds the maximum block size")]
+    TxSizeExceedsMaxBlockSize,
+
+    #[error("Transaction size ({tx_size}) exceeds the maximum cluster size ({limit})")]
+    TxSizeExceedsMaxClusterSize { tx_size: usize, limit: usize },
 
     #[error(
         "Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}"
@@ -114,29 +111,29 @@ pub enum MempoolPolicyError {
         original_fee: Fee,
     },
 
-    #[error("The sum of the fees of this transaction's conflicts overflows.")]
+    #[error("The sum of the fees of this transaction's conflicts overflows")]
     ConflictsFeeOverflow,
 
     #[error(
-        "Transaction pays a fee that is lower than the fee of its conflicts with their descendants."
+        "Transaction pays a fee that is lower than the fee of its conflicts with their descendants"
     )]
     TransactionFeeLowerThanConflictsWithDescendants,
 
-    #[error("Underflow in computing transaction's additional fees.")]
+    #[error("Underflow in computing transaction's additional fees")]
     AdditionalFeesUnderflow,
 
     #[error(
-        "Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee}, min_relay_fee: {min_relay_fee})."
+        "Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee}, min_relay_fee: {min_relay_fee})"
     )]
     InsufficientFeesToRelay {
         tx_fee: DisplayAmount,
         min_relay_fee: DisplayAmount,
     },
 
-    #[error("Replacement transaction does not pay enough for its bandwidth.")]
+    #[error("Replacement transaction does not pay enough for its bandwidth")]
     InsufficientFeesToRelayRBF,
 
-    #[error("Rolling fee threshold not met (fee is {tx_fee}, minimum {minimum_fee}).")]
+    #[error("Rolling fee threshold not met (fee is {tx_fee}, minimum {minimum_fee})")]
     RollingFeeThresholdNotMet {
         minimum_fee: DisplayAmount,
         tx_fee: DisplayAmount,
@@ -145,20 +142,41 @@ pub enum MempoolPolicyError {
     #[error("Overflow encountered while computing fee with ancestors")]
     AncestorFeeOverflow,
 
-    #[error("Overflow encountered while updating ancestor fee.")]
+    #[error("Overflow encountered while updating ancestor fee")]
     AncestorFeeUpdateOverflow,
 
     #[error("Fee overflow")]
     FeeOverflow,
 
-    #[error("Get parent error")]
-    GetParentError,
-
-    #[error("Transaction is a descendant of expired transaction.")]
+    #[error("Transaction is a descendant of expired transaction")]
     DescendantOfExpiredTransaction,
 
     #[error("Relay fee overflow error")]
     RelayFeeOverflow,
+
+    #[error("Cluster max transaction count limit ({limit}) violated")]
+    ClusterMaxTxCountLimitViolated { limit: usize },
+
+    #[error("Cluster total transaction size ({actual_size}) exceeds the limit ({limit})")]
+    ClusterTotalTxSizeLimitViolated { actual_size: usize, limit: usize },
+
+    #[error(transparent)]
+    MempoolStoreError(#[from] MempoolStoreError),
+
+    #[error(transparent)]
+    MempoolStoreInvariantError(#[from] MempoolStoreInvariantError),
+}
+
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum MempoolStoreInvariantError {
+    #[error("Mempool entry for transaction {0:x} must exist but it wasn't found")]
+    SupposedlyExistingEntryNotFound(Id<Transaction>),
+}
+
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum MempoolStoreError {
+    #[error("Mempool entry for transaction {0:x} wasn't found")]
+    TxEntryNotFound(Id<Transaction>),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]

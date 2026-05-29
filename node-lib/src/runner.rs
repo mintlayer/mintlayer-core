@@ -107,7 +107,7 @@ async fn initialize(
         node_config.mempool.unwrap_or_default().into(),
         subsystem::Handle::clone(&chainstate),
         Default::default(),
-    );
+    )?;
     let mempool = manager.add_custom_subsystem("mempool", |handle, _| mempool_init.init(handle));
 
     // P2P subsystem

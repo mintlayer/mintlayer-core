@@ -213,7 +213,8 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         mempool_config,
         chainstate.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl, _| mempool_init.init(hdl));
 

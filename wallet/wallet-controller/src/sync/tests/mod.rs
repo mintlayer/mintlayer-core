@@ -38,7 +38,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use logging::log;
-use mempool::{FeeRate, tx_accumulator::PackingStrategy};
+use mempool::{FeeRate, MempoolConfig, tx_accumulator::PackingStrategy};
 use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
     node_traits::{ConnectedPeer, MempoolEvents, PeerId},
@@ -447,6 +447,10 @@ impl NodeInterface for MockNode {
     }
 
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
         unreachable!()
     }
 

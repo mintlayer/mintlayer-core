@@ -301,6 +301,14 @@ pub struct RunOptions {
     #[clap(long, value_name = "COUNT")]
     pub max_orphan_blocks: Option<usize>,
 
+    /// The maximum number of transactions that a single mempool transaction cluster may have.
+    #[clap(long, value_name = "COUNT")]
+    pub mempool_max_cluster_transaction_count: Option<usize>,
+
+    /// The maximum size in bytes that a single mempool transaction cluster may have.
+    #[clap(long, value_name = "SIZE")]
+    pub mempool_max_cluster_size_bytes: Option<usize>,
+
     /// Whether p2p networking should be enabled.
     #[clap(long, value_name = "VAL")]
     pub p2p_networking_enabled: Option<bool>,
@@ -478,6 +486,8 @@ mod tests {
             max_db_commit_attempts: Default::default(),
             enable_db_reckless_mode_in_ibd: Default::default(),
             max_orphan_blocks: Default::default(),
+            mempool_max_cluster_transaction_count: Default::default(),
+            mempool_max_cluster_size_bytes: Default::default(),
             p2p_networking_enabled: Default::default(),
             p2p_bind_addresses: Default::default(),
             p2p_socks5_proxy: Default::default(),

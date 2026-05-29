@@ -93,7 +93,8 @@ pub fn start_subsystems_generic(
         mempool_config,
         chainstate.clone(),
         time_getter,
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("p2p-test-mempool", |handle, _| mempool_init.init(handle));
 

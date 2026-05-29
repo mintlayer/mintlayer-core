@@ -280,6 +280,10 @@ impl TxOrphanPool {
             .map(|(_origin, iid)| *iid)
             .next()
     }
+
+    pub fn get_all_transaction_ids(&self) -> Vec<Id<Transaction>> {
+        self.transactions.iter().map(|entry| *entry.tx_id()).collect()
+    }
 }
 
 /// Entry-like access to orphans in the pool (somewhat similar to `btree_map::OccupiedEntry`)

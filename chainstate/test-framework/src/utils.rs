@@ -57,12 +57,19 @@ use crypto::{
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng, RngExt as _};
+use test_utils::random::gen_random_bytes;
 use utxo::UtxosView;
 
+// Note: 99 is because originally `empty_witness` returned a randomly shuffled vec of numbers (0..100)
+// and now some tests that check transaction sizes depend on this.
+pub const EMPTY_WITNESS_DEFAULT_SIZE: usize = 99;
+
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
-    use randomness::SliceRandom;
-    let mut msg: Vec<u8> = (1..100).collect();
-    msg.shuffle(rng);
+    empty_witness_with_size(rng, EMPTY_WITNESS_DEFAULT_SIZE)
+}
+
+pub fn empty_witness_with_size(rng: &mut impl Rng, size: usize) -> InputWitness {
+    let msg = gen_random_bytes(rng, size, size);
     InputWitness::NoSignature(Some(msg))
 }
 

@@ -91,7 +91,8 @@ pub async fn start_subsystems(
         mempool_config,
         chainstate_handle.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool_handle =
         manager.add_custom_subsystem("test-mempool", |hdl, _| mempool_init.init(hdl));
 

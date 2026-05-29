@@ -1000,6 +1000,25 @@ Returns:
 ], .. ]
 ```
 
+### Method `mempool_get_config`
+
+Get the mempool config.
+
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+{
+    "min_tx_relay_fee_rate": { "amount_per_kb": { "atoms": number string } },
+    "max_cluster_tx_count": number,
+    "max_cluster_size_bytes": number,
+}
+```
+
 ### Subscription `mempool_subscribe_to_events`
 
 Subscribe to mempool events, such as tx processed.

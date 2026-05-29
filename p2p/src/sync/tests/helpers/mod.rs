@@ -694,7 +694,8 @@ impl TestNodeBuilder {
             mempool_config,
             chainstate.clone(),
             time_getter.clone(),
-        );
+        )
+        .unwrap();
         let mempool =
             manager.add_custom_subsystem("p2p-sync-test-mempool", |h, _| mempool_init.init(h));
 

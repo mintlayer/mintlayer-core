@@ -279,6 +279,7 @@ async fn verify_wallet_balance<B, P, RDF>(
     let db_copy = reopen_db_func();
     let wallet = Wallet::load_wallet(
         Arc::clone(chain_config),
+        Default::default(),
         db_copy,
         None,
         |_| Ok(()),
@@ -387,6 +388,7 @@ async fn wallet_creation_in_memory() {
     // fail to load an empty wallet
     match Wallet::load_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         empty_db,
         None,
         |_| Ok(()),
@@ -408,6 +410,7 @@ async fn wallet_creation_in_memory() {
     let wrong_network_chain_config = Arc::new(create_mainnet());
     match Wallet::load_wallet(
         wrong_network_chain_config.clone(),
+        Default::default(),
         initialized_db,
         None,
         |_| Ok(()),
@@ -429,6 +432,7 @@ async fn wallet_creation_in_memory() {
     // successfully load a wallet from initialized db
     let _wallet = Wallet::load_wallet(
         chain_config.clone(),
+        Default::default(),
         initialized_db,
         None,
         |_| Ok(()),
@@ -459,6 +463,7 @@ async fn wallet_creation_in_memory() {
         eprintln!("load again.");
         match Wallet::load_wallet(
             Arc::clone(&chain_config),
+            Default::default(),
             wallet.db,
             None,
             |_| Ok(()),
@@ -505,6 +510,7 @@ async fn wallet_migration_to_v2(#[case] seed: Seed) {
     let genesis_block_id = chain_config.genesis_block_id();
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
@@ -572,6 +578,7 @@ async fn wallet_migration_to_v2(#[case] seed: Seed) {
 
     let wallet = Wallet::load_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         new_db,
         password,
         |_| Ok(()),
@@ -629,6 +636,7 @@ async fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     let genesis_block_id = chain_config.genesis_block_id();
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
@@ -728,6 +736,7 @@ async fn wallet_seed_phrase_check_address() {
     let wallet_passphrase: Option<String> = None;
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
@@ -773,6 +782,7 @@ async fn wallet_seed_phrase_check_address() {
     let wallet_passphrase: Option<String> = Some("phrase123".into());
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
@@ -1153,6 +1163,7 @@ async fn test_wallet_accounts<B, P, RDF>(
     let db_copy = reopen_db_func();
     let wallet = Wallet::load_wallet(
         Arc::clone(chain_config),
+        Default::default(),
         db_copy,
         None,
         |_| Ok(()),

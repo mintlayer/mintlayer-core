@@ -327,7 +327,8 @@ mod tests {
             mempool_config,
             subsystem::Handle::clone(&chainstate),
             time_getter.clone(),
-        );
+        )
+        .unwrap();
         let mempool = manager.add_custom_subsystem("mempool", |hdl, _| mempool_init.init(hdl));
 
         let mut p2p_config = test_p2p_config();

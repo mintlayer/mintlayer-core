@@ -5034,6 +5034,7 @@ dependencies = [
  "ctor",
  "hashbrown 0.17.1",
  "hex",
+ "itertools 0.14.0",
  "jsonrpsee",
  "logging",
  "mempool-types",

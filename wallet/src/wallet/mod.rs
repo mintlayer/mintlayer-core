@@ -52,7 +52,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use mempool::FeeRate;
+use mempool::{FeeRate, MempoolConfig};
 use tx_verifier::{CheckTransactionError, check_transaction, error::TokenIssuanceError};
 use utils::{debug_panic_or_log, ensure};
 use wallet_storage::{
@@ -327,6 +327,12 @@ pub enum WalletPoolsFilter {
 
 pub struct Wallet<B: storage::Backend + 'static, P: SignerProvider> {
     chain_config: Arc<ChainConfig>,
+    // Note: unlike the chain config, the mempool config may potentially change, e.g. if the node
+    // is restarted with different parameters. At this moment, node restart requires the wallet
+    // to be restarted as well, so it's not an issue for now. But when we implement automatic
+    // reconnection, the mempool config stored here should be updated each time we reconnect to
+    // the node. See https://github.com/mintlayer/mintlayer-core/issues/2064.
+    mempool_config: Arc<MempoolConfig>,
     db: Store<B>,
     accounts: BTreeMap<U31, Account<P::K>>,
     latest_median_time: BlockTimestamp,
@@ -388,12 +394,20 @@ where
 {
     pub async fn create_new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         db: Store<B>,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider).await?;
+        let mut wallet = Self::new_wallet(
+            chain_config,
+            mempool_config,
+            db,
+            wallet_type,
+            signer_provider,
+        )
+        .await?;
 
         match &mut wallet {
             WalletCreation::Wallet(w) => {
@@ -408,15 +422,24 @@ where
 
     pub async fn recover_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
     ) -> WalletResult<WalletCreation<Self>> {
-        Self::new_wallet(chain_config, db, wallet_type, signer_provider).await
+        Self::new_wallet(
+            chain_config,
+            mempool_config,
+            db,
+            wallet_type,
+            signer_provider,
+        )
+        .await
     }
 
     async fn new_wallet<F: AsyncFnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         mut db: Store<B>,
         wallet_type: WalletType,
         signer_provider: F,
@@ -463,6 +486,7 @@ where
         let latest_median_time = chain_config.genesis_block().timestamp();
         let wallet = Wallet {
             chain_config,
+            mempool_config,
             db,
             accounts: [default_account].into(),
             latest_median_time,
@@ -875,11 +899,13 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn load_wallet<
         F: Fn(u32) -> WalletResult<()>,
         F2: AsyncFnOnce(StoreTxRo<B>) -> WalletResult<P>,
     >(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         mut db: Store<B>,
         password: Option<String>,
         pre_migration: F,
@@ -957,6 +983,7 @@ where
 
         Ok(WalletCreation::Wallet(Wallet {
             chain_config,
+            mempool_config,
             db,
             accounts,
             latest_median_time,
@@ -1771,6 +1798,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(SignedTxWithFees, AddlData)> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx_generic(
             account_index,
             additional_info,
@@ -1787,6 +1816,7 @@ where
                         consolidate_fee_rate,
                     },
                     None,
+                    &mempool_config,
                 )?;
 
                 let additional_data = additional_data_getter(&request);
@@ -1811,6 +1841,8 @@ where
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.for_account_rw(account_index, |account, db_tx| {
             let mut request = account.select_inputs_for_send_request(
                 request,
@@ -1824,6 +1856,7 @@ where
                     consolidate_fee_rate,
                 },
                 None,
+                &mempool_config,
             )?;
 
             let fees = request.get_fees();
@@ -1910,6 +1943,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -1924,6 +1959,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -1940,6 +1976,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -1953,6 +1991,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -1968,6 +2007,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -1980,6 +2021,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -1996,6 +2038,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2009,6 +2053,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2024,6 +2069,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2036,6 +2083,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2052,6 +2100,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2065,6 +2115,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2081,6 +2132,8 @@ where
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
         let additional_info = to_token_additional_info(token_info);
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2094,6 +2147,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2177,6 +2231,7 @@ where
     ) -> WalletResult<(TokenId, SignedTxWithFees)> {
         let destination = address.into_object();
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
 
         let signed_transaction = self
             .async_for_account_rw_unlocked_and_check_tx(
@@ -2194,6 +2249,7 @@ where
                             current_fee_rate,
                             consolidate_fee_rate,
                         },
+                        &mempool_config,
                     )
                 },
             )
@@ -2215,6 +2271,8 @@ where
         stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
@@ -2227,6 +2285,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2321,6 +2380,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2334,6 +2395,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2359,6 +2421,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<(OrderId, SignedTxWithFees)> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         let tx = self
             .async_for_account_rw_unlocked_and_check_tx(
                 account_index,
@@ -2374,6 +2438,7 @@ where
                             current_fee_rate,
                             consolidate_fee_rate,
                         },
+                        &mempool_config,
                     )
                 },
             )
@@ -2394,6 +2459,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2408,6 +2475,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2427,6 +2495,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2442,6 +2512,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2458,6 +2529,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2471,6 +2544,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2489,6 +2563,8 @@ where
         additional_info: TxAdditionalInfo,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             additional_info,
@@ -2503,6 +2579,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )
@@ -2771,6 +2848,8 @@ where
         stake_pool_arguments: StakePoolCreationArguments,
     ) -> WalletResult<SignedTxWithFees> {
         let latest_median_time = self.latest_median_time;
+        let mempool_config = Arc::clone(&self.mempool_config);
+
         self.async_for_account_rw_unlocked_and_check_tx(
             account_index,
             TxAdditionalInfo::new(),
@@ -2783,6 +2862,7 @@ where
                         current_fee_rate,
                         consolidate_fee_rate,
                     },
+                    &mempool_config,
                 )
             },
         )

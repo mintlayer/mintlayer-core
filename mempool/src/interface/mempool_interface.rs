@@ -22,7 +22,7 @@ use common::{
 use mempool_types::TransactionDuplicateStatus;
 
 use crate::{
-    FeeRate, MempoolMaxSize, TxOptions, TxStatus,
+    FeeRate, MempoolConfig, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
@@ -62,6 +62,9 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Best block ID according to mempool. May be temporarily out of sync with chainstate.
     fn best_block_id(&self) -> Id<GenBlock>;
+
+    /// Return the mempool config.
+    fn config(&self) -> &MempoolConfig;
 
     /// Collect transactions by putting them in given accumulator
     /// Returns the accumulator with the collected transactions

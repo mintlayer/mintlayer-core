@@ -22,6 +22,18 @@ use super::UtxoSelectorError;
 
 /// A group of UTXOs paid to the same output script.
 /// This helps reduce privacy leaks resulting from address reuse.
+// TODO: at this moment, we always create a separate output group for each utxo, i.e. we don't have
+// by-destination grouping. See https://github.com/mintlayer/mintlayer-core/issues/2067.
+// Note that in Bitcoin transactions are not grouped unconditionally:
+// *) They are grouped if either m_avoid_partial_spends or m_avoid_address_reuse is true (both are
+//    false by default).
+// *) Otherwise, if m_max_aps_fee is non-negative (it's zero by default), then a second attempt
+//    to construct the tx is made, this time with grouping enabled, and the result is chosen only
+//    if its fee difference with the "non-grouped" tx is not bigger than m_max_aps_fee (see
+//    CreateTransaction in wallet/spend.cpp).
+// *) In any case, there is a notion of "unsafe" outputs (see COutput::safe in wallet/coinselection.h),
+//    which are normally completely omitted from utxo selection (m_include_unsafe_inputs is false
+//    by default), and there is a limit on how many utxos can be in a single group.
 #[derive(Clone, Debug)]
 pub struct OutputGroup {
     /// The list of UTXOs contained in this output group.

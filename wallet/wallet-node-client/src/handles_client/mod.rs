@@ -34,7 +34,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    FeeRate, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
+    FeeRate, MempoolConfig, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
     tx_options::TxOptionsOverrides,
 };
 use p2p::{
@@ -530,5 +530,10 @@ impl NodeInterface for WalletHandlesClient {
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         let res = self.mempool.call(move |this| this.get_all()).await?;
         Ok(res)
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        let config = self.mempool.call(move |this| this.config().clone()).await?;
+        Ok(Some(config))
     }
 }

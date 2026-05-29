@@ -48,5 +48,6 @@ crypto = { path = "../crypto" }
 test-utils = { path = "../test-utils" }
 
 ctor.workspace = true
+itertools.workspace = true
 mockall.workspace = true
 rstest.workspace = true
