@@ -175,7 +175,7 @@ fn check_tokens_tx(
                         OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                         OutputValue::TokenV0(_) => true,
                     };
-                    let give_token_v0 = match data.ask() {
+                    let give_token_v0 = match data.give() {
                         OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                         OutputValue::TokenV0(_) => true,
                     };

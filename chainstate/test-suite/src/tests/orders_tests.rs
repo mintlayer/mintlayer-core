@@ -5014,31 +5014,29 @@ fn token_v0_in_orders_test(
             .build_and_process(&mut rng)
             .unwrap_err();
 
-        if ask_for_token {
-            if switch_to_tokens_v1 {
-                assert_eq!(
-                    err,
-                    ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                        CheckBlockError::CheckTransactionFailed(
-                            CheckBlockTransactionsError::CheckTransactionError(
-                                tx_verifier::CheckTransactionError::DeprecatedTokenOperationVersion(
-                                    TokenIssuanceVersion::V0,
-                                    order_creation_tx_id
-                                )
+        if switch_to_tokens_v1 {
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            tx_verifier::CheckTransactionError::DeprecatedTokenOperationVersion(
+                                TokenIssuanceVersion::V0,
+                                order_creation_tx_id
                             )
                         )
-                    ))
-                );
-            } else {
-                assert_eq!(
-                    err,
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::OrdersAccountingError(
-                            orders_accounting::Error::UnsupportedTokenVersion,
-                        )
-                    ))
-                );
-            }
+                    )
+                ))
+            );
+        } else if ask_for_token {
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::OrdersAccountingError(
+                        orders_accounting::Error::UnsupportedTokenVersion,
+                    )
+                ))
+            );
         } else {
             assert_eq!(
                 err,
