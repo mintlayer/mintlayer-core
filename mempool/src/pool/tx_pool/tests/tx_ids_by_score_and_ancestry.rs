@@ -174,3 +174,87 @@ async fn tx_ids_by_score_and_ancestry(#[case] seed: Seed) {
         ]
     );
 }
+
+// While using a small stack and unlimited `max_cluster_tx_count`, create a long chain of
+// dependent txs and pass the first and the last of them to `get_best_tx_ids_by_score_and_ancestry`
+// (so that it has to check all the txs in between). The expected result is that the test doesn't
+// crash. This basically checks that `get_best_tx_ids_by_score_and_ancestry` doesn't use recursion.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+fn stack_overflow_on_misconfigured_cluster_size_limit(#[case] seed: Seed) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        // Use a small stack, same logic as in the `stack_overflow_on_transaction_addition` test.
+        .thread_stack_size(256 * 1024)
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let test_body = move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        // This was enough to crash the original code using the given stack size both in
+        // debug and release builds (actually, 1000 was also enough, but we use a bigger
+        // value "just in case").
+        let chain_len = 1500;
+
+        let mut amount = 1_000_000;
+        let funding_tx = make_tx(
+            &mut rng,
+            &[(OutPointSourceId::BlockReward(genesis_id.into()), 0)],
+            &[amount],
+        );
+        let funding_tx_id = funding_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(funding_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let mut mempool = setup_with_chainstate_generic(
+            tf.chainstate(),
+            MempoolConfig {
+                min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+                max_cluster_size_bytes: usize::MAX.into(),
+                max_cluster_tx_count: usize::MAX.into(),
+            },
+            Default::default(),
+        );
+
+        // Disable heavy checks because the test is already relatively slow.
+        mempool.disable_heavy_validity_checks();
+
+        let mut prev_source: OutPointSourceId = funding_tx_id.into();
+        let mut tx_ids = Vec::new();
+
+        for _ in 0..chain_len {
+            let tx = make_tx(&mut rng, &[(prev_source, 0)], &[amount - 1]);
+            amount -= 1;
+            let tx_id = tx.transaction().get_id();
+            prev_source = tx_id.into();
+
+            let result = mempool.add_transaction_test(tx);
+
+            assert_eq!(result, Ok(TxStatus::InMempool));
+            tx_ids.push(tx_id);
+        }
+
+        let selected_tx_ids = [*tx_ids.first().unwrap(), *tx_ids.last().unwrap()];
+        let result = mempool
+            .get_best_tx_ids_by_score_and_ancestry(&BTreeSet::from(selected_tx_ids), tx_ids.len())
+            .unwrap();
+        assert_eq!(result, selected_tx_ids);
+    };
+
+    runtime.block_on(async move {
+        // Same as in `stack_overflow_on_transaction_addition`, need to use `spawn` or `spawn_blocking`
+        // here.
+        tokio::task::spawn_blocking(move || {
+            test_body();
+        })
+        .await
+        .unwrap();
+    });
+}

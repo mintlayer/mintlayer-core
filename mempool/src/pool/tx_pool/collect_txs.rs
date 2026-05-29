@@ -359,6 +359,23 @@ pub fn get_best_tx_ids_by_score_and_ancestry<M>(
 mod get_best_tx_ids_by_score_and_ancestry_impl {
     use super::*;
 
+    // Stack item for collect_nearest_selected_ancestors.
+    struct StackItem<'a, I: Iterator<Item = &'a Id<Transaction>>> {
+        tx_entry: &'a TxMempoolEntry,
+        tx_ancestors: BTreeSet<Id<Transaction>>,
+        parents_iter: I,
+    }
+
+    fn new_stack_item<'a>(
+        tx_entry: &'a TxMempoolEntry,
+    ) -> StackItem<'a, impl Iterator<Item = &'a Id<Transaction>>> {
+        StackItem {
+            tx_entry,
+            tx_ancestors: BTreeSet::new(),
+            parents_iter: tx_entry.parents(),
+        }
+    }
+
     // For each ancestor path starting from the specified tx, take the nearest ancestor that is in `selected_tx_ids`
     // and put it into a set. E.g. in
     //  /--S1--**--S2
@@ -379,30 +396,41 @@ mod get_best_tx_ids_by_score_and_ancestry_impl {
         selected_tx_ids: &BTreeSet<Id<Transaction>>,
         ancestors_map: &mut BTreeMap<Id<Transaction>, BTreeSet<Id<Transaction>>>,
     ) -> Result<(), TxCollectionError> {
-        let tx_id = tx_entry.tx_id();
+        if ancestors_map.contains_key(tx_entry.tx_id()) {
+            return Ok(());
+        }
 
-        if !ancestors_map.contains_key(tx_id) {
-            let mut tx_ancestors = BTreeSet::new();
+        let mut stack = vec![new_stack_item(tx_entry)];
 
-            for parent_id in tx_entry.parents() {
+        'outer: loop {
+            // We start with a non-empty stack and then check if it's empty at the end of the outer loop.
+            let item = stack.last_mut().expect("known to be present");
+
+            for parent_id in item.parents_iter.by_ref() {
                 if selected_tx_ids.contains(parent_id) {
                     // The nearest selected ancestor has been found, no need to go deeper.
-                    tx_ancestors.insert(*parent_id);
+                    item.tx_ancestors.insert(*parent_id);
+                } else if let Some(existing_ancestors) = ancestors_map.get(parent_id) {
+                    item.tx_ancestors.extend(existing_ancestors);
                 } else {
                     let parent_tx_entry = mempool.store.get_existing_entry(parent_id)?;
-                    collect_nearest_selected_ancestors(
-                        mempool,
-                        parent_tx_entry,
-                        selected_tx_ids,
-                        ancestors_map,
-                    )?;
-
-                    let parent_ancestors = ancestors_map.get(parent_id).expect("must be present");
-                    tx_ancestors.extend(parent_ancestors);
+                    stack.push(new_stack_item(parent_tx_entry));
+                    continue 'outer;
                 }
             }
 
-            ancestors_map.insert(*tx_id, tx_ancestors);
+            // We've completely processed the current item, so put the collected `tx_ancestors`
+            // into `ancestors_map`. If there is another item on top of the stack, it's this item's
+            // child, whose `tx_ancestors` must be extended with this item's `tx_ancestors`.
+            // Otherwise we're done.
+            let item = stack.pop().expect("known to be present");
+            let entry = ancestors_map.entry(*item.tx_entry.tx_id()).insert_entry(item.tx_ancestors);
+
+            if let Some(child_item) = stack.last_mut() {
+                child_item.tx_ancestors.extend(entry.get());
+            } else {
+                break;
+            }
         }
 
         Ok(())
