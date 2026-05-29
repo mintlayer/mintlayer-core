@@ -587,6 +587,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
         let prev_block_index = self.get_previous_block_index(header)?;
+        let block_height = prev_block_index.block_height().next_height();
         let common_ancestor_height =
             self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
         let min_allowed_height = self.get_min_height_with_allowed_reorg()?;
@@ -596,6 +597,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
             return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                 common_ancestor_height,
+                block_height,
                 tip_block_height,
                 min_allowed_height,
             });

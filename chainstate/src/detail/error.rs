@@ -174,13 +174,15 @@ pub enum CheckBlockError {
     #[error("CRITICAL: Failed to retrieve ancestor of submitted block: {0}")]
     GetAncestorError(#[from] GetAncestorError),
     #[error(
-        "Attempted to add a block before reorg limit (common ancestor height is: {} while current tip height is: {} and min allowed is: {})",
-        common_ancestor_height,
+        "Attempted to add a block before reorg limit (block height: {}, tip height: {}, common ancestor height: {}, min allowed height for reorg: {})",
+        block_height,
         tip_block_height,
+        common_ancestor_height,
         min_allowed_height
     )]
     AttemptedToAddBlockBeforeReorgLimit {
         common_ancestor_height: BlockHeight,
+        block_height: BlockHeight,
         tip_block_height: BlockHeight,
         min_allowed_height: BlockHeight,
     },

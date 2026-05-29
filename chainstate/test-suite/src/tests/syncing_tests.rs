@@ -547,6 +547,7 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                     common_ancestor_height: BlockHeight::new(0),
+                    block_height: BlockHeight::new(0),
                     tip_block_height: BlockHeight::new(2),
                     min_allowed_height: BlockHeight::new(1),
                 }
@@ -585,6 +586,7 @@ fn try_reorg_past_limit_in_fork(#[case] seed: Seed) {
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                     common_ancestor_height: BlockHeight::new(0),
+                    block_height: BlockHeight::new(2),
                     tip_block_height: BlockHeight::new(3),
                     min_allowed_height: BlockHeight::new(1),
                 }
@@ -1177,6 +1179,7 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
         let block_reorg_limit_error = ChainstateError::ProcessBlockError(
             BlockError::CheckBlockFailed(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit {
                 common_ancestor_height: BlockHeight::new(parent_height_below_reorg_limit as u64),
+                block_height: BlockHeight::new(parent_height_below_reorg_limit as u64 + 1),
                 tip_block_height: BlockHeight::new(chain_len as u64),
                 min_allowed_height: BlockHeight::new(first_parent_height_above_reorg_limit as u64),
             }),
@@ -1324,7 +1327,6 @@ fn preliminary_checks_for_existing_block(#[case] seed: Seed) {
         tf.chainstate
             .preliminary_headers_check(std::slice::from_ref(bad_block_above_reorg_limit.header()))
             .unwrap();
-        assert_eq!(err, block_reorg_limit_error);
         let err = tf.chainstate.preliminary_block_check(bad_block_above_reorg_limit).unwrap_err();
         assert_empty_tx_error(&err);
     });
