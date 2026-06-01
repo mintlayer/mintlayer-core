@@ -45,6 +45,7 @@ pub trait NodeInterface {
     // Note: not requiring the `Error` trait here so that `anyhow::Error` can be used.
     type Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static;
 
+    // TODO: rename this, e.g. to wallet_mode.
     async fn is_cold_wallet_node(&self) -> WalletControllerMode;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
