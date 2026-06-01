@@ -22,6 +22,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
+## [1.3.1]
+
+### Fixed
+  - Wallet:
+    - Fixed an issue where the wallet in cold mode would always use input commitments v0, thus producing signatures
+      that may no longer be valid at the current height.
+    - Fixed an issue where the wallet in cold mode would still try to access the mempool, which would cause `wallet-cli`
+      to print lots of error messages like "Method is not available in cold wallet mode".
+
 ## [1.3.0] - 2026-04-09
 
 ### Added
