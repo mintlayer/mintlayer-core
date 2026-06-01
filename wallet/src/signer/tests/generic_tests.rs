@@ -319,9 +319,15 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
+// Note: unlike some other tests (in particular, the "fixed signature" ones) that only accept
+// input_commitments_version, which determines both the expected commitments and the height
+// at which the signatures will be produced, this test accepts both the expected version
+// and the flag `before_fork`, which determines the height. This is used in the software signer
+// tests to check that in the cold mode v1 commitments are used regardless of the current height.
 pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
-    input_commitments_version: SighashInputCommitmentVersion,
+    before_fork: bool,
+    expected_input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
     include_orders_v0: bool,
@@ -333,9 +339,10 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 {
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
         let fork_height = rng.gen_range(100..100_000);
-        let tx_block_height = match input_commitments_version {
-            SighashInputCommitmentVersion::V0 => rng.gen_range(1..fork_height),
-            SighashInputCommitmentVersion::V1 => rng.gen_range(fork_height..fork_height * 2),
+        let tx_block_height = if before_fork {
+            rng.gen_range(1..fork_height)
+        } else {
+            rng.gen_range(fork_height..fork_height * 2)
         };
         (
             BlockHeight::new(fork_height),
@@ -888,8 +895,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         assert_eq!(ptx, another_ptx);
     }
 
-    let input_commitments = ptx
-        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(expected_input_commitments_version)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
@@ -908,7 +915,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 &chain_config,
                 dest,
                 &ptx,
-                &input_commitments,
+                &expected_input_commitments,
                 i,
                 all_utxos[i].cloned(),
             )
@@ -983,7 +990,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             &chain_config,
             dest,
             &ptx,
-            &input_commitments,
+            &expected_input_commitments,
             i,
             all_utxos[i].cloned(),
         )

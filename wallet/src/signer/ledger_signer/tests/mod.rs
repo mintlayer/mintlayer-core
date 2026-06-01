@@ -316,13 +316,10 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[serial_test::serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_transaction(
-    #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
-) {
-    log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+async fn test_sign_transaction(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction, seed = {seed:?}");
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
@@ -330,7 +327,8 @@ async fn test_sign_transaction(
 
     test_sign_transaction_generic(
         &mut rng,
-        input_commitments_version,
+        false,
+        SighashInputCommitmentVersion::V1,
         make_ledger_signer,
         no_another_signer(),
         false,
@@ -397,13 +395,10 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[serial_test::serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_transaction_sig_consistency(
-    #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
-) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+async fn test_sign_transaction_sig_consistency(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}");
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
@@ -411,7 +406,8 @@ async fn test_sign_transaction_sig_consistency(
 
     test_sign_transaction_generic(
         &mut rng,
-        input_commitments_version,
+        false,
+        SighashInputCommitmentVersion::V1,
         make_ledger_signer,
         Some(make_deterministic_software_signer),
         false,

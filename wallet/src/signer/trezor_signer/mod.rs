@@ -1781,8 +1781,17 @@ impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
 
-    fn provide(&mut self, chain_config: Arc<ChainConfig>, _account_index: U31) -> Self::S {
-        TrezorSigner::new(chain_config, self.client.clone(), self.session_id.clone())
+    fn provide(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        _account_index: U31,
+        _db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<Self::S> {
+        Ok(TrezorSigner::new(
+            chain_config,
+            self.client.clone(),
+            self.session_id.clone(),
+        ))
     }
 
     async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(

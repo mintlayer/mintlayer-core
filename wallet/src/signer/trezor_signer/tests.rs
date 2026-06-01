@@ -112,16 +112,22 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
 #[trace]
 #[serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction(
     #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
+    #[case] before_fork: bool,
+    #[case] expected_input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction, seed = {:?}, before_fork = {}, expected_input_commitments_version = {:?}",
+        seed,
+        before_fork,
+        expected_input_commitments_version
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -129,7 +135,8 @@ async fn test_sign_transaction(
 
     test_sign_transaction_generic(
         &mut rng,
-        input_commitments_version,
+        before_fork,
+        expected_input_commitments_version,
         make_trezor_signer,
         no_another_signer(),
         true,
@@ -258,16 +265,22 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
+#[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
 #[trace]
 #[serial]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction_sig_consistency(
     #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
+    #[case] before_fork: bool,
+    #[case] expected_input_commitments_version: SighashInputCommitmentVersion,
 ) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}, input_commitments_version = {input_commitments_version:?}");
+    log::debug!(
+        "test_sign_transaction_sig_consistency, seed = {:?}, before_fork = {}, expected_input_commitments_version = {:?}",
+        seed,
+        before_fork,
+        expected_input_commitments_version
+    );
 
     let _join_guard = maybe_spawn_auto_confirmer();
 
@@ -275,7 +288,8 @@ async fn test_sign_transaction_sig_consistency(
 
     test_sign_transaction_generic(
         &mut rng,
-        input_commitments_version,
+        before_fork,
+        expected_input_commitments_version,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
         true,

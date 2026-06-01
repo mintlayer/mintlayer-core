@@ -182,7 +182,12 @@ pub trait SignerProvider: Send {
     type S: Signer + Send;
     type K: AccountKeyChains + Sync + Send;
 
-    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
+    fn provide(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<Self::S>;
 
     async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(
         &mut self,
