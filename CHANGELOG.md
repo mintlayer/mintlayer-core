@@ -22,14 +22,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
-### Fixed
-  - Wallet:
-    - Fixed handling of confirmed and unconfirmed conflicting order transactions in the wallet.
-
 ## [1.3.1]
 
 ### Fixed
   - Wallet:
+    - Fixed wallet handling of V1 order command conflicts, allowing confirmed ConcludeOrder and FreezeOrder transactions
+      to replace conflicting unconfirmed order transactions correctly.
     - Fixed an issue where the wallet in cold mode would always use input commitments v0, thus producing signatures
       that may no longer be valid at the current height.
     - Fixed an issue where the wallet in cold mode would still try to access the mempool, which would cause `wallet-cli`
