@@ -37,6 +37,7 @@ make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(DisconnectionTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(SoketWriteTimeout, Duration, Duration::from_secs(60));
+make_config_setting!(MaxPendingInboundConnections, usize, 100);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -144,12 +145,21 @@ pub struct BackendConfig {
     /// The outbound connection timeout value.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
 
-    /// Timeout for initial peer handshake
+    /// Timeout for initial peer handshake.
     pub peer_handshake_timeout: PeerHandshakeTimeout,
 
-    /// Timeout for disconnection
+    /// Timeout for disconnection.
     pub disconnection_timeout: DisconnectionTimeout,
 
-    /// Timeout for the socket write call
+    /// Timeout for the socket write call.
     pub socket_write_timeout: SoketWriteTimeout,
+
+    /// The maximum number of pending inbound connections that can exist at the same time.
+    ///
+    /// Note: the presence of this limit is important for security, but its specific value is not -
+    /// it just defines backend's burst tolerance for transport-accepted inbound connections that
+    /// have not completed the P2P handshake yet. But it makes sense to keep it in the same order
+    /// as `MAX_CONCURRENT_HANDSHAKES` used by wrapped transport layer's `AdaptedListener`, which
+    /// limits the number of simultaneous transport-level inbound handshakes.
+    pub max_pending_inbound_connections: MaxPendingInboundConnections,
 }

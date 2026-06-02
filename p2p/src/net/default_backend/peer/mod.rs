@@ -73,6 +73,13 @@ impl ConnectionInfo {
             ConnectionInfo::Outbound { .. } => ConnectionDirection::Outbound,
         }
     }
+
+    pub fn is_inbound(&self) -> bool {
+        match self {
+            ConnectionInfo::Inbound => true,
+            ConnectionInfo::Outbound { .. } => false,
+        }
+    }
 }
 
 pub struct Peer<T: TransportSocket> {

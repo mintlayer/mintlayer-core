@@ -37,7 +37,7 @@ use test_utils::{
 };
 
 use crate::{
-    config::{BackendTimeoutsConfig, P2pConfig},
+    config::{BackendConfig, P2pConfig},
     message::{HeaderList, HeaderListRequest},
     net::{
         default_backend::types::{HandshakeMessage, Message, MessageTag, P2pTimestamp},
@@ -291,6 +291,7 @@ async fn timeout_when_socket_not_read(
 
                 outbound_connection_timeout: Default::default(),
                 peer_handshake_timeout: Default::default(),
+                max_pending_inbound_connections: Default::default(),
             },
 
             bind_addresses: Default::default(),

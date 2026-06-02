@@ -21,6 +21,8 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
 };
 
+use logging::log;
+
 use crate::{
     Result,
     transport::{TransportListener, TransportSocket, impls::stream_adapter::traits::StreamAdapter},
@@ -63,7 +65,10 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
                     match handshake_res {
                         (Ok(handshake), addr) => return Ok((handshake, addr)),
                         (Err(err), addr) => {
-                            logging::log::warn!("Handshake with {addr} failed: {err}");
+                            // Note: failed transport handshakes are peer-triggerable. In particular,
+                            // a malicious peer can deliberately and repeatedly fail the Noise handshake,
+                            // so we keep this at debug level to avoid flooding default logs.
+                            log::debug!("Handshake with {addr} failed: {err}");
                             continue;
                         },
                     }
@@ -80,7 +85,12 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
                             self.handshakes.push(handshake_with_addr);
                         },
                         Err(err) => {
-                            logging::log::error!("Accept failed unexpectedly: {err}");
+                            // Note: this can also be peer-triggered, though less reliably than the
+                            // handshake error above. E.g. a malicious peer may open TCP connections
+                            // and close them immediately, attempting to flood the node's logs.
+                            // But in any case, this error is propagated to the p2p backend, which logs
+                            // it again, so there is no point in using a level higher than debug here.
+                            log::debug!("Accept failed unexpectedly: {err}");
                             return Err(err);
                         },
                     }

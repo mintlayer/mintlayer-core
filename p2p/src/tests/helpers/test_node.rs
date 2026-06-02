@@ -19,6 +19,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use logging::log;
 use tokio::{
     sync::{
         mpsc::{self},
@@ -373,6 +374,62 @@ where
                 }
             }
         }
+    }
+
+    pub async fn wait_for_next_pending_peer_creation_in_backend(&mut self) -> PeerId {
+        loop {
+            if let BackendNotification::PendingPeerCreated { peer_id } =
+                self.backend_notification_receiver.recv().await.unwrap()
+            {
+                return peer_id;
+            }
+        }
+    }
+
+    pub async fn wait_for_next_pending_peer_removal_in_backend(
+        &mut self,
+        expected_peer_id: PeerId,
+    ) {
+        loop {
+            if let BackendNotification::PendingPeerRemoved { peer_id } =
+                self.backend_notification_receiver.recv().await.unwrap()
+            {
+                assert_eq!(peer_id, expected_peer_id);
+                return;
+            }
+        }
+    }
+
+    pub async fn assert_no_pending_peer_creation_in_backend(&mut self) {
+        log::debug!("Asserting no pending peer creation in backend");
+
+        time::timeout(SHORT_TIMEOUT, async {
+            loop {
+                if let BackendNotification::PendingPeerCreated { .. } =
+                    self.backend_notification_receiver.recv().await.unwrap()
+                {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap_err();
+    }
+
+    pub async fn assert_no_pending_peer_removal_in_backend(&mut self) {
+        log::debug!("Asserting no pending peer removal in backend");
+
+        time::timeout(SHORT_TIMEOUT, async {
+            loop {
+                if let BackendNotification::PendingPeerRemoved { .. } =
+                    self.backend_notification_receiver.recv().await.unwrap()
+                {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap_err();
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {

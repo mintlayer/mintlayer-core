@@ -1009,6 +1009,7 @@ async fn connection_timeout_rpc_notified<T>(
             peer_handshake_timeout: Default::default(),
             disconnection_timeout: Default::default(),
             socket_write_timeout: Default::default(),
+            max_pending_inbound_connections: Default::default(),
         },
 
         bind_addresses: Default::default(),

@@ -434,6 +434,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
                 outbound_connection_timeout: Default::default(),
                 disconnection_timeout: Default::default(),
                 socket_write_timeout: Default::default(),
+                max_pending_inbound_connections: Default::default(),
             },
 
             bind_addresses: Default::default(),

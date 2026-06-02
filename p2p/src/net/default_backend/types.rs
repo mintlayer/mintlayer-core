@@ -417,6 +417,15 @@ pub trait BackendObserver {
 
     /// Called after the message has been read from the socket.
     fn on_message_read(&self, peer_id: PeerId, msg: &Message);
+
+    /// Called after a new peer has been created (i.e. after the peer task has been spawned and
+    /// `PendingPeerContext` added to the corresponding collection).
+    fn on_pending_peer_created(&self, peer_id: PeerId);
+
+    /// Called when a `PendingPeerContext` has been removed from the corresponding collection
+    /// (i.e. either the peer has completed the handshake successfully and is no longer pending,
+    /// or it failed the handshake and got disconnected).
+    fn on_pending_peer_removed(&self, peer_id: PeerId);
 }
 
 #[cfg(test)]

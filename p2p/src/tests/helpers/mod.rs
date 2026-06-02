@@ -149,6 +149,8 @@ impl PeerManagerObserver for PeerManagerObserverImpl {
 pub enum BackendNotification {
     MessageRead { peer_id: PeerId, message: Message },
     MessageWritten { peer_id: PeerId, message: Message },
+    PendingPeerCreated { peer_id: PeerId },
+    PendingPeerRemoved { peer_id: PeerId },
 }
 
 pub struct BackendObserverImpl {
@@ -184,6 +186,14 @@ impl BackendObserver for BackendObserverImpl {
             peer_id,
             message: message.clone(),
         });
+    }
+
+    fn on_pending_peer_created(&self, peer_id: PeerId) {
+        self.send_notification(BackendNotification::PendingPeerCreated { peer_id });
+    }
+
+    fn on_pending_peer_removed(&self, peer_id: PeerId) {
+        self.send_notification(BackendNotification::PendingPeerRemoved { peer_id });
     }
 }
 
