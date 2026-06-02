@@ -293,7 +293,7 @@ jobs:
 
   # Build Ledger-specific tests and archive them
   run_tests_on_ledger_preparation:
-    if: false # Temporarily disabled for the v1.3.0 release
+    if: false # Temporarily disabled for the v1.3.x releases
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the core repository
@@ -339,7 +339,7 @@ jobs:
 
   # Run Ledger-specific tests on an emulator
   run_tests_on_ledger:
-    if: false # Temporarily disabled for the v1.3.0 release
+    if: false # Temporarily disabled for the v1.3.x releases
     needs: run_tests_on_ledger_preparation
     runs-on: ubuntu-latest
     strategy:
