@@ -285,7 +285,7 @@ async fn timeout_when_socket_not_read(
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(chain::config::create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
-            backend_timeouts: BackendTimeoutsConfig {
+            backend_config: BackendConfig {
                 socket_write_timeout: socket_write_timeout.into(),
                 disconnection_timeout: disconnection_timeout.into(),
 

@@ -195,7 +195,7 @@ pub fn test_p2p_config() -> P2pConfig {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }
@@ -219,7 +219,7 @@ pub fn test_p2p_config_with_protocol_config(protocol_config: ProtocolConfig) -> 
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }
@@ -243,7 +243,7 @@ pub fn test_p2p_config_with_peer_mgr_config(peer_manager_config: PeerManagerConf
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }
@@ -292,7 +292,7 @@ pub fn test_p2p_config_with_ban_config(ban_config: BanConfig) -> P2pConfig {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }

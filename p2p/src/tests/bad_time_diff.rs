@@ -73,7 +73,7 @@ where
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -209,7 +209,7 @@ where
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

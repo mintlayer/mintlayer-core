@@ -121,8 +121,8 @@ pub struct P2pConfig {
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
 
-    /// Various timeouts used by the backend.
-    pub backend_timeouts: BackendTimeoutsConfig,
+    /// Various settings specific to the backend.
+    pub backend_config: BackendConfig,
 
     /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
     pub custom_disconnection_reason_for_banning: Option<String>,
@@ -134,13 +134,13 @@ impl P2pConfig {
     /// It is calculated as the max clock diff setting plus handshake timeout to allow for
     /// imprecisions caused by the network latency.
     pub fn effective_max_clock_diff(&self) -> Duration {
-        *self.max_clock_diff + *self.backend_timeouts.peer_handshake_timeout
+        *self.max_clock_diff + *self.backend_config.peer_handshake_timeout
     }
 }
 
-/// Part of P2pConfig containing various timeouts used by the backend.
+/// Part of P2pConfig containing various settings specific to the backend.
 #[derive(Default, Debug, Clone)]
-pub struct BackendTimeoutsConfig {
+pub struct BackendConfig {
     /// The outbound connection timeout value.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
 

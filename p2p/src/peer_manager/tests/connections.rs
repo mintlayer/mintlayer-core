@@ -48,7 +48,7 @@ use utils_networking::IpOrSocketAddress;
 
 use crate::{
     PeerManagerEvent,
-    config::{BackendTimeoutsConfig, P2pConfig},
+    config::{BackendConfig, P2pConfig},
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, DialError, P2pError, ProtocolError},
     message::AddrListRequest,
@@ -1004,7 +1004,7 @@ async fn connection_timeout_rpc_notified<T>(
 
     let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        backend_timeouts: BackendTimeoutsConfig {
+        backend_config: BackendConfig {
             outbound_connection_timeout: Duration::from_secs(1).into(),
             peer_handshake_timeout: Default::default(),
             disconnection_timeout: Default::default(),
@@ -1162,7 +1162,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1207,7 +1207,7 @@ where
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1332,7 +1332,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1377,7 +1377,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1409,7 +1409,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1554,7 +1554,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1600,7 +1600,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1633,7 +1633,7 @@ async fn discovered_node_2_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -1730,7 +1730,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1776,7 +1776,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1809,7 +1809,7 @@ async fn discovered_node_separate_groups(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -2125,7 +2125,7 @@ mod feeler_connections_test_utils {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         }
     }
@@ -2212,7 +2212,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
 

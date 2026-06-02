@@ -141,7 +141,7 @@ mod dont_evict_if_blocks_in_flight {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

@@ -356,7 +356,7 @@ where
             match send_result {
                 Ok(()) => {
                     let disconnect_result = tokio::time::timeout(
-                        *p2p_config.backend_timeouts.disconnection_timeout,
+                        *p2p_config.backend_config.disconnection_timeout,
                         async {
                             match writer_event_receiver.recv().await {
                                 Some(WriterEvent::WriterClosed(result)) => {
@@ -483,7 +483,7 @@ async fn writer_loop<S: PeerStream>(
                 }
 
                 tokio::time::timeout(
-                    *p2p_config.backend_timeouts.socket_write_timeout,
+                    *p2p_config.backend_config.socket_write_timeout,
                     socket_writer.send(*message),
                 )
                 .await

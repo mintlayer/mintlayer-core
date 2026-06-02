@@ -186,7 +186,7 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 min_peer_software_version,
             },
-            backend_timeouts: BackendTimeoutsConfig {
+            backend_config: BackendConfig {
                 outbound_connection_timeout: outbound_connection_timeout
                     .map(|t| Duration::from_secs(t.into()))
                     .into(),

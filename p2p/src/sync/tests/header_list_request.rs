@@ -159,7 +159,7 @@ async fn respond_with_empty_header_list_when_in_ibd() {
             user_agent: mintlayer_core_user_agent(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

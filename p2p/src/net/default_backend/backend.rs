@@ -732,7 +732,7 @@ where
                 local_services_override,
             } => {
                 let connection_fut = timeout(
-                    *self.p2p_config.backend_timeouts.outbound_connection_timeout,
+                    *self.p2p_config.backend_config.outbound_connection_timeout,
                     self.transport.connect(address.socket_addr()),
                 );
 
