@@ -464,10 +464,6 @@ criteria = "safe-to-deploy"
 version = "5.4.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.expect-test]]
-version = "1.5.1"
-criteria = "safe-to-run"
-
 [[exemptions.fallible-streaming-iterator]]
 version = "0.1.9"
 criteria = "safe-to-deploy"
@@ -638,10 +634,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.impl-trait-for-tuples]]
 version = "0.2.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.instant]]
-version = "0.1.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
@@ -1406,10 +1398,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.uds_windows]]
 version = "1.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.unarray]]
-version = "0.1.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-bidi-mirroring]]

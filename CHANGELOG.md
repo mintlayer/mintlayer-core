@@ -22,7 +22,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - `wallet-create`/`wallet-recover`/`wallet-open` support the `ledger` subcommand, in addition to the existing
       `software` and `trezor`, which specifies the type of the wallet to operate on.
 
-## [1.3.0]
+## [1.3.0] - 2026-04-09
 
 ### Added
   - Node RPC: new methods added - `chainstate_tokens_info`, `chainstate_orders_info_by_currencies`.

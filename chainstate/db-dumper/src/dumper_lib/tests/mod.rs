@@ -266,7 +266,7 @@ fn dump_blocks_random(
             }
 
             infos.shuffle(&mut rng);
-            infos.sort_by(|b1, b2| b1.input_info.height.cmp(&b2.input_info.height));
+            infos.sort_by_key(|b| b.input_info.height);
         }
 
         infos
