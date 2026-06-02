@@ -30,6 +30,27 @@ pub enum WalletType {
     Ledger,
 }
 
+impl WalletType {
+    pub fn to_software_wallet_type(self) -> Option<SoftwareWalletType> {
+        match self {
+            WalletType::Cold => Some(SoftwareWalletType::Cold),
+            WalletType::Hot => Some(SoftwareWalletType::Hot),
+            #[cfg(feature = "trezor")]
+            WalletType::Trezor => None,
+            #[cfg(feature = "ledger")]
+            WalletType::Ledger => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SoftwareWalletType {
+    Cold,
+    Hot,
+}
+
+// Note: this is conceptually different from SoftwareWalletType, because here "Hot" includes
+// hardware wallets as well.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WalletControllerMode {
     Cold,

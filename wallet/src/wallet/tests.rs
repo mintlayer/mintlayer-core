@@ -24,6 +24,7 @@ use rstest::rstest;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        self,
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
         output_value::{OutputValue, RpcOutputValue},
@@ -32,7 +33,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
         AccountNonce, AccountSpending, ChainstateUpgradeBuilder, Currency, Destination, Genesis,
-        OutPointSourceId, TxInput,
+        NetUpgrades, OutPointSourceId, SighashInputCommitmentVersion, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
@@ -69,14 +70,20 @@ use crate::{
     send_request::{make_address_output, make_create_delegation_output},
     signer::software_signer::SoftwareSignerProvider,
     wallet::test_helpers::{
-        create_named_in_memory_backend, create_named_in_memory_store, create_wallet_with_mnemonic,
-        create_wallet_with_mnemonic_and_named_db, scan_wallet,
+        create_named_in_memory_backend, create_named_in_memory_store, create_wallet_generic,
+        create_wallet_with_mnemonic, create_wallet_with_mnemonic_and_named_db,
+        create_wallet_with_type_and_mnemonic, load_wallet, scan_wallet,
     },
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
 
 use super::*;
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
 
 // TODO: Many of these tests require randomization...
 
@@ -5493,7 +5500,12 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     // create cold wallet that is not synced and only contains decommission key
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
-    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic).await;
+    let mut cold_wallet = create_wallet_with_type_and_mnemonic(
+        chain_config.clone(),
+        *[WalletType::Hot, WalletType::Cold].choose(&mut rng).unwrap(),
+        another_mnemonic,
+    )
+    .await;
     let decommission_key = cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -5594,6 +5606,217 @@ async fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
 
     let coin_balance = get_coin_balance(&hot_wallet);
     assert_eq!(coin_balance, pool_amount,);
+}
+
+// Check that signing a pool decommission tx from a cold wallet produces signatures using
+// input commitments v1.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_decommission_pool_request_in_cold_wallet_expect_input_commitments_v1(
+    #[case] seed: Seed,
+    #[values(false, true)] reload_as_cold: bool,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    let input_commitments_v1_fork_height = BlockHeight::new(4);
+    let chain_config = chain::config::Builder::new(ChainType::Regtest)
+        .chainstate_upgrades({
+            NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest()
+                        .sighash_input_commitment_version(SighashInputCommitmentVersion::V0)
+                        .build(),
+                ),
+                (
+                    input_commitments_v1_fork_height,
+                    ChainstateUpgradeBuilder::latest()
+                        .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+                        .build(),
+                ),
+            ])
+            .unwrap()
+        })
+        .build();
+
+    let chain_config = Arc::new(chain_config);
+
+    let mut hot_wallet = create_wallet(Arc::clone(&chain_config)).await;
+
+    // Create a cold wallet. If reload_as_cold is true, first create a hot wallet and force-reload
+    // it as cold. Otherwise just create a cold wallet.
+    let another_mnemonic =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    let mut cold_wallet = if reload_as_cold {
+        let db_name = random_ascii_alphanumeric_string(&mut rng, 10..20);
+        let _tmp_wallet = create_wallet_generic(
+            Arc::clone(&chain_config),
+            WalletType::Hot,
+            another_mnemonic,
+            Some(&db_name),
+        )
+        .await;
+
+        load_wallet(
+            Arc::clone(&chain_config),
+            &db_name,
+            WalletControllerMode::Cold,
+            true,
+        )
+        .await
+    } else {
+        create_wallet_generic(
+            Arc::clone(&chain_config),
+            WalletType::Cold,
+            another_mnemonic,
+            None,
+        )
+        .await
+    };
+    let decommission_key =
+        cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1.into_object();
+
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let (_, _block1) = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0).await;
+
+    let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = block1_amount;
+
+    let res = hot_wallet.create_next_account(Some("name".into())).await.unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
+
+    let pool_creation_tx = hot_wallet
+        .create_stake_pool(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolCreationArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: decommission_key.clone(),
+                staker_key: None,
+                vrf_public_key: None,
+            },
+        )
+        .await
+        .unwrap()
+        .tx;
+    let pool_creation_tx_id = pool_creation_tx.transaction().get_id();
+    let (_, _block2) = create_block(
+        &chain_config,
+        &mut hot_wallet,
+        vec![pool_creation_tx],
+        Amount::ZERO,
+        1,
+    )
+    .await;
+
+    let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+    let pool_id = pool_ids.first().unwrap().0;
+
+    let pos_data = hot_wallet.get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX, pool_id).unwrap();
+    let staker_key = Destination::PublicKey(pos_data.stake_public_key());
+
+    // Create a block using the pool that will be decommissioned, so that the utxo consumed
+    // during decommissioning is ProduceBlockFromStake (because it's one of the utxos for which
+    // input commitments v0 and v1 are different).
+    let block3 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::PoS(Box::new(PoSData::new(
+            vec![TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(pool_creation_tx_id),
+                0,
+            ))],
+            vec![],
+            pool_id,
+            pos_data.vrf_private_key().produce_vrf_data(VRFTranscript::new(&[])),
+            common::primitives::Compact(0),
+        ))),
+        BlockReward::new(vec![TxOutput::ProduceBlockFromStake(staker_key, pool_id)]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut hot_wallet, BlockHeight::new(2), vec![block3]).await;
+
+    let pool_decommission_ptx = hot_wallet
+        .decommission_stake_pool_request(
+            DEFAULT_ACCOUNT_INDEX,
+            pool_id,
+            pool_amount,
+            None,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .await
+        .unwrap();
+
+    // Sanity check: the consumed utxo is ProduceBlockFromStake.
+    assert_eq!(pool_decommission_ptx.input_utxos().len(), 1);
+    let pool_decommission_utxo = pool_decommission_ptx.input_utxos()[0].clone().unwrap();
+    assert_matches!(
+        &pool_decommission_utxo,
+        TxOutput::ProduceBlockFromStake(_, _)
+    );
+
+    let expected_input_commitments = pool_decommission_ptx
+        .make_sighash_input_commitments_at_height(&chain_config, input_commitments_v1_fork_height)
+        .unwrap();
+    let v0_input_commitments = pool_decommission_ptx
+        .make_sighash_input_commitments_at_height(&chain_config, BlockHeight::zero())
+        .unwrap();
+    // Sanity check
+    assert_ne!(expected_input_commitments, v0_input_commitments);
+
+    // Sign the tx with cold wallet
+    let pool_decommission_ptx_after_signing = cold_wallet
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            pool_decommission_ptx.clone(),
+            &TokensAdditionalInfo::new(),
+        )
+        .await
+        .unwrap()
+        .0;
+    assert!(pool_decommission_ptx_after_signing.all_signatures_available());
+
+    let pool_decommission_signed_tx = pool_decommission_ptx_after_signing.into_signed_tx().unwrap();
+
+    // Verify the signature using v1 input commitments.
+    tx_verifier::input_check::signature_only_check::verify_tx_signature(
+        &chain_config,
+        &decommission_key,
+        &pool_decommission_signed_tx,
+        &expected_input_commitments,
+        0,
+        Some(pool_decommission_utxo),
+    )
+    .unwrap();
+
+    let (_, _block4) = create_block(
+        &chain_config,
+        &mut hot_wallet,
+        vec![pool_decommission_signed_tx],
+        Amount::ZERO,
+        2,
+    )
+    .await;
+
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, pool_amount);
 }
 
 #[rstest]
@@ -5702,7 +5925,12 @@ async fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     // create cold wallet that is not synced
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
-    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic).await;
+    let mut cold_wallet = create_wallet_with_type_and_mnemonic(
+        chain_config.clone(),
+        *[WalletType::Hot, WalletType::Cold].choose(&mut rng).unwrap(),
+        another_mnemonic,
+    )
+    .await;
     let cold_wallet_address = cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&hot_wallet);
