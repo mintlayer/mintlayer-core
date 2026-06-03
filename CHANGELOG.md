@@ -26,6 +26,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
   - Wallet:
+    - Fixed wallet handling of V1 order command conflicts, allowing confirmed ConcludeOrder and FreezeOrder transactions
+      to replace conflicting unconfirmed order transactions correctly.
     - Fixed an issue where the wallet in cold mode would always use input commitments v0, thus producing signatures
       that may no longer be valid at the current height.
     - Fixed an issue where the wallet in cold mode would still try to access the mempool, which would cause `wallet-cli`

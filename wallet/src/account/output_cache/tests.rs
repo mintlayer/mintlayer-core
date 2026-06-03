@@ -1267,6 +1267,338 @@ fn orders_state_update(#[case] seed: Seed) {
     );
 }
 
+// Regression test: when a confirmed V1 ConcludeOrder arrives and an unconfirmed ConcludeOrder,
+// FreezeOrder or FillOrder for the same order is already in the cache,
+// the unconfirmed one must be marked Conflicted and the confirmed one must be accepted without error.
+// Previously, update_conflicting_txs returned None for OrderAccountCommand, so the unconfirmed
+// conclude was never rolled back, causing add_tx to fail with OrderAlreadyConcluded.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn update_conflicting_txs_order_v1_conclude(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = create_unit_test_config();
+    let mut output_cache = OutputCache::empty();
+
+    // Create the order (confirmed).
+    let parent_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let creation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(parent_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            OutputValue::Coin(Amount::from_atoms(2000)),
+        ))))
+        .build();
+    let order_id = make_order_id(creation_tx.inputs()).unwrap();
+    let creation_tx_id = creation_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(1),
+            creation_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                creation_tx,
+                TxState::Confirmed(BlockHeight::new(1), BlockTimestamp::from_int_seconds(1), 0),
+            )),
+        )
+        .unwrap();
+
+    // Add an unconfirmed fill order tx
+    let unconfirmed_fill_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let unconfirmed_fill_tx_id = unconfirmed_fill_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            unconfirmed_fill_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                unconfirmed_fill_tx.clone(),
+                TxState::InMempool(1),
+            )),
+        )
+        .unwrap();
+
+    // Add an unconfirmed freeze tx — sets is_frozen = true.
+    let unconfirmed_freeze_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let unconfirmed_freeze_tx_id = unconfirmed_freeze_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            unconfirmed_freeze_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                unconfirmed_freeze_tx.clone(),
+                TxState::InMempool(1),
+            )),
+        )
+        .unwrap();
+
+    assert!(output_cache.orders[&order_id].is_frozen);
+
+    // Add an unconfirmed conclude tx — sets is_concluded = true.
+    let unconfirmed_conclude_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let unconfirmed_conclude_tx_id = unconfirmed_conclude_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            unconfirmed_conclude_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                unconfirmed_conclude_tx.clone(),
+                TxState::InMempool(2),
+            )),
+        )
+        .unwrap();
+
+    assert!(output_cache.orders[&order_id].is_concluded);
+
+    // A *different* confirmed conclude tx for the same order arrives.
+    // update_conflicting_txs must mark the unconfirmed ones as Conflicted.
+    let confirmed_conclude_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let confirmed_conclude_tx_id = confirmed_conclude_tx.transaction().get_id();
+    assert_ne!(confirmed_conclude_tx_id, unconfirmed_conclude_tx_id);
+
+    let block_id = Id::<GenBlock>::random_using(&mut rng);
+    let mut conflicted = output_cache
+        .update_conflicting_txs(&chain_config, confirmed_conclude_tx.transaction(), block_id)
+        .unwrap();
+
+    // sort conflicted by tx id
+    conflicted.sort_by_key(|(tx_id, _)| *tx_id);
+
+    let mut expected_conflicted = vec![
+        (
+            unconfirmed_fill_tx_id,
+            WalletTx::Tx(TxData::new(
+                unconfirmed_fill_tx,
+                TxState::Conflicted(block_id),
+            )),
+        ),
+        (
+            unconfirmed_freeze_tx_id,
+            WalletTx::Tx(TxData::new(
+                unconfirmed_freeze_tx,
+                TxState::Conflicted(block_id),
+            )),
+        ),
+        (
+            unconfirmed_conclude_tx_id,
+            WalletTx::Tx(TxData::new(
+                unconfirmed_conclude_tx,
+                TxState::Conflicted(block_id),
+            )),
+        ),
+    ];
+    expected_conflicted.sort_by_key(|(tx_id, _)| *tx_id);
+
+    assert_eq!(conflicted, expected_conflicted);
+
+    // is_concluded and is_frozen must be rolled back after the conflict.
+    assert!(!output_cache.orders[&order_id].is_concluded);
+    assert!(!output_cache.orders[&order_id].is_frozen);
+
+    // The confirmed conclude tx must now be addable without error.
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            confirmed_conclude_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                confirmed_conclude_tx,
+                TxState::Confirmed(BlockHeight::new(2), BlockTimestamp::from_int_seconds(2), 0),
+            )),
+        )
+        .unwrap();
+
+    assert!(output_cache.orders[&order_id].is_concluded);
+    assert!(!output_cache.orders[&order_id].is_frozen);
+}
+
+// Regression test: same as above but for FreezeOrder.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = create_unit_test_config();
+    let mut output_cache = OutputCache::empty();
+
+    // Create the order (confirmed).
+    let parent_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let creation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(parent_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            OutputValue::Coin(Amount::from_atoms(2000)),
+        ))))
+        .build();
+    let order_id = make_order_id(creation_tx.inputs()).unwrap();
+    let creation_tx_id = creation_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(1),
+            creation_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                creation_tx,
+                TxState::Confirmed(BlockHeight::new(1), BlockTimestamp::from_int_seconds(1), 0),
+            )),
+        )
+        .unwrap();
+
+    // Add an unconfirmed fill order tx
+    let unconfirmed_fill_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                order_id,
+                Amount::from_atoms(rng.gen_range(100..200)),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let unconfirmed_fill_tx_id = unconfirmed_fill_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            unconfirmed_fill_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                unconfirmed_fill_tx.clone(),
+                TxState::InMempool(0),
+            )),
+        )
+        .unwrap();
+
+    // Add an unconfirmed freeze tx — sets is_frozen = true.
+    let unconfirmed_freeze_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .build();
+    let unconfirmed_freeze_tx_id = unconfirmed_freeze_tx.transaction().get_id();
+
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            unconfirmed_freeze_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                unconfirmed_freeze_tx.clone(),
+                TxState::InMempool(1),
+            )),
+        )
+        .unwrap();
+
+    assert!(output_cache.orders[&order_id].is_frozen);
+    // concluded is still false
+    assert!(!output_cache.orders[&order_id].is_concluded);
+
+    // A *different* confirmed freeze tx for the same order arrives.
+    // update_conflicting_txs must mark the unconfirmed one as Conflicted.
+    let confirmed_freeze_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let confirmed_freeze_tx_id = confirmed_freeze_tx.transaction().get_id();
+    assert_ne!(confirmed_freeze_tx_id, unconfirmed_freeze_tx_id);
+
+    let block_id = Id::<GenBlock>::random_using(&mut rng);
+    let mut conflicted = output_cache
+        .update_conflicting_txs(&chain_config, confirmed_freeze_tx.transaction(), block_id)
+        .unwrap();
+
+    let mut expected_conflicted = vec![
+        (
+            unconfirmed_fill_tx_id,
+            WalletTx::Tx(TxData::new(
+                unconfirmed_fill_tx,
+                TxState::Conflicted(block_id),
+            )),
+        ),
+        (
+            unconfirmed_freeze_tx_id,
+            WalletTx::Tx(TxData::new(
+                unconfirmed_freeze_tx,
+                TxState::Conflicted(block_id),
+            )),
+        ),
+    ];
+
+    // Sort by tx id
+    conflicted.sort_by_key(|(tx_id, _)| *tx_id);
+    expected_conflicted.sort_by_key(|(tx_id, _)| *tx_id);
+
+    assert_eq!(conflicted, expected_conflicted);
+
+    // is_frozen must be rolled back after the conflict.
+    assert!(!output_cache.orders[&order_id].is_frozen);
+    assert!(!output_cache.orders[&order_id].is_concluded);
+
+    // The confirmed freeze tx must now be addable without error.
+    output_cache
+        .add_tx(
+            &chain_config,
+            BlockHeight::new(2),
+            confirmed_freeze_tx_id.into(),
+            WalletTx::Tx(TxData::new(
+                confirmed_freeze_tx,
+                TxState::Confirmed(BlockHeight::new(2), BlockTimestamp::from_int_seconds(2), 0),
+            )),
+        )
+        .unwrap();
+
+    assert!(output_cache.orders[&order_id].is_frozen);
+    assert!(!output_cache.orders[&order_id].is_concluded);
+}
+
 fn add_random_transfer_tx(
     output_cache: &mut OutputCache,
     chain_config: &ChainConfig,
