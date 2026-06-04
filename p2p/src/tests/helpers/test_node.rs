@@ -377,6 +377,8 @@ where
     }
 
     pub async fn wait_for_next_pending_peer_creation_in_backend(&mut self) -> PeerId {
+        log::debug!("Waiting for next pending peer creation in backend");
+
         loop {
             if let BackendNotification::PendingPeerCreated { peer_id } =
                 self.backend_notification_receiver.recv().await.unwrap()
@@ -390,6 +392,8 @@ where
         &mut self,
         expected_peer_id: PeerId,
     ) {
+        log::debug!("Waiting for next pending peer removal in backend");
+
         loop {
             if let BackendNotification::PendingPeerRemoved { peer_id } =
                 self.backend_notification_receiver.recv().await.unwrap()
