@@ -43,7 +43,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       of a cluster that exceeds the limits. The default cluster limits are: max 64 transactions, max 100'000 bytes
       in total.
 
-## [1.3.1]
+## [1.3.1] - 2026-06-03
 
 ### Fixed
   - Wallet:
