@@ -892,21 +892,6 @@ impl OutputCache {
                             conflicting_txs.insert(tx.get_transaction().get_id());
                             continue;
                         }
-
-                        if let Some((confirmed_cmd_tag, confirmed_order_id)) =
-                            conflict_check.conflicting_order_command
-                        {
-                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
-                                && uses_conflicting_order_command(
-                                    unconfirmed_tx,
-                                    confirmed_cmd_tag,
-                                    confirmed_order_id,
-                                )
-                            {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
-                        }
                     }
                     WalletTx::Block(_) => {
                         utils::debug_panic_or_log!("Cannot be block reward");

@@ -24,9 +24,8 @@ use rstest::rstest;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        self,
-        AccountNonce, AccountSpending, ChainstateUpgradeBuilder, Currency, Destination, Genesis,
-        OutPointSourceId, TxInput,
+        self, AccountNonce, AccountSpending, ChainstateUpgradeBuilder, Currency, Destination,
+        Genesis, NetUpgrades, OutPointSourceId, SighashInputCommitmentVersion, TxInput,
         block::{BlockReward, ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
         config::{Builder, ChainType, create_mainnet, create_regtest, create_unit_test_config},
         output_value::{OutputValue, RpcOutputValue},
@@ -34,7 +33,6 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        NetUpgrades, SighashInputCommitmentVersion
     },
     primitives::{H256, Idable, per_thousand::PerThousand},
 };
@@ -45,7 +43,7 @@ use crypto::{
     },
     vrf::transcript::no_rng::VRFTranscript,
 };
-use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom};
+use randomness::{CryptoRng, IndexedRandom as _, Rng, RngExt as _, SliceRandom as _};
 use serialization::{Encode, extras::non_empty_vec::DataOrNoVec, hex::HexEncode};
 use storage::raw::DbMapId;
 use test_utils::{
@@ -5711,7 +5709,8 @@ async fn sign_decommission_pool_request_in_cold_wallet_expect_input_commitments_
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount =
+        Amount::from_atoms(rng.random_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let (_, _block1) = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0).await;
 
     let pool_ids = hot_wallet.get_pools(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();

@@ -20,7 +20,8 @@ use itertools::Itertools;
 
 use common::{
     chain::{
-        ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
+        ChainConfig, Destination, SighashInputCommitmentVersion, SignedTransactionIntent,
+        Transaction, TxOutput,
         config::ChainType,
         htlc::HtlcSecret,
         signature::{

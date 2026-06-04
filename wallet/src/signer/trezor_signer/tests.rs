@@ -111,7 +111,6 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 
 #[rstest]
 #[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
-
 #[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
 #[trace]
 #[serial]
@@ -263,7 +262,6 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 
 #[rstest]
 #[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
-
 #[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
 #[trace]
 #[serial]
