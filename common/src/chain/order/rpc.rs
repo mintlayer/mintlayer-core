@@ -17,8 +17,8 @@ use rpc_description::HasValueHint;
 
 use crate::{
     chain::{
-        output_value::RpcOutputValue, output_values_holder::RpcOutputValuesHolder, AccountNonce,
-        Destination,
+        AccountNonce, Destination, output_value::RpcOutputValue,
+        output_values_holder::RpcOutputValuesHolder,
     },
     primitives::Amount,
 };

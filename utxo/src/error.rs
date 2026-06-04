@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::GenBlock, OutPointSourceId, Transaction},
+    chain::{OutPointSourceId, Transaction, block::GenBlock},
     primitives::Id,
 };
 use thiserror::Error;

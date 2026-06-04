@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use generic_array::{sequence::Split, typenum::U32, GenericArray};
+use generic_array::{GenericArray, sequence::Split, typenum::U32};
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use zeroize::Zeroize;
 
 use crate::key::hdkd::{
-    chain_code::{ChainCode, CHAINCODE_LENGTH},
+    chain_code::{CHAINCODE_LENGTH, ChainCode},
     derivable::DerivationError,
 };
 
@@ -58,9 +58,9 @@ pub fn to_key_and_chain_code<SecretKey>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     #[rstest]
     #[trace]
@@ -69,9 +69,9 @@ mod test {
     fn mac_key_of_any_size(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let key_size = rng.gen_range(0..=1000);
+        let key_size = rng.random_range(0..=1000);
 
-        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let _hmac = new_hmac_sha_512(&key);
     }

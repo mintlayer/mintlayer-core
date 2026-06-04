@@ -21,7 +21,7 @@ use common::{
     primitives::Id,
 };
 
-use crate::{pos::error::ConsensusPoSError, ConsensusPoWError};
+use crate::{ConsensusPoWError, pos::error::ConsensusPoSError};
 
 /// A consensus related error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

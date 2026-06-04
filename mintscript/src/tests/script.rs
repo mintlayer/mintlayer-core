@@ -16,6 +16,7 @@
 use std::ops::RangeInclusive;
 
 use common::chain::signature::EvaluatedInputWitness;
+use test_utils::random::Rng;
 
 use super::*;
 
@@ -57,16 +58,16 @@ fn generate_conds(rng: &mut impl Rng, n_sat: usize, n_dissat: usize) -> Vec<Scri
 #[case(Seed::from_entropy(), 0..=0, 1..=1)]
 #[case(Seed::from_entropy(), 1..=1, 0..=0)]
 #[case(Seed::from_entropy(), 1..=1, 1..=1)]
-#[trace]
 #[case(Seed::from_entropy(), 2..=100, 2..=100)]
+#[trace]
 fn threshold_collect_satisfied(
     #[case] seed: Seed,
     #[case] sat_range: RangeInclusive<usize>,
     #[case] dissat_range: RangeInclusive<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let n_sat = rng.gen_range(sat_range);
-    let n_dissat = rng.gen_range(dissat_range);
+    let n_sat = rng.random_range(sat_range);
+    let n_dissat = rng.random_range(dissat_range);
     let conds = generate_conds(&mut rng, n_sat, n_dissat);
 
     {
@@ -78,12 +79,12 @@ fn threshold_collect_satisfied(
     }
 
     if n_sat > 0 {
-        let thresh = Threshold::new(rng.gen_range(0..n_sat), conds.clone()).unwrap();
+        let thresh = Threshold::new(rng.random_range(0..n_sat), conds.clone()).unwrap();
         assert_eq!(thresh.collect_satisfied(), Err(ThresholdError::Excessive));
     }
 
     if n_dissat > 0 {
-        let required = rng.gen_range((n_sat + 1)..=conds.len());
+        let required = rng.random_range((n_sat + 1)..=conds.len());
         let thresh = Threshold::new(required, conds.clone()).unwrap();
         assert_eq!(
             thresh.collect_satisfied(),
@@ -93,15 +94,15 @@ fn threshold_collect_satisfied(
 }
 
 #[rstest::rstest]
-#[trace]
 #[case::zero(Seed::from_entropy(), 0..=0)]
 #[case::unit(Seed::from_entropy(), 1..=1)]
 #[case::rand(Seed::from_entropy(), 2..=100)]
+#[trace]
 fn conjunction_matches_explicit(#[case] seed: Seed, #[case] size_range: RangeInclusive<usize>) {
     let mut rng = make_seedable_rng(seed);
-    let n = rng.gen_range(size_range);
+    let n = rng.random_range(size_range);
 
-    let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.gen_bool(0.8))).collect();
+    let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.random_bool(0.8))).collect();
 
     let thr_conj = WitnessScript::conjunction(conds.clone());
     let thr_expl = WitnessScript::threshold(n, conds).unwrap();

@@ -17,8 +17,8 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
-        tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
         Currency,
+        tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
     },
     primitives::Amount,
 };

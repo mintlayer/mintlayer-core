@@ -28,11 +28,11 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        AccountNonce, AccountType, Block, GenBlock,
+        block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
-        AccountNonce, AccountType, Block, GenBlock,
     },
     primitives::{BlockHeight, Id},
 };
@@ -150,7 +150,7 @@ pub trait BlockchainStorageRead:
 
     /// Get nonce value for specific account
     fn get_account_nonce_count(&self, account: &AccountType)
-        -> crate::Result<Option<AccountNonce>>;
+    -> crate::Result<Option<AccountNonce>>;
 
     /// Get all keys (block ids) from the block map. This is used in the chainstate's
     /// "heavy" consistency checks.
@@ -276,7 +276,7 @@ pub trait BlockchainStorageWrite:
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
     fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce)
-        -> Result<()>;
+    -> Result<()>;
     fn del_account_nonce_count(&mut self, account: &AccountType) -> Result<()>;
 }
 

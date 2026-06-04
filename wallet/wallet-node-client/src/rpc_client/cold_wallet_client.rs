@@ -23,23 +23,25 @@ use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
+use mempool::{
+    FeeRate, MempoolConfig, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
+};
 use p2p::{
     interface::types::ConnectedPeer,
-    types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
+    types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress},
 };
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MempoolEvents, NodeInterface};
+use crate::node_traits::{MempoolEvents, NodeInterface, NodeInterfaceError};
 
 use super::ColdWalletClient;
 
@@ -47,6 +49,12 @@ use super::ColdWalletClient;
 pub enum ColdWalletRpcError {
     #[error("Method is not available in cold wallet mode")]
     NotAvailable,
+}
+
+impl NodeInterfaceError for ColdWalletRpcError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -303,6 +311,10 @@ impl NodeInterface for ColdWalletClient {
 
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        Ok(None)
     }
 
     async fn get_utxo(

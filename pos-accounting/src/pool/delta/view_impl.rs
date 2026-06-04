@@ -18,21 +18,21 @@ use std::collections::BTreeMap;
 use accounting::combine_amount_delta;
 use common::{
     chain::{DelegationId, PoolId},
-    primitives::{amount::SignedAmount, Amount},
+    primitives::{Amount, amount::SignedAmount},
 };
 use utils::tap_log::TapLog;
 
 use crate::{
+    DeltaMergeUndo,
     error::Error,
     pool::{
         delegation::DelegationData,
         pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
-    DeltaMergeUndo,
 };
 
-use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};
+use super::{PoSAccountingDelta, data::PoSAccountingDeltaData};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 mod error;
-use bech32::{primitives::decode::CheckedHrpstring, Bech32m, Hrp};
+use bech32::{Bech32m, Hrp, primitives::decode::CheckedHrpstring};
 pub use error::*;
 
 pub fn bech32m_decode(s: impl AsRef<str>) -> Result<DecodedBech32, Bech32Error> {

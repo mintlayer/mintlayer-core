@@ -21,7 +21,7 @@ use test_utils::random::Seed;
 
 use super::utils::*;
 use crate::chain::config::create_mainnet;
-use crate::chain::{signature::inputsig::InputWitness, Destination};
+use crate::chain::{Destination, signature::inputsig::InputWitness};
 
 // Create a transaction with a different signature hash type for every input.
 // This test takes a long time to finish, so it is ignored by default.

@@ -19,19 +19,23 @@ use std::{
     sync::Arc,
 };
 
-use itertools::{izip, Itertools as _};
+use itertools::{Itertools as _, izip};
 
 use common::{
     chain::{
-        self,
+        self, AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
+        ChainstateUpgradeBuilder, Currency, DelegationId, Destination, GenBlock, NetUpgrades,
+        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
+        SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::{create_regtest, ChainType},
+        config::{ChainType, create_regtest},
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::{
-            inputsig::arbitrary_message::produce_message_challenge, DestinationSigError,
-            Transactable,
+            DestinationSigError, Transactable,
+            inputsig::arbitrary_message::produce_message_challenge,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -39,20 +43,15 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig,
-        ChainstateUpgradeBuilder, Currency, DelegationId, Destination, GenBlock, NetUpgrades,
-        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId,
-        SighashInputCommitmentVersion, SignedTransactionIntent, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
-    key::{hdkd::u31::U31, KeyKind, PrivateKey},
+    key::{KeyKind, PrivateKey, hdkd::u31::U31},
     vrf::VRFPrivateKey,
 };
 use logging::log;
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     random::{gen_random_bytes, make_seedable_rng},
@@ -61,19 +60,19 @@ use test_utils::{
 use tx_verifier::error::{InputCheckErrorPayload, ScriptError};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::{
+    BlockInfo, KeyPurpose,
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
         OrderAdditionalInfo, PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo,
         TokensAdditionalInfo,
     },
-    BlockInfo, KeyPurpose,
 };
 
 use crate::{
+    Account, SendRequest,
     account::PoolData,
     key_chain::AccountKeyChains,
-    signer::{tests::account_from_mnemonic, Signer, SignerError},
-    Account, SendRequest,
+    signer::{Signer, SignerError, tests::account_from_mnemonic},
 };
 
 #[derive(Debug)]
@@ -85,6 +84,10 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
+#[cfg(any(
+    feature = "enable-trezor-device-tests",
+    feature = "enable-ledger-device-tests"
+))]
 #[rstest_reuse::template]
 pub fn sign_message_test_params(
     #[values(
@@ -98,7 +101,7 @@ pub fn sign_message_test_params(
 }
 
 pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     message_to_sign: MessageToSign,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -116,11 +119,11 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 
     let mut make_message = {
         // Note: can't pass rng to the closure without knowing its exact type, so we create a new one.
-        let mut rng = make_seedable_rng(rng.gen());
+        let mut rng = make_seedable_rng(rng.random());
         move || {
             let msg = match &message_to_sign {
                 MessageToSign::Random => {
-                    vec![rng.r#gen::<u8>(), rng.r#gen::<u8>(), rng.r#gen::<u8>()]
+                    vec![rng.random::<u8>(), rng.random::<u8>(), rng.random::<u8>()]
                 }
                 MessageToSign::Predefined(msg) => msg.clone(),
             };
@@ -197,7 +200,7 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 }
 
 pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
 ) where
@@ -220,9 +223,9 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
-    let inputs: Vec<TxInput> = (0..rng.gen_range(3..6))
+    let inputs: Vec<TxInput> = (0..rng.random_range(3..6))
         .map(|_| {
-            let source_id = if rng.gen_bool(0.5) {
+            let source_id = if rng.random_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(rng)).into()
             } else {
                 Id::<GenBlock>::new(H256::random_using(rng)).into()
@@ -238,7 +241,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
                 .unwrap()
                 .1
                 .into_object();
-            if rng.gen::<bool>() {
+            if rng.random::<bool>() {
                 pkh_destination
             } else {
                 let pkh = match pkh_destination {
@@ -256,13 +259,15 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
         0,
         inputs,
         vec![TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
             account.get_new_address(&mut db_tx, KeyPurpose::Change).unwrap().1.into_object(),
         )],
     )
     .unwrap();
 
-    let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
+    let intent: String = [rng.random::<char>(), rng.random::<char>(), rng.random::<char>()]
+        .iter()
+        .collect();
     log::debug!("Generated intent: `{intent}`");
     let expected_signed_message =
         SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
@@ -303,7 +308,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     // cannot sign when there is a random destination
     let (_, random_pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let random_pk_destination = Destination::PublicKey(random_pk);
-    input_destinations[rng.gen_range(0..num_inputs)] = random_pk_destination;
+    input_destinations[rng.random_range(0..num_inputs)] = random_pk_destination;
 
     let err = signer
         .sign_transaction_intent(
@@ -325,7 +330,7 @@ pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
 // and the flag `before_fork`, which determines the height. This is used in the software signer
 // tests to check that in the cold mode v1 commitments are used regardless of the current height.
 pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     before_fork: bool,
     expected_input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
@@ -338,11 +343,11 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let (sighash_input_commitment_version_fork_height, tx_block_height) = {
-        let fork_height = rng.gen_range(100..100_000);
+        let fork_height = rng.random_range(100..100_000);
         let tx_block_height = if before_fork {
-            rng.gen_range(1..fork_height)
+            rng.random_range(1..fork_height)
         } else {
-            rng.gen_range(fork_height..fork_height * 2)
+            rng.random_range(fork_height..fork_height * 2)
         };
         (
             BlockHeight::new(fork_height),
@@ -386,8 +391,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
 
-    let coin_input_amounts: Vec<Amount> = (0..rng.gen_range(2..7))
-        .map(|_| Amount::from_atoms(rng.gen_range(100..1000)))
+    let coin_input_amounts: Vec<Amount> = (0..rng.random_range(2..7))
+        .map(|_| Amount::from_atoms(rng.random_range(100..1000)))
         .collect();
 
     let total_coin_input_amount =
@@ -395,7 +400,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
     let decommissioned_pool_balance = Amount::from_atoms(
-        rng.gen_range(100..200)
+        rng.random_range(100..200)
             + chain_config.fungible_token_issuance_fee().into_atoms()
             + chain_config.nft_issuance_fee(tx_block_height).into_atoms() * 2
             + chain_config.token_supply_change_fee(tx_block_height).into_atoms() * 3
@@ -407,14 +412,14 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let decommissioned_pool_data = PoolData {
         utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
         creation_block: BlockInfo {
-            height: BlockHeight::new(rng.gen()),
-            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+            height: BlockHeight::new(rng.random()),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
         },
         decommission_key: destination_from_account(&mut account, &mut db_tx, rng),
         stake_destination: random_destination(rng),
         vrf_public_key: VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel).1,
         margin_ratio_per_thousand: PerThousand::new_from_rng(rng),
-        cost_per_block: Amount::from_atoms(rng.gen_range(100..200)),
+        cost_per_block: Amount::from_atoms(rng.random_range(100..200)),
     };
 
     let produce_block_from_stake_utxo =
@@ -436,7 +441,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let inputs: Vec<TxInput> = (0..utxos.len())
         .map(|_| {
-            let source_id = if rng.gen_bool(0.5) {
+            let source_id = if rng.random_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(rng)).into()
             } else {
                 Id::<GenBlock>::new(H256::random_using(rng)).into()
@@ -481,18 +486,18 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let multisig_dest = Destination::ClassicMultisig(multisig_hash1);
 
-    let source_id: OutPointSourceId = if rng.gen_bool(0.5) {
+    let source_id: OutPointSourceId = if rng.random_bool(0.5) {
         Id::<Transaction>::new(H256::random_using(rng)).into()
     } else {
         Id::<GenBlock>::new(H256::random_using(rng)).into()
     };
     let multisig_input = TxInput::from_utxo(source_id.clone(), rng.next_u32());
     let multisig_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
         multisig_dest.clone(),
     );
 
-    let pub_key1_or_2 = if rng.gen_bool(0.5) {
+    let pub_key1_or_2 = if rng.random_bool(0.5) {
         log::debug!("pub_key1_or_2 is pub_key1");
         pub_key1.clone()
     } else {
@@ -500,7 +505,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         pub_key2.clone()
     };
     let pub_key1_or_2_is_key1 = pub_key1_or_2 == pub_key1;
-    let dest1_or_2 = if rng.gen_bool(0.5) {
+    let dest1_or_2 = if rng.random_bool(0.5) {
         log::debug!("dest1_or_2 is pub key");
         Destination::PublicKey(pub_key1_or_2)
     } else {
@@ -508,7 +513,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         Destination::PublicKeyHash((&pub_key1_or_2).into())
     };
 
-    let spend_htlc = rng.gen_bool(0.5);
+    let spend_htlc = rng.random_bool(0.5);
     let htlc_secret = HtlcSecret::new_from_rng(rng);
 
     // Note: in "first_account_can_sign_htlc", "sign" actually means "at least partially sign".
@@ -521,7 +526,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             pub_key1_or_2_is_key1,
         )
     } else {
-        let (refund_dest, first_account_can_sign_htlc) = if rng.gen_bool(0.5) {
+        let (refund_dest, first_account_can_sign_htlc) = if rng.random_bool(0.5) {
             log::debug!("htlc will be refunded, single sig");
 
             (dest1_or_2, pub_key1_or_2_is_key1)
@@ -553,25 +558,25 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let htlc = HashedTimelockContract {
         secret_hash: htlc_secret.hash(),
         spend_key: htlc_spend_dest,
-        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.gen_range(100..200))),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.random_range(100..200))),
         refund_key: htlc_refund_dest,
     };
 
     let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
     let htlc_utxo = TxOutput::Htlc(
-        OutputValue::Coin(Amount::from_atoms(rng.gen::<u32>() as u128)),
+        OutputValue::Coin(Amount::from_atoms(rng.random::<u32>() as u128)),
         Box::new(htlc.clone()),
     );
 
     let token_id = TokenId::new(H256::random_using(rng));
-    let token_mint_amount = Amount::from_atoms(rng.gen_range(100..200));
+    let token_mint_amount = Amount::from_atoms(rng.random_range(100..200));
 
-    let coin_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+    let coin_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let coin_lock_then_transfer_amount =
-        total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let coin_burn_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let delegate_staking_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
-    let htlc_transfer_amount = total_coin_input_amount.div(rng.gen_range(10..20)).unwrap();
+        total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let filled_order1_id = OrderId::new(H256::random_using(rng));
     let filled_order2_id = OrderId::new(H256::random_using(rng));
@@ -599,10 +604,10 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let mut acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(rng.gen_range(0..100)),
+            AccountNonce::new(rng.random_range(0..100)),
             AccountSpending::DelegationBalance(
                 DelegationId::new(H256::random_using(rng)),
-                Amount::from_atoms(rng.gen_range(100..200)),
+                Amount::from_atoms(rng.random_range(100..200)),
             ),
         )),
         TxInput::AccountCommand(
@@ -653,7 +658,9 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 AccountCommand::FillOrder(
                     filled_order1_id,
                     Amount::from_atoms(
-                        rng.gen_range(1..filled_order1_info.initially_asked.amount().into_atoms()),
+                        rng.random_range(
+                            1..filled_order1_info.initially_asked.amount().into_atoms(),
+                        ),
                     ),
                     Destination::AnyoneCanSpend,
                 ),
@@ -665,7 +672,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         filled_order2_info.initially_asked.amount(),
         token_mint_amount,
     );
-    let token_amount_to_fill = rng.gen_range(1..token_max_fill.into_atoms());
+    let token_amount_to_fill = rng.random_range(1..token_max_fill.into_atoms());
     acc_inputs.extend([
         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
         TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(frozen_order_id)),
@@ -687,20 +694,20 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let created_pool_id = PoolId::new(H256::random_using(rng));
     let delegation_id = DelegationId::new(H256::random_using(rng));
     let pool_data = StakePoolData::new(
-        Amount::from_atoms(rng.gen_range(100..200)),
+        Amount::from_atoms(rng.random_range(100..200)),
         Destination::PublicKey(dest_pub.clone()),
         vrf_public_key,
         Destination::PublicKey(dest_pub.clone()),
         PerThousand::new_from_rng(rng),
-        Amount::from_atoms(rng.gen_range(10..100)),
+        Amount::from_atoms(rng.random_range(10..100)),
     );
     let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
-        number_of_decimals: rng.gen_range(1..18),
+        number_of_decimals: rng.random_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
         total_supply: TokenTotalSupply::Unlimited,
         authority: Destination::PublicKey(dest_pub.clone()),
-        is_freezable: if rng.gen_bool(0.5) {
+        is_freezable: if rng.random_bool(0.5) {
             IsTokenFreezable::Yes
         } else {
             IsTokenFreezable::No
@@ -737,8 +744,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
-        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
-        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(100..200))),
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
     );
 
     let outputs = vec![
@@ -746,7 +753,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             OutputValue::TokenV1(
                 token_id,
                 Amount::from_atoms(
-                    rng.gen_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
+                    rng.random_range(1..=(token_mint_amount.into_atoms() - token_amount_to_fill)),
                 ),
             ),
             Destination::PublicKey(dest_pub.clone()),
@@ -855,7 +862,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let tokens_additional_info = TokensAdditionalInfo::new().with_info(
         token_id,
         TokenAdditionalInfo {
-            num_decimals: rng.gen_range(5..10),
+            num_decimals: rng.random_range(5..10),
             ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
         },
     );
@@ -1006,10 +1013,10 @@ fn random_order_info(
     min_balance: u128,
     rng: &mut impl Rng,
 ) -> OrderAdditionalInfo {
-    let initially_asked = rng.gen_range(min_initial_value..=max_initial_value);
-    let initially_given = rng.gen_range(min_initial_value..=max_initial_value);
-    let ask_balance = rng.gen_range(min_balance..=initially_asked);
-    let give_balance = rng.gen_range(min_balance..=initially_given);
+    let initially_asked = rng.random_range(min_initial_value..=max_initial_value);
+    let initially_given = rng.random_range(min_initial_value..=max_initial_value);
+    let ask_balance = rng.random_range(min_balance..=initially_asked);
+    let give_balance = rng.random_range(min_balance..=initially_given);
 
     OrderAdditionalInfo {
         initially_asked: ask_currency.into_output_value(Amount::from_atoms(initially_asked)),
@@ -1019,7 +1026,7 @@ fn random_order_info(
     }
 }
 
-fn random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+fn random_destination(rng: &mut impl CryptoRng) -> Destination {
     let (_sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pk)
 }
@@ -1029,7 +1036,7 @@ fn destination_from_account<K: AccountKeyChains>(
     db_tx: &mut impl TransactionRwUnlocked,
     rng: &mut impl Rng,
 ) -> Destination {
-    let purpose = if rng.gen_bool(0.5) {
+    let purpose = if rng.random_bool(0.5) {
         KeyPurpose::ReceiveFunds
     } else {
         KeyPurpose::Change

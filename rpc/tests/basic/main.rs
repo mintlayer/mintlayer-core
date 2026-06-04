@@ -15,18 +15,21 @@
 
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
-use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::rpc_params;
-use randomness::{
-    distributions::{Alphanumeric, DistString},
-    Rng,
+use jsonrpsee::{
+    core::client::{ClientT, SubscriptionClientT},
+    rpc_params,
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+
+use randomness::{
+    Rng, RngExt as _,
+    distributions::{Alphanumeric, SampleString},
+};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use rpc::{
-    new_http_client, new_ws_client, rpc_creds::RpcCreds, subscription, Builder, Rpc, RpcAuthData,
-    RpcClientResult, RpcResult,
+    Builder, Rpc, RpcAuthData, RpcClientResult, RpcResult, new_http_client, new_ws_client,
+    rpc_creds::RpcCreds, subscription,
 };
 
 mod desc;
@@ -166,7 +169,7 @@ async fn http_request(rpc: &Rpc, rpc_auth: RpcAuthData) -> anyhow::Result<()> {
 }
 
 fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
-    let len = rng.gen_range(1..20);
+    let len = rng.random_range(1..20);
     loop {
         let val = Alphanumeric.sample_string(rng, len);
         if not_equal_to != val {

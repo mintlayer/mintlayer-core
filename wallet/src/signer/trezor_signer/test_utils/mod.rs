@@ -17,8 +17,8 @@ mod auto_confirmer;
 
 use itertools::Itertools as _;
 use trezor_client::{
-    transport::{udp::UdpTransport, webusb::WebUsbTransport},
     AvailableDevice, Model, Trezor, TrezorMessage,
+    transport::{udp::UdpTransport, webusb::WebUsbTransport},
 };
 
 use logging::log;

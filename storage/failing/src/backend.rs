@@ -18,8 +18,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use storage_core::{backend, Data, DbMapId};
-use test_utils::random::{Rng, Seed, TestRng};
+use storage_core::{Data, DbMapId, backend};
+use test_utils::random::{RngExt as _, Seed, TestRng};
 use utils::{atomics::AcqRelAtomicU32, shallow_clone::ShallowClone};
 
 use crate::{ErrorGeneration, FailureConfig};
@@ -92,7 +92,7 @@ impl<T> FailingImpl<T> {
     }
 
     fn make_rng_impl(rng: &Mutex<TestRng>) -> TestRng {
-        TestRng::new(Seed(rng.lock().expect("lock poisoned").gen()))
+        TestRng::new(Seed(rng.lock().expect("lock poisoned").random()))
     }
 
     fn make_rw_tx_state<'a>(
@@ -161,15 +161,15 @@ struct RwTxState<'a> {
 
 impl RwTxState<'_> {
     fn emit_error(&mut self, eg: &ErrorGeneration) -> storage_core::Result<()> {
-        if self.transaction_failures < self.config.max_failures_per_transaction() {
-            if let Some(err) = eg.generate(&mut self.rng) {
-                if self.total_failures.fetch_add(1) < self.config.max_failures_total() {
-                    self.transaction_failures += 1;
-                    return Err(err.into());
-                } else {
-                    // Correct the previous fetch_add if we reached the max.
-                    self.total_failures.fetch_sub(1);
-                }
+        if self.transaction_failures < self.config.max_failures_per_transaction()
+            && let Some(err) = eg.generate(&mut self.rng)
+        {
+            if self.total_failures.fetch_add(1) < self.config.max_failures_total() {
+                self.transaction_failures += 1;
+                return Err(err.into());
+            } else {
+                // Correct the previous fetch_add if we reached the max.
+                self.total_failures.fetch_sub(1);
             }
         }
         Ok(())

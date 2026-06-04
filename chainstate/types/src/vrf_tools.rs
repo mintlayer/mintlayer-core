@@ -18,8 +18,8 @@ use common::{
     primitives::H256,
 };
 use crypto::vrf::{
-    transcript::{no_rng::VRFTranscript, traits::SignableTranscript},
     VRFError, VRFPublicKey, VRFReturn,
+    transcript::{no_rng::VRFTranscript, traits::SignableTranscript},
 };
 use thiserror::Error;
 

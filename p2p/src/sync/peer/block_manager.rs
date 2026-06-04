@@ -22,15 +22,15 @@ use itertools::Itertools;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, GenBlockIndex,
-    GenBlockIndexRef, Locator,
+    BlockIndex, BlockSource, GenBlockIndex, GenBlockIndexRef, Locator,
+    chainstate_interface::ChainstateInterface,
 };
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         Block, ChainConfig, GenBlock,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
     },
-    primitives::{time::Time, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id, Idable, time::Time},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -40,13 +40,14 @@ use utils::{
 };
 
 use crate::{
+    MessagingService, PeerManagerEvent, Result,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{P2pError, PeerError, ProtocolError, SyncError},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     net::{
-        types::services::{Service, Services},
         NetworkingService,
+        types::services::{Service, Services},
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
@@ -57,12 +58,16 @@ use crate::{
             handle_message_processing_result,
         },
         sync_status::PeerBlockSyncStatus,
-        LocalEvent,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, PeerManagerEvent, Result,
 };
+
+#[derive(Debug, Clone)]
+pub enum PeerBlockSyncManagerLocalEvent {
+    /// Chainstate got new tip.
+    ChainstateNewTip(Id<GenBlock>),
+}
 
 // TODO: Take into account the chain work when syncing.
 /// Block syncing manager.
@@ -77,7 +82,7 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_msg_receiver: Receiver<BlockSyncMessage>,
-    local_event_receiver: UnboundedReceiver<LocalEvent>,
+    local_event_receiver: UnboundedReceiver<PeerBlockSyncManagerLocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
@@ -92,7 +97,7 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
 }
 
 struct IncomingDataState {
-    /// A list of headers received via the `HeaderListResponse` message that we haven't yet
+    /// A list of headers received via the `HeaderList` message that we haven't yet
     /// requested the blocks for.
     pending_headers: Vec<SignedBlockHeader>,
     /// A list of blocks that we requested from this peer.
@@ -128,7 +133,7 @@ where
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         sync_msg_receiver: Receiver<BlockSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_receiver: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<PeerBlockSyncManagerLocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         Self {
@@ -324,12 +329,13 @@ where
         Ok(())
     }
 
-    async fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
-        log::debug!("Handling local peer mgr event: {event:?}");
+    async fn handle_local_event(&mut self, event: PeerBlockSyncManagerLocalEvent) -> Result<()> {
+        log::debug!("Handling local event: {event:?}");
 
         match event {
-            LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
-            LocalEvent::MempoolNewTx(_) => Ok(()),
+            PeerBlockSyncManagerLocalEvent::ChainstateNewTip(new_tip_id) => {
+                self.handle_new_tip(&new_tip_id).await
+            }
         }
     }
 
@@ -549,21 +555,20 @@ where
                         P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(id)),
                     )?;
 
-                    if let Some(ref best_sent_block) = best_sent_block {
-                        if index.block_height() <= best_sent_block.block_height() {
-                            // This can be normal in case of reorg; ensure that the mainchain block
-                            // at best_sent_block's height has a different id.
-                            // Note that mainchain could have become shorter due to blocks
-                            // invalidation, so no block at that height may be present at all.
-                            if let Some(mainchain_block_id_at_height) =
-                                c.get_block_id_from_height(best_sent_block.block_height())?
-                            {
-                                if &mainchain_block_id_at_height == best_sent_block.block_id() {
-                                    return Err(P2pError::ProtocolError(
-                                        ProtocolError::DuplicatedBlockRequest(id),
-                                    ));
-                                }
-                            }
+                    if let Some(ref best_sent_block) = best_sent_block
+                        && index.block_height() <= best_sent_block.block_height()
+                    {
+                        // This can be normal in case of reorg; ensure that the mainchain block
+                        // at best_sent_block's height has a different id.
+                        // Note that mainchain could have become shorter due to blocks
+                        // invalidation, so no block at that height may be present at all.
+                        if let Some(mainchain_block_id_at_height) =
+                            c.get_block_id_from_height(best_sent_block.block_height())?
+                            && &mainchain_block_id_at_height == best_sent_block.block_id()
+                        {
+                            return Err(P2pError::ProtocolError(
+                                ProtocolError::DuplicatedBlockRequest(id),
+                            ));
                         }
                     }
                 }
@@ -995,8 +1000,11 @@ where
         // Nodes can disconnect each other if all of them are in the initial block download state,
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
-        log::warn!("Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
-            headers_req_stalling, blocks_req_stalling);
+        log::warn!(
+            "Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
+            headers_req_stalling,
+            blocks_req_stalling
+        );
         self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,

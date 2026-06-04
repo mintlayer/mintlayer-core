@@ -23,7 +23,7 @@ use impls::{channel, socks5, stream_adapter, tcp};
 pub use self::{
     channel::{ChannelListener, ChannelStream, MpscChannelTransport, MpscChannelTransportError},
     message_codec::MessageCodec,
-    message_stream::{new_message_stream, MessageReader, MessageWriter},
+    message_stream::{MessageReader, MessageWriter, new_message_stream},
     socks5::Socks5TransportSocket,
     stream_adapter::{
         identity::IdentityStreamAdapter,

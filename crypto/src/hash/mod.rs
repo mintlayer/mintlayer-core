@@ -15,7 +15,7 @@
 
 mod internal;
 
-use generic_array::{sequence::Split, typenum, ArrayLength, GenericArray};
+use generic_array::{ArrayLength, GenericArray, sequence::Split, typenum};
 use internal::InternalStreamHasher;
 
 pub trait Hasher {

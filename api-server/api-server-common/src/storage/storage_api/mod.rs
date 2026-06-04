@@ -22,16 +22,16 @@ use std::{
 use common::{
     address::Address,
     chain::{
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, IdCreationError, OrderId,
+        PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
             TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, IdCreationError, OrderId,
-        PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, per_thousand::PerThousand},
 };
 use crypto::vrf::VRFPublicKey;
 use pos_accounting::{Error as PosError, PoolData};
@@ -94,7 +94,7 @@ impl FromStr for CoinOrTokenStatistic {
             _ => {
                 return Err(ApiServerStorageError::DeserializationError(format!(
                     "invalid coin or token statistic type: {s}"
-                )))
+                )));
             }
         };
 
@@ -716,10 +716,10 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError>;
 
     async fn get_last_transaction_global_index(&self)
-        -> Result<Option<u64>, ApiServerStorageError>;
+    -> Result<Option<u64>, ApiServerStorageError>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
-        -> Result<Option<Utxo>, ApiServerStorageError>;
+    -> Result<Option<Utxo>, ApiServerStorageError>;
 
     async fn get_address_available_utxos(
         &self,

@@ -24,6 +24,21 @@ macro_rules! newtype {
             pub fn new(inner: $wrapped) -> Self {
                 Self(inner)
             }
+
+            #[allow(dead_code)]
+            pub fn inner(&self) -> &$wrapped {
+                &self.0
+            }
+
+            #[allow(dead_code)]
+            pub fn inner_mut(&mut self) -> &mut $wrapped {
+                &mut self.0
+            }
+
+            #[allow(dead_code)]
+            pub fn take(self) -> $wrapped {
+                self.0
+            }
         }
 
         impl From<$name> for $wrapped {
@@ -56,17 +71,19 @@ macro_rules! newtype {
 #[cfg(test)]
 mod tests {
     #[derive(Clone, Debug)]
-    struct OldInt {
+    struct Inner {
         val: u32,
     }
 
-    impl OldInt {
+    impl Inner {
         fn new() -> Self {
             Self { val: 0 }
         }
+
         fn set(&mut self, val: u32) {
             self.val = val
         }
+
         fn get(&self) -> u32 {
             self.val
         }
@@ -74,17 +91,31 @@ mod tests {
 
     newtype! {
         #[derive(Clone, Debug)]
-        struct NewInt(OldInt);
+        struct Wrapper(Inner);
     }
 
     #[test]
     fn test_new_type() {
-        let old = OldInt::new();
-        let mut new = NewInt::from(old);
+        let inner = Inner::new();
+        let mut wrapper = Wrapper::from(inner);
+
         let val = 7;
-        new.set(val);
-        assert_eq!(new.get(), val);
-        let old_again = OldInt::from(new);
-        assert_eq!(old_again.get(), val);
+        wrapper.set(val);
+        assert_eq!(wrapper.get(), val);
+        assert_eq!(wrapper.inner().get(), val);
+        assert_eq!(wrapper.inner_mut().get(), val);
+
+        let val = 8;
+        wrapper.inner_mut().set(val);
+        assert_eq!(wrapper.get(), val);
+        assert_eq!(wrapper.inner().get(), val);
+        assert_eq!(wrapper.inner_mut().get(), val);
+
+        let wrapper_clone = wrapper.clone();
+        let taken_inner = wrapper_clone.take();
+        assert_eq!(taken_inner.get(), val);
+
+        let inner_again = Inner::from(wrapper);
+        assert_eq!(inner_again.get(), val);
     }
 }

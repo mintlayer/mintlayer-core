@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use crate::{
-    error::{BlockConstructionError, TxValidationError},
-    pool::tx_pool::{tx_verifier, TxMempoolEntry, TxPool},
+    error::{BlockConstructionError, TxCollectionError, TxValidationError},
+    pool::tx_pool::{TxMempoolEntry, TxPool, tx_verifier},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
 
 use std::{
     cmp::Ordering,
-    collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, binary_heap, btree_map},
     ops::Deref,
 };
 
@@ -147,7 +147,7 @@ pub fn collect_txs<M>(
         .filter_map(|tx_id| {
             // If the transaction with this ID has already been processed, skip it
             ensure!(processed.insert(tx_id));
-            let tx = mempool.store.txs_by_id.get(tx_id).expect("already checked").deref();
+            let tx = mempool.store.get_entry(tx_id).expect("already checked");
 
             tx_verifier::input_check::verify_timelocks(
                 tx.transaction(),
@@ -198,6 +198,18 @@ pub fn collect_txs<M>(
             tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &unlock_timestamp);
 
         if let Err(err) = verification_result {
+            // TODO: this will fire because "parents" only reflect utxo-based relationships and not:
+            // 1) account-nonce-based ones - token commands and delegation withdrawals.
+            // 2) token creation vs token commands.
+            // 3) order creation vs order commands (though it's not a super useful scenario).
+            // 4) delegation id creation vs the delegation itself.
+            // 5) delegation id creation vs delegation withdrawal (not a super useful scenario).
+            // 6) pool creation vs delegation id creation.
+            // Need to update TxDependency to handle these relationships too and use TxDependency
+            // when determining "parents" for TxMempoolEntry.
+            // Also see https://github.com/mintlayer/mintlayer-core/issues/2065.
+            // The old TODO goes below.
+
             // TODO Narrow down when the critical error is presented. Printing the error may be a
             // false positive if the tip moves during the execution of this function.
             log::error!(
@@ -225,7 +237,9 @@ pub fn collect_txs<M>(
                     0 => panic!("pending with 0 missing parents"),
                     1 => {
                         // This was the last missing parent, put the tx into the ready queue
-                        ready.push(mempool.store.txs_by_id[c.key()].deref().into());
+                        let entry =
+                            mempool.store.get_entry(c.key()).expect("child must be present");
+                        ready.push(entry.into());
                         c.remove();
                     }
                     n => *n -= 1,
@@ -236,10 +250,189 @@ pub fn collect_txs<M>(
 
     let final_chainstate_tip =
         utxo::UtxosView::best_block_hash(&chainstate).expect("cannot fetch tip");
-    ensure!(
-        mempool_tip == final_chainstate_tip,
-        BlockConstructionError::TipMoved(mempool_tip, final_chainstate_tip),
-    );
 
-    Ok(Some(tx_accumulator))
+    if mempool_tip == final_chainstate_tip {
+        Ok(Some(tx_accumulator))
+    } else {
+        // The tip has moved, so return "Ok(None)" to signal a recoverable error.
+        // TODO: perhaps the chainstate tip check is redundant here, because the tip change can't
+        // have affected the mempool at this point, so all collected txs are valid for inclusion
+        // in a block that has `tx_accumulator.expected_tip()` as its parent.
+        Ok(None)
+    }
+}
+
+/// Return at most `tx_count` tx ids from `selected_tx_ids`, ordering them by score and ancestry
+/// (txs with better score will come first, ancestors will come before their descendants).
+///
+/// All txs in `selected_tx_ids` must be present in the mempool.
+///
+/// Note: the ancestry is determined using TxMempoolEntry's `parents` and `children` collections,
+/// which at the moment only reflect utxo-based relationships, see the TODO inside `collect_txs`.
+pub fn get_best_tx_ids_by_score_and_ancestry<M>(
+    mempool: &TxPool<M>,
+    selected_tx_ids: &BTreeSet<Id<Transaction>>,
+    tx_count: usize,
+) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+    use get_best_tx_ids_by_score_and_ancestry_impl::*;
+
+    if tx_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    // Map from a selected tx id to all its nearest selected ancestors (tx being "selected" means
+    // it's present in `selected_tx_ids`). E.g. if there is a chain TX <- A1 <- A2 and all of TX/A1/A2
+    // are selected, then selected_ancestors_map[TX] will contain A1, but not A2, selected_ancestors_map[A1]
+    // will contain A2 and selected_ancestors_map[A2] will be empty.
+    // (Technically, the map will also contain some keys that are not selected tx ids, due to how it's
+    // constructed, but they will be ignored).
+    let mut selected_ancestors_map = BTreeMap::<Id<Transaction>, BTreeSet<Id<Transaction>>>::new();
+    // Map from a selected tx id to txs for which it is one of the nearest selected ancestors.
+    // In the example above, selected_descendants_map[A2] will contain A1, selected_descendants_map[A1]
+    // will contain TX and selected_descendants_map[TX] will be empty.
+    let mut selected_descendants_map =
+        BTreeMap::<Id<Transaction>, BTreeSet<Id<Transaction>>>::new();
+    // Map from a tx id to the number of its nearest selected ancestors that haven't been emitted so far.
+    let mut missing_selected_ancestors_count_map = BTreeMap::<Id<Transaction>, usize>::new();
+    // Heap of tx entries all of whose selected ancestors have already been emitted.
+    let mut ready_txs = BinaryHeap::<EntryByScore>::with_capacity(selected_tx_ids.len());
+
+    for tx_id in selected_tx_ids {
+        let entry = mempool.store.get_specified_entry(tx_id)?;
+
+        collect_nearest_selected_ancestors(
+            mempool,
+            entry,
+            selected_tx_ids,
+            &mut selected_ancestors_map,
+        )?;
+        let selected_ancestors = selected_ancestors_map.get(tx_id).expect("must be present");
+
+        if selected_ancestors.is_empty() {
+            ready_txs.push(entry.into());
+        } else {
+            missing_selected_ancestors_count_map.insert(*tx_id, selected_ancestors.len());
+            for ancestor_id in selected_ancestors {
+                selected_descendants_map.entry(*ancestor_id).or_default().insert(*tx_id);
+            }
+        }
+    }
+
+    let selected_descendants_map = selected_descendants_map;
+    drop(selected_ancestors_map);
+
+    let mut result = Vec::with_capacity(std::cmp::min(tx_count, selected_tx_ids.len()));
+
+    while result.len() < tx_count {
+        let Some(tx_entry) = ready_txs.pop() else {
+            break;
+        };
+        let tx_id = tx_entry.entry.tx_id();
+        result.push(*tx_id);
+
+        if let Some(child_ids) = selected_descendants_map.get(tx_id) {
+            for child_id in child_ids {
+                match missing_selected_ancestors_count_map.entry(*child_id) {
+                    btree_map::Entry::Vacant(_) => {}
+                    btree_map::Entry::Occupied(mut missing_selected_ancestors_count) => {
+                        match missing_selected_ancestors_count.get_mut() {
+                            0 => {
+                                // Should not be possible by construction.
+                                panic!("Pending child with 0 selected ancestors");
+                            }
+                            1 => {
+                                missing_selected_ancestors_count.remove();
+                                let child = mempool.store.get_existing_entry(child_id)?;
+                                ready_txs.push(child.into());
+                            }
+                            missing_count => *missing_count -= 1,
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+mod get_best_tx_ids_by_score_and_ancestry_impl {
+    use super::*;
+
+    // Stack item for collect_nearest_selected_ancestors.
+    struct StackItem<'a, I: Iterator<Item = &'a Id<Transaction>>> {
+        tx_entry: &'a TxMempoolEntry,
+        tx_ancestors: BTreeSet<Id<Transaction>>,
+        parents_iter: I,
+    }
+
+    fn new_stack_item<'a>(
+        tx_entry: &'a TxMempoolEntry,
+    ) -> StackItem<'a, impl Iterator<Item = &'a Id<Transaction>>> {
+        StackItem {
+            tx_entry,
+            tx_ancestors: BTreeSet::new(),
+            parents_iter: tx_entry.parents(),
+        }
+    }
+
+    // For each ancestor path starting from the specified tx, take the nearest ancestor that is in `selected_tx_ids`
+    // and put it into a set. E.g. in
+    //  /--S1--**--S2
+    // T---**--S3--S4
+    //          \--**--S5
+    // where "S" means a tx in `selected_tx_ids` and "**" some other tx, S1 and S3 will be put into the set,
+    // while S2, S4 and S5 will not.
+    // After the call, `ancestors_map` is guaranteed to contain the id of the tx as a key, and the value
+    // will be the above-mentioned set.
+    //
+    // Note: it'd be better if the function returned a reference to the collected ancestors set instead
+    // of forcing the caller to do an additional lookup with `expect`, but the borrow checker throws
+    // a tantrum in this case and there doesn't seem to be a way to pacify it without doing extra lookups
+    // or cloning.
+    pub fn collect_nearest_selected_ancestors<M>(
+        mempool: &TxPool<M>,
+        tx_entry: &TxMempoolEntry,
+        selected_tx_ids: &BTreeSet<Id<Transaction>>,
+        ancestors_map: &mut BTreeMap<Id<Transaction>, BTreeSet<Id<Transaction>>>,
+    ) -> Result<(), TxCollectionError> {
+        if ancestors_map.contains_key(tx_entry.tx_id()) {
+            return Ok(());
+        }
+
+        let mut stack = vec![new_stack_item(tx_entry)];
+
+        'outer: loop {
+            // We start with a non-empty stack and then check if it's empty at the end of the outer loop.
+            let item = stack.last_mut().expect("known to be present");
+
+            for parent_id in item.parents_iter.by_ref() {
+                if selected_tx_ids.contains(parent_id) {
+                    // The nearest selected ancestor has been found, no need to go deeper.
+                    item.tx_ancestors.insert(*parent_id);
+                } else if let Some(existing_ancestors) = ancestors_map.get(parent_id) {
+                    item.tx_ancestors.extend(existing_ancestors);
+                } else {
+                    let parent_tx_entry = mempool.store.get_existing_entry(parent_id)?;
+                    stack.push(new_stack_item(parent_tx_entry));
+                    continue 'outer;
+                }
+            }
+
+            // We've completely processed the current item, so put the collected `tx_ancestors`
+            // into `ancestors_map`. If there is another item on top of the stack, it's this item's
+            // child, whose `tx_ancestors` must be extended with this item's `tx_ancestors`.
+            // Otherwise we're done.
+            let item = stack.pop().expect("known to be present");
+            let entry = ancestors_map.entry(*item.tx_entry.tx_id()).insert_entry(item.tx_ancestors);
+
+            if let Some(child_item) = stack.last_mut() {
+                child_item.tx_ancestors.extend(entry.get());
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
 }

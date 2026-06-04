@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use chainstate::BlockSource;
 use common::chain::block::timestamp::BlockTimestamp;
 
-use crate::event::NewTip;
+use crate::event::NewTipEvent;
 
 use super::*;
 
@@ -366,7 +366,7 @@ async fn ibd_transition(#[case] seed: Seed) {
     assert!(mempool.contains_transaction(&tx_id));
 
     // Check that the new tip event was sent.
-    let expected_event = MempoolEvent::NewTip(NewTip::new(block_id.into(), block_height));
+    let expected_event = MempoolEvent::NewTip(NewTipEvent::new(block_id.into(), block_height));
 
     let event = events_rx.recv().await;
     assert_eq!(event.as_ref(), Some(&expected_event));

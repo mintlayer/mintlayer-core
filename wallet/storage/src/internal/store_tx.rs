@@ -16,26 +16,28 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    schema::{self as db, Schema},
     WalletStorageEncryptionRead, WalletStorageEncryptionWrite, WalletStorageReadLocked,
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    schema::{self as db, Schema},
 };
 use common::{
     address::Address,
-    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
+    chain::{Destination, SignedTransaction, block::timestamp::BlockTimestamp},
 };
 use crypto::{
     kdf::KdfChallenge,
-    key::{extended::ExtendedPublicKey, PrivateKey},
+    key::{PrivateKey, extended::ExtendedPublicKey},
     symkey::SymmetricKey,
 };
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
-use storage::{schema, MakeMapRef};
+use storage::{MakeMapRef, schema};
 use utils::{
     ensure,
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
     account_id::{AccountAddress, AccountPublicKey},
     account_info::{
         AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
@@ -44,8 +46,6 @@ use wallet_types::{
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
     wallet_type::WalletType,
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use wallet_types::hw_data;

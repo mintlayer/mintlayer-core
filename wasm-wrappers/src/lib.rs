@@ -33,55 +33,55 @@ use std::{num::NonZeroU8, str::FromStr};
 
 use bip39::Language;
 use itertools::Itertools as _;
-use wasm_bindgen::{prelude::*, JsValue};
+use wasm_bindgen::{JsValue, prelude::*};
 
 use common::{
-    address::{dehexify::dehexify_all_addresses, pubkeyhash::PublicKeyHash, Address},
+    address::{Address, dehexify::dehexify_all_addresses, pubkeyhash::PublicKeyHash},
     chain::{
+        Destination, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
-        config::{Builder, BIP44_PATH},
+        config::{BIP44_PATH, Builder},
         htlc::HtlcSecret,
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
         partially_signed_transaction::{
-            make_sighash_input_commitments_at_height, PartiallySignedTransaction,
-            PartiallySignedTransactionConsistencyCheck,
+            PartiallySignedTransaction, PartiallySignedTransactionConsistencyCheck,
+            make_sighash_input_commitments_at_height,
         },
         signature::{
             inputsig::{
-                arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
+                InputWitness,
+                arbitrary_message::{ArbitraryMessageSignature, produce_message_challenge},
                 authorize_hashed_timelock_contract_spend::{
                     AuthorizedHashedTimelockContractSpend, AuthorizedHashedTimelockContractSpendTag,
                 },
                 classical_multisig::authorize_classical_multisig::{
-                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                    AuthorizedClassicalMultisigSpend, sign_classical_multisig_spending,
                 },
                 htlc::{
                     produce_uniparty_signature_for_htlc_refunding,
                     produce_uniparty_signature_for_htlc_spending,
                 },
                 standard_signature::StandardInputSignature,
-                InputWitness,
             },
             sighash::signature_hash,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        Destination, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, BlockHeight, Id, Idable, H256},
+    primitives::{BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
     size_estimation::{
         input_signature_size_from_destination, outputs_encoded_size,
         tx_size_with_num_inputs_and_outputs,
     },
 };
 use crypto::key::{
+    KeyKind, PrivateKey, PublicKey, Signature,
     extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
-    KeyKind, PrivateKey, PublicKey, Signature,
 };
-use serialization::{json_encoded::JsonEncoded, Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode, json_encoded::JsonEncoded};
 
 use crate::{
     error::Error,

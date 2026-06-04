@@ -21,9 +21,9 @@ use tokio::net::TcpStream;
 use tokio_socks::tcp::Socks5Stream;
 
 use crate::{
+    Result,
     error::NetworkingError,
     transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
-    Result,
 };
 
 // TODO: Add tests. A typical way to test this is to create a forwarding proxy with a socks interface

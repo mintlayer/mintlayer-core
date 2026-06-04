@@ -18,26 +18,30 @@ mod ledger_messages;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
+    Account, WalletResult,
+    key_chain::{AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path},
     signer::{
+        Signer, SignerError, SignerProvider, SignerResult,
         hardware_signer_utils::{
-            arbitrary_message_signature_from_raw_sig, sign_with_standalone_private_keys,
-            StandaloneInput, StandaloneInputs,
+            StandaloneInput, StandaloneInputs, arbitrary_message_signature_from_raw_sig,
+            sign_with_standalone_private_keys,
         },
         ledger_signer::ledger_messages::{
-            check_current_app, get_extended_public_key, get_extended_public_key_raw,
-            sign_challenge, sign_tx, LedgerMessagesError,
+            LedgerMessagesError, check_current_app, get_extended_public_key,
+            get_extended_public_key_raw, sign_challenge, sign_tx,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
-        Signer, SignerError, SignerProvider, SignerResult,
     },
-    Account, WalletResult,
 };
 use common::{
     chain::{
+        AccountCommand, ChainConfig, Destination, DestinationTag, OrderAccountCommand,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput,
         config::ChainType,
         signature::{
+            DestinationSigError,
             inputsig::{
+                InputWitness,
                 arbitrary_message::ArbitraryMessageSignature,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
@@ -47,22 +51,18 @@ use common::{
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
                 standard_signature::StandardInputSignature,
-                InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
-            DestinationSigError,
         },
-        AccountCommand, ChainConfig, Destination, DestinationTag, OrderAccountCommand,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{BlockHeight, Idable, H256},
+    primitives::{BlockHeight, H256, Idable},
     primitives_converters::TryConvertInto as _,
 };
 use crypto::key::{
+    SigAuxDataProvider, Signature, SignatureError,
     extended::ExtendedPublicKey,
     hdkd::{derivable::Derivable, u31::U31},
     signature::SignatureKind,
-    SigAuxDataProvider, Signature, SignatureError,
 };
 use serialization::Encode;
 use utils::ensure;
@@ -70,6 +70,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId,
     account_info::DEFAULT_ACCOUNT_INDEX,
     hw_data::{
         HardwareWalletData, HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel,
@@ -78,12 +79,11 @@ use wallet_types::{
         PartiallySignedTransaction, PtxAdditionalInfo, TokensAdditionalInfo,
     },
     signature_status::SignatureStatus,
-    AccountId,
 };
 
 use async_trait::async_trait;
-use itertools::{izip, Itertools};
-use ledger_lib::{info::Model, Exchange, Filters, LedgerHandle, LedgerProvider, Transport};
+use itertools::{Itertools, izip};
+use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model};
 use mintlayer_ledger_messages::{
     AdditionalOrderInfo, AdditionalUtxoInfo, AddrType, Bip32Path as LedgerBip32Path, CoinType,
     InputAddressPath as LedgerInputAddressPath, SighashInputCommitment as LSighashInputCommitment,
@@ -99,7 +99,9 @@ pub enum LedgerError {
     NoDeviceFound,
     #[error("Device timeout")]
     DeviceTimeout,
-    #[error("A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead.")]
+    #[error(
+        "A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead."
+    )]
     DifferentActiveApp(String),
     #[error("Received an invalid response from the Ledger device")]
     InvalidResponse,
@@ -113,9 +115,13 @@ pub enum LedgerError {
     ApduMessageTooLong,
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
-    #[error("The file being loaded is a software wallet and cannot be used with the connected Ledger wallet")]
+    #[error(
+        "The file being loaded is a software wallet and cannot be used with the connected Ledger wallet"
+    )]
     WalletFileIsSoftwareWallet,
-    #[error("The file being loaded is a trezor wallet and cannot be used with the connected Ledger wallet")]
+    #[error(
+        "The file being loaded is a trezor wallet and cannot be used with the connected Ledger wallet"
+    )]
     WalletFileIsTrezorWallet,
     #[error("Public keys mismatch - wrong device or passphrase")]
     HardwareWalletDifferentMnemonicOrPassphrase,

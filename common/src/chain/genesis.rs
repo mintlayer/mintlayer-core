@@ -16,9 +16,9 @@
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
-use super::block::{timestamp::BlockTimestamp, BlockRewardTransactable};
 use super::TxOutput;
-use crate::primitives::{id, Id, Idable};
+use super::block::{BlockRewardTransactable, timestamp::BlockTimestamp};
+use crate::primitives::{Id, Idable, id};
 
 /// Genesis defines the initial state of the blockchain
 #[derive(Eq, PartialEq, Clone, Encode, Decode, Debug, TypeName)]

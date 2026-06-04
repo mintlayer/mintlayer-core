@@ -25,21 +25,21 @@ use chainstate::ChainInfo;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        Destination, OrderData, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         config::create_regtest,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{RPCTokenInfo, TokenId},
-        Destination, OrderData, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use node_comm::{mock::ClonableMockNodeInterface, node_traits::MockNodeInterface};
-use randomness::Rng;
+use randomness::RngExt as _;
 use test_utils::{
     assert_matches_return_val,
-    random::{gen_random_alnum_string, make_seedable_rng, Seed},
+    random::{Seed, gen_random_alnum_string, make_seedable_rng},
 };
 use wallet::{
     account::TransactionToSign, wallet::test_helpers::create_wallet_with_mnemonic,
@@ -50,20 +50,19 @@ use wallet_types::{
 };
 
 use crate::{
+    Controller,
     helpers::get_referenced_token_ids_from_partially_signed_transaction,
     runtime_wallet::RuntimeWallet,
     tests::test_utils::{
-        assert_fees, create_block_scan_wallet, random_rpc_ft_info_with_id_ticker_decimals,
-        tx_with_outputs, wallet_new_dest, MNEMONIC,
+        MNEMONIC, assert_fees, create_block_scan_wallet,
+        random_rpc_ft_info_with_id_ticker_decimals, tx_with_outputs, wallet_new_dest,
     },
-    Controller,
 };
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), false)]
-#[trace]
 #[case(Seed::from_entropy(), true)]
+#[trace]
 #[tokio::test]
 async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let mut rng = make_seedable_rng(seed);
@@ -76,9 +75,9 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let token3_id = TokenId::random_using(&mut rng);
     let token4_id = TokenId::random_using(&mut rng);
 
-    let token1_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let token2_amount = Amount::from_atoms(rng.gen_range(1000..2000));
-    let block_reward_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let token1_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let token2_amount = Amount::from_atoms(rng.random_range(1000..2000));
+    let block_reward_amount = Amount::from_atoms(rng.random_range(1000..2000));
 
     let token1_tx_output_dest = wallet_new_dest(&mut wallet);
     let token1_tx_output = TxOutput::Transfer(
@@ -105,19 +104,21 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
     let last_height = 1;
 
     let token1_outpoint = UtxoOutPoint::new(tx_with_token1_id.into(), 0);
-    let token2_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+    let token2_outpoint = UtxoOutPoint::new(
+        Id::<Transaction>::random_using(&mut rng).into(),
+        rng.random(),
+    );
 
-    let token4_num_decimals = rng.gen_range(1..20);
+    let token4_num_decimals = rng.random_range(1..20);
     let token4_ticker = gen_random_alnum_string(&mut rng, 5, 10);
 
-    let created_order_coin_give_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let created_order_coin_give_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let create_order_output = TxOutput::CreateOrder(Box::new(OrderData::new(
         Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng)),
-        OutputValue::TokenV1(token3_id, Amount::from_atoms(rng.gen())),
+        OutputValue::TokenV1(token3_id, Amount::from_atoms(rng.random())),
         OutputValue::Coin(created_order_coin_give_amount),
     )));
-    let htlc_amount = Amount::from_atoms(rng.gen_range(1000..2000));
+    let htlc_amount = Amount::from_atoms(rng.random_range(1000..2000));
     let htlc_spend_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let htlc_refund_key = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     // Note: the wallet doesn't check that the secret and the secret hash are consistent.
@@ -127,21 +128,24 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
         Box::new(HashedTimelockContract {
             secret_hash: HtlcSecretHash::random_using(&mut rng),
             spend_key: htlc_spend_key.clone(),
-            refund_timelock: OutputTimeLock::ForBlockCount(rng.gen()),
+            refund_timelock: OutputTimeLock::ForBlockCount(rng.random()),
             refund_key: htlc_refund_key.clone(),
         }),
     );
-    let create_htlc_outpoint =
-        UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), rng.gen());
+    let create_htlc_outpoint = UtxoOutPoint::new(
+        Id::<Transaction>::random_using(&mut rng).into(),
+        rng.random(),
+    );
 
     let coins_outpoint = UtxoOutPoint::new(Id::<Transaction>::random_using(&mut rng).into(), 0);
-    let coins_outpoint_amount =
-        (created_order_coin_give_amount + Amount::from_atoms(rng.gen_range(1000..2000))).unwrap();
+    let coins_outpoint_amount = (created_order_coin_give_amount
+        + Amount::from_atoms(rng.random_range(1000..2000)))
+    .unwrap();
     let coins_utxo_dest = Destination::PublicKeyHash(PublicKeyHash::random_using(&mut rng));
     let coins_utxo = TxOutput::LockThenTransfer(
         OutputValue::Coin(coins_outpoint_amount),
         coins_utxo_dest.clone(),
-        OutputTimeLock::ForBlockCount(rng.gen()),
+        OutputTimeLock::ForBlockCount(rng.random()),
     );
 
     let node_mock = {
@@ -169,7 +173,7 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             best_block_height: BlockHeight::new(last_height),
             best_block_id: last_block.get_id().into(),
             best_block_timestamp: last_block.timestamp(),
-            median_time: BlockTimestamp::from_int_seconds(rng.gen()),
+            median_time: BlockTimestamp::from_int_seconds(rng.random()),
             is_initial_block_download: false,
         };
 

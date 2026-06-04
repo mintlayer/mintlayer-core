@@ -16,9 +16,9 @@
 use common::{
     address::RpcAddress,
     chain::{
-        tokens::{IsTokenUnfreezable, TokenId},
         AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
         OrderAccountCommand, OrderId,
+        tokens::{IsTokenUnfreezable, TokenId},
     },
     primitives::amount::RpcAmountOut,
 };

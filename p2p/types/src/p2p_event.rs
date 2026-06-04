@@ -15,21 +15,20 @@
 
 use std::sync::Arc;
 
-use serde::Serialize;
-
 use common::primitives::{semver::SemVer, user_agent::UserAgent};
+use networking::types::ConnectionDirection;
 
 use crate::{peer_id::PeerId, services::Services};
 
 pub type P2pEventHandler = Arc<dyn Fn(P2pEvent) + Send + Sync>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum P2pEvent {
     PeerConnected {
         id: PeerId,
         services: Services,
         address: String,
-        inbound: bool,
+        direction: ConnectionDirection,
         user_agent: UserAgent,
         software_version: SemVer,
     },

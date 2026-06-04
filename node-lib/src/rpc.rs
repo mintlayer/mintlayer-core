@@ -18,7 +18,7 @@
 use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
-use rpc::{description::Described, handle_result, RpcResult};
+use rpc::{RpcResult, description::Described, handle_result};
 use subsystem::ShutdownTrigger;
 use utils::{app_version_with_git_info, tokio_spawn};
 

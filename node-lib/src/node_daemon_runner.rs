@@ -15,19 +15,23 @@
 
 use anyhow::Result;
 
-use chainstate::{import_bootstrap_file, BootstrapError, ChainstateError};
+use chainstate::{BootstrapError, ChainstateError, import_bootstrap_file};
 use utils::{shallow_clone::ShallowClone as _, tokio_spawn};
 
 use crate::{
-    setup, NodeSetupResult, NodeType, Options, CLEAN_DATA_OPTION_LONG_NAME,
-    IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME,
+    CLEAN_DATA_OPTION_LONG_NAME, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, NodeSetupResult, NodeType,
+    Options, setup,
 };
 
 pub struct ExitCode(pub i32);
 
 pub async fn run_node_daemon() -> anyhow::Result<ExitCode> {
     let opts = Options::from_args(std::env::args_os(), NodeType::NodeDaemon);
-    let setup_result = setup(opts.with_resolved_command()).await?;
+    let setup_result = setup(
+        opts.with_resolved_command(),
+        logging::SIMPLE_INIT_DEFAULT_FILTER,
+    )
+    .await?;
     match setup_result {
         NodeSetupResult::RunNode(node) => {
             node.main().await;

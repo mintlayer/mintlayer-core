@@ -15,8 +15,8 @@
 
 use common::primitives::DecimalAmount;
 use iced::{
-    widget::{column, text_input, Text},
     Element,
+    widget::{Text, column, text_input},
 };
 
 use super::WalletMessage;

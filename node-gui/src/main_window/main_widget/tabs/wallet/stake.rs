@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element, Length,
+    widget::{Text, button, column, row, text_input, tooltip, tooltip::Position},
 };
 use iced_aw::{Grid, GridRow};
 
@@ -35,7 +35,7 @@ pub const MATURITY_PERIOD_TOOLTIP_TEXT: &str = "Any amount in a staking pool, wh
         For delegations, any amount taken out of a delegation will be locked for the maturity period. The locking is done automatically \
         at the consensus level.";
 
-const PLEDGE_AMOUNT_TOOLTIP_TEXT: &str ="The amount to be pledged to the pool. There is a minimum to be accepted. \
+const PLEDGE_AMOUNT_TOOLTIP_TEXT: &str = "The amount to be pledged to the pool. There is a minimum to be accepted. \
         This amount, and the rewards gained by the pool, CANNOT be taken out without decommissioning the pool. \
         If you'd like to withdraw rewards, consider creating a pool and delegating to yourself. \
         Delegators have no restrictions on withdrawals. \
@@ -57,14 +57,12 @@ const CREATE_STAKING_POOL_TOOLTIP_TEXT: &str = "A staking pool locks the pledge 
         which will earn you extra rewards for staking their coins. Once a pool is created, it will be assigned a pool id, which can be used \
         by other delegators to delegate to you.";
 
-const START_STAKING_TOOLTIP_TEXT: &str =
-    "If you have created pools, this will activate staking. The node must be kept running, in order to assist the network in creating blocks and earn rewards.";
+const START_STAKING_TOOLTIP_TEXT: &str = "If you have created pools, this will activate staking. The node must be kept running, in order to assist the network in creating blocks and earn rewards.";
 
 const DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT: &str = "The address of the pool that will be decommissioned. Make sure to stop staking before going through with this.";
 const DECOMMISSION_COINS_DESTINATION_ADDRESS_TOOLTIP_TEXT: &str =
     "The output address where the coins will be sent after decommissioning the pool.";
-const DECOMMISSION_POOL_TOOLTIP_TEXT: &str =
-    "This will decommission the staking pool and lock the pledge amount for the maturity period (see above to learn how long). Locking implies that the coins cannot be moved until the lock period is over. This is needed for blockchain security reasons. Please STOP STAKING before doing this, otherwise decommissioning won't work. DO NOT use an exchange address for this. Most exchanges cannot handle locked outputs.";
+const DECOMMISSION_POOL_TOOLTIP_TEXT: &str = "This will decommission the staking pool and lock the pledge amount for the maturity period (see above to learn how long). Locking implies that the coins cannot be moved until the lock period is over. This is needed for blockchain security reasons. Please STOP STAKING before doing this, otherwise decommissioning won't work. DO NOT use an exchange address for this. Most exchanges cannot handle locked outputs.";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_stake(

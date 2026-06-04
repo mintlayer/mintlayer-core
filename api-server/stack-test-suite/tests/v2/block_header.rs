@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::{api::json_helpers::block_header_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::block_header_to_json};
 use common::{
-    chain::{stakelock::StakePoolData, CoinUnit, PoolId},
-    primitives::{per_thousand::PerThousand, time::get_time, H256},
+    chain::{CoinUnit, PoolId, stakelock::StakePoolData},
+    primitives::{H256, per_thousand::PerThousand, time::get_time},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use std::sync::RwLock;
@@ -70,7 +70,8 @@ async fn ok(#[case] seed: Seed) {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
 
-            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+            let initial_pledge =
+                40_000 * CoinUnit::ATOMS_PER_COIN + rng.random_range(10000..100000);
             let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let staking_key = Destination::PublicKey(pk.clone());
@@ -80,7 +81,7 @@ async fn ok(#[case] seed: Seed) {
                 vrf_pk,
                 staking_key.clone(),
                 PerThousand::new_from_rng(&mut rng),
-                Amount::from_atoms(rng.gen_range(0..100)),
+                Amount::from_atoms(rng.random_range(0..100)),
             );
             let pool_id = PoolId::new(H256::random_using(&mut rng));
 

@@ -38,13 +38,13 @@ use tokio::sync::mpsc;
 use chainstate::ban_score::BanScore;
 use common::{
     chain::ChainConfig,
-    primitives::time::{duration_to_int, Time},
+    primitives::time::{Time, duration_to_int},
     time_getter::TimeGetter,
 };
 use logging::log;
 use networking::types::ConnectionDirection;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
-use randomness::{seq::IteratorRandom, BoxedRngMutexWrapper, Rng, RngCore};
+use p2p_types::{IsGlobalIp, bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::{BoxedRngMutexWrapper, Rng, RngExt as _, seq::IteratorRandom};
 use utils::{
     bloom_filters::rolling_bloom_filter::RollingBloomFilter, debug_panic_or_log, ensure,
     set_flag::SetFlag,
@@ -52,6 +52,7 @@ use utils::{
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    PeerManagerEvent,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
@@ -61,11 +62,11 @@ use crate::{
         PingResponse, WillDisconnectMessage,
     },
     net::{
-        types::{
-            services::{Service, Services},
-            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
-        },
         ConnectivityService, NetworkingService,
+        types::{
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, PeerManagerMessageExtTag, PeerRole,
+            services::{Service, Services},
+        },
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::sync_status::PeerBlockSyncStatus,
@@ -74,7 +75,6 @@ use crate::{
         peer_id::PeerId,
     },
     utils::{oneshot_nofail, rate_limiter::RateLimiter},
-    PeerManagerEvent,
 };
 
 use self::{
@@ -210,7 +210,7 @@ where
     dns_seed: Box<dyn DnsSeed>,
 
     /// An RNG used to generate various delays when dealing with peers.
-    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
+    rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 
     /// The time when PeerManager was initialized.
     init_time: Time,
@@ -249,7 +249,7 @@ where
         peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
-        rng: impl RngCore + Send + 'static,
+        rng: impl Rng + Send + 'static,
     ) -> crate::Result<Self> {
         Self::new_generic(
             networking_enabled,
@@ -276,7 +276,7 @@ where
         peerdb_storage: S,
         observer: Option<Box<dyn PeerManagerObserver + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
-        mut rng: impl RngCore + Send + 'static,
+        mut rng: impl Rng + Send + 'static,
     ) -> crate::Result<Self> {
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
@@ -320,15 +320,15 @@ where
     }
 
     fn lock_rng(
-        rng: &std::sync::Mutex<Box<dyn RngCore + Send>>,
-    ) -> std::sync::MutexGuard<'_, Box<dyn RngCore + Send>> {
+        rng: &std::sync::Mutex<Box<dyn Rng + Send>>,
+    ) -> std::sync::MutexGuard<'_, Box<dyn Rng + Send>> {
         rng.lock().expect("poisoned mutex")
     }
 
     fn choose_next_feeler_connection_time(
         p2p_config: &P2pConfig,
         now: Time,
-        rng: &mut impl RngCore,
+        rng: &mut impl Rng,
     ) -> Time {
         let delay = p2p_config
             .peer_manager_config
@@ -732,8 +732,12 @@ where
         };
 
         let peer_role: PeerRole = (&outbound_connect_type).into();
-        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
-            address, local_services_override, peer_role);
+        log::debug!(
+            "Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
+            address,
+            local_services_override,
+            peer_role
+        );
         let res = self.try_connect(address, local_services_override, peer_role);
 
         match res {
@@ -863,16 +867,16 @@ where
             P2pError::ConnectionValidationFailed(ConnectionValidationError::NoCommonServices),
         );
 
-        if let Some(min_version) = self.p2p_config.peer_manager_config.min_peer_software_version {
-            if info.user_agent == self.p2p_config.user_agent && info.software_version < min_version
-            {
-                return Err(P2pError::ConnectionValidationFailed(
-                    ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
-                        min_version,
-                        actual_version: info.software_version,
-                    },
-                ));
-            }
+        if let Some(min_version) = self.p2p_config.peer_manager_config.min_peer_software_version
+            && info.user_agent == self.p2p_config.user_agent
+            && info.software_version < min_version
+        {
+            return Err(P2pError::ConnectionValidationFailed(
+                ConnectionValidationError::MinPeerSoftwareVersionNotSatisfied {
+                    min_version,
+                    actual_version: info.software_version,
+                },
+            ));
         }
 
         match peer_role {
@@ -886,14 +890,18 @@ where
                     >= *self.p2p_config.peer_manager_config.max_inbound_connections
                 {
                     if self.peerdb.is_address_discouraged(&address.as_bannable()) {
-                        log::info!("Rejecting inbound connection from a discouraged address - too many peers");
+                        log::info!(
+                            "Rejecting inbound connection from a discouraged address - too many peers"
+                        );
                         return Err(P2pError::ConnectionValidationFailed(
                             ConnectionValidationError::TooManyInboundPeersAndThisOneIsDiscouraged,
                         ));
                     }
 
                     if !self.try_evict_random_inbound_connection() {
-                        log::info!("Rejecting inbound connection - too many peers and none of them can be evicted");
+                        log::info!(
+                            "Rejecting inbound connection - too many peers and none of them can be evicted"
+                        );
                         return Err(P2pError::ConnectionValidationFailed(
                             ConnectionValidationError::TooManyInboundPeersAndCannotEvictAnyone,
                         ));
@@ -1642,7 +1650,7 @@ where
             self.peerdb.peer_discovered(address);
 
             if !self.peerdb.is_address_banned_or_discouraged(&address.as_bannable()) {
-                let peer_ids = self.subscribed_to_peer_addresses.iter().cloned().choose_multiple(
+                let peer_ids = self.subscribed_to_peer_addresses.iter().cloned().sample(
                     Self::lock_rng(&self.rng).deref_mut(),
                     PEER_ADDRESS_RESEND_COUNT,
                 );
@@ -1685,7 +1693,7 @@ where
                                 None
                             }
                         })
-                        .choose_multiple(&mut BoxedRngMutexWrapper::new(&self.rng), max_addr_count)
+                        .sample(&mut BoxedRngMutexWrapper::new(&self.rng), max_addr_count)
                 },
                 &mut BoxedRngMutexWrapper::new(&self.rng),
             )
@@ -1840,7 +1848,9 @@ where
                 new_status: status,
             } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("Block sync status update received from peer {peer_id}, new status is {status:?}");
+                    log::debug!(
+                        "Block sync status update received from peer {peer_id}, new status is {status:?}"
+                    );
                     peer.block_sync_status = status;
                 }
             }
@@ -2146,7 +2156,7 @@ where
                     }
                 }
                 None => {
-                    let nonce = Self::lock_rng(&self.rng).gen();
+                    let nonce = Self::lock_rng(&self.rng).random();
                     Self::send_peer_message(
                         &mut self.peer_connectivity_handle,
                         *peer_id,
@@ -2343,6 +2353,7 @@ where
             log::warn!("Starting with networking disabled");
         }
 
+        // TODO: switch to using MonotonicTimeGetter for calculating delays.
         let mut last_time = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
 

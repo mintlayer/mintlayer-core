@@ -94,7 +94,7 @@ async fn height_n(#[case] seed: Seed) {
     let task = tokio::spawn({
         async move {
             let mut rng = make_seedable_rng(seed);
-            let n_blocks = rng.gen_range(1..100);
+            let n_blocks = rng.random_range(1..100);
 
             let web_server_state = {
                 let chain_config = create_unit_test_config();

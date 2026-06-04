@@ -13,19 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::output_value::OutputValue;
+use chainstate_test_framework::helpers::make_simple_coin_tx;
 use common::chain::UtxoOutPoint;
+use common::chain::output_value::OutputValue;
 use common::primitives::H256;
 
 // Re-export various testing utils from other crates
 pub use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, CryptoRng, Rng, Seed},
+    random::{CryptoRng, RngExt as _, Seed, make_seedable_rng},
 };
 
 pub use memory_usage_estimator::StoreMemoryUsageEstimator;
@@ -44,6 +45,8 @@ pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
 pub fn create_mempool_config() -> MempoolConfig {
     MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     }
 }
 
@@ -218,21 +221,13 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
     val.coin_amount().unwrap_or(Amount::ZERO)
 }
 
+// TODO: remove it, call make_simple_coin_tx directly
 pub fn make_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     ins: &[(OutPointSourceId, u32)],
     outs: &[u128],
 ) -> SignedTransaction {
-    let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
-        b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(rng))
-    });
-    let builder = outs.iter().fold(builder, |b, a| {
-        b.add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(*a)),
-            Destination::AnyoneCanSpend,
-        ))
-    });
-    builder.build()
+    make_simple_coin_tx(rng, ins.iter().cloned(), outs.iter().cloned())
 }
 
 /// Generate a valid transaction graph.
@@ -241,7 +236,7 @@ pub fn make_tx(
 /// * The transaction fees may drop below minimum threshold.
 /// * In extreme, 0-value outputs may be generated.
 pub fn generate_transaction_graph(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     time: Time,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
     let tf = TestFramework::builder(rng).build();
@@ -251,8 +246,8 @@ pub fn generate_transaction_graph(
     )];
 
     std::iter::from_fn(move || {
-        let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));
-        let n_outputs = rng.gen_range(1..=3);
+        let n_inputs = rng.random_range(1..=std::cmp::min(3, utxos.len()));
+        let n_outputs = rng.random_range(1..=3);
 
         let estimated_fee = get_relay_fee_from_tx_size(estimate_tx_size(n_inputs, n_outputs));
 
@@ -266,7 +261,7 @@ pub fn generate_transaction_graph(
         let mut input_count = 0;
         while input_count < n_inputs || total < estimated_fee.into_atoms() + min_valid_total_amount
         {
-            let (outpt, amt) = utxos.swap_remove(rng.gen_range(0..utxos.len()));
+            let (outpt, amt) = utxos.swap_remove(rng.random_range(0..utxos.len()));
             total += amt;
             builder = builder.add_input(outpt, empty_witness(rng));
             input_count += 1;
@@ -276,7 +271,7 @@ pub fn generate_transaction_graph(
             if total < min_valid_total_amount {
                 break;
             }
-            let amt = rng.gen_range((total / 2)..(95 * total / 100));
+            let amt = rng.random_range((total / 2)..(95 * total / 100));
             total -= amt;
             builder = builder.add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(amt)),
@@ -324,7 +319,7 @@ pub fn setup() -> TxPool<StoreMemoryUsageEstimator> {
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        create_mempool_config().into(),
+        create_mempool_config(),
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -335,11 +330,13 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: fee_rate.into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
     };
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -361,7 +358,7 @@ pub fn setup_with_chainstate_generic(
     let chainstate_handle = start_chainstate(chainstate);
     TxPool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_handle,
         clock,
         StoreMemoryUsageEstimator,
@@ -468,4 +465,35 @@ pub async fn tx_spend_several_inputs<M>(
     let tx = tx?;
     SignedTransaction::new(tx, witnesses.to_vec())
         .map_err(|_| anyhow::Error::msg("invalid witness count"))
+}
+
+/// Assert that the specified txs form a cluster
+pub fn assert_cluster(store: &MempoolStore, tx_ids: &BTreeSet<Id<Transaction>>) {
+    for tx_id in tx_ids {
+        let cluster = store.collect_cluster(tx_id).unwrap();
+        let cluster = cluster.iter().copied().collect::<BTreeSet<_>>();
+        assert_eq!(&cluster, tx_ids, "tx_id = {tx_id:x}");
+    }
+}
+
+/// Assert that the specified tx has the specified ancestors
+pub fn assert_ancestors(
+    store: &MempoolStore,
+    tx_id: &Id<Transaction>,
+    ancestor_tx_ids: &BTreeSet<Id<Transaction>>,
+) {
+    let ancestors = store.collect_ancestors(tx_id).unwrap();
+    let ancestors = ancestors.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(&ancestors, ancestor_tx_ids);
+}
+
+/// Assert that the specified tx has the specified descendants
+pub fn assert_descendants(
+    store: &MempoolStore,
+    tx_id: &Id<Transaction>,
+    descendant_tx_ids: &BTreeSet<Id<Transaction>>,
+) {
+    let descendants = store.collect_descendants(tx_id).unwrap();
+    let descendants = descendants.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(&descendants, descendant_tx_ids);
 }

@@ -17,15 +17,14 @@ use std::collections::BTreeMap;
 
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     chain::{
-        make_token_id,
+        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint, make_token_id,
         output_value::OutputValue,
         tokens::{NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
-        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -139,8 +138,8 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
             .add_output(TxOutput::Transfer(
                 TokenIssuanceV0 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
-                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                    number_of_decimals: rng.gen_range(1..18),
+                    amount_to_issue: Amount::from_atoms(rng.random_range(1..u128::MAX)),
+                    number_of_decimals: rng.random_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),

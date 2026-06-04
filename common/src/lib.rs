@@ -41,10 +41,10 @@ mod tests {
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
-            tokens::TokenId, Block, DelegationId, Destination, GenBlock, OrderId, PoolId,
-            Transaction,
+            Block, DelegationId, Destination, GenBlock, OrderId, PoolId, Transaction,
+            tokens::TokenId,
         },
-        primitives::{Id, H256},
+        primitives::{H256, Id},
     };
 
     #[ctor::ctor]

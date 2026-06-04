@@ -7,9 +7,10 @@ rust-version.workspace = true
 
 [dependencies]
 utils = { path = "../../utils" }
-wallet-cli-lib = { path = "../wallet-cli-lib" }
+wallet-cli-lib = { path = "../wallet-cli-lib", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 tokio = { workspace = true, default-features = false, features = [
   "io-util",
   "macros",
@@ -21,4 +22,4 @@ tokio = { workspace = true, default-features = false, features = [
 [features]
 trezor = ["wallet-cli-lib/trezor"]
 ledger = ["wallet-cli-lib/ledger"]
-default = ["trezor"]
+default = ["trezor", "ledger"]

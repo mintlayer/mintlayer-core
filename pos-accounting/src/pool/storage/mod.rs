@@ -16,14 +16,14 @@
 use std::{collections::BTreeMap, ops::Neg};
 
 use accounting::{
-    combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataCollection,
-    DeltaDataUndoCollection,
+    DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection, combine_amount_delta,
+    combine_data_with_delta,
 };
-use common::primitives::{amount::SignedAmount, Amount};
+use common::primitives::{Amount, amount::SignedAmount};
 
 use crate::{
-    error::Error, pool::delta::data::PoSAccountingDeltaData, storage::PoSAccountingStorageWrite,
-    DeltaMergeUndo, StorageTag,
+    DeltaMergeUndo, StorageTag, error::Error, pool::delta::data::PoSAccountingDeltaData,
+    storage::PoSAccountingStorageWrite,
 };
 
 pub mod view_impls;

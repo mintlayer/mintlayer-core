@@ -21,32 +21,31 @@ use chainstate::{BlockSource, ChainstateConfig, ChainstateHandle, Locator};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{self, block::timestamp::BlockTimestamp},
-    primitives::{user_agent::mintlayer_core_user_agent, BlockDistance, Idable},
+    primitives::{BlockDistance, Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
-use p2p_test_utils::{create_n_blocks, run_with_timeout, MEDIUM_TIMEOUT};
+use p2p_test_utils::{MEDIUM_TIMEOUT, create_n_blocks, run_with_timeout};
 use p2p_types::PeerId;
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
-    mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{Seed, make_seedable_rng},
 };
 use utils::atomics::SeqCstAtomicU64;
 
 use crate::{
+    PeerManagerEvent,
     config::{BackendTimeoutsConfig, P2pConfig},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     protocol::ProtocolConfig,
     sync::tests::helpers::{
-        make_new_block, make_new_blocks, make_new_top_blocks,
+        TestNode, make_new_block, make_new_blocks, make_new_top_blocks,
         test_node_group::{
             BlockSyncMessageWithNodeIdx, MsgAction, PeerManagerEventWithNodeIdx, TestNodeGroup,
         },
-        TestNode,
     },
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
-    PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -128,7 +127,7 @@ async fn basic(#[case] seed: Seed) {
 
         for _ in 0..15 {
             let mut top_block_id = None;
-            for _ in 0..rng.gen_range(1..2) {
+            for _ in 0..rng.random_range(1..2) {
                 top_block_id = Some(
                     make_new_top_blocks(
                         &chainstate1,
@@ -332,7 +331,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
-        let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);
+        let initial_block_count = rng.random_range(1..=MAX_REQUEST_BLOCKS_COUNT);
 
         let initial_blocks = make_new_blocks(
             &chain_config,
@@ -368,16 +367,16 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
         nodes
             .exchange_block_sync_messages_while(&mut delayed_msgs, async |_, delayed_msgs, msg| {
-                if msg.sender_node_idx == 1 {
-                    if let BlockSyncMessage::BlockListRequest(req) = &msg.message {
-                        assert_eq!(req.block_ids().len(), initial_block_count);
-                        log::debug!(
-                            "Got block list request from node idx {}, delaying it",
-                            msg.sender_node_idx
-                        );
-                        delayed_msgs.push(msg.clone());
-                        return MsgAction::Break;
-                    }
+                if msg.sender_node_idx == 1
+                    && let BlockSyncMessage::BlockListRequest(req) = &msg.message
+                {
+                    assert_eq!(req.block_ids().len(), initial_block_count);
+                    log::debug!(
+                        "Got block list request from node idx {}, delaying it",
+                        msg.sender_node_idx
+                    );
+                    delayed_msgs.push(msg.clone());
+                    return MsgAction::Break;
                 }
 
                 MsgAction::SendAndContinue
@@ -387,7 +386,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         nodes.delay_block_sync_messages_from_node(1, true);
 
         let new_block_count =
-            rng.gen_range(MAX_REQUEST_BLOCKS_COUNT..=MAX_REQUEST_BLOCKS_COUNT * 4);
+            rng.random_range(MAX_REQUEST_BLOCKS_COUNT..=MAX_REQUEST_BLOCKS_COUNT * 4);
 
         log::debug!("Starting to produce new blocks");
         let mut best_block_id = None;
@@ -665,7 +664,8 @@ async fn process_block_interference1(#[case] seed: Seed) {
                                 ))
                                 .await;
 
-                            tokio::time::sleep(Duration::from_millis(rng.gen_range(1..10))).await;
+                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10)))
+                                .await;
                         }
                     };
 
@@ -792,7 +792,8 @@ async fn process_block_interference2(#[case] seed: Seed) {
                                 ))
                                 .await;
 
-                            tokio::time::sleep(Duration::from_millis(rng.gen_range(1..10))).await;
+                            tokio::time::sleep(Duration::from_millis(rng.random_range(1..10)))
+                                .await;
                         }
                     };
 
@@ -881,9 +882,9 @@ async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed)
         // peer-specific blocks will be bigger than 16; this means the first locators that the
         // peers will send each other won't be able to locate any blocks.
         let msg_header_count_limit: usize = 5;
-        let common_blocks_count = rng.gen_range(5..8);
-        let node1_extra_blocks_count = rng.gen_range(18..22);
-        let node2_extra_blocks_count = rng.gen_range(18..22);
+        let common_blocks_count = rng.random_range(5..8);
+        let node1_extra_blocks_count = rng.random_range(18..22);
+        let node2_extra_blocks_count = rng.random_range(18..22);
 
         log::debug!(
             "common blocks: {}, node1 extra blocks: {}, node2 extra blocks: {}",
@@ -903,7 +904,7 @@ async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed)
         );
         let genesis_ts_secs = chain_config.genesis_block().timestamp().as_int_seconds();
         let cur_time = Arc::new(SeqCstAtomicU64::new(
-            rng.gen_range(genesis_ts_secs..genesis_ts_secs * 2),
+            rng.random_range(genesis_ts_secs..genesis_ts_secs * 2),
         ));
         let time_getter = mocked_time_getter_seconds(cur_time);
 

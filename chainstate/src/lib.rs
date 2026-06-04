@@ -37,13 +37,13 @@ use crate::{detail::Chainstate, interface::chainstate_interface_impl};
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
-        ban_score, block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
-        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps, BlockError,
-        BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource, ChainInfo,
-        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError,
-        InitializationError, Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
-        StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
-        TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
+        BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
+        ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
+        IOPolicyError, InitializationError, Locator, MEDIAN_TIME_SPAN, NonZeroPoolBalances,
+        OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError,
+        TokensError, TransactionVerifierStorageError, ban_score,
+        block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
+        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
     },
 };
 pub use chainstate_types::{BlockIndex, GenBlockIndex, GenBlockIndexRef, PropertyQueryError};

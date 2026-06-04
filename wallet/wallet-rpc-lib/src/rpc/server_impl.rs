@@ -19,33 +19,34 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
         block::timestamp::BlockTimestamp,
         output_values_holder::collect_token_v1_ids_from_output_values_holders,
         tokens::{IsTokenUnfreezable, RPCTokenInfo, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
     },
-    primitives::{time::Time, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id, Idable, time::Time},
 };
 use crypto::{key::PrivateKey, vrf::VRFPublicKey};
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
+    ConnectedPeer, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
     types::{
         BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase,
         WalletCreationOptions, WalletInfo,
     },
-    ConnectedPeer, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
-    partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
-    signature_status::SignatureStatus, with_locked::WithLocked, ImportOrCreate,
+    ImportOrCreate, partially_signed_transaction::PartiallySignedTransaction,
+    scan_blockchain::ScanBlockchain, signature_status::SignatureStatus, with_locked::WithLocked,
 };
 
 use crate::{
+    RpcError,
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo,
@@ -58,7 +59,6 @@ use crate::{
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
         TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
-    RpcError,
 };
 
 use super::types::{

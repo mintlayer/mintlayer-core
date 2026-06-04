@@ -29,8 +29,8 @@ use utils::set_flag::SetFlag;
 
 // Some useful reexports
 pub use chainstate::{
-    chainstate_interface::ChainstateInterface, ChainstateConfig, ChainstateError as Error,
-    ChainstateSubsystem, DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateError as Error, ChainstateSubsystem,
+    DefaultTransactionVerificationStrategy, chainstate_interface::ChainstateInterface,
 };
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
@@ -111,7 +111,7 @@ fn make_chainstate_impl(
 fn create_lmdb_storage(
     datadir: &std::path::Path,
     chain_config: &ChainConfig,
-) -> Result<impl BlockchainStorage, Error> {
+) -> Result<impl BlockchainStorage + use<>, Error> {
     let lmdb_resize_callback = MapResizeCallback::new(Box::new(|resize_info| {
         logging::log::info!("Lmdb resize happened: {:?}", resize_info)
     }));
@@ -126,14 +126,16 @@ fn create_lmdb_storage(
     create_storage(backend, chain_config)
 }
 
-fn create_inmemory_storage(chain_config: &ChainConfig) -> Result<impl BlockchainStorage, Error> {
+fn create_inmemory_storage(
+    chain_config: &ChainConfig,
+) -> Result<impl BlockchainStorage + use<>, Error> {
     create_storage(storage_inmemory::InMemory::new(), chain_config)
 }
 
-fn create_storage(
-    storage_backend: impl BlockchainStorageBackend + 'static,
+fn create_storage<B: BlockchainStorageBackend + 'static>(
+    storage_backend: B,
     chain_config: &ChainConfig,
-) -> Result<impl BlockchainStorage, Error> {
+) -> Result<impl BlockchainStorage + use<B>, Error> {
     let storage = chainstate_storage::Store::new(storage_backend, chain_config)
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 

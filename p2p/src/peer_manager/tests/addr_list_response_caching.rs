@@ -27,30 +27,28 @@ use networking::{
 };
 use p2p_test_utils::expect_recv;
 use p2p_types::peer_address::PeerAddress;
-use randomness::{Rng, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::{
-    assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
     config::{NodeType, P2pConfig},
     message::AddrListResponse,
     net::{
+        ConnectivityService, NetworkingService,
         default_backend::{
-            types::{Command, Message},
             DefaultNetworkingService,
+            types::{Command, Message},
         },
         types::PeerInfo,
-        ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        addr_list_response_cache,
+        PeerManager, addr_list_response_cache,
         peerdb::{
             address_tables::table::test_utils::make_non_colliding_addresses, storage::PeerDbStorage,
         },
-        PeerManager,
     },
     protocol::ProtocolConfig,
     test_helpers::TEST_PROTOCOL_VERSION,
@@ -82,7 +80,7 @@ async fn basic_test(#[case] seed: Seed) {
         &chain_config,
         &p2p_config,
         &time_getter,
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     );
 
     let peer1_address = TestAddressMaker::new_random_address(&mut rng);
@@ -275,12 +273,12 @@ fn setup_peer_mgr(
     chain_config: &Arc<ChainConfig>,
     p2p_config: &Arc<P2pConfig>,
     time_getter: &BasicTestTimeGetter,
-    mut rng: impl RngCore + Send + 'static,
+    mut rng: impl Rng + Send + 'static,
 ) -> (
     PeerManager<TestNetworkingService, impl PeerDbStorage>,
     UnboundedReceiver<Command>,
 ) {
-    let mut another_rng = make_seedable_rng(rng.gen());
+    let mut another_rng = make_seedable_rng(rng.random());
 
     let (mut peer_mgr, _conn_event_sender, _peer_mgr_event_sender, cmd_receiver, _) =
         make_standalone_peer_manager(

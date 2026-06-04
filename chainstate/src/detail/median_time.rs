@@ -17,7 +17,7 @@ use chainstate_types::BlockIndexHandle;
 use itertools::Itertools;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    chain::{GenBlock, block::timestamp::BlockTimestamp},
     primitives::Id,
 };
 
@@ -46,8 +46,8 @@ pub fn calculate_median_time_past_from_blocktimestamps<I: Iterator<Item = BlockT
 #[cfg(test)]
 mod test {
     use crate::{
-        detail::tx_verification_strategy::DefaultTransactionVerificationStrategy, BlockSource,
-        Chainstate, ChainstateConfig,
+        BlockSource, Chainstate, ChainstateConfig,
+        detail::tx_verification_strategy::DefaultTransactionVerificationStrategy,
     };
     use test_utils::mock_time_getter::mocked_time_getter_seconds;
 
@@ -56,8 +56,8 @@ mod test {
     use common::{
         chain::{
             block::{
-                timestamp::{BlockTimestamp, BlockTimestampInternalType},
                 Block, BlockReward, ConsensusData,
+                timestamp::{BlockTimestamp, BlockTimestampInternalType},
             },
             config::create_unit_test_config,
         },

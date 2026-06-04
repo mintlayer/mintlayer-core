@@ -18,11 +18,11 @@ mod write_impls;
 
 use common::primitives::{BlockHeight, Id};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
-use storage::{schema, MakeMapRef};
+use storage::{MakeMapRef, schema};
 
 use crate::{
-    schema::{self as db, Schema},
     ChainstateStorageVersion,
+    schema::{self as db, Schema},
 };
 
 mod well_known {

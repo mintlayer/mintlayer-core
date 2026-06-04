@@ -20,7 +20,7 @@
 //! The framework is taken from Bitcoin and is written in Python. It is ultimately responsible for
 //! running the tests. All command line arguments are forwarded to it.
 
-use libtest_mimic::{run, Arguments as HarnessArgs, Failed, Trial};
+use libtest_mimic::{Arguments as HarnessArgs, Failed, Trial, run};
 use std::env::consts::EXE_SUFFIX;
 use std::fs;
 use std::path::PathBuf;

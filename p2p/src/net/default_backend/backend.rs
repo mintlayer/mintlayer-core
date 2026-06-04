@@ -19,12 +19,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
+use futures::{FutureExt, future::BoxFuture, never::Never, stream::FuturesUnordered};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
-use tokio_stream::{wrappers::ReceiverStream, StreamExt, StreamMap};
+use tokio_stream::{StreamExt, StreamMap, wrappers::ReceiverStream};
 
 use common::{
     chain::ChainConfig,
@@ -32,15 +32,19 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use networking::transport::{ConnectedSocketInfo, TransportListener, TransportSocket};
+use networking::{
+    transport::{ConnectedSocketInfo, TransportListener, TransportSocket},
+    types::ConnectionDirection,
+};
 use p2p_types::socket_address::SocketAddress;
-use randomness::{make_pseudo_rng, Rng};
+use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
     shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
 };
 
 use crate::{
+    P2pEvent, P2pEventHandler,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError, PeerError},
@@ -50,17 +54,16 @@ use crate::{
             types::{BackendEvent, BackendObserver, Command, PeerEvent},
         },
         types::{
-            services::Services, ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent,
+            ConnectivityEvent, PeerInfo, PeerManagerMessageExt, SyncingEvent, services::Services,
         },
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
-    P2pEvent, P2pEventHandler,
 };
 
 use super::{
     peer::ConnectionInfo,
-    types::{peer_event, HandshakeNonce, Message},
+    types::{HandshakeNonce, Message, peer_event},
 };
 
 /// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
@@ -90,7 +93,7 @@ struct PeerContext {
 
     peer_address: SocketAddress,
 
-    inbound: bool,
+    direction: ConnectionDirection,
 
     protocol_version: SupportedProtocolVersion,
 
@@ -227,7 +230,7 @@ where
     ) -> crate::Result<()> {
         match connection_res {
             Ok(socket) => {
-                let handshake_nonce = make_pseudo_rng().gen();
+                let handshake_nonce = make_pseudo_rng().random();
 
                 self.create_pending_peer(
                     socket,
@@ -277,6 +280,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services: peer.common_services,
+                direction: peer.direction,
                 protocol_version: peer.protocol_version,
                 block_sync_msg_receiver,
                 transaction_sync_msg_receiver,
@@ -287,7 +291,7 @@ where
             id: peer_id,
             services: peer.common_services,
             address: peer.peer_address.to_string(),
-            inbound: peer.inbound,
+            direction: peer.direction,
             user_agent: peer.user_agent.clone(),
             software_version: peer.software_version,
         });
@@ -474,7 +478,6 @@ where
 
         let common_services = peer_info.common_services;
         let protocol_version = peer_info.protocol_version;
-        let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
 
@@ -505,7 +508,7 @@ where
             PeerContext {
                 handle,
                 peer_address,
-                inbound,
+                direction: connection_info.as_direction(),
                 protocol_version,
                 user_agent,
                 software_version,

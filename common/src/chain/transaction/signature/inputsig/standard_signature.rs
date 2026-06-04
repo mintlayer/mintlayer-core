@@ -20,28 +20,28 @@ use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{
+        ChainConfig, Destination, Transaction,
         signature::{
+            DestinationSigError, Signable,
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError, Signable,
         },
-        ChainConfig, Destination, Transaction,
     },
     primitives::H256,
 };
 
 use super::{
     authorize_pubkey_spend::{
-        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        AuthorizedPublicKeySpend, sign_public_key_spending, verify_public_key_spending,
     },
     authorize_pubkeyhash_spend::{
-        sign_public_key_hash_spending, verify_public_key_hash_spending,
-        AuthorizedPublicKeyHashSpend,
+        AuthorizedPublicKeyHashSpend, sign_public_key_hash_spending,
+        verify_public_key_hash_spending,
     },
     classical_multisig::{
         authorize_classical_multisig::{
-            verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+            AuthorizedClassicalMultisigSpend, verify_classical_multisig_spending,
         },
         multisig_partial_signature::PartiallySignedMultisigChallenge,
     },
@@ -159,10 +159,10 @@ impl StandardInputSignature {
         match verification_result {
             SigsVerifyResult::CompleteAndValid => (),
             SigsVerifyResult::Incomplete => {
-                return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization)
+                return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization);
             }
             SigsVerifyResult::Invalid => {
-                return Err(DestinationSigError::InvalidClassicalMultisigAuthorization)
+                return Err(DestinationSigError::InvalidClassicalMultisigAuthorization);
             }
         }
 
@@ -224,12 +224,12 @@ mod test {
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
+            Destination,
             config::create_mainnet,
-            signature::{sighash::signature_hash, DestinationSigError},
+            signature::{DestinationSigError, sighash::signature_hash},
             transaction::signature::tests::utils::{
                 generate_input_commitments, generate_unsigned_tx, sig_hash_types,
             },
-            Destination,
         },
     };
 

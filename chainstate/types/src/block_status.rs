@@ -176,7 +176,7 @@ const FAIL_BITS_RANGE: Range<BlockStatusBitArea> = Range::<BlockStatusBitArea> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     #[test]
     fn test_bit_range_of() {
@@ -279,10 +279,12 @@ mod tests {
         );
 
         // Set a value that is too big for the range.
-        assert!(catch_unwind(AssertUnwindSafe(
-            || status.set_bits(0..25, 0b11_11111111_11111111_11111111)
-        ))
-        .is_err());
+        assert!(
+            catch_unwind(AssertUnwindSafe(
+                || status.set_bits(0..25, 0b11_11111111_11111111_11111111)
+            ))
+            .is_err()
+        );
         assert_eq!(
             status.0,
             0b11110000_11001100_10101010_11100111_10101010_10101111_11111111_11111111
@@ -359,39 +361,49 @@ mod tests {
     #[allow(clippy::unusual_byte_groupings)]
     #[test]
     fn test_set_field_panic_if_value_too_big() {
-        assert!(catch_unwind(|| {
-            let mut status = BlockStatus(0);
-            status.set_field(BlockStatusBitArea::ValidationStage, 0b1_00000000);
-        })
-        .is_err());
+        assert!(
+            catch_unwind(|| {
+                let mut status = BlockStatus(0);
+                status.set_field(BlockStatusBitArea::ValidationStage, 0b1_00000000);
+            })
+            .is_err()
+        );
 
-        assert!(catch_unwind(|| {
-            let mut status = BlockStatus(0);
-            status.set_field(BlockStatusBitArea::ValidationFailedBit, 2);
-        })
-        .is_err());
+        assert!(
+            catch_unwind(|| {
+                let mut status = BlockStatus(0);
+                status.set_field(BlockStatusBitArea::ValidationFailedBit, 2);
+            })
+            .is_err()
+        );
 
-        assert!(catch_unwind(|| {
-            let mut status = BlockStatus(0);
-            status.set_field(BlockStatusBitArea::InvalidParentBit, 2);
-        })
-        .is_err());
+        assert!(
+            catch_unwind(|| {
+                let mut status = BlockStatus(0);
+                status.set_field(BlockStatusBitArea::InvalidParentBit, 2);
+            })
+            .is_err()
+        );
 
-        assert!(catch_unwind(|| {
-            let mut status = BlockStatus(0);
-            status.set_field(BlockStatusBitArea::ExplicitlyInvalidatedBit, 2);
-        })
-        .is_err());
+        assert!(
+            catch_unwind(|| {
+                let mut status = BlockStatus(0);
+                status.set_field(BlockStatusBitArea::ExplicitlyInvalidatedBit, 2);
+            })
+            .is_err()
+        );
 
-        assert!(catch_unwind(|| {
-            let mut status = BlockStatus(0);
-            status.set_field(
-                BlockStatusBitArea::ReservedArea,
-                // This is the value from test_set_field but with an additional 1 an the end.
-                0b10101010_10101010_10101010_10101010_10101010_10101010_101011,
-            );
-        })
-        .is_err());
+        assert!(
+            catch_unwind(|| {
+                let mut status = BlockStatus(0);
+                status.set_field(
+                    BlockStatusBitArea::ReservedArea,
+                    // This is the value from test_set_field but with an additional 1 an the end.
+                    0b10101010_10101010_10101010_10101010_10101010_10101010_101011,
+                );
+            })
+            .is_err()
+        );
     }
 
     #[test]

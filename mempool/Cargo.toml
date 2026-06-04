@@ -30,6 +30,7 @@ utxo = { path = "../utxo" }
 anyhow.workspace = true
 async-trait.workspace = true
 byte-unit.workspace = true
+hashbrown.workspace = true
 hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 parking_lot.workspace = true
@@ -47,5 +48,6 @@ crypto = { path = "../crypto" }
 test-utils = { path = "../test-utils" }
 
 ctor.workspace = true
+itertools.workspace = true
 mockall.workspace = true
 rstest.workspace = true

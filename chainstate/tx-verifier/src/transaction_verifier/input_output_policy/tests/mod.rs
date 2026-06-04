@@ -17,15 +17,15 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         Block, DelegationId, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        block::{BlockReward, ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
     },
-    primitives::{Compact, Id, H256},
+    primitives::{Compact, H256, Id},
 };
-use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey, VRFPublicKey};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey, transcript::no_rng::VRFTranscript};
 use itertools::Itertools;
-use randomness::{seq::IteratorRandom, Rng};
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::{Rng, seq::IteratorRandom};
+use test_utils::random::{Seed, make_seedable_rng};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::*;

@@ -23,36 +23,36 @@ pub mod target;
 mod effective_pool_balance;
 
 use chainstate_types::{
-    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndexHandle,
-    EpochStorageRead, GenBlockIndex,
+    BlockIndexHandle, EpochStorageRead, GenBlockIndex, pos_randomness::PoSRandomness,
+    vrf_tools::construct_transcript,
 };
 use common::{
+    Uint256,
     address::Address,
     chain::{
+        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
         block::{
-            consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            BlockHeader, ConsensusData, consensus_data::PoSData,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp,
         },
         config::EpochIndex,
-        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Idable},
-    Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
 use logging::log;
 use pos_accounting::PoSAccountingView;
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use utils::ensure;
 use utxo::UtxosView;
 
 use crate::{
-    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
     PoSFinalizeBlockInputData,
+    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
 };
 
 pub use effective_pool_balance::{
-    effective_pool_balance as calculate_effective_pool_balance, EffectivePoolBalanceError,
+    EffectivePoolBalanceError, effective_pool_balance as calculate_effective_pool_balance,
 };
 pub use hash_check::check_pos_hash;
 
@@ -182,7 +182,7 @@ where
             | TxOutput::CreateOrder(_) => {
                 return Err(ConsensusPoSError::InvalidOutputTypeInStakeKernel(
                     header.get_id(),
-                ))
+                ));
             }
             TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker().clone(),
             TxOutput::ProduceBlockFromStake(dest, _) => dest,
@@ -276,7 +276,7 @@ pub fn calc_pos_hash_from_prv_key(
     block_timestamp: BlockTimestamp,
     vrf_pub_key: &VRFPublicKey,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Result<Uint256, ConsensusPoSError> {
     let vrf_data = produce_vrf_data(
         epoch_index,
@@ -304,7 +304,7 @@ pub fn produce_vrf_data(
     sealed_epoch_randomness: &PoSRandomness,
     timestamp: BlockTimestamp,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> VRFReturn {
     let transcript = construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp)
         .with_rng(&mut *rng);
@@ -324,7 +324,7 @@ pub fn find_timestamp_for_staking(
     pledge_amount: Amount,
     pool_balance: Amount,
     vrf_prv_key: &VRFPrivateKey,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
 ) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
     let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
     let target = compact_target_to_target(target)?;

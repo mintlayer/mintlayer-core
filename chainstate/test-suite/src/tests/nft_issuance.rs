@@ -22,25 +22,25 @@ use chainstate::{
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue,
-        signature::inputsig::InputWitness,
-        tokens::{is_rfc3986_valid_symbol, Metadata, NftIssuance, NftIssuanceV0, TokenId},
         Block, ChainstateUpgradeBuilder, Destination, GenBlock, OutPointSourceId,
         TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
+        tokens::{Metadata, NftIssuance, NftIssuanceV0, TokenId, is_rfc3986_valid_symbol},
     },
     primitives::{BlockHeight, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
     token_utils::{random_creator, random_nft_issuance, random_token_issuance_v1},
 };
-use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
+use tx_verifier::{CheckTransactionError, error::TokenIssuanceError};
 
-use crate::tests::helpers::token_checks::{check_nft, ExpectedNftData};
+use crate::tests::helpers::token_checks::{ExpectedNftData, check_nft};
 
 #[rstest]
 #[trace]
@@ -1357,7 +1357,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
 }
 
 fn new_block_with_media_hash(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     input_source_id: &OutPointSourceId,
     media_hash: Vec<u8>,
@@ -1413,7 +1413,7 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
 
         // Media hash is too short
         for i in 0..min_hash_len {
-            let media_hash = [rng.gen::<u8>()].repeat(i);
+            let media_hash = [rng.random::<u8>()].repeat(i);
 
             let block =
                 new_block_with_media_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
@@ -1448,7 +1448,7 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
 
         // Media hash is too long
         for i in (max_hash_len + 1)..=(u8::MAX as usize) {
-            let media_hash = [rng.gen::<u8>()].repeat(i);
+            let media_hash = [rng.random::<u8>()].repeat(i);
 
             let block =
                 new_block_with_media_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
@@ -1493,7 +1493,7 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
             min_hash_len + 20,
             max_hash_len,
         ] {
-            let media_hash = [rng.gen::<u8>()].repeat(hash_size);
+            let media_hash = [rng.random::<u8>()].repeat(hash_size);
 
             let block = new_block_with_media_hash(
                 &mut rng,
@@ -1848,7 +1848,7 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let invalid_token_id = TokenId::from_tx_input(
-            &UtxoOutPoint::new(outpoint_source_id.clone(), rng.gen_range(1..100)).into(),
+            &UtxoOutPoint::new(outpoint_source_id.clone(), rng.random_range(1..100)).into(),
         );
         let tx_first_input = TxInput::from_utxo(outpoint_source_id, 0);
         let valid_token_id = TokenId::from_tx_input(&tx_first_input);

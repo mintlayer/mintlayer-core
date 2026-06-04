@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{Block, GenBlock},
-    primitives::{time::Time, Id, Idable},
+    primitives::{Id, Idable, time::Time},
 };
 use logging::log;
 use utils::ensure;
@@ -111,13 +111,13 @@ impl ReorgData {
 fn fetch_disconnected_txs<M>(
     tx_pool: &TxPool<M>,
     new_tip: Id<GenBlock>,
-) -> Result<impl Iterator<Item = TxEntry>, ReorgError> {
+) -> Result<impl Iterator<Item = TxEntry> + use<M>, ReorgError> {
     let old_tip = tx_pool
         .tx_verifier
         .get_best_block_for_utxos()
         .map_err(|_| ReorgError::BestBlockForUtxos)?;
 
-    log::debug!("Fetching disconnected txs, old_tip = {old_tip:?}");
+    log::debug!("Fetching disconnected txs, old_tip = {old_tip:x}");
 
     let now = tx_pool.clock.get_time();
 
@@ -148,7 +148,7 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
 
     if new_tip != actual_tip {
         log::debug!(
-            "Not updating mempool because actual tip differs: new_tip = {new_tip:?}, actual_tip = {actual_tip:?}"
+            "Not updating mempool because actual tip differs: new_tip = {new_tip:x}, actual_tip = {actual_tip:x}"
         );
 
         return Ok(());
@@ -174,7 +174,7 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     let old_transactions = tx_pool.reset();
 
     log::debug!(
-        "Reorging mempool txs, tx_verifier's best block for utxos after mempool reset: {:?}",
+        "Reorging mempool txs, tx_verifier's best block for utxos after mempool reset: {:x}",
         tx_pool
             .tx_verifier
             .get_best_block_for_utxos()
@@ -183,18 +183,18 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
 
     for tx in txs_to_insert {
         let tx_id = *tx.tx_id();
-        log::trace!("Adding {tx_id} after reorg");
+        log::trace!("Adding {tx_id:x} after reorg");
         if let Err(e) = tx_pool.add_transaction(tx, &mut finalizer) {
-            log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
+            log::debug!("Disconnected transaction {tx_id:x} no longer validates: {e:?}")
         }
     }
 
     // Re-populate the verifier with transactions from mempool
     for tx in old_transactions {
         let tx_id = *tx.tx_id();
-        log::trace!("Adding {tx_id} after reorg");
+        log::trace!("Adding {tx_id:x} after reorg");
         if let Err(e) = tx_pool.add_transaction(tx, &mut finalizer) {
-            log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
+            log::debug!("Evicting {tx_id:x} from mempool: {e:?}")
         }
     }
 

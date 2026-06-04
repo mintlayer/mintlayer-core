@@ -15,7 +15,7 @@
 
 use serialization::{Decode, Encode};
 
-use super::{output_value::OutputValue, Destination};
+use super::{Destination, output_value::OutputValue};
 
 mod order_id;
 pub use order_id::OrderId;

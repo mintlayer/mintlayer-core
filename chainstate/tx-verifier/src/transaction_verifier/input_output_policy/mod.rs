@@ -15,11 +15,11 @@
 
 use common::{
     chain::{
+        Block, ChainConfig, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
+        tokens::{TokenId, get_tokens_issuance_count},
     },
     primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
@@ -134,13 +134,13 @@ pub fn check_reward_inputs_outputs_policy(
                 [] => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::NoBlockRewardOutputs,
-                    ))
+                    ));
                 }
                 [_] => { /* ok */ }
                 _ => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::MultipleBlockRewardOutputs,
-                    ))
+                    ));
                 }
             };
         }

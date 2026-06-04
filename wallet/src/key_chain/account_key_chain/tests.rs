@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
+use crate::key_chain::{LOOKAHEAD_SIZE, MasterKeyChain};
 use common::chain::config::create_mainnet;
 use crypto::key::secp256k1::Secp256k1PublicKey;
 use rstest::rstest;

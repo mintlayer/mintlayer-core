@@ -30,12 +30,12 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer},
 };
 use networking::test_helpers::TestAddressMaker;
-use randomness::{Rng, SliceRandom};
+use randomness::{Rng, RngExt as _, SliceRandom};
 use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
 use crate::{
     crawler_p2p::crawler::address_data::SoftwareInfo,
-    dns_server::{handle_command, AuthorityImpl, DnsServerCommand},
+    dns_server::{AuthorityImpl, DnsServerCommand, handle_command},
 };
 
 use super::{AuthorityImplConfig, MinSameSoftwareVersionNodesRatio};
@@ -529,7 +529,7 @@ mod same_software_version_addr_selection_test {
     fn make_random_software_info(rng: &mut impl Rng) -> SoftwareInfo {
         SoftwareInfo {
             user_agent: "bogus".try_into().unwrap(),
-            version: SemVer::new(rng.gen(), rng.gen(), rng.gen()),
+            version: SemVer::new(rng.random(), rng.random(), rng.random()),
         }
     }
 

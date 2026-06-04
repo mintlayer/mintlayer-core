@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 rand.workspace = true
+rand_core.workspace = true
+rand_0_8.workspace = true
 
 [dev-dependencies]
 static_assertions.workspace = true

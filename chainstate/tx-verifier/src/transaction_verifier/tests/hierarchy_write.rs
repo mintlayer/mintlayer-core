@@ -18,9 +18,9 @@ use rstest::rstest;
 
 use accounting::TxUndo;
 use common::chain::{
+    DelegationId, PoolId,
     config::Builder as ConfigBuilder,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
-    DelegationId, PoolId,
 };
 use orders_accounting::OrdersAccountingDeltaUndoData;
 use pos_accounting::DeltaMergeUndo;
@@ -1057,10 +1057,10 @@ fn nonce_set_hierarchy(#[case] seed: Seed) {
 
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let nonce1 = AccountNonce::new(rng.gen());
+    let nonce1 = AccountNonce::new(rng.random());
     let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
 
-    let nonce2 = AccountNonce::new(rng.gen());
+    let nonce2 = AccountNonce::new(rng.random());
     let account2 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
 
     let mut store = mock::MockStore::new();

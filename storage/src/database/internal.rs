@@ -18,10 +18,10 @@
 use std::borrow::Cow;
 
 use crate::schema;
-use serialization::{encoded::Encoded, EncodeLike};
+use serialization::{EncodeLike, encoded::Encoded};
 use storage_core::{
-    backend::{self, ReadOps},
     Backend, DbMapId,
+    backend::{self, ReadOps},
 };
 
 /// Map high-level transaction type to the backend-specific implementation type

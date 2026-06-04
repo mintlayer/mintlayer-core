@@ -16,7 +16,7 @@
 use thiserror::Error;
 
 use common::{
-    chain::{tokens::TokenId, Block, GenBlock, OrderId, PoolId},
+    chain::{Block, GenBlock, OrderId, PoolId, tokens::TokenId},
     primitives::{BlockHeight, Id},
 };
 
@@ -68,7 +68,9 @@ pub enum PropertyQueryError {
 pub enum GetAncestorError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] crate::storage_result::Error),
-    #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
+    #[error(
+        "Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}"
+    )]
     InvalidAncestorHeight {
         block_height: BlockHeight,
         ancestor_height: BlockHeight,

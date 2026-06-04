@@ -22,10 +22,10 @@ use std::{convert::identity, env};
 
 use heck::ToUpperCamelCase as _;
 use iced::{
+    Element, Length, Settings, Size, Subscription, Task, Theme,
     advanced::graphics::core::window,
     executor, font,
-    widget::{column, row, text, tooltip, Text},
-    Element, Length, Settings, Size, Subscription, Task, Theme,
+    widget::{Text, column, row, text, tooltip},
 };
 use iced_aw::widgets::spinner::Spinner;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -33,14 +33,13 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use common::chain::config::ChainType;
 use main_window::{MainWindow, MainWindowMessage};
 use node_gui_backend::{
+    BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome, WalletMode,
     messages::{BackendEvent, BackendRequest},
-    node_initialize, BackendControls, BackendSender, InitNetwork, NodeInitializationOutcome,
-    WalletMode,
+    node_initialize,
 };
-use node_lib::{NodeType, CLEAN_DATA_OPTION_LONG_NAME};
+use node_lib::{CLEAN_DATA_OPTION_LONG_NAME, NodeType};
 
-const COLD_WALLET_TOOLTIP_TEXT: &str =
-    "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
+const COLD_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
 const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
 
 const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
@@ -50,9 +49,9 @@ const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that
 const INITIAL_MAIN_WINDOW_WIDTH: f32 = 1024.0;
 const INITIAL_MAIN_WINDOW_HEIGHT: f32 = 768.0;
 
-pub fn main() -> iced::Result {
-    utils::rust_backtrace::enable();
+utils::enable_rust_backtrace!();
 
+pub fn main() -> iced::Result {
     let initial_opts = node_lib::Options::from_args(std::env::args_os(), NodeType::NodeGui);
 
     iced::application(title, update, view)

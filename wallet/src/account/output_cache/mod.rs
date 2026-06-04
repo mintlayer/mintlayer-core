@@ -15,28 +15,28 @@
 
 use std::{
     cmp::Reverse,
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
     ops::Add,
 };
 
 use common::{
     chain::{
+        AccountCommand, AccountCommandTag, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        DelegationId, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag, OrderId,
+        OutPointSourceId, PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         make_delegation_id, make_order_id, make_token_id, make_token_id_with_version,
         output_value::{OutputValue, RpcOutputValue},
         output_values_holder::RpcOutputValuesHolder,
         stakelock::StakePoolData,
         tokens::{
-            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
-            TokenId, TokenIssuance, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo, RPCIsTokenFrozen,
+            RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
+            get_referenced_token_ids_ignore_issuance,
         },
-        AccountCommand, AccountCommandTag, AccountNonce, AccountSpending, AccountType, ChainConfig,
-        DelegationId, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag, OrderId,
-        OutPointSourceId, PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
     },
-    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id::WithId, per_thousand::PerThousand},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -44,13 +44,13 @@ use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
-    utxo_types::{get_utxo_state, UtxoState, UtxoStates},
+    AccountWalletTxId, BlockInfo, WalletTx,
+    utxo_types::{UtxoState, UtxoStates, get_utxo_state},
     wallet_tx::{TxData, TxState},
     with_locked::WithLocked,
-    AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
+use crate::{WalletError, WalletResult, destination_getters::get_all_tx_output_destinations};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, &'a TxOutput);
 
@@ -860,26 +860,37 @@ impl OutputCache {
 
                 match unconfirmed_tx {
                     WalletTx::Tx(tx) => {
-                        if let Some(frozen_token_id) = conflict_check.frozen_token_id {
-                            if self.violates_frozen_token(unconfirmed_tx, &frozen_token_id) {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
+                        if let Some(frozen_token_id) = conflict_check.frozen_token_id
+                            && self.violates_frozen_token(unconfirmed_tx, &frozen_token_id)
+                        {
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
 
                         if let Some((confirmed_account, confirmed_account_nonce)) =
                             conflict_check.confirmed_account_nonce
+                            && confirmed_tx.get_id() != tx.get_transaction().get_id()
+                            && uses_conflicting_nonce(
+                                unconfirmed_tx,
+                                confirmed_account,
+                                confirmed_account_nonce,
+                            )
                         {
-                            if confirmed_tx.get_id() != tx.get_transaction().get_id()
-                                && uses_conflicting_nonce(
-                                    unconfirmed_tx,
-                                    confirmed_account,
-                                    confirmed_account_nonce,
-                                )
-                            {
-                                conflicting_txs.insert(tx.get_transaction().get_id());
-                                continue;
-                            }
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
+                        }
+
+                        if let Some((confirmed_cmd_tag, confirmed_order_id)) =
+                            conflict_check.conflicting_order_command
+                            && confirmed_tx.get_id() != tx.get_transaction().get_id()
+                            && uses_conflicting_order_command(
+                                unconfirmed_tx,
+                                confirmed_cmd_tag,
+                                confirmed_order_id,
+                            )
+                        {
+                            conflicting_txs.insert(tx.get_transaction().get_id());
+                            continue;
                         }
 
                         if let Some((confirmed_cmd_tag, confirmed_order_id)) =
@@ -934,9 +945,11 @@ impl OutputCache {
                                     TxState::Conflicted(..)
                                     | TxState::Abandoned
                                     | TxState::Confirmed(..) => {
-                                        return Err(WalletError::CannotMarkTxAsConflictedIfInState(
-                                            *tx.state(),
-                                        ))
+                                        return Err(
+                                            WalletError::CannotMarkTxAsConflictedIfInState(
+                                                *tx.state(),
+                                            ),
+                                        );
                                     }
                                 }
                                 conflicting_txs_with_descendants
@@ -1190,16 +1203,16 @@ impl OutputCache {
                 }
                 TxInput::Account(outpoint) => match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, _) => {
-                        if !already_present {
-                            if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                Self::update_delegation_state(
-                                    &mut self.unconfirmed_descendants,
-                                    data,
-                                    delegation_id,
-                                    outpoint.nonce(),
-                                    tx_id,
-                                )?;
-                            }
+                        if !already_present
+                            && let Some(data) = self.delegations.get_mut(delegation_id)
+                        {
+                            Self::update_delegation_state(
+                                &mut self.unconfirmed_descendants,
+                                data,
+                                delegation_id,
+                                outpoint.nonce(),
+                                tx_id,
+                            )?;
                         }
                     }
                 },
@@ -1276,17 +1289,15 @@ impl OutputCache {
                     OrderAccountCommand::FillOrder(order_id, _)
                     | OrderAccountCommand::FreezeOrder(order_id)
                     | OrderAccountCommand::ConcludeOrder(order_id) => {
-                        if !already_present {
-                            if let Some(data) = self.orders.get_mut(order_id) {
-                                Self::update_order_state(
-                                    &mut self.unconfirmed_descendants,
-                                    data,
-                                    order_id,
-                                    cmd.into(),
-                                    None,
-                                    tx_id,
-                                )?;
-                            }
+                        if !already_present && let Some(data) = self.orders.get_mut(order_id) {
+                            Self::update_order_state(
+                                &mut self.unconfirmed_descendants,
+                                data,
+                                order_id,
+                                cmd.into(),
+                                None,
+                                tx_id,
+                            )?;
                         }
                     }
                 },
@@ -1812,7 +1823,7 @@ impl OutputCache {
                                     return Err(WalletError::CannotChangeTransactionState(
                                         *state,
                                         TxState::Abandoned,
-                                    ))
+                                    ));
                                 }
                             };
 

@@ -24,12 +24,12 @@ use crate::detail::{
     tx_verification_strategy::TransactionVerificationStrategy,
 };
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
+use chainstate_types::{GenBlockIndex, TipStorageTag, storage_result};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderId,
         PoolId, Transaction,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, Id},
 };

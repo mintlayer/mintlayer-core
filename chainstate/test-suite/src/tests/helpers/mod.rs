@@ -19,17 +19,16 @@ use std::{
 };
 
 use chainstate::ChainstateEvent;
-use chainstate_test_framework::{anyonecanspend_address, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, anyonecanspend_address};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, output_value::OutputValue,
-        signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination, Transaction,
-        TxInput, TxOutput,
+        Destination, Transaction, TxInput, TxOutput, block::timestamp::BlockTimestamp,
+        output_value::OutputValue, signature::inputsig::InputWitness, timelock::OutputTimeLock,
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 
 pub mod block_creation_helpers;
 pub mod block_status_helpers;
@@ -39,7 +38,7 @@ pub mod token_checks;
 
 /// Adds a block with the locked output and returns input corresponding to this output.
 pub fn add_block_with_locked_output(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     output_time_lock: OutputTimeLock,
     timestamp: BlockTimestamp,
@@ -79,7 +78,7 @@ pub fn add_block_with_locked_output(
     )
 }
 
-pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+pub fn new_pub_key_destination(rng: &mut impl CryptoRng) -> Destination {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
 }

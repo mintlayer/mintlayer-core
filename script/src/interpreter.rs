@@ -380,10 +380,10 @@ fn check_multisig<'a, Ctx: Context>(
                 ParseResult::Reserved => break,
                 // parsed a pubkey -> check signature
                 ParseResult::Ok(pubkey) => {
-                    if let Some(sigdata) = ctx.parse_signature(pubkey, sig) {
-                        if ctx.verify_signature(&sigdata, subscript, codesep_idx) {
-                            break;
-                        }
+                    if let Some(sigdata) = ctx.parse_signature(pubkey, sig)
+                        && ctx.verify_signature(&sigdata, subscript, codesep_idx)
+                    {
+                        break;
                     }
                 }
             }

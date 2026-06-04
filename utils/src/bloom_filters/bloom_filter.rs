@@ -16,7 +16,8 @@
 use std::{fmt::Debug, hash::Hash};
 
 use probabilistic_collections::SipHasherBuilder;
-use randomness::Rng;
+
+use randomness::{Rng, RngExt as _};
 
 /// A space-efficient probabilistic data structure to test for membership in a set.
 pub struct BloomFilter<T>(probabilistic_collections::bloom::BloomFilter<T>);
@@ -32,8 +33,8 @@ impl<T: Hash> BloomFilter<T> {
                 size,
                 fpp,
                 [
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+                    SipHasherBuilder::from_seed(rng.random(), rng.random()),
+                    SipHasherBuilder::from_seed(rng.random(), rng.random()),
                 ],
             ),
         )

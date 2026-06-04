@@ -44,7 +44,9 @@ pub fn default_data_dir_for_chain(chain_name: &str) -> PathBuf {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PrepareDataDirError {
-    #[error("Custom data directory '{0}' does not exist. Please create it or use the default data directory.")]
+    #[error(
+        "Custom data directory '{0}' does not exist. Please create it or use the default data directory."
+    )]
     DoesNotExist(PathBuf),
     #[error("Failed to create the '{0}' data directory: {1}")]
     CreateFailed(PathBuf, std::io::Error),
@@ -86,7 +88,7 @@ pub fn prepare_data_dir<F: Fn() -> PathBuf>(
 mod test {
     use std::io::{Read, Write};
 
-    use randomness::{make_pseudo_rng, Rng};
+    use randomness::{RngExt as _, make_pseudo_rng};
     use tempfile::TempDir;
 
     use super::*;
@@ -128,7 +130,7 @@ mod test {
 
         // Now let's use the data directory
         let file_path = supposed_default_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().random::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
             file.write_all(&file_data).unwrap();
@@ -222,7 +224,7 @@ mod test {
 
         // Now let's use the data directory
         let file_path = supposed_custom_dir.join("SomeFile.txt");
-        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
+        let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().random::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
             file.write_all(&file_data).unwrap();

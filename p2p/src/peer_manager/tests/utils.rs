@@ -21,12 +21,13 @@ use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_age
 use logging::log;
 use p2p_test_utils::wait_for_recv;
 use p2p_types::{
-    bannable_address::BannableAddress, services::Service, socket_address::SocketAddress, PeerId,
+    PeerId, bannable_address::BannableAddress, services::Service, socket_address::SocketAddress,
 };
-use test_utils::{assert_matches_return_val, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, assert_matches_return_val};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    PeerManagerEvent,
     config::NodeType,
     message::PeerManagerMessage,
     net::{
@@ -37,7 +38,6 @@ use crate::{
     test_helpers::TEST_PROTOCOL_VERSION,
     tests::helpers::PeerManagerNotification,
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {

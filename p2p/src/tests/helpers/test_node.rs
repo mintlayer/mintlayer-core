@@ -30,31 +30,32 @@ use tokio::{
 
 use ::test_utils::BasicTestTimeGetter;
 use chainstate::{
-    make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy, make_chainstate,
 };
 use common::chain::ChainConfig;
 use mempool::MempoolConfig;
 use networking::transport::{TransportListener, TransportSocket};
 use p2p_test_utils::SHORT_TIMEOUT;
-use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress, PeerId};
-use randomness::RngCore;
+use p2p_types::{PeerId, p2p_event::P2pEventHandler, socket_address::SocketAddress};
+use randomness::Rng;
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
 use utils::{atomics::SeqCstAtomicBool, tokio_spawn_in_tracing_span};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    PeerManagerEvent,
     config::P2pConfig,
     error::P2pError,
     net::{
-        default_backend::{types::MessageTag, DefaultNetworkingService},
-        types::PeerRole,
         ConnectivityService,
+        default_backend::{DefaultNetworkingService, types::MessageTag},
+        types::PeerRole,
     },
     peer_manager::{
+        PeerManager,
         peerdb::storage_impl::PeerDbStorageImpl,
         test_utils::{mutate_peer_manager, query_peer_manager},
-        PeerManager,
     },
     peer_manager_event::PeerDisconnectionDbAction,
     protocol::ProtocolVersion,
@@ -62,7 +63,6 @@ use crate::{
     test_helpers::peerdb_inmemory_store,
     tests::helpers::{BackendNotification, BackendObserverImpl},
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 use super::{PeerManagerNotification, PeerManagerObserverImpl, TestDnsSeed, TestPeersInfo};
@@ -121,7 +121,7 @@ where
         bind_address: SocketAddress,
         protocol_version: ProtocolVersion,
         node_name: Option<&str>,
-        rng: impl RngCore + Send + 'static,
+        rng: impl Rng + Send + 'static,
     ) -> Self {
         let socket = transport.bind(vec![bind_address.socket_addr()]).await.unwrap();
         let local_address = socket.local_addresses().unwrap()[0];
@@ -231,6 +231,7 @@ where
             mempool,
             peer_mgr_event_sender.clone(),
             time_getter.get_time_getter(),
+            time_getter.get_monotonic_time_getter(),
         );
         let sync_mgr_join_handle = tokio_spawn_in_tracing_span(
             async move {

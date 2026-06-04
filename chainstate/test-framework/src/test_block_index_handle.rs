@@ -15,7 +15,7 @@
 
 use chainstate::PropertyQueryError;
 use chainstate_storage::BlockchainStorageRead;
-use chainstate_types::{storage_result, BlockIndex, BlockIndexHandle, GenBlockIndex};
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, storage_result};
 use common::{
     chain::{Block, ChainConfig, GenBlock, GenBlockId},
     primitives::Id,

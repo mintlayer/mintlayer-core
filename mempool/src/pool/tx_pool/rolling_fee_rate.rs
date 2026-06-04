@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use common::primitives::{time::Time, Amount};
+use common::primitives::{Amount, time::Time};
 use logging::log;
 
 use super::FeeRate;

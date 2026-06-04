@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
-use crate::transaction_verifier::{cached_operation::combine, CachedOperation};
+use crate::transaction_verifier::{CachedOperation, cached_operation::combine};
 use common::{
     chain::{OutPointSourceId, Transaction},
     primitives::Id,

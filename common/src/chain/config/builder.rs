@@ -16,10 +16,17 @@
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
 
 use crate::{
+    Uint256,
     chain::{
+        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
+        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
+        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
+        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+        TokenIssuanceVersion, TokensFeeVersion,
         config::{
-            create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
-            emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
+            ChainConfig, ChainType, EmissionScheduleTabular, create_mainnet_genesis,
+            create_testnet_genesis, create_unit_test_genesis, emission_schedule,
         },
         get_initial_randomness,
         pos::{
@@ -28,25 +35,18 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
-        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
-        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
-        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-        TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
-        BlockHeight, Id, Idable, H256,
+        Amount, BlockCount, BlockDistance, BlockHeight, H256, Id, Idable, id::WithId,
+        per_thousand::PerThousand, semver::SemVer,
     },
-    Uint256,
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
 use super::{
+    MagicBytes,
     checkpoints::Checkpoints,
     checkpoints_data::{MAINNET_CHECKPOINTS, TESTNET_CHECKPOINTS},
-    MagicBytes,
 };
 
 // Note: the names of the "FORK_HEIGHT" constants below only contain the short description
@@ -651,9 +651,9 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::chain::config::{
         DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1, DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
@@ -670,7 +670,7 @@ mod tests {
             let config = Builder::new(ChainType::Mainnet).build();
 
             let before_the_fork = BlockHeight::new(
-                rng.gen_range(0..MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()),
+                rng.random_range(0..MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
@@ -683,7 +683,7 @@ mod tests {
             );
 
             let after_the_fork = BlockHeight::new(
-                rng.gen_range(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()..u64::MAX),
+                rng.random_range(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS.into_int()..u64::MAX),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
@@ -696,7 +696,7 @@ mod tests {
             let config = Builder::new(ChainType::Testnet).build();
 
             let before_the_fork =
-                BlockHeight::new(rng.gen_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
+                BlockHeight::new(rng.random_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
@@ -708,7 +708,7 @@ mod tests {
             );
 
             let after_the_fork =
-                BlockHeight::new(rng.gen_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
+                BlockHeight::new(rng.random_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(after_the_fork)
@@ -719,7 +719,7 @@ mod tests {
         {
             let config = Builder::new(ChainType::Regtest).build();
 
-            let height = BlockHeight::new(rng.gen::<u64>());
+            let height = BlockHeight::new(rng.random::<u64>());
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(height)
@@ -728,12 +728,12 @@ mod tests {
 
         // Custom
         {
-            let custom_offset = Duration::from_secs(rng.gen::<u64>());
+            let custom_offset = Duration::from_secs(rng.random::<u64>());
             let config = Builder::new(ChainType::Regtest)
                 .max_future_block_time_offset(Some(custom_offset))
                 .build();
 
-            let height = BlockHeight::new(rng.gen::<u64>());
+            let height = BlockHeight::new(rng.random::<u64>());
             assert_eq!(custom_offset, config.max_future_block_time_offset(height));
         }
     }

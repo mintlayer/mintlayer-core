@@ -15,24 +15,24 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 
-use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
+use chainstate::{ChainInfo, rpc::RpcOutputValueIn};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::RPCTokenInfo, Block, GenBlock, RpcCurrency,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint, block::timestamp::BlockTimestamp, tokens::RPCTokenInfo,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey};
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use crypto::key::{PrivateKey, hdkd::u31::U31};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
     types::{
         CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo, WalletTypeArgs,
     },
-    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
@@ -377,7 +377,7 @@ pub trait WalletInterface {
     ) -> Result<Vec<CreatedBlockInfo>, Self::Error>;
 
     async fn new_vrf_public_key(&self, account_index: U31)
-        -> Result<VrfPublicKeyInfo, Self::Error>;
+    -> Result<VrfPublicKeyInfo, Self::Error>;
 
     async fn get_vrf_public_key(
         &self,

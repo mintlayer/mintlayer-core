@@ -56,13 +56,15 @@ fn create_default_config() {
         None
     );
 
-    assert!(config
-        .p2p
-        .clone()
-        .unwrap_or_default()
-        .bind_addresses
-        .unwrap_or_default()
-        .is_empty());
+    assert!(
+        config
+            .p2p
+            .clone()
+            .unwrap_or_default()
+            .bind_addresses
+            .unwrap_or_default()
+            .is_empty()
+    );
     assert_eq!(
         config.p2p.clone().unwrap_or_default().discouragement_threshold,
         None
@@ -100,6 +102,8 @@ fn read_config_override_values() {
     let max_db_commit_attempts = 1;
     let enable_db_reckless_mode_in_ibd = true;
     let max_orphan_blocks = 2;
+    let mempool_max_cluster_transaction_count = 123;
+    let mempool_max_cluster_size_bytes = 12345;
     let p2p_networking_enabled = false;
     let p2p_bind_addr = "127.0.0.1:44444".parse::<SocketAddr>().unwrap();
     let p2p_socks5_proxy = "socks5_proxy";
@@ -142,6 +146,8 @@ fn read_config_override_values() {
         max_db_commit_attempts: Some(max_db_commit_attempts),
         enable_db_reckless_mode_in_ibd: Some(enable_db_reckless_mode_in_ibd),
         max_orphan_blocks: Some(max_orphan_blocks),
+        mempool_max_cluster_transaction_count: Some(mempool_max_cluster_transaction_count),
+        mempool_max_cluster_size_bytes: Some(mempool_max_cluster_size_bytes),
         p2p_networking_enabled: Some(p2p_networking_enabled),
         p2p_bind_addresses: Some(vec![p2p_bind_addr]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
@@ -218,8 +224,18 @@ fn read_config_override_values() {
     );
 
     assert_eq!(
-        config.mempool.unwrap().min_tx_relay_fee_rate,
+        config.mempool.as_ref().unwrap().min_tx_relay_fee_rate,
         Some(min_tx_relay_fee_rate)
+    );
+
+    assert_eq!(
+        config.mempool.as_ref().unwrap().max_cluster_tx_count,
+        Some(mempool_max_cluster_transaction_count)
+    );
+
+    assert_eq!(
+        config.mempool.as_ref().unwrap().max_cluster_size_bytes,
+        Some(mempool_max_cluster_size_bytes)
     );
 
     assert_eq!(

@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use merkletree_mintlayer::{tree::MerkleTree, MerkleTreeFormError};
+use merkletree_mintlayer::{MerkleTreeFormError, tree::MerkleTree};
 
 use crate::{
     chain::SignedTransaction,
-    primitives::id::{self, Idable, H256},
+    primitives::id::{self, H256, Idable},
 };
 
-use super::{merkle_tools::MerkleHasher, BlockBody};
+use super::{BlockBody, merkle_tools::MerkleHasher};
 
 fn tx_hasher(tx: &SignedTransaction) -> H256 {
     tx.transaction().get_id().to_hash()

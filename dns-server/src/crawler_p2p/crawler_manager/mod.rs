@@ -34,16 +34,16 @@ use p2p::{
         PingResponse,
     },
     net::{
-        types::{ConnectivityEvent, PeerManagerMessageExt, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
+        types::{ConnectivityEvent, PeerManagerMessageExt, SyncingEvent},
     },
     peer_manager::{
         ip_or_socket_address_to_peer_address,
-        peerdb_common::{storage::update_db, StorageVersion, TransactionRo, TransactionRw},
+        peerdb_common::{StorageVersion, TransactionRo, TransactionRw, storage::update_db},
     },
     types::{
-        bannable_address::BannableAddress, peer_address::PeerAddress, peer_id::PeerId,
-        socket_address::SocketAddress, IsGlobalIp,
+        IsGlobalIp, bannable_address::BannableAddress, peer_address::PeerAddress, peer_id::PeerId,
+        socket_address::SocketAddress,
     },
 };
 use randomness::make_pseudo_rng;
@@ -290,10 +290,10 @@ where
             ConnectivityEvent::Message { peer_id, message } => {
                 let result = self.handle_conn_message(peer_id, message);
 
-                if let Err(error) = result {
-                    if error.ban_score() > 0 {
-                        self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
-                    }
+                if let Err(error) = result
+                    && error.ban_score() > 0
+                {
+                    self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
                 }
             }
             ConnectivityEvent::OutboundAccepted {

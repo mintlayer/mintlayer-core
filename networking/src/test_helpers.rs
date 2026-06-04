@@ -27,7 +27,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use crate::transport::{
     MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
@@ -105,14 +105,14 @@ pub struct TestAddressMaker {}
 impl TestAddressMaker {
     pub fn new_random_ipv6_addr(rng: &mut impl Rng) -> Ipv6Addr {
         Ipv6Addr::new(
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
+            rng.random(),
         )
     }
 
@@ -127,7 +127,7 @@ impl TestAddressMaker {
     }
 
     pub fn new_random_ipv4_addr(rng: &mut impl Rng) -> Ipv4Addr {
-        Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())
+        Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random())
     }
 
     pub fn new_distinct_random_ipv4_addrs(count: usize, rng: &mut impl Rng) -> Vec<Ipv4Addr> {
@@ -142,7 +142,7 @@ impl TestAddressMaker {
 
     pub fn new_random_address(rng: &mut impl Rng) -> SocketAddr {
         let ip = Self::new_random_ipv6_addr(rng);
-        SocketAddr::new(IpAddr::V6(ip), rng.gen())
+        SocketAddr::new(IpAddr::V6(ip), rng.random())
     }
 }
 

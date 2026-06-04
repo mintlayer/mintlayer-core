@@ -17,12 +17,12 @@ use std::num::NonZeroU64;
 
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
+    Uint256, Uint512,
     chain::{
-        block::ConsensusData, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
-        RequiredConsensus,
+        ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus, RequiredConsensus,
+        block::ConsensusData,
     },
     primitives::{BlockDistance, BlockHeight, Compact, Id},
-    Uint256, Uint512,
 };
 use utils::ensure;
 
@@ -194,7 +194,9 @@ where
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Prev block's consensus status must be PoS because we are in Ongoing PoS net version")
+            panic!(
+                "Prev block's consensus status must be PoS because we are in Ongoing PoS net version"
+            )
         }
     };
 
@@ -233,22 +235,22 @@ mod tests {
     };
     use common::{
         chain::{
-            block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
-            config::Builder as ConfigBuilder,
             Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoSChainConfigBuilder, PoolId,
+            block::{BlockReward, consensus_data::PoSData, timestamp::BlockTimestamp},
+            config::Builder as ConfigBuilder,
         },
-        primitives::{per_thousand::PerThousand, Idable, H256},
+        primitives::{H256, Idable, per_thousand::PerThousand},
     };
-    use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey, transcript::no_rng::VRFTranscript};
     use itertools::Itertools;
-    use randomness::{CryptoRng, Rng};
+    use randomness::{CryptoRng, RngExt as _};
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::*;
 
     fn make_block(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         prev_block: Id<GenBlock>,
         timestamp: BlockTimestamp,
         target: Uint256,
@@ -285,7 +287,7 @@ mod tests {
         }
 
         pub fn new_with_blocks(
-            rng: &mut (impl Rng + CryptoRng),
+            rng: &mut impl CryptoRng,
             chain_config: &'a ChainConfig,
             timestamps: &[u64],
         ) -> Self {
@@ -394,8 +396,8 @@ mod tests {
         let config = PoSChainConfigBuilder::new_for_unit_test().build();
         {
             // average block time <= target block time
-            let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = target_block_time.get() / rng.gen_range(1..10);
+            let prev_target = Uint256::from_u64(rng.random::<u64>());
+            let average_block_time = target_block_time.get() / rng.random_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
                     .unwrap();
@@ -403,8 +405,8 @@ mod tests {
         }
         {
             // average block time >= target block time
-            let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = target_block_time.get() * rng.gen_range(1..10);
+            let prev_target = Uint256::from_u64(rng.random::<u64>());
+            let average_block_time = target_block_time.get() * rng.random_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
                     .unwrap();
@@ -688,8 +690,8 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_target_required_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
-        let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
+        let target_limit_1 = Uint256::from_u64(rng.random::<u64>());
+        let target_limit_2 = Uint256::from_u64(rng.random::<u64>());
         let pos_config_1 = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit_1)
             .block_count_to_average_for_blocktime(2)
@@ -838,7 +840,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_target_through_netupgrade(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let target_limit = Uint256::from_u64(rng.gen::<u64>());
+        let target_limit = Uint256::from_u64(rng.random::<u64>());
         let pos_config = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit)
             .block_count_to_average_for_blocktime(3)
@@ -918,9 +920,11 @@ mod tests {
         let mut tip_height = BlockHeight::one();
         let pos_status = get_pos_status(&chain_config, tip_height.next_height());
 
-        println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}",
-                                   pos_status.get_chain_config().block_count_to_average_for_blocktime(),
-                                   pos_status.get_chain_config().difficulty_change_limit());
+        println!(
+            "Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}",
+            pos_status.get_chain_config().block_count_to_average_for_blocktime(),
+            pos_status.get_chain_config().difficulty_change_limit()
+        );
 
         for slot in 121..1_000_000 {
             let tip = block_index_handle.get_block_index_by_height(tip_height).unwrap();
@@ -937,7 +941,7 @@ mod tests {
             let current_hash = {
                 let mut words = [0u64; 4];
                 for w in &mut words {
-                    *w = rng.gen::<u64>();
+                    *w = rng.random::<u64>();
                 }
                 Uint256(words)
             };

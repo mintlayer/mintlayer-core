@@ -31,7 +31,7 @@ use std::{
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 use error::process_sqlite_error;
-use storage_core::{backend, Data, DbDesc, DbMapId};
+use storage_core::{Data, DbDesc, DbMapId, backend};
 
 use crate::queries::SqliteQueries;
 

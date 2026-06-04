@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{config::MagicBytes, ChainConfig, GenBlock},
+    chain::{ChainConfig, GenBlock, config::MagicBytes},
     primitives::Id,
 };
 use serialization::{Decode, Encode};

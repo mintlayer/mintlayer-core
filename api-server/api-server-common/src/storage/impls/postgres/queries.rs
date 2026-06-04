@@ -18,16 +18,16 @@ use std::{
     str::FromStr,
 };
 
-use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
+use bb8_postgres::{PostgresConnectionManager, bb8::PooledConnection};
 use serialization::{DecodeAll, Encode};
 
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{NftIssuance, TokenId},
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         Transaction, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        tokens::{NftIssuance, TokenId},
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -36,10 +36,10 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::{BlockAuxData, BlockWithExtraData},
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
         FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
         TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
 

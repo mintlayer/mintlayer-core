@@ -33,8 +33,8 @@ use serialization::{Decode, Encode};
 
 use crypto::{
     key::{
-        hdkd::{child_number::ChildNumber, u31::U31},
         PublicKey,
+        hdkd::{child_number::ChildNumber, u31::U31},
     },
     vrf::VRFPublicKey,
 };
@@ -43,24 +43,23 @@ use utils::const_nz_u64;
 
 use crate::{
     chain::{
-        block::timestamp::BlockTimestamp, transaction::Destination, upgrades::NetUpgrades,
-        GenBlock, Genesis, PoWChainConfig, TxOutput,
+        GenBlock, Genesis, PoWChainConfig, TxOutput, block::timestamp::BlockTimestamp,
+        transaction::Destination, upgrades::NetUpgrades,
     },
     primitives::{
+        Amount, BlockCount, BlockDistance, BlockHeight, H256,
         id::{Id, Idable, WithId},
         per_thousand::PerThousand,
         semver::SemVer,
-        Amount, BlockCount, BlockDistance, BlockHeight, H256,
     },
 };
 
 use super::{
-    output_value::OutputValue, stakelock::StakePoolData, ChainstateUpgrade,
-    ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
+    DestinationTag, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RequiredConsensus, RewardDistributionVersion, SighashInputCommitmentVersion,
     StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
-    TokensFeeVersion,
+    TokensFeeVersion, output_value::OutputValue, stakelock::StakePoolData,
 };
 
 use self::emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT};
@@ -523,7 +522,11 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
-    /// The maximum size of any transaction submitted to the node for the mempool
+    /// The approximate maximum size of any transaction submitted to the node for the mempool.
+    ///
+    /// Note that this is just an upper limit - creating a tx bigger than this doesn't make much
+    /// sense, because it won't fit into a block. Normally, the cluster size limit (specified in
+    /// the mempool config) will be the actual limit.
     pub fn max_tx_size_for_mempool(&self) -> usize {
         // Reserve some space in the block for the data it needs to store beyond the transaction
         // data itself, namely the transaction count due to how sequences of elements are encoded.

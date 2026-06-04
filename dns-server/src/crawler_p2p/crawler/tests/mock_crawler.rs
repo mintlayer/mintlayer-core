@@ -26,7 +26,7 @@ use p2p::types::{
 use randomness::Rng;
 
 use crate::crawler_p2p::{
-    crawler::{address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent},
+    crawler::{Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent, address_data::AddressState},
     crawler_manager::storage::AddressInfo,
 };
 

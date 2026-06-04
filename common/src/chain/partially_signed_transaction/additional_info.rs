@@ -19,10 +19,10 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
+        OrderId, PoolId,
         output_value::OutputValue,
         output_values_holder::OutputValuesHolder,
         signature::sighash::{self},
-        OrderId, PoolId,
     },
     primitives::Amount,
 };

@@ -14,30 +14,30 @@
 // limitations under the License.
 
 use crate::{
-    pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index},
     ConsensusCreationError,
+    pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index},
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
+    BlockIndex, GenBlockIndex, pos_randomness::PoSRandomness, vrf_tools::construct_transcript,
 };
 use common::{
     chain::{
+        ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
         block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward,
-            BlockRewardTransactable,
+            BlockReward, BlockRewardTransactable, consensus_data::PoSData,
+            timestamp::BlockTimestamp,
         },
         config::EpochIndex,
         signature::{
             inputsig::{
-                authorize_pubkey_spend::sign_public_key_spending,
-                standard_signature::StandardInputSignature, InputWitness,
+                InputWitness, authorize_pubkey_spend::sign_public_key_spending,
+                standard_signature::StandardInputSignature,
             },
             sighash::{
                 input_commitments::make_sighash_input_commitments_for_kernel_input_utxos,
                 sighashtype::SigHashType, signature_hash,
             },
         },
-        ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
 };

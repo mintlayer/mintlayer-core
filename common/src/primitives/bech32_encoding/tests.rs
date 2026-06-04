@@ -15,9 +15,9 @@
 
 use bitcoin_bech32::WitnessProgram;
 use hex::FromHex;
-use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+use randomness::{Rng, RngExt as _, distributions::Alphanumeric, make_pseudo_rng};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::Bech32Error;
 
@@ -204,7 +204,8 @@ fn check_arbitraty_data_convertion() {
 )]
 #[trace]
 #[case(
-    "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc","7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061"
+    "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc",
+    "7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061"
 )]
 #[trace]
 #[case("hrp1xyerxdp4xcmnswfs3y3n8w", "31323334353637383930")]
@@ -228,14 +229,14 @@ fn check_bech32m_convertion_to_arbitraty_chosen_data(
 }
 
 fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
-    let hrp_length = 1 + rng.gen::<usize>() % 10;
+    let hrp_length = rng.random_range(1..=10);
     let test_hrp = make_pseudo_rng()
         .sample_iter(&Alphanumeric)
         .take(hrp_length)
         .map(char::from)
         .collect::<String>()
         .to_lowercase();
-    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
+    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.random::<u8>()).collect();
 
     let encoded_data = super::bech32m_encode(&test_hrp, &random_bytes).unwrap();
     let decoded_data = super::bech32m_decode(encoded_data).unwrap();
@@ -248,7 +249,7 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
 #[case(Seed::from_entropy())]
 fn bech32m_check_random_data_convertion_back_and_forth(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let data_length = rng.gen::<usize>() % 100;
+    let data_length = rng.random_range(0..100);
     bech32m_test_random_data(&mut rng, data_length);
 }
 
@@ -257,8 +258,8 @@ fn bech32m_check_random_data_convertion_back_and_forth(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn bech32m_hrp_is_empty(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let data_length = 10 + rng.gen::<usize>() % 100;
-    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
+    let data_length = 10 + rng.random_range(0..100);
+    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.random::<u8>()).collect();
 
     assert_eq!(
         super::bech32m_encode("", random_bytes).unwrap_err(),

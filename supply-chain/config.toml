@@ -269,11 +269,15 @@ version = "0.5.0"
 criteria = "safe-to-run"
 
 [[exemptions.ctor]]
-version = "0.2.9"
+version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ctor-lite]]
 version = "0.1.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.ctor-proc-macro]]
+version = "0.0.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.cursor-icon]]
@@ -414,6 +418,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.drm-sys]]
 version = "0.8.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.dtor]]
+version = "0.8.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.dtor-proc-macro]]
+version = "0.0.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.encdec]]
@@ -705,11 +717,11 @@ version = "0.10.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.ledger-lib]]
-version = "0.1.0@git:035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+version = "0.1.0@git:c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 criteria = "safe-to-deploy"
 
 [[exemptions.ledger-proto]]
-version = "0.1.0@git:035789ec436d47b938e8a3d2085ffb2fbf6f0559"
+version = "0.1.0@git:c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 criteria = "safe-to-deploy"
 
 [[exemptions.libdbus-sys]]
@@ -730,6 +742,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libusb1-sys]]
 version = "0.7.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.link-section]]
+version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.lru]]
@@ -997,7 +1013,7 @@ version = "1.0.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.proptest]]
-version = "1.6.0"
+version = "1.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.protobuf]]
@@ -1056,8 +1072,16 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.rand_chacha]]
+version = "0.10.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.rand_core]]
 version = "0.5.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_core]]
+version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_hc]]

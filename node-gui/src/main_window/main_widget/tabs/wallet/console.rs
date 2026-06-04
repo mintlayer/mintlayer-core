@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, row, scrollable::Id, tooltip, Scrollable, Text},
     Element, Length,
+    widget::{Scrollable, Text, button, column, row, scrollable::Id, tooltip},
 };
 
 use node_gui_backend::messages::WalletInfo;
 
 use crate::main_window::main_widget::tabs::wallet::{
-    status_bar::estimate_status_bar_height, STATUS_BAR_SEPARATOR_HEIGHT,
+    STATUS_BAR_SEPARATOR_HEIGHT, status_bar::estimate_status_bar_height,
 };
 
 use super::{ConsoleState, WalletMessage};

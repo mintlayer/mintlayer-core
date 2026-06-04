@@ -15,7 +15,7 @@
 
 use crate::error::TokenIssuanceError;
 
-use common::chain::{tokens::is_rfc3986_valid_symbol, ChainConfig};
+use common::chain::{ChainConfig, tokens::is_rfc3986_valid_symbol};
 use utils::ensure;
 
 fn check_is_text_ascii_alphanumeric(str: &[u8]) -> bool {

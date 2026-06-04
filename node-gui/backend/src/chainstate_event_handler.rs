@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use chainstate::ChainstateEvent;
 use utils::tap_log::TapLog;

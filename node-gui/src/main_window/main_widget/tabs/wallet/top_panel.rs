@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, horizontal_space, row, text::LineHeight, tooltip, Text},
     Alignment, Element, Length,
+    widget::{Text, button, horizontal_space, row, text::LineHeight, tooltip},
 };
 
 use common::chain::ChainConfig;
@@ -41,8 +41,10 @@ pub fn view_top_panel(
 
     let password = match wallet_info.encryption {
         EncryptionState::EnabledLocked => {
-            row![iced::widget::button(Text::new("Unlock").line_height(LineHeight::Relative(1.0)))
-                .on_press(WalletMessage::Unlock)]
+            row![
+                iced::widget::button(Text::new("Unlock").line_height(LineHeight::Relative(1.0)))
+                    .on_press(WalletMessage::Unlock)
+            ]
         }
         EncryptionState::EnabledUnlocked => row![
             iced::widget::button(Text::new("Lock").line_height(LineHeight::Relative(1.0)))

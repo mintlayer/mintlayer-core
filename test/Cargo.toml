@@ -13,11 +13,12 @@ dist = false
 utils = { path = "../utils" }
 node-lib = { path = "../node-lib" }
 logging = { path = "../logging" }
-wallet-cli-lib = { path = "../wallet/wallet-cli-lib" }
 wallet-address-generator-lib = { path = "../wallet/wallet-address-generator-lib" }
-wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib" }
+wallet-cli-lib = { path = "../wallet/wallet-cli-lib", default-features = false }
+wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib", default-features = false }
 
 clap = { workspace = true, features = ["derive"] }
+ctor.workspace = true
 tokio = { workspace = true, features = ['full'] }
 
 [dev-dependencies]
@@ -28,3 +29,14 @@ thiserror.workspace = true
 name = "functional"
 path = "runner/functional.rs"
 harness = false
+
+[features]
+trezor = [
+  "wallet-cli-lib/trezor",
+  "wallet-rpc-lib/trezor",
+]
+ledger = [
+  "wallet-cli-lib/ledger",
+  "wallet-rpc-lib/ledger",
+]
+default = ["trezor", "ledger"]

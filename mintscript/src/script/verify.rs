@@ -15,7 +15,7 @@
 
 //! Script verification / evaluation
 
-use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{Destination, signature::EvaluatedInputWitness, timelock::OutputTimeLock};
 
 use super::{HashChallenge, WitnessScript};
 

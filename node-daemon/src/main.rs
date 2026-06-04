@@ -15,14 +15,10 @@
 
 use node_lib::run_node_daemon;
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     let exit_code = run_node_daemon().await.unwrap_or_else(|err| {
         eprintln!("Mintlayer node launch failed: {err:?}");
         std::process::exit(1)

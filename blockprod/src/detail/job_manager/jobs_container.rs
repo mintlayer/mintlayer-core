@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use crate::detail::CustomId;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    chain::{GenBlock, block::timestamp::BlockTimestamp},
     primitives::Id,
 };
 use logging::log;

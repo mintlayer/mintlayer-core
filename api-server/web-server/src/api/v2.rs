@@ -14,35 +14,35 @@
 // limitations under the License.
 
 use crate::{
+    TxSubmitClient,
     api::json_helpers::{
-        self, amount_to_json, block_header_to_json, pool_data_to_json, to_tx_json_with_block_info,
-        tx_to_json, txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
+        self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
+        to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
     },
-    TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorage, ApiServerStorageRead,
-    BlockInfo, CoinOrTokenStatistic, Order, TransactionInfo,
+    AmountWithDecimals, ApiServerStorage, ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic,
+    Order, TransactionInfo, block_aux_data::BlockAuxData,
 };
 use axum::{
+    Json, Router,
     extract::{DefaultBodyLimit, Path, Query, State},
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
         UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
 };
 use hex::ToHex;
 use serde::Deserialize;
@@ -221,13 +221,15 @@ pub async fn block_reward<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?.block;
 
-    Ok(Json(json!(block
-        .block
-        .block_reward()
-        .outputs()
-        .iter()
-        .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
-        .collect::<Vec<_>>())))
+    Ok(Json(json!(
+        block
+            .block
+            .block_reward()
+            .outputs()
+            .iter()
+            .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
+            .collect::<Vec<_>>()
+    )))
 }
 
 pub async fn block_transaction_ids<T: ApiServerStorage>(
@@ -625,7 +627,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         (None, _) => {
             return Err(ApiServerWebServerError::NotFound(
                 ApiServerWebServerNotFoundError::TransactionNotPartOfBlock,
-            ))
+            ));
         }
     };
 

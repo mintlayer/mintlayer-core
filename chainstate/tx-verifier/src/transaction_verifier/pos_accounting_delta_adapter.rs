@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{storage::TransactionVerifierStorageError, TransactionSource};
+use super::{TransactionSource, storage::TransactionVerifierStorageError};
 
 use common::{
     chain::{DelegationId, PoolId},

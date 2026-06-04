@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{borrow::Cow, ffi::OsString};
+use std::ffi::OsString;
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum GetFromEnvError {
@@ -30,9 +30,4 @@ pub fn get_from_env(var_name: &str) -> Result<Option<String>, GetFromEnvError> {
             data,
         }),
     }
-}
-
-pub enum ValueOrEnvVar<T> {
-    Value(T),
-    EnvVar(Cow<'static, str>),
 }

@@ -21,9 +21,9 @@ use std::{
 use serialization::{Decode, Encode};
 
 use crate::{
+    IsGlobalIp,
     ip_address::{Ip4, Ip6},
     socket_address::SocketAddress,
-    IsGlobalIp,
 };
 
 #[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq)]

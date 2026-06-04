@@ -15,19 +15,19 @@
 
 use clap::{Parser, ValueEnum};
 
-use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
+use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::config::{Builder, ChainType};
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::u31::U31;
 use crypto::key::hdkd::{child_number::ChildNumber, derivable::Derivable};
 use utils::{app_version_with_git_info, clap_utils, ensure};
-use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::WalletError;
+use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::{
-    key_chain::{make_account_path, KeyChainError, MasterKeyChain},
     WalletResult,
+    key_chain::{KeyChainError, MasterKeyChain, make_account_path},
 };
 use wallet_types::KeyPurpose;
 

@@ -13,19 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error::{BlockConstructionError, Error},
-    event::MempoolEvent,
-    tx_accumulator::{PackingStrategy, TransactionAccumulator},
-    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolMaxSize, TxOptions, TxStatus,
-};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc};
+
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
-use std::{num::NonZeroUsize, sync::Arc};
+use mempool_types::TransactionDuplicateStatus;
 
+use crate::{
+    FeeRate, MempoolConfig, MempoolMaxSize, TxOptions, TxStatus,
+    error::{BlockConstructionError, Error},
+    event::MempoolEvent,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+};
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
     fn add_transaction_remote(
@@ -41,7 +43,7 @@ pub trait MempoolInterface: Send + Sync {
         tx: SignedTransaction,
         origin: LocalTxOrigin,
         options: TxOptions,
-    ) -> Result<(), Error>;
+    ) -> Result<TransactionDuplicateStatus, Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Vec<SignedTransaction>;
@@ -61,6 +63,9 @@ pub trait MempoolInterface: Send + Sync {
     /// Best block ID according to mempool. May be temporarily out of sync with chainstate.
     fn best_block_id(&self) -> Id<GenBlock>;
 
+    /// Return the mempool config.
+    fn config(&self) -> &MempoolConfig;
+
     /// Collect transactions by putting them in given accumulator
     /// Returns the accumulator with the collected transactions
     /// Ok(None) is returned on recoverable errors, such as if
@@ -71,6 +76,16 @@ pub trait MempoolInterface: Send + Sync {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
+
+    /// Return at most `tx_count` transaction ids from `tx_ids`, ordering them by score and ancestry:
+    /// transactions with better score will come first and ancestors will come before their descendants.
+    ///
+    /// All transactions in `tx_ids` must be present in the mempool before the call.
+    fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, Error>;
 
     /// Subscribe to events emitted by mempool subsystem
     fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
@@ -93,7 +108,7 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Get the fee rate at multiple uniformly distributed points along the mempool's transactions
     fn get_fee_rate_points(&self, num_points: NonZeroUsize)
-        -> Result<Vec<(usize, FeeRate)>, Error>;
+    -> Result<Vec<(usize, FeeRate)>, Error>;
 
     /// Notify mempool given peer has disconnected
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);

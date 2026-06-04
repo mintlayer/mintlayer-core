@@ -25,8 +25,8 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
 use networking::transport::TransportSocket;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
-use randomness::RngCore;
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::Rng;
 use test_utils::BasicTestTimeGetter;
 
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
         default_backend::types::{BackendObserver, Message},
         types::{PeerInfo, PeerManagerMessageExtTag, PeerRole},
     },
-    peer_manager::{self, dns_seed::DnsSeed, PeerManagerObserver},
+    peer_manager::{self, PeerManagerObserver, dns_seed::DnsSeed},
 };
 
 pub mod test_node;
@@ -240,7 +240,7 @@ impl TestDnsSeed {
 
 #[async_trait]
 impl DnsSeed for TestDnsSeed {
-    async fn obtain_addresses(&self, _rng: &mut (dyn RngCore + Send)) -> Vec<SocketAddress> {
+    async fn obtain_addresses(&self, _rng: &mut (dyn Rng + Send)) -> Vec<SocketAddress> {
         self.addresses.lock().unwrap().clone()
     }
 }

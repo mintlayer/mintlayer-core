@@ -22,10 +22,12 @@ use crypto::key::{PredefinedSigAuxDataProvider, PrivateKey, PublicKey, Signature
 use serialization::{CompactLen, Encode};
 
 use crate::chain::{
+    Destination, SignedTransaction, Transaction, TxInput, TxOutput,
     classic_multisig::ClassicMultisigChallenge,
-    htlc::{HtlcSecret, HTLC_SECRET_SIZE},
+    htlc::{HTLC_SECRET_SIZE, HtlcSecret},
     signature::{
         inputsig::{
+            InputWitness,
             authorize_hashed_timelock_contract_spend::{
                 AuthorizedHashedTimelockContractSpend, AuthorizedHashedTimelockContractSpendTag,
             },
@@ -33,11 +35,9 @@ use crate::chain::{
             authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
             classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
             standard_signature::StandardInputSignature,
-            InputWitness,
         },
         sighash::sighashtype::SigHashType,
     },
-    Destination, SignedTransaction, Transaction, TxInput, TxOutput,
 };
 
 /// Wallet errors

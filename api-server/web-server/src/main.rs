@@ -19,8 +19,8 @@ mod error;
 
 use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use api_web_server::{
-    api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState, CachedValues,
-    TxSubmitClient,
+    ApiServerWebServerState, CachedValues, TxSubmitClient, api::web_server,
+    config::ApiServerWebServerConfig,
 };
 use clap::Parser;
 use common::{
@@ -36,12 +36,10 @@ use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chai
 
 use crate::error::ApiServerWebServerInitError;
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() -> Result<(), ApiServerWebServerInitError> {
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     logging::init_logging();
 
     let args = ApiServerWebServerConfig::parse();
@@ -80,7 +78,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
             _ => {
                 return Err(ApiServerWebServerInitError::InvalidConfig(
                     "Invalid RPC cookie/username/password combination".to_owned(),
-                ))
+                ));
             }
         };
         let default_rpc_bind_address =

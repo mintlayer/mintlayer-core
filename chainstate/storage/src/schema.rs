@@ -18,10 +18,10 @@
 use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
-        config::EpochIndex,
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        config::EpochIndex,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, BlockHeight, Id},
 };

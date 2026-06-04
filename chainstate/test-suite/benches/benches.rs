@@ -15,8 +15,8 @@
 
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, Idable, H256},
+    chain::{Destination, PoolId, config::create_unit_test_config, stakelock::StakePoolData},
+    primitives::{Amount, BlockDistance, H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -24,7 +24,7 @@ use crypto::{
 };
 use test_utils::random::make_seedable_rng;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 pub fn pow_reorg(c: &mut Criterion) {
     let mut rng = make_seedable_rng(1111.into());

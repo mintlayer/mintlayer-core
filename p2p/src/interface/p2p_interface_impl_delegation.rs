@@ -24,7 +24,7 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use utils_networking::IpOrSocketAddress;
 
-use crate::{types::peer_id::PeerId, P2pEvent};
+use crate::{P2pEvent, types::peer_id::PeerId};
 
 use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 

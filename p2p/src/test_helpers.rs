@@ -35,8 +35,8 @@ use crate::{
     ban_config::BanConfig,
     config::P2pConfig,
     net::{
-        types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
+        types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::{
         self,

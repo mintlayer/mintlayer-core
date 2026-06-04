@@ -16,19 +16,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate::{
+    ChainstateError,
     chainstate_interface::ChainstateInterface,
     tx_verifier::{
-        transaction_verifier::{CachedBlockUndo, CachedUtxosBlockUndo},
         TransactionSource, TransactionVerifierStorageRef,
+        transaction_verifier::{CachedBlockUndo, CachedUtxosBlockUndo},
     },
-    ChainstateError,
 };
-use chainstate_types::{storage_result, TipStorageTag};
+use chainstate_types::{TipStorageTag, storage_result};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, Id},
 };

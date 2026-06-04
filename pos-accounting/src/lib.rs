@@ -23,7 +23,7 @@ pub use crate::{
     error::{Error, Result},
     pool::{
         delegation::DelegationData,
-        delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
+        delta::{DeltaMergeUndo, PoSAccountingDelta, data::PoSAccountingDeltaData},
         helpers::random_undo_for_test,
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
@@ -31,7 +31,7 @@ pub use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{
-        in_memory::InMemoryPoSAccounting, DefaultStorageTag, PoSAccountingStorageRead,
-        PoSAccountingStorageWrite, StorageTag,
+        DefaultStorageTag, PoSAccountingStorageRead, PoSAccountingStorageWrite, StorageTag,
+        in_memory::InMemoryPoSAccounting,
     },
 };

@@ -18,7 +18,7 @@ pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
+    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::id::WithId,
 };
 use orders_accounting::OrdersAccountingView;
@@ -27,8 +27,8 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     error::ConnectTransactionError,
     transaction_verifier::{
-        storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
         TransactionVerifier,
+        storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
     },
 };
 use utils::shallow_clone::ShallowClone;

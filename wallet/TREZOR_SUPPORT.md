@@ -52,17 +52,14 @@ Instead, you'll have to build it from `mintlayer-master`.
 
 If you are interested in a particular release, you may just go to [the firmware releases page](https://github.com/mintlayer/mintlayer-trezor-firmware/releases),
 download the `.bin` file corresponding to your device model and install it via Trezor Suite:
-- If you are installing the Mintlayer firmware over the official one, enter the bootloader mode on the device first,
-  otherwise Trezor Suite may refuse to install it, complaining about "different firmware vendor". To do so,
-  hold down both buttons while connecting a Safe 3, or swipe across the screen while connecting a Safe 5
-  or Model T. After that, select the "Install firmware" option (it can be named differently depending on
-  the device, e.g. it's called "INSTALL FW" on Safe 3).\
-  Note that if you're installing the Mintlayer firmware over another custom firmware (Mintlayer or not), this step is optional,
-  because Trezor Suite will automatically restart the device and put it in the bootloader mode on the next step.
 - Inside Trezor Suite go to "Settings" -> "Device" -> "Danger area" -> "Install custom firmware" and click "Install".
 - Follow the instructions that will appear on your screen.
 
-Note:
+Note that when installing the Mintlayer firmware over the official one, some versions of Trezor Suite may refuse to do it
+complaining about "different firmware vendor". In such a case you may need to enter the bootloader mode on the device first,
+as described in [Flash the built firmware](#flash-the-built-firmware), and try again.
+
+Also note:
 - Trezor Safe 3 comes in two revisions, A and B, that look identical but require different firmware.\
   Determining the revision of your particular device is non-trivial, unfortunately:
   * If you have `trezorctl` installed, which is the Trezor command line tool, you may run `trezorctl get-features`[^1]
@@ -83,24 +80,31 @@ In either case, you'll first need to clone the repository and checkout the requi
 - If you want a particular release, checkout the tag corresponding to that release. The list of tags
   can be found [here](https://github.com/mintlayer/mintlayer-trezor-firmware/tags).
 
-In the examples below we'll be assuming that you want the release 1.0.0, whose tag is `mintlayer-v1.0.0`.
+In the examples below we'll be assuming that you want the latest version from the `mintlayer-master` branch.
 
 #### Building the firmware using `Nix`
 
 ##### Get the source code
 
-Clone the repository, `cd` into the directory and checkout the required revision:
 ```sh
-git clone --recurse-submodules https://github.com/mintlayer/mintlayer-trezor-firmware
+# Clone the repository
+git clone https://github.com/mintlayer/mintlayer-trezor-firmware
+
+# `cd` into the source directory
 cd mintlayer-trezor-firmware
-git checkout --recurse-submodules mintlayer-v1.0.0
+
+# Checkout the required revision (redundant in the case of mintlayer-master, which is the default branch)
+git checkout mintlayer-master
+
+# Init repository submodules
+git submodule update --init --recursive
 ```
 
 ##### Install `Nix`
 
 On a Debian-based system you can do this via `sudo apt install nix-bin`.
 
-Check that `Nix` works by running `nix-shell -p hello --run hello`
+Check that `Nix` works by running `nix-shell -p hello --run hello`.
 
 If you're getting the error `getting status of /nix/var/nix/daemon-socket/socket: Permission denied`
 on your Linux machine, you may need to add the current user to the `nix-users` group:
@@ -112,16 +116,16 @@ You'll also need to re-login after that.
 If you're getting the error `file 'nixpkgs' was not found in the Nix search path`, add
 the `nixpkgs` channel by running:
 ```sh
-nix-channel --add https://nixos.org/channels/nixos-25.05 nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-25.11 nixpkgs
 nix-channel --update
 ```
 
 Run `nix-shell -p hello --run hello` again. If everything is ok, it should print `Hello, world!`.
 
-##### Install required Python dependencies via `Poetry`
+##### Install required Python dependencies via `uv` [^2]
 
 ```sh
-nix-shell --run "poetry install"
+nix-shell --run "uv sync"
 ```
 
 ##### Build the firmware
@@ -129,7 +133,7 @@ nix-shell --run "poetry install"
 Run:
 
 ```sh
-TREZOR_MODEL=T3T1 nix-shell --run "poetry run make -C core vendor build_firmware"
+TREZOR_MODEL=T3T1 nix-shell --run "uv run make -C core vendor build_firmware"
 ```
 
 The value of the `TREZOR_MODEL` env variable determines the target device which the firmware will be built for.
@@ -143,7 +147,10 @@ The possible values are:
 
 So in the example above we're building it for Safe 5.
 
-##### Flash the firmware
+Note: Trezor Safe 7 (TREZOR_MODEL=T3W1) is not currently supported by the Core wallets. I.e. you can build
+the Mintlayer firmware for Safe 7, but the wallets won't be able to communicate with the device.
+
+##### Flash the built firmware
 
 The file `core/build/firmware/firmware.bin` in the source directory will be the firmware that you've just built,
 so you can go ahead and install it via Trezor Suite.
@@ -152,18 +159,19 @@ However you can also do it via the command line:
 
 First you need to put your device into bootloader mode. To do so
 - On Safe 3, hold the left button when connecting the USB cable.
-- On Model T and Safe 5, swipe across the screen when connecting the USB cable.
+- On touchscreen models, swipe across the screen when connecting the USB cable.
 
-After that the device will present you with an option to install firmware, select that option.
+After that the device will present you with an option to install firmware (which can be named differently depending
+on the model, e.g. it's called "INSTALL FW" on Safe 3); select that option.
 
-Now you can flash the firmware by running[^2]:
+Now you can flash the firmware by running[^3]:
 ```sh
-nix-shell --run "poetry run make -C core upload"
+nix-shell --run "uv run make -C core upload"
 ```
 
 Note: after having installed the firmware you may use Mintlayer-specific commands of `trezorctl`. Run
 ```sh
-nix-shell --run "poetry run trezorctl mintlayer --help"
+nix-shell --run "uv run trezorctl mintlayer --help"
 ```
 to see what commands are available.
 
@@ -177,17 +185,17 @@ Clone the repository, `cd` into the directory and checkout the required revision
 ```sh
 git clone https://github.com/mintlayer/mintlayer-trezor-firmware
 cd mintlayer-trezor-firmware
-git checkout mintlayer-v1.0.0
+git checkout mintlayer-master
 ```
 
-Note that the `--recurse-submodules` parameter is not needed in this case. This is because the build script will
-do the cloning again, so this initial clone is mainly to get the correct build script.
+Note that the `git submodule update` command is not needed in this case. This is because the build script will
+do the cloning again, so this initial clone is only needed to get the correct build script.
 
 ##### Build the firmware
 
 Run:
 ```sh
-PRODUCTION=0 ./build-docker.sh --models T3T1 --skip-bitcoinonly --targets firmware mintlayer-v1.0.0
+PRODUCTION=0 ./build-docker.sh --models T3T1 --skip-bitcoinonly --targets firmware mintlayer-master
 ```
 
 Note:
@@ -205,12 +213,25 @@ that you've specified via the `--models` parameter
 (i.e. in this particular example the path will be `build/core-T3T1/firmware/firmware.bin`).\
 Install it via Trezor Suite.
 
+### Passphrase
+
+Since late 2025, Trezor Suite disables passphrase wallets by default during the initial device setup.
+If you want to use a passphrase wallet (which is a good idea, but make sure you understand what it means),
+there are two ways to enable them:
+* via Trezor Suite: go to "Settings" -> "Device" -> "Passphrase" and turn the "Use Passphrase wallets" switch on;
+* via `trezorctl`: run `nix-shell --run "uv run trezorctl set passphrase on"` in the firmware source directory.
+
+When passphrase wallets are enabled on the device, `node-gui` and `wallet-cli` will ask you for the passphrase
+whenever you create a new wallet or open/recover an existing one.
+
 [^1]: If you instead decide to build the firmware from source using the `Nix` approach,
 you'll be able to run `trezorctl` directly from the source directory like this:
-`nix-shell --run "poetry run trezorctl get-features"`.\
+`nix-shell --run "uv run trezorctl get-features"`.\
 I.e. you won't have to install it separately in this case.
 
-[^2]: instead of executing `nix-shell --run "poetry run YOUR_COMMAND"` every time,
-you can enter the nix-shell by running `nix-shell`
-and then inside the nix-shell enter poetry shell by running `poetry shell`.\
-After this, you can run `YOUR_COMMAND` directly, e.g. `make -C core upload` or `trezorctl get-features`.
+[^2]: At the time of the `mintlayer-v1.0.0` release, Trezor firmware used `poetry` instead of `uv`
+for Python package management. So, if you're building `mintlayer-v1.0.0`, then a) instead of `uv sync` do `poetry install`, b) in all other commands just replace `uv` with `poetry`.
+
+[^3]: nix-shell is somewhat slow to start, so instead of executing `nix-shell --run "uv run YOUR_COMMAND_1"`,
+`nix-shell --run "uv run YOUR_COMMAND_2"` you may want to enter the shell once by executing `nix-shell`
+and then execute `uv run YOUR_COMMAND_1`, `uv run YOUR_COMMAND_2` inside it.

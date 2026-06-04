@@ -16,6 +16,9 @@
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination,
+        GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
         signature::sighash::input_commitments::SighashInputCommitment,
@@ -25,14 +28,11 @@ use crate::{
             IsTokenFreezable, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId, Destination,
-        GenBlock, OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, H256},
+    primitives::{Amount, H256, Id, per_thousand::PerThousand},
 };
 use crypto::{
-    key::{secp256k1::Secp256k1PublicKey, KeyKind, PublicKey},
+    key::{KeyKind, PublicKey, secp256k1::Secp256k1PublicKey},
     vrf::{SchnorrkelPublicKey, VRFKeyKind, VRFPublicKey},
 };
 use script::Script;

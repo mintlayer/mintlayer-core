@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
+use chainstate::{ChainstateConfig, DefaultTransactionVerificationStrategy, make_chainstate};
 use common::chain::config::create_unit_test_config;
 use mempool::{MempoolConfig, MempoolInit};
 use storage_inmemory::InMemory;
@@ -60,7 +60,8 @@ async fn shutdown_timeout() {
         mempool_config,
         chainstate.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("shutdown-test-mempool", |hdl, _| mempool_init.init(hdl));
 
@@ -71,6 +72,7 @@ async fn shutdown_timeout() {
         p2p_config,
         chainstate.clone(),
         mempool.clone(),
+        Default::default(),
         Default::default(),
         peerdb_storage,
     )

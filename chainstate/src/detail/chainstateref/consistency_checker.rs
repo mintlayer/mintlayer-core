@@ -127,8 +127,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
             // Check that the id stored in the block index matches the supposed id of the block.
             let block_id_in_block_index = block_index.block_id();
             assert_eq!(
-                block_id,
-                block_id_in_block_index,
+                block_id, block_id_in_block_index,
                 "{PANIC_MSG}: block id from BlockIndex {block_id_in_block_index} doesn't match {block_id}"
             );
 

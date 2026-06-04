@@ -17,10 +17,10 @@ use utils::ensure;
 
 use crate::{
     chain::{
-        signature::{sighash::sighashtype, DestinationSigError},
         TxInput, TxOutput,
+        signature::{DestinationSigError, sighash::sighashtype},
     },
-    primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
+    primitives::id::{DefaultHashAlgoStream, hash_encoded_to},
 };
 
 use super::SighashInputCommitment;
@@ -136,24 +136,24 @@ mod tests {
     use rstest::rstest;
 
     use crypto::hash::StreamHasher;
-    use randomness::{CryptoRng, Rng};
-    use test_utils::random::{make_seedable_rng, Seed};
+    use randomness::{CryptoRng, Rng, RngExt as _};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{
         chain::{
+            OutPointSourceId,
             signature::{
-                sighash::{sighashtype::SigHashType, SighashInputCommitment},
+                sighash::{SighashInputCommitment, sighashtype::SigHashType},
                 tests::utils::{generate_input_commitments, generate_inputs_utxos, sig_hash_types},
             },
-            OutPointSourceId,
         },
-        primitives::{Id, H256},
+        primitives::{H256, Id},
     };
 
     use super::*;
 
     fn generate_random_input(rng: &mut impl Rng) -> TxInput {
-        let outpoint = if rng.gen::<bool>() {
+        let outpoint = if rng.random::<bool>() {
             OutPointSourceId::Transaction(Id::new(H256::random_using(rng)))
         } else {
             OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)))
@@ -165,7 +165,7 @@ mod tests {
     fn do_test_hashable_inputs(
         inputs_count: usize,
         input_commitments_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) {
         let inputs = (0..inputs_count).map(|_| generate_random_input(rng)).collect::<Vec<_>>();
 
@@ -191,17 +191,19 @@ mod tests {
 
             let mut stream = DefaultHashAlgoStream::new();
 
-            let index_to_hash = rng.gen_range(0..inputs.len());
+            let index_to_hash = rng.random_range(0..inputs.len());
 
             // Invalid input index
-            assert!(hashable_inputs
-                .signature_hash(
-                    &mut stream,
-                    SigHashType::all(),
-                    &inputs[index_to_hash],
-                    index_to_hash,
-                )
-                .is_ok());
+            assert!(
+                hashable_inputs
+                    .signature_hash(
+                        &mut stream,
+                        SigHashType::all(),
+                        &inputs[index_to_hash],
+                        index_to_hash,
+                    )
+                    .is_ok()
+            );
 
             // Valid case
             assert_eq!(
@@ -225,8 +227,8 @@ mod tests {
     fn signature_hashable_inputs(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let inputs_count = rng.gen_range(0..100);
-        let inputs_utxos_count = rng.gen_range(0..100);
+        let inputs_count = rng.random_range(0..100);
+        let inputs_utxos_count = rng.random_range(0..100);
 
         // invalid case
         do_test_hashable_inputs(inputs_count, inputs_utxos_count, &mut rng);
@@ -297,7 +299,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         for sighash_type in sig_hash_types() {
-            let inputs_count = rng.gen_range(1..100);
+            let inputs_count = rng.random_range(1..100);
             let inputs =
                 (0..inputs_count).map(|_| generate_random_input(&mut rng)).collect::<Vec<_>>();
             let inputs_utxos = generate_inputs_utxos(&mut rng, inputs_count);
@@ -309,7 +311,7 @@ mod tests {
                 inputs_utxos: &inputs_utxos_refs,
             };
 
-            let input_index = rng.gen_range(0..inputs_count);
+            let input_index = rng.random_range(0..inputs_count);
 
             let hash_legacy: H256 = {
                 let mut stream = DefaultHashAlgoStream::new();

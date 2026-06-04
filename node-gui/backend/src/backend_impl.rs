@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 
-use futures::{stream::FuturesOrdered, TryStreamExt};
+use futures::{TryStreamExt, stream::FuturesOrdered};
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
@@ -24,7 +24,7 @@ use tokio::{
 use common::{
     address::{Address, RpcAddress},
     chain::{ChainConfig, GenBlock, SignedTransaction},
-    primitives::{per_thousand::PerThousand, BlockHeight, Id},
+    primitives::{BlockHeight, Id, per_thousand::PerThousand},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use logging::log;
@@ -32,21 +32,20 @@ use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
 use serialization::hex_encoded::HexEncoded;
 use utils::tokio_spawn;
-use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
+use wallet::{WalletError, account::transaction_list::TransactionList, wallet::Error};
 use wallet_cli_commands::{
-    get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
-    WalletCommand,
+    CommandHandler, ConsoleCommand, ManageableWalletCommand, WalletCommand, get_repl_command,
+    parse_input,
 };
 use wallet_controller::{
-    make_cold_wallet_rpc_client,
+    ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient, make_cold_wallet_rpc_client,
     types::{Balances, WalletCreationOptions, WalletExtraInfo, WalletTypeArgs},
-    ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
-use wallet_rpc_lib::{types::HardwareWalletType, EventStream, WalletRpc, WalletService};
+use wallet_rpc_lib::{EventStream, WalletRpc, WalletService, types::HardwareWalletType};
 use wallet_types::{
-    scan_blockchain::ScanBlockchain, wallet_type::WalletType, with_locked::WithLocked,
-    ImportOrCreate,
+    ImportOrCreate, scan_blockchain::ScanBlockchain, wallet_type::WalletType,
+    with_locked::WithLocked,
 };
 
 use super::{
@@ -344,14 +343,14 @@ impl Backend {
             }
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+                return Err(BackendError::HardwareWalletNotSupportedInColdMode);
             }
             #[cfg(feature = "ledger")]
             (WalletType::Ledger, ColdHotNodeController::Cold) => {
-                return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+                return Err(BackendError::HardwareWalletNotSupportedInColdMode);
             }
             (WalletType::Hot, ColdHotNodeController::Cold) => {
-                return Err(BackendError::HotNotSupported)
+                return Err(BackendError::HotNotSupported);
             }
         };
 
@@ -432,7 +431,7 @@ impl Backend {
             | wallet_controller::types::CreatedWallet::NewlyGeneratedMnemonic(_) => {}
             #[cfg(feature = "trezor")]
             wallet_controller::types::CreatedWallet::TrezorDeviceSelection(found_devices) => {
-                return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
+                return Err(BackendError::MultipleTrezorDevicesFound(found_devices));
             }
         }
         tokio_spawn(
@@ -579,14 +578,14 @@ impl Backend {
                 }
                 #[cfg(feature = "trezor")]
                 (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                    return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+                    return Err(BackendError::HardwareWalletNotSupportedInColdMode);
                 }
                 #[cfg(feature = "ledger")]
                 (WalletType::Ledger, ColdHotNodeController::Cold) => {
-                    return Err(BackendError::HardwareWalletNotSupportedInColdMode)
+                    return Err(BackendError::HardwareWalletNotSupportedInColdMode);
                 }
                 (WalletType::Hot, ColdHotNodeController::Cold) => {
-                    return Err(BackendError::HotNotSupported)
+                    return Err(BackendError::HotNotSupported);
                 }
             };
 
@@ -649,7 +648,7 @@ impl Backend {
             | wallet_controller::types::OpenedWallet::Opened => {}
             #[cfg(feature = "trezor")]
             wallet_controller::types::OpenedWallet::TrezorDeviceSelection(found_devices) => {
-                return Err(BackendError::MultipleTrezorDevicesFound(found_devices))
+                return Err(BackendError::MultipleTrezorDevicesFound(found_devices));
             }
         }
         tokio_spawn(

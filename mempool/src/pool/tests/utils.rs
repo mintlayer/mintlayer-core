@@ -19,7 +19,7 @@ use common::{
     primitives::Id,
     time_getter::TimeGetter,
 };
-use mempool_types::{tx_origin::TxOrigin, TxOptions, TxStatus};
+use mempool_types::{TxOptions, TxStatus, tx_origin::TxOrigin};
 
 pub use crate::pool::tx_pool::tests::utils::*;
 pub use rstest::rstest;
@@ -41,7 +41,7 @@ pub fn setup_with_chainstate_and_clock(
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
         chain_config,
-        mempool_config.into(),
+        mempool_config,
         chainstate_handle,
         clock,
         StoreMemoryUsageEstimator,

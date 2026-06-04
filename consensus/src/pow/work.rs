@@ -19,23 +19,23 @@ use std::sync::Arc;
 
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
-    chain::{
-        block::consensus_data::PoWData,
-        block::{timestamp::BlockTimestamp, BlockHeader, ConsensusData},
-        config::ChainConfig,
-        GenBlockId, PoWStatus,
-    },
-    primitives::{BlockHeight, Compact, Idable, H256},
     Uint256,
+    chain::{
+        GenBlockId, PoWStatus,
+        block::consensus_data::PoWData,
+        block::{BlockHeader, ConsensusData, timestamp::BlockTimestamp},
+        config::ChainConfig,
+    },
+    primitives::{BlockHeight, Compact, H256, Idable},
 };
 use utils::atomics::RelaxedAtomicBool;
 
 use crate::{
     get_ancestor_from_block_index_handle,
     pow::{
+        PoW,
         error::ConsensusPoWError,
         helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
-        PoW,
     },
 };
 

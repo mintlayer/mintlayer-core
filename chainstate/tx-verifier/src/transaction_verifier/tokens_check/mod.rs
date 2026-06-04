@@ -18,8 +18,8 @@ use self::check_utils::check_media_hash;
 use crate::error::TokenIssuanceError;
 
 use common::chain::{
-    tokens::{NftIssuanceV0, TokenIssuance},
     ChainConfig,
+    tokens::{NftIssuanceV0, TokenIssuance},
 };
 use serialization::{DecodeAll, Encode};
 use utils::ensure;

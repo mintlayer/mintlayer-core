@@ -16,7 +16,7 @@
 pub mod tabs;
 
 use iced::{Element, Task};
-use node_gui_backend::{messages::WalletId, BackendSender};
+use node_gui_backend::{BackendSender, messages::WalletId};
 use wallet_types::wallet_type::WalletType;
 
 use crate::WalletMode;

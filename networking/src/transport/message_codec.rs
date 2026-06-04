@@ -19,8 +19,8 @@ use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{
-    error::{MessageCodecError, NetworkingError},
     Result,
+    error::{MessageCodecError, NetworkingError},
 };
 use serialization::{DecodeAll, Encode};
 
@@ -42,14 +42,14 @@ impl<Msg> MessageCodec<Msg> {
     }
 
     fn check_encoded_message_size(&self, size: usize) -> Result<()> {
-        if let Some(max_message_size) = self.max_encoded_message_size {
-            if size > max_message_size {
-                return Err(MessageCodecError::MessageTooLarge {
-                    actual_size: size,
-                    max_size: max_message_size,
-                }
-                .into());
+        if let Some(max_message_size) = self.max_encoded_message_size
+            && size > max_message_size
+        {
+            return Err(MessageCodecError::MessageTooLarge {
+                actual_size: size,
+                max_size: max_message_size,
             }
+            .into());
         }
 
         Ok(())
@@ -110,7 +110,7 @@ impl<Msg: Encode> Encoder<Msg> for MessageCodec<Msg> {
 
 #[cfg(test)]
 mod tests {
-    use randomness::Rng;
+    use randomness::RngExt;
     use serialization::{Decode, Encode};
     use test_utils::random::Seed;
 
@@ -130,17 +130,17 @@ mod tests {
     fn size_limit_encode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
-        MessageCodec::new(Some(rng.gen_range(64..128)))
+        MessageCodec::new(Some(rng.random_range(64..128)))
             .encode(message.clone(), &mut buf)
             .unwrap();
         assert!(buf.len() > size_of::<MsgLenHeader>());
 
         let message_length = buf.len() - size_of::<MsgLenHeader>();
-        let max_length = rng.gen_range(0..message_length);
+        let max_length = rng.random_range(0..message_length);
         let mut encoder = MessageCodec::new(Some(max_length));
         let result = encoder.encode(message, &mut buf);
         assert_eq!(
@@ -161,14 +161,14 @@ mod tests {
     fn size_limit_decode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
         let mut encoded = BytesMut::new();
-        MessageCodec::new(Some(rng.gen_range(126..512)))
+        MessageCodec::new(Some(rng.random_range(126..512)))
             .encode(message, &mut encoded)
             .unwrap();
 
         let message_length = encoded.len() - size_of::<MsgLenHeader>();
-        let max_length = rng.gen_range(0..message_length);
+        let max_length = rng.random_range(0..message_length);
         let mut decoder = MessageCodec::<TestMessage>::new(Some(max_length));
         let result = decoder.decode(&mut encoded);
         assert_eq!(
@@ -189,9 +189,9 @@ mod tests {
     fn roundtrip(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = TestMessage { data: rng.gen() };
+        let message = TestMessage { data: rng.random() };
 
-        let mut encoder = MessageCodec::new(Some(rng.gen_range(128..2048)));
+        let mut encoder = MessageCodec::new(Some(rng.random_range(128..2048)));
 
         let mut buf = BytesMut::new();
         encoder.encode(message.clone(), &mut buf).unwrap();

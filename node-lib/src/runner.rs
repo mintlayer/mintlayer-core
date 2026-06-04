@@ -21,15 +21,15 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, Context, Result};
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
+use anyhow::{Context, Result, anyhow};
+use file_rotate::{ContentLimit, FileRotate, compression::Compression, suffix::AppendCount};
 
 use blockprod::rpc::BlockProductionRpcServer;
-use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
+use chainstate::{ChainstateError, InitializationError, rpc::ChainstateRpcServer};
 use chainstate_launcher::{ChainConfig, StorageBackendConfig};
-use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
+use common::chain::config::{ChainType, assert_no_ignore_consensus_in_chain_config};
 use logging::log;
-use mempool::{rpc::MempoolRpcServer, MempoolInit};
+use mempool::{MempoolInit, rpc::MempoolRpcServer};
 use p2p::{error::P2pError, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::{
@@ -37,11 +37,11 @@ use test_rpc_functions::{
 };
 
 use crate::{
-    config_files::{NodeConfigFile, DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED},
+    RpcConfigFile,
+    config_files::{DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED, NodeConfigFile},
     mock_time::set_mock_time,
     node_controller::NodeController,
-    options::{default_data_dir, OptionsWithResolvedCommand, RunOptions},
-    RpcConfigFile,
+    options::{OptionsWithResolvedCommand, RunOptions, default_data_dir},
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -107,7 +107,7 @@ async fn initialize(
         node_config.mempool.unwrap_or_default().into(),
         subsystem::Handle::clone(&chainstate),
         Default::default(),
-    );
+    )?;
     let mempool = manager.add_custom_subsystem("mempool", |handle, _| mempool_init.init(handle));
 
     // P2P subsystem
@@ -166,6 +166,7 @@ async fn initialize(
         Arc::new(p2p_config_file.into()),
         subsystem::Handle::clone(&chainstate),
         subsystem::Handle::clone(&mempool),
+        Default::default(),
         Default::default(),
         peerdb_storage,
     )?
@@ -240,7 +241,10 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResult> {
+pub async fn setup(
+    options: OptionsWithResolvedCommand,
+    default_log_filter: &str,
+) -> Result<NodeSetupResult> {
     let chain_config = options.command.create_chain_config()?;
 
     // Prepare data dir
@@ -255,7 +259,7 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
     let lock_file = lock_data_dir(&data_dir)?;
 
     // Init logging
-    let main_log_writer_settings = logging::default_writer_settings();
+    let main_log_writer_settings = logging::default_writer_settings(default_log_filter.to_owned());
     if options.log_to_file_option_set() {
         let log_file_name = std::env::current_exe().map_or_else(
             |_| DEFAULT_LOG_FILE_NAME.to_owned(),
@@ -279,7 +283,7 @@ pub async fn setup(options: OptionsWithResolvedCommand) -> Result<NodeSetupResul
             Some(logging::WriterSettings {
                 make_writer: logging::write_to_make_writer(log_file),
                 is_terminal: false,
-                filter: logging::ValueOrEnvVar::Value("info".into()),
+                filter: logging::ValueOrEnvVarWithDefault::Value("info".into()),
                 log_style: logging::ValueOrEnvVar::Value(logging::LogStyle::Text(
                     logging::TextColoring::Off,
                 )),
@@ -394,7 +398,9 @@ async fn start(
             Some(ChainstateError::FailedToInitializeChainstate(
                 InitializationError::StorageCompatibilityCheckError(e),
             )) => {
-                log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+                log::warn!(
+                    "Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch."
+                );
 
                 let storage_config: StorageBackendConfig =
                     node_config.chainstate.clone().unwrap_or_default().storage_backend.into();

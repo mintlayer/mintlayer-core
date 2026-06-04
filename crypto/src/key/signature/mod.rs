@@ -17,7 +17,7 @@ use secp256k1;
 use std::io::BufWriter;
 
 use num_derive::FromPrimitive;
-use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode, hex_encoded::HexEncoded};
 
 use super::SignatureError;
 
@@ -111,8 +111,8 @@ mod test {
     use crate::key::{KeyKind, PrivateKey, PublicKey};
     use hex::FromHex;
     use rstest::rstest;
-    use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
+    use test_utils::random::make_seedable_rng;
 
     #[rstest]
     #[trace]

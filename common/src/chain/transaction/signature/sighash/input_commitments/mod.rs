@@ -24,8 +24,8 @@ use utils::cow_utils::CowUtils as _;
 
 use crate::{
     chain::{
-        output_value::OutputValue, AccountCommand, ChainConfig, OrderAccountCommand, OrderId,
-        PoolId, SighashInputCommitmentVersion, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, ChainConfig, OrderAccountCommand, OrderId, PoolId,
+        SighashInputCommitmentVersion, TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue,
     },
     primitives::{Amount, BlockHeight},
 };

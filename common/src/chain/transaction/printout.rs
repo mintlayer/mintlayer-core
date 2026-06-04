@@ -15,7 +15,7 @@
 
 use crate::{
     chain::ChainConfig,
-    primitives::{Idable, H256},
+    primitives::{H256, Idable},
     text_summary::TextSummary,
 };
 
@@ -59,11 +59,20 @@ pub fn transaction_summary(tx: &Transaction, chain_config: &ChainConfig) -> Stri
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rstest::rstest;
+
+    use crypto::{
+        key::{KeyKind, PrivateKey},
+        vrf::{VRFKeyKind, VRFPrivateKey},
+    };
+    use serialization::extras::non_empty_vec::DataOrNoVec;
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use crate::{
         address::Address,
         chain::{
+            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
+            Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
             block::timestamp::BlockTimestamp,
             config::create_mainnet,
             output_value::OutputValue,
@@ -73,21 +82,20 @@ mod tests {
                 IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenId,
                 TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
             },
-            AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, DelegationId,
-            Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         },
-        primitives::{per_thousand::PerThousand, Amount, Id, H256},
+        primitives::{Amount, H256, Id, per_thousand::PerThousand},
         time_getter::TimeGetter,
     };
-    use crypto::{
-        key::{KeyKind, PrivateKey},
-        vrf::{VRFKeyKind, VRFPrivateKey},
-    };
-    use serialization::extras::non_empty_vec::DataOrNoVec;
+
+    use super::*;
 
     // This test is made so that the data can be viewed for evaluation purposes
-    #[test]
-    fn try_it_out() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn try_it_out(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
         let cfg = create_mainnet();
 
         let (_vrf_priv_key, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
@@ -138,7 +146,7 @@ mod tests {
                 )),
             ),
             TxOutput::CreateStakePool(
-                PoolId::new(H256::random()),
+                PoolId::new(H256::random_using(&mut rng)),
                 Box::new(StakePoolData::new(
                     Amount::from_fixedpoint_str("1000.225", 11).unwrap(),
                     Destination::AnyoneCanSpend,
@@ -150,12 +158,15 @@ mod tests {
             ),
             TxOutput::ProduceBlockFromStake(
                 Destination::AnyoneCanSpend,
-                PoolId::new(H256::random()),
+                PoolId::new(H256::random_using(&mut rng)),
             ),
-            TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, PoolId::new(H256::random())),
+            TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                PoolId::new(H256::random_using(&mut rng)),
+            ),
             TxOutput::DelegateStaking(
                 Amount::from_fixedpoint_str("1.2", 11).unwrap(),
-                DelegationId::new(H256::random()),
+                DelegationId::new(H256::random_using(&mut rng)),
             ),
             TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: "abc".to_owned().into_bytes(),
@@ -168,7 +179,7 @@ mod tests {
                 is_freezable: IsTokenFreezable::No,
             }))),
             TxOutput::IssueNft(
-                TokenId::new(H256::random()),
+                TokenId::new(H256::random_using(&mut rng)),
                 Box::new(NftIssuance::V0(NftIssuanceV0 {
                     metadata: Metadata {
                         creator: Some(TokenCreator {
@@ -186,7 +197,7 @@ mod tests {
                         media_uri: DataOrNoVec::from(Some(
                             "http://media.com".to_string().into_bytes(),
                         )),
-                        media_hash: H256::random().as_bytes().to_vec(),
+                        media_hash: H256::random_using(&mut rng).as_bytes().to_vec(),
                     },
                 })),
                 Destination::AnyoneCanSpend,
@@ -198,27 +209,30 @@ mod tests {
             0,
             [
                 TxInput::Utxo(UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(Id::new(H256::random())),
+                    OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
                     2,
                 )),
                 TxInput::Utxo(UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(Id::new(H256::random())),
+                    OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
                     1,
                 )),
                 TxInput::Utxo(UtxoOutPoint::new(
-                    OutPointSourceId::BlockReward(Id::new(H256::random())),
+                    OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
                     1,
                 )),
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(15),
                     AccountSpending::DelegationBalance(
-                        Id::new(H256::random()),
+                        Id::new(H256::random_using(&mut rng)),
                         Amount::from_atoms(100000),
                     ),
                 )),
                 TxInput::AccountCommand(
                     AccountNonce::new(25),
-                    AccountCommand::MintTokens(Id::new(H256::random()), Amount::from_atoms(100000)),
+                    AccountCommand::MintTokens(
+                        Id::new(H256::random_using(&mut rng)),
+                        Amount::from_atoms(100000),
+                    ),
                 ),
             ]
             .to_vec(),

@@ -20,25 +20,26 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, StreamExt};
+use futures::{StreamExt, future::BoxFuture};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
 };
 
 use test_utils::{
-    random::{gen_random_bytes, Seed},
     BasicTestTimeGetter,
+    random::{Seed, gen_random_bytes},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
     test_helpers::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
     transport::{
+        ChannelListener, IdentityStreamAdapter, MpscChannelTransport, NoiseEncryptionAdapter,
+        NoiseEncryptionAdapterMaker, PeerStream, TcpTransportSocket, TransportListener,
+        TransportSocket,
         impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
-        new_message_stream, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
-        NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, PeerStream, TcpTransportSocket,
-        TransportListener, TransportSocket,
+        new_message_stream,
     },
 };
 

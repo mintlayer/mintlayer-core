@@ -19,15 +19,16 @@ use utils::*;
 
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness, Destination,
-        OutPointSourceId, TxInput, TxOutput,
+        Destination, OutPointSourceId, TxInput, TxOutput, output_value::OutputValue,
+        signature::inputsig::InputWitness,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Amount, H256, Id, Idable},
 };
 
 mod basic;
 mod orders_v1;
 mod orphans;
+mod relatives;
 mod utils;
 
 #[ctor::ctor]

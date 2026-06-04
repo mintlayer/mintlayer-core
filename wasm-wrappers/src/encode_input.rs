@@ -17,8 +17,8 @@ use wasm_bindgen::prelude::*;
 
 use common::{
     chain::{
-        config::Builder, AccountCommand, AccountNonce, AccountOutPoint, AccountSpending,
-        OrderAccountCommand, OrdersVersion, OutPointSourceId, TxInput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, OrderAccountCommand,
+        OrdersVersion, OutPointSourceId, TxInput, UtxoOutPoint, config::Builder,
     },
     primitives::BlockHeight,
 };

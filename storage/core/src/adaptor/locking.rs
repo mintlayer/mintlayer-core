@@ -17,10 +17,10 @@
 //! read/write operations, giving a full-featured (albeit not necessarily efficient) backend.
 
 use crate::{
+    Data, DbDesc, DbMapCount, DbMapId, DbMapsData,
     adaptor::{Construct, CoreOps},
     backend::{self, ReadOps, WriteOps},
     util::MapPrefixIter,
-    Data, DbDesc, DbMapCount, DbMapId, DbMapsData,
 };
 
 use itertools::EitherOrBoth;

@@ -14,21 +14,22 @@
 // limitations under the License.
 
 use common::chain::{
-    block::BlockRewardTransactable,
-    signature::{
-        inputsig::{
-            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-            standard_signature::StandardInputSignature, InputWitness,
-        },
-        DestinationSigError, EvaluatedInputWitness,
-    },
-    tokens::TokenId,
     AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination,
     OrderAccountCommand, OrderId, PoolId, SignedTransaction, TxOutput, UtxoOutPoint,
+    block::BlockRewardTransactable,
+    signature::{
+        DestinationSigError, EvaluatedInputWitness,
+        inputsig::{
+            InputWitness,
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+            standard_signature::StandardInputSignature,
+        },
+    },
+    tokens::TokenId,
 };
 use utxo::UtxoSource;
 
-use crate::{script::HashChallenge, WitnessScript};
+use crate::{WitnessScript, script::HashChallenge};
 
 /// An error that can happen during translation of an input to a script
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -149,7 +150,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                         InputWitness::NoSignature(_) => {
                             return Err(TranslationError::SignatureError(
                                 DestinationSigError::SignatureNotFound,
-                            ))
+                            ));
                         }
                         InputWitness::Standard(sig) => {
                             let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(
@@ -390,7 +391,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                         InputWitness::NoSignature(_) => {
                             return Err(TranslationError::SignatureError(
                                 DestinationSigError::SignatureNotFound,
-                            ))
+                            ));
                         }
                         InputWitness::Standard(sig) => {
                             let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(

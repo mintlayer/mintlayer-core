@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        block::signed_block_header::{BlockHeaderSignature, SignedBlockHeader},
         Block, Destination,
+        block::signed_block_header::{BlockHeaderSignature, SignedBlockHeader},
     },
     primitives::{Id, Idable},
 };
@@ -43,7 +43,7 @@ pub fn check_block_signature(
         | Destination::PublicKeyHash(_)
         | Destination::ScriptHash(_)
         | Destination::ClassicMultisig(_) => {
-            return Err(BlockSignatureError::WrongDestination(header.get_id()))
+            return Err(BlockSignatureError::WrongDestination(header.get_id()));
         }
         Destination::PublicKey(pk) => pk,
     };
@@ -52,7 +52,7 @@ pub fn check_block_signature(
 
     let sig_data = match signature_in_header {
         BlockHeaderSignature::None => {
-            return Err(BlockSignatureError::BlockSignatureNotFound(header.get_id()))
+            return Err(BlockSignatureError::BlockSignatureNotFound(header.get_id()));
         }
         BlockHeaderSignature::HeaderSignature(sig_data) => sig_data,
     };

@@ -21,17 +21,17 @@ use derive_more::Display;
 use thiserror::Error;
 
 use self::best_chain_candidates::BestChainCandidates;
-use super::{chainstateref::ChainstateRef, Chainstate};
+use super::{Chainstate, chainstateref::ChainstateRef};
 use crate::{
-    detail::chainstateref::ReorgError, BlockError, BlockProcessingErrorClassification,
-    TransactionVerificationStrategy,
+    BlockError, BlockProcessingErrorClassification, TransactionVerificationStrategy,
+    detail::chainstateref::ReorgError,
 };
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
 use common::{
+    Uint256,
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
-    Uint256,
 };
 use logging::log;
 use utils::{ensure, log_error};

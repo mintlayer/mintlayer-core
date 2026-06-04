@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use api_blockchain_scanner_lib::blockchain_state::BlockchainState;
 use api_server_common::storage::{
-    impls::{postgres::TransactionalApiServerPostgresStorage, CURRENT_STORAGE_VERSION},
+    impls::{CURRENT_STORAGE_VERSION, postgres::TransactionalApiServerPostgresStorage},
     storage_api::{
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw,
     },
 };
 use clap::Parser;
-use common::chain::{config::ChainType, ChainConfig};
+use common::chain::{ChainConfig, config::ChainType};
 use config::ApiServerScannerArgs;
 use node_comm::{make_rpc_client, rpc_client::NodeRpcClient};
 use rpc::RpcAuthData;
@@ -140,14 +140,10 @@ pub enum ApiServerScannerError {
     PostgresConnectionError(ApiServerStorageError),
 }
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() -> Result<(), ApiServerScannerError> {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     let args = ApiServerScannerArgs::parse();
 
     logging::init_logging();
@@ -178,7 +174,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
         _ => {
             return Err(ApiServerScannerError::InvalidConfig(
                 "Invalid RPC cookie/username/password combination".to_owned(),
-            ))
+            ));
         }
     };
 

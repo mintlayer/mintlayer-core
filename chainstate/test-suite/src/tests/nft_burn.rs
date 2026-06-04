@@ -19,15 +19,15 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenId,
         ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
-        TxOutput, UtxoOutPoint,
+        TxOutput, UtxoOutPoint, output_value::OutputValue, signature::inputsig::InputWitness,
+        tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
-use randomness::Rng;
+use randomness::RngExt as _;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 
@@ -70,7 +70,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Burn(OutputValue::TokenV1(
                 token_id,
-                Amount::from_atoms(rng.gen_range(2..123)),
+                Amount::from_atoms(rng.random_range(2..123)),
             )))
             .build();
         let tx_id = tx.transaction().get_id();
@@ -155,9 +155,10 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        assert!(tf
-            .outputs_from_genblock(block.get_id().into())
-            .contains_key(&first_burn_outpoint_id));
+        assert!(
+            tf.outputs_from_genblock(block.get_id().into())
+                .contains_key(&first_burn_outpoint_id)
+        );
 
         // Try to transfer burned tokens
         let result = tf

@@ -21,28 +21,28 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crypto::{key::PublicKey, vrf::VRFPublicKey};
 use hex::FromHex;
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 
 use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
 use chainstate::{
-    make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, DefaultTransactionVerificationStrategy, make_chainstate,
+    rpc::ChainstateRpcServer,
 };
 use common::{
     chain::{
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
+        TxOutput,
         block::timestamp::BlockTimestamp,
         config::{
-            self, regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions, ChainType,
+            self, ChainType, regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions,
         },
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-        TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
+    primitives::{Amount, BlockHeight, H256, per_thousand::PerThousand},
 };
-use mempool::{rpc::MempoolRpcServer, MempoolConfig, MempoolInit};
+use mempool::{MempoolConfig, MempoolInit, rpc::MempoolRpcServer};
 use p2p::rpc::P2pRpcServer;
 use rpc::rpc_creds::RpcCreds;
 
@@ -106,7 +106,7 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
     );
 
     // Must be less than the current time, otherwise block production will not work properly
-    let genesis_timestamp = rng.gen_range(1685000000..1685030000);
+    let genesis_timestamp = rng.random_range(1685000000..1685030000);
 
     Genesis::new(
         String::new(),
@@ -213,7 +213,8 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         mempool_config,
         chainstate.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl, _| mempool_init.init(hdl));
 
@@ -224,6 +225,7 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         Arc::new(p2p_config),
         chainstate.clone(),
         mempool.clone(),
+        Default::default(),
         Default::default(),
         peerdb_storage,
     )

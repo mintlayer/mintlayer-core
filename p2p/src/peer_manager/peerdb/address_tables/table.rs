@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{BTreeMap, btree_map};
 
 use p2p_types::socket_address::SocketAddress;
 use utils::array_2d::Array2d;
@@ -259,23 +259,23 @@ impl Table {
 #[cfg(test)]
 pub mod test_utils {
     use std::{
-        collections::{btree_map::Entry, BTreeSet},
+        collections::{BTreeSet, btree_map::Entry},
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     };
 
-    use randomness::Rng;
+    use randomness::{Rng, RngExt as _};
 
     use super::*;
 
     pub fn make_random_address(rng: &mut impl Rng) -> SocketAddress {
         let addr_v4 = SocketAddrV4::new(
-            Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            Ipv4Addr::new(rng.random(), rng.random(), rng.random(), rng.random()),
             // Note: addresses with zero port are never considered discoverable
             // (PeerAddress::.as_discoverable_socket_address always returns None for them),
             // so some test may malfunction if such an address is generated.
             // On the other hand, in general, it doesn't make much sense to produce random socket
             // addresses with zero port, so we disable it on this level.
-            rng.gen_range(1..=u16::MAX),
+            rng.random_range(1..=u16::MAX),
         );
         SocketAddress::new(SocketAddr::V4(addr_v4))
     }
@@ -383,7 +383,7 @@ pub mod test_utils {
 mod tests {
     use rstest::rstest;
 
-    use ::test_utils::random::{make_seedable_rng, Seed};
+    use ::test_utils::random::{Seed, make_seedable_rng};
 
     use super::{test_utils::*, *};
 

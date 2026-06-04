@@ -17,8 +17,8 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
-        signature::{inputsig::InputWitness, Signable, Transactable},
         TxInput, TxOutput,
+        signature::{Signable, Transactable, inputsig::InputWitness},
     },
     primitives::id::{self, H256},
 };

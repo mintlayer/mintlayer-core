@@ -17,12 +17,12 @@ use std::fmt::Debug;
 
 use common::chain::ChainConfig;
 use iced::{
-    widget::{column, tooltip, Text},
     Element, Length, Task,
+    widget::{Text, column, tooltip},
 };
-use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
+use iced_aw::{Grid, GridRow, tab_bar::TabLabel};
 
-use crate::main_window::{print_block_timestamp, NodeState};
+use crate::main_window::{NodeState, print_block_timestamp};
 
 use super::{Tab, TabsMessage};
 

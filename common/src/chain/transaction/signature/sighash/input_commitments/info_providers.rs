@@ -16,7 +16,7 @@
 use std::{borrow::Cow, collections::BTreeMap};
 
 use crate::{
-    chain::{output_value::OutputValue, OrderId, PoolId, TxOutput, UtxoOutPoint},
+    chain::{OrderId, PoolId, TxOutput, UtxoOutPoint, output_value::OutputValue},
     primitives::Amount,
 };
 

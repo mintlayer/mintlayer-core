@@ -30,9 +30,10 @@ use logging::log;
 use networking::{
     error::NetworkingError,
     transport::{
-        new_message_stream, ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream,
-        TransportSocket,
+        ConnectedSocketInfo, MessageReader, MessageWriter, PeerStream, TransportSocket,
+        new_message_stream,
     },
+    types::ConnectionDirection,
 };
 use p2p_types::{peer_address::PeerAddress, services::Services, socket_addr_ext::SocketAddrExt};
 use serialization::Encode as _;
@@ -54,7 +55,7 @@ use crate::{
     types::peer_id::PeerId,
 };
 
-use super::types::{can_send_will_disconnect, CategorizedMessage, HandshakeNonce, Message};
+use super::types::{CategorizedMessage, HandshakeNonce, Message, can_send_will_disconnect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionInfo {
@@ -63,6 +64,15 @@ pub enum ConnectionInfo {
         handshake_nonce: HandshakeNonce,
         local_services_override: Option<Services>,
     },
+}
+
+impl ConnectionInfo {
+    pub fn as_direction(&self) -> ConnectionDirection {
+        match self {
+            ConnectionInfo::Inbound => ConnectionDirection::Inbound,
+            ConnectionInfo::Outbound { .. } => ConnectionDirection::Outbound,
+        }
+    }
 }
 
 pub struct Peer<T: TransportSocket> {
@@ -398,15 +408,15 @@ async fn maybe_send_will_disconnect<S: PeerStream>(
     peer_protocol_version: ProtocolVersion,
     socket_writer: &mut MessageWriter<S, Message>,
 ) -> crate::Result<()> {
-    if can_send_will_disconnect(peer_protocol_version) {
-        if let Some(reason) = reason {
-            log::debug!("Sending WillDisconnect, reason: {:?}", reason);
-            socket_writer
-                .send(Message::WillDisconnect(WillDisconnectMessage {
-                    reason: reason.to_string(),
-                }))
-                .await?;
-        }
+    if can_send_will_disconnect(peer_protocol_version)
+        && let Some(reason) = reason
+    {
+        log::debug!("Sending WillDisconnect, reason: {:?}", reason);
+        socket_writer
+            .send(Message::WillDisconnect(WillDisconnectMessage {
+                reason: reason.to_string(),
+            }))
+            .await?;
     }
 
     Ok(())

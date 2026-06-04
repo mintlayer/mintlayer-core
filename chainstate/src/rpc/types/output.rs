@@ -14,21 +14,21 @@
 // limitations under the License.
 
 use common::{
+    TokenDecimalsProvider,
     address::RpcAddress,
     chain::{
-        htlc::HashedTimelockContract, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId,
-        TxOutput,
+        ChainConfig, DelegationId, Destination, PoolId, TxOutput, htlc::HashedTimelockContract,
+        output_value::OutputValue, stakelock::StakePoolData, timelock::OutputTimeLock,
+        tokens::TokenId,
     },
     primitives::amount::{RpcAmountIn, RpcAmountOut},
-    TokenDecimalsProvider,
 };
 use crypto::vrf::VRFPublicKey;
 use rpc::types::RpcHexString;
 
 use super::{
-    token::{RpcNftIssuance, RpcTokenIssuance},
     RpcTypeError,
+    token::{RpcNftIssuance, RpcTokenIssuance},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]

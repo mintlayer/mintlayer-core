@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{well_known, StoreTxRw};
+use super::{StoreTxRw, well_known};
 use crate::{BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
 use chainstate_types::{BlockIndex, EpochData, EpochStorageWrite};
 use common::{
     chain::{
-        config::{EpochIndex, MagicBytes},
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        config::{EpochIndex, MagicBytes},
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };

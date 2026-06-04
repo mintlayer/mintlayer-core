@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
+    BlockError, ChainstateError, CheckBlockError, chainstate_interface::ChainstateInterface,
 };
-use chainstate_test_framework::{anyonecanspend_address, TestFramework};
+use chainstate_test_framework::{TestFramework, anyonecanspend_address};
 use chainstate_types::vrf_tools::construct_transcript;
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
-        signature::inputsig::InputWitness,
         TxInput, TxOutput,
+        block::{ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
+        signature::inputsig::InputWitness,
     },
     primitives::Compact,
 };
@@ -32,7 +32,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 #[rstest]
 #[trace]

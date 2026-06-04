@@ -29,14 +29,14 @@ fn shuffle_vec<T>(mut vec: Vec<T>, rng: &mut impl Rng) -> Vec<T> {
 // Make a random non-banned-or-discouraged candidate.
 fn random_candidate(peer_role: PeerRole, rng: &mut impl Rng) -> EvictionCandidate {
     EvictionCandidate {
-        age: Duration::from_secs(rng.gen_range(0..10000)),
+        age: Duration::from_secs(rng.random_range(0..10000)),
         peer_id: PeerId::new(),
-        net_group_keyed: NetGroupKeyed(rng.gen()),
-        ping_min: rng.gen_range(0..100),
+        net_group_keyed: NetGroupKeyed(rng.random()),
+        ping_min: rng.random_range(0..100),
         peer_role,
-        last_tip_block_time: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
-        last_tx_time: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
-        expecting_blocks_since: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
+        last_tip_block_time: Some(Time::from_secs_since_epoch(rng.random_range(0..10000))),
+        last_tx_time: Some(Time::from_secs_since_epoch(rng.random_range(0..10000))),
+        expecting_blocks_since: Some(Time::from_secs_since_epoch(rng.random_range(0..10000))),
         is_banned_or_discouraged: false,
     }
 }
@@ -392,7 +392,7 @@ mod inbound {
 
         for _ in 0..10 {
             for test in tests {
-                let count = rng.gen_range(0..150usize);
+                let count = rng.random_range(0..150usize);
                 let mut candidates = (0..count)
                     .map(|_| random_candidate(PeerRole::Inbound, &mut rng))
                     .collect::<Vec<_>>();
@@ -940,7 +940,7 @@ mod discouraged_candidate {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let config: PeerManagerConfig = Default::default();
         let preserve_count = max_preserve_count(peer_role, &config);
-        let now = Time::from_secs_since_epoch(rng.gen_range(0..10000));
+        let now = Time::from_secs_since_epoch(rng.random_range(0..10000));
 
         for _i in 0..5 {
             for candidates_count in [preserve_count - 1, preserve_count + 1] {
@@ -951,7 +951,7 @@ mod discouraged_candidate {
                 let normally_evicted_peer_id =
                     select_for_eviction(peer_role, candidates.clone(), &config, now, &mut rng);
 
-                let discouraged_candidate_idx = rng.gen_range(0..candidates_count);
+                let discouraged_candidate_idx = rng.random_range(0..candidates_count);
                 let discouraged_peer_id = candidates[discouraged_candidate_idx].peer_id;
                 let candidates = {
                     let mut candidates = candidates;

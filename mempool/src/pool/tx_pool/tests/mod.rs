@@ -16,24 +16,24 @@
 use crate::{
     config::*,
     pool::{
-        tx_pool::{memory_usage_estimator::StoreMemoryUsageEstimator, *},
         OrphanType, TxOptions, TxOrigin, TxStatus,
+        tx_pool::{memory_usage_estimator::StoreMemoryUsageEstimator, *},
     },
 };
 
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
-    make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
-    MaxTipAge,
+    BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy, MaxTipAge,
+    make_chainstate,
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
+        self, OutPointSourceId, Transaction, UtxoOutPoint,
+        block::{Block, BlockReward, ConsensusData, timestamp::BlockTimestamp},
         config::ChainConfig,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         transaction::{Destination, TxInput, TxOutput},
-        OutPointSourceId, Transaction, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -46,6 +46,7 @@ mod basic;
 mod expiry;
 mod reorg;
 mod replacement;
+mod tx_ids_by_score_and_ancestry;
 pub mod utils;
 
 use self::utils::*;

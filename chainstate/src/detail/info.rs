@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    chain::{GenBlock, block::timestamp::BlockTimestamp},
     primitives::{BlockHeight, Id},
 };
 

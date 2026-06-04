@@ -31,36 +31,38 @@ use std::{
 use parking_lot::RwLock;
 
 use chainstate::{
+    ConnectTransactionError,
     chainstate_interface::ChainstateInterface,
     tx_verifier::{
-        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
         TransactionSource,
+        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
     },
-    ConnectTransactionError,
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, ChainConfig, GenBlock, SignedTransaction, Transaction,
-        TxInput,
+        ChainConfig, GenBlock, SignedTransaction, Transaction, TxInput,
+        block::timestamp::BlockTimestamp,
     },
-    primitives::{amount::DisplayAmount, time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, amount::DisplayAmount, time::Time},
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{const_value::ConstValue, debug_panic_or_log, ensure, shallow_clone::ShallowClone};
+use utils::{debug_panic_or_log, ensure, shallow_clone::ShallowClone};
 use utxo::UtxosStorageRead;
 
 use crate::{
     config::{self, MempoolConfig, MempoolMaxSize},
     error::{
         BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
-        ReorgError, TxValidationError,
+        ReorgError, TxCollectionError, TxValidationError,
     },
     pool::{
         entry::{TxEntry, TxEntryWithFee},
         fee::Fee,
         feerate::FeeRate,
-        tx_pool::store::{StrictDropPolicy, Tracked, TrackedMap, TrackedTxIdMultiMap},
+        tx_pool::store::{
+            StoreHashSet, StrictDropPolicy, Tracked, TrackedHashMap, TrackedTxIdMultiMap,
+        },
     },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::RemoteTxOrigin,
@@ -74,7 +76,7 @@ use self::{
 
 pub struct TxPool<M> {
     chain_config: Arc<ChainConfig>,
-    mempool_config: ConstValue<MempoolConfig>,
+    mempool_config: Arc<MempoolConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: config::MempoolMaxSize,
@@ -94,22 +96,22 @@ impl<M> std::fmt::Debug for TxPool<M> {
 impl<M> TxPool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: ConstValue<MempoolConfig>,
+        mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
-        log::trace!("Setting up mempool transaction verifier");
         let tx_verifier = tx_verifier::create(
             chain_config.shallow_clone(),
             chainstate_handle.shallow_clone(),
         );
+        let mempool_config = Arc::new(mempool_config);
+        let store = MempoolStore::new(Arc::clone(&mempool_config));
 
-        log::trace!("Creating mempool object");
         Self {
             chain_config,
             mempool_config,
-            store: MempoolStore::new(),
+            store,
             chainstate_handle,
             max_size: Self::initial_max_size(),
             max_tx_age: config::DEFAULT_MEMPOOL_EXPIRY,
@@ -139,19 +141,27 @@ impl<M> TxPool<M> {
             .expect("best block to exist")
     }
 
+    pub fn mempool_config(&self) -> &MempoolConfig {
+        &self.mempool_config
+    }
+
     pub fn max_size(&self) -> config::MempoolMaxSize {
         self.max_size
     }
 
     // Reset the mempool state, returning the list of transactions previously stored in mempool
-    pub fn reset(&mut self) -> impl Iterator<Item = TxEntry> {
+    pub fn reset(&mut self) -> impl Iterator<Item = TxEntry> + use<M> {
         // Discard the old tx verifier and replace it with a fresh one
         self.tx_verifier = tx_verifier::create(
             self.chain_config.shallow_clone(),
             self.chainstate_handle.shallow_clone(),
         );
 
-        std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+        std::mem::replace(
+            &mut self.store,
+            MempoolStore::new(Arc::clone(&self.mempool_config)),
+        )
+        .into_transactions()
     }
 
     pub fn is_ibd(&self) -> bool {
@@ -166,6 +176,11 @@ impl<M> TxPool<M> {
             .iter()
             .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
+    }
+
+    #[cfg(test)]
+    pub fn disable_heavy_validity_checks(&mut self) {
+        self.store.disable_heavy_validity_checks()
     }
 }
 
@@ -266,8 +281,21 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         ensure!(has_outputs, MempoolPolicyError::NoOutputs);
 
         let size = entry.size().get();
-        let max_size = self.chain_config.max_tx_size_for_mempool();
-        ensure!(size <= max_size, MempoolPolicyError::ExceedsMaxBlockSize);
+        let absolute_max_size = self.chain_config.max_tx_size_for_mempool();
+        ensure!(
+            size <= absolute_max_size,
+            MempoolPolicyError::TxSizeExceedsMaxBlockSize
+        );
+
+        // A tx cannot be bigger than a cluster.
+        let max_cluster_size = *self.mempool_config.max_cluster_size_bytes;
+        ensure!(
+            size <= max_cluster_size,
+            MempoolPolicyError::TxSizeExceedsMaxClusterSize {
+                tx_size: size,
+                limit: max_cluster_size
+            }
+        );
 
         Ok(())
     }
@@ -288,7 +316,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                 self.conflicting_tx_ids(entry.tx_entry()).next().is_none(),
                 MempoolConflictError::Irreplacable
             );
-            Ok(Conflicts::new(BTreeSet::new()))
+            Ok(Conflicts::new(StoreHashSet::default()))
         }
     }
 
@@ -364,7 +392,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             .collect::<Vec<_>>();
 
         if conflicts.is_empty() {
-            Ok(BTreeSet::new().into())
+            Ok(StoreHashSet::default().into())
         } else {
             self.do_rbf_checks(tx, &conflicts)
         }
@@ -455,7 +483,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     fn pays_more_than_conflicts_with_descendants(
         &self,
         tx: &TxEntryWithFee,
-        conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
+        conflicts_with_descendants: &StoreHashSet<Id<Transaction>>,
     ) -> Result<Fee, MempoolPolicyError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
             self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
@@ -535,10 +563,10 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     fn replacements_with_descendants(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> BTreeSet<Id<Transaction>> {
+    ) -> StoreHashSet<Id<Transaction>> {
         conflicts
             .iter()
-            .flat_map(|conflict| BTreeSet::from(conflict.unconfirmed_descendants(&self.store)))
+            .flat_map(|conflict| conflict.collect_descendants(&self.store).take())
             .chain(conflicts.iter().map(|conflict| *conflict.tx_id()))
             .collect()
     }
@@ -546,9 +574,17 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
 // Transaction Finalization
 impl<M: MemoryUsageEstimator> TxPool<M> {
-    fn finalize_tx(&mut self, entry: TxEntryWithFee) -> Result<(), Error> {
+    fn finalize_tx(
+        &mut self,
+        entry: TxEntryWithFee,
+        tx_verifier_delta: TransactionVerifierDelta,
+    ) -> Result<(), Error> {
         let tx_id = *entry.tx_id();
         self.store.add_transaction(entry)?;
+
+        // Note: the call to `add_transaction` above can fail e.g. if the cluster-related limits
+        // are violated. So we flush the delta to storage only after `add_transaction` has succeeded.
+        tx_verifier::flush_to_storage(&mut self.tx_verifier, tx_verifier_delta)?;
 
         self.remove_expired_transactions();
         ensure!(
@@ -586,26 +622,29 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     }
 
     fn remove_expired_transactions(&mut self) {
-        let expired_ids: Vec<_> = self
+        let now = self.clock.get_time();
+
+        let expired_ids = self
             .store
             .txs_by_creation_time
             .iter()
-            .map(|(_time, id)| self.store.txs_by_id.get(id).expect("entry should exist"))
-            .filter(|entry| {
-                let now = self.clock.get_time();
-                let expired = now.saturating_sub(entry.creation_time()) > self.max_tx_age;
+            // Note: entries in txs_by_creation_time are sorted by the creation time in ascending order,
+            // so once we find a tx that is not expired, the rest will not be expired either.
+            .map_while(|&(creation_time, tx_id)| {
+                let expired = now.saturating_sub(creation_time) > self.max_tx_age;
                 if expired {
                     log::trace!(
-                        "Evicting tx {} which was created at {:?}. It is now {:?}",
-                        entry.tx_id(),
-                        entry.creation_time(),
+                        "Evicting tx {:x} which was created at {:?}. It is now {:?}",
+                        tx_id,
+                        creation_time,
                         now
                     );
+                    Some(tx_id)
+                } else {
+                    None
                 }
-                expired
             })
-            .map(|entry| *entry.tx_id())
-            .collect();
+            .collect::<Vec<_>>();
 
         for tx_id in expired_ids.iter() {
             self.remove_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry);
@@ -626,7 +665,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
 
             log::debug!(
-                "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
+                "Mempool trim: Evicting tx {:x} which has a descendant score of {:?} and has size {}",
                 removed_id,
                 removed.descendant_score(),
                 removed.size()
@@ -658,7 +697,9 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             // dependencies. However, it does not appear to be easy to extract that information
             // from the transaction verifier at the moment. To be addressed in the future.
 
-            log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
+            log::error!(
+                "Disconnecting {disc_id:x} failed with '{err}' during eviction of {tx_id:x}"
+            );
 
             if let Err(refresh_err) = reorg::refresh_mempool(self, |_, _| ()) {
                 log::error!("Refreshing mempool failed: {refresh_err}");
@@ -676,7 +717,12 @@ pub enum TxAdditionOutcome<'a> {
     Added { transaction: &'a TxMempoolEntry },
 
     /// Transaction already in mempool
-    Duplicate { transaction: &'a TxMempoolEntry },
+    Duplicate {
+        existing_transaction: &'a TxMempoolEntry,
+        // Note: the transaction part of the new entry will be the same as the old one (maybe except
+        // for the signatures), but the tx origin and options may be different.
+        new_transaction: TxEntry,
+    },
 
     /// Transaction was rejected from the mempool since it is not valid at the current tip
     Rejected {
@@ -737,15 +783,18 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         }
 
         let tx_id = *transaction.tx_id();
-        if let Some(transaction) = self.store.get_entry(&tx_id) {
-            let outcome = TxAdditionOutcome::Duplicate { transaction };
+        if let Some(existing_transaction) = self.store.get_entry(&tx_id) {
+            let outcome = TxAdditionOutcome::Duplicate {
+                existing_transaction,
+                new_transaction: transaction,
+            };
             return Ok(finalizer(outcome, self));
         }
 
         self.check_preliminary_mempool_policy(&transaction)?;
 
         for attempt_no in 1..=config::MAX_TX_ADDITION_ATTEMPTS {
-            log::trace!("Adding {tx_id:?} attempt #{attempt_no}");
+            log::trace!("Adding {tx_id:x} attempt #{attempt_no}");
             transaction = match self.try_add_transaction(transaction)? {
                 TxAdditionAttemptOutcome::Added => {
                     let transaction = self.store.get_entry(&tx_id).expect("just added");
@@ -762,7 +811,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
                     current_tip,
                 } => {
                     log::debug!(
-                        "Tip moved from {start_tip:?} to {current_tip:?} while verifying {tx_id:?}"
+                        "Tip moved from {start_tip:x} to {current_tip:x} while verifying {tx_id:x}"
                     );
                     transaction
                 }
@@ -781,7 +830,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let (fee, delta) = match self.validate_transaction(&transaction)? {
             TxValidationOutcome::Valid { fee, delta } => (fee, delta),
             TxValidationOutcome::Rejected { error } => {
-                return Ok(TxAdditionAttemptOutcome::Rejected { transaction, error })
+                return Ok(TxAdditionAttemptOutcome::Rejected { transaction, error });
             }
             TxValidationOutcome::TipMoved {
                 start_tip,
@@ -801,8 +850,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         if config::ENABLE_RBF {
             self.store.drop_conflicts(conflicts);
         }
-        tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
-        self.finalize_tx(tx)?;
+        self.finalize_tx(tx, delta)?;
         self.store.assert_valid();
 
         Ok(TxAdditionAttemptOutcome::Added)
@@ -826,7 +874,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let mut tx_verifier = self.tx_verifier.derive_child();
 
         log::trace!(
-            "Verifying {tx_id:?}, tip = {start_tip:?}, tx_verifier's best block for utxos = {:?}",
+            "Verifying {tx_id:x}, tip = {start_tip:x}, tx_verifier's best block for utxos = {:x}",
             tx_verifier.get_best_block_for_utxos()?
         );
 
@@ -876,6 +924,14 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
     }
 
+    pub fn get_best_tx_ids_by_score_and_ancestry(
+        &self,
+        tx_ids: &BTreeSet<Id<Transaction>>,
+        tx_count: usize,
+    ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
+        collect_txs::get_best_tx_ids_by_score_and_ancestry(self, tx_ids, tx_count)
+    }
+
     pub fn reorg(
         &mut self,
         block_id: Id<GenBlock>,
@@ -910,7 +966,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         mempool_config: &MempoolConfig,
         rolling_fee_rate: &RollingFeeRate,
         txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
-        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+        txs_by_id: &TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
     ) -> FeeRate {
         let min_feerate = std::cmp::max(
             rolling_fee_rate.rolling_minimum_fee_rate(),
@@ -957,7 +1013,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         mempool_config: &MempoolConfig,
         rolling_fee_rate: &RollingFeeRate,
         txs_by_descendant_score: &TrackedTxIdMultiMap<DescendantScore>,
-        txs_by_id: &TrackedMap<Id<Transaction>, Tracked<TxMempoolEntry, StrictDropPolicy>>,
+        txs_by_id: &TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
     ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
         let min_feerate = std::cmp::max(
             rolling_fee_rate.rolling_minimum_fee_rate(),

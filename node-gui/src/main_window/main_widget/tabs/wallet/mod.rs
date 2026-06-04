@@ -28,22 +28,22 @@ pub use console::CONSOLE_OUTPUT_ID;
 use std::collections::BTreeMap;
 
 use iced::{
-    widget::{
-        column, container, horizontal_rule, pane_grid, row,
-        scrollable::{snap_to, Id},
-        vertical_rule, PaneGrid, Scrollable, Text,
-    },
     Element, Length, Task,
+    widget::{
+        PaneGrid, Scrollable, Text, column, container, horizontal_rule, pane_grid, row,
+        scrollable::{Id, snap_to},
+        vertical_rule,
+    },
 };
 use iced_aw::tab_bar::TabLabel;
 
 use common::chain::DelegationId;
 use node_gui_backend::{
+    AccountId, BackendSender,
     messages::{
         BackendRequest, CreateDelegationRequest, DecommissionPoolRequest, DelegateStakingRequest,
         SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
     },
-    AccountId, BackendSender,
 };
 use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::wallet_type::WalletType;

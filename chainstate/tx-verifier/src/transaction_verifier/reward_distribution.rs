@@ -17,12 +17,11 @@ use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
 use common::{
-    amount_sum,
+    Uint256, amount_sum,
     chain::{Block, DelegationId, PoolId, RewardDistributionVersion},
     primitives::{
-        amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand, Amount, Id,
+        Amount, Id, amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand,
     },
-    Uint256,
 };
 use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
 use thiserror::Error;
@@ -50,7 +49,9 @@ pub enum RewardDistributionError {
         "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
     )]
     StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
-    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
+    #[error(
+        "Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}"
+    )]
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
     DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
@@ -317,25 +318,25 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
 #[cfg(test)]
 mod tests {
     use crate::{
-        transaction_verifier::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
         TransactionSource,
+        transaction_verifier::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     };
 
     use super::*;
     use common::{
         amount_sum,
         chain::{DelegationId, Destination, PoolId},
-        primitives::{per_thousand::PerThousand, Amount, H256},
+        primitives::{Amount, H256, per_thousand::PerThousand},
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use pos_accounting::{
         DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
         PoolData,
     };
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use std::collections::BTreeMap;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     fn new_pool_id(v: u64) -> PoolId {
         PoolId::new(H256::from_low_u64_be(v))
@@ -351,13 +352,13 @@ mod tests {
     fn calculate_staker_reward_test_v0(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(1..=reward.into_atoms()));
         let cost_per_block_over_reward =
-            (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
+            (reward + Amount::from_atoms(rng.random_range(1..=100_000_000))).unwrap();
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
-        let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
+        let mpt_more_than_one = PerThousand::new(rng.random_range(2..=1000)).unwrap();
 
         assert!(calculate_staker_reward_v0(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
         assert!(calculate_staker_reward_v0(Amount::ZERO, Amount::ZERO, mpt).is_some());
@@ -501,16 +502,16 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let pool_id = new_pool_id(1);
-        let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let pool_balance = Amount::from_atoms(rng.gen_range(1..=100_000_000));
-        let staker_balance = Amount::from_atoms(rng.gen_range(1..=pool_balance.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let pool_balance = Amount::from_atoms(rng.random_range(1..=100_000_000));
+        let staker_balance = Amount::from_atoms(rng.random_range(1..=pool_balance.into_atoms()));
 
-        let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let cost_per_block = Amount::from_atoms(rng.random_range(1..=reward.into_atoms()));
         let cost_per_block_over_reward =
-            (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
+            (reward + Amount::from_atoms(rng.random_range(1..=100_000_000))).unwrap();
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
-        let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
+        let mpt_more_than_one = PerThousand::new(rng.random_range(2..=1000)).unwrap();
 
         assert_eq!(
             calculate_staker_reward_v1(
@@ -534,33 +535,39 @@ mod tests {
             ),
             Err(RewardDistributionError::InvariantPoolBalanceIsZero(pool_id))
         );
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            staker_balance,
-            Amount::ZERO,
-            mpt_zero,
-            pool_id
-        )
-        .is_ok());
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            staker_balance,
-            Amount::ZERO,
-            mpt,
-            pool_id
-        )
-        .is_ok());
-        assert!(calculate_staker_reward_v1(
-            reward,
-            pool_balance,
-            Amount::ZERO,
-            Amount::ZERO,
-            mpt,
-            pool_id
-        )
-        .is_ok());
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                staker_balance,
+                Amount::ZERO,
+                mpt_zero,
+                pool_id
+            )
+            .is_ok()
+        );
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                staker_balance,
+                Amount::ZERO,
+                mpt,
+                pool_id
+            )
+            .is_ok()
+        );
+        assert!(
+            calculate_staker_reward_v1(
+                reward,
+                pool_balance,
+                Amount::ZERO,
+                Amount::ZERO,
+                mpt,
+                pool_id
+            )
+            .is_ok()
+        );
         // negative amount
         assert_eq!(
             calculate_staker_reward_v1(
@@ -586,15 +593,17 @@ mod tests {
             Ok(reward)
         );
         // overflow
-        assert!(calculate_staker_reward_v1(
-            Amount::MAX,
-            pool_balance,
-            staker_balance,
-            cost_per_block,
-            mpt_more_than_one,
-            pool_id
-        )
-        .is_ok());
+        assert!(
+            calculate_staker_reward_v1(
+                Amount::MAX,
+                pool_balance,
+                staker_balance,
+                cost_per_block,
+                mpt_more_than_one,
+                pool_id
+            )
+            .is_ok()
+        );
 
         // arbitrary values
         assert_eq!(
@@ -638,9 +647,9 @@ mod tests {
     // and that pool_b and its delegations were not affected.
     // Then undo everything and check that original state was restored.
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn distribution_basic(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));
@@ -801,9 +810,9 @@ mod tests {
     // Create a pool with 2 delegations and random balances and reward.
     // Check distribution properties.
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn distribution_properties(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));
@@ -813,9 +822,9 @@ mod tests {
         let delegation_id_1 = new_delegation_id(1);
         let delegation_id_2 = new_delegation_id(2);
 
-        let original_pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_1_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_2_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let original_pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let delegation_1_balance = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let delegation_2_balance = Amount::from_atoms(rng.random_range(0..100_000_000));
         let total_delegation_shares = (delegation_1_balance + delegation_2_balance).unwrap();
 
         let original_pool_balance = amount_sum!(
@@ -825,8 +834,8 @@ mod tests {
         )
         .unwrap();
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
         let staker_reward = match version {
             RewardDistributionVersion::V0 => {
@@ -950,9 +959,9 @@ mod tests {
 
     // Check that if delegation is present but its balance is 0 then all the reward goes to staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn total_delegations_balance_zero(
         #[case] seed: Seed,
         #[case] version: RewardDistributionVersion,
@@ -963,12 +972,12 @@ mod tests {
         let pool_id = new_pool_id(1);
         let delegation_id = new_delegation_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
         let delegation_id_amount = Amount::ZERO;
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
@@ -1025,9 +1034,9 @@ mod tests {
 
     // Check that staker can set its reward to 100% and the reward goes entirely to the staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn total_delegations_reward_zero(
         #[case] seed: Seed,
         #[case] version: RewardDistributionVersion,
@@ -1038,12 +1047,12 @@ mod tests {
         let pool_id = new_pool_id(1);
         let delegation_id = new_delegation_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
-        let delegation_id_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let delegation_id_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new(1000).unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
@@ -1100,19 +1109,19 @@ mod tests {
 
     // Check that if there are no delegations then the whole reward goes to the staker
     #[rstest]
-    #[trace]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V0)]
     #[case(Seed::from_entropy(), RewardDistributionVersion::V1)]
+    #[trace]
     fn no_delegations(#[case] seed: Seed, #[case] version: RewardDistributionVersion) {
         let mut rng = make_seedable_rng(seed);
         let block_id = Id::new(H256::random_using(&mut rng));
         let pool_id = new_pool_id(1);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let pledged_amount = Amount::from_atoms(rng.random_range(0..100_000_000));
         let original_pool_balance = pledged_amount;
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let reward = Amount::from_atoms(rng.random_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.random_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);

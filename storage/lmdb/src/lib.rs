@@ -30,7 +30,7 @@ use std::{borrow::Cow, path::PathBuf};
 use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
 use resize_callback::MapResizeCallback;
-use storage_core::{backend, Data, DbDesc, DbMapDesc, DbMapId, DbMapsData};
+use storage_core::{Data, DbDesc, DbMapDesc, DbMapId, DbMapsData, backend};
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
@@ -74,7 +74,7 @@ impl<Tx: lmdb::Transaction> DbTx<'_, Tx> {
         &self,
         map_id: DbMapId,
         key: &[u8],
-    ) -> storage_core::Result<lmdb::Iter<'_, impl Cursor<'_>>> {
+    ) -> storage_core::Result<lmdb::Iter<'_, impl Cursor<'_> + use<'_, Tx>>> {
         let cursor = self
             .tx
             .open_ro_cursor(self.backend.dbs[map_id])

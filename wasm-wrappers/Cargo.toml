@@ -26,8 +26,11 @@ itertools.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
-# This crate is required for rand to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-getrandom = { version = "0.2", features = ["js"] }
+# This is required for `rand` to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support
+# Note that technically we use 2 differeent versions of `rand` (0.8 and 0.10) which depend on different versions of
+# `getrandom` (0.2 and 0.4 respectively). In reality though, only RNGs from 0.10 will be created.
+getrandom_0_2 = { version = "0.2", package = "getrandom", features = ["js"] }
+getrandom_0_4 = { version = "0.4", package = "getrandom", features = ["wasm_js"] }
 gloo-utils = "0.2"
 js-sys = "0.3"
 tsify = "0.5"

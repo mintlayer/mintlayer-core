@@ -29,8 +29,8 @@ use common::{
     chain::{
         self,
         config::{
-            regtest_options::{regtest_chain_config_builder, ChainConfigOptions},
             ChainType,
+            regtest_options::{ChainConfigOptions, regtest_chain_config_builder},
         },
     },
     primitives::semver::SemVer,
@@ -42,9 +42,9 @@ use utils::{
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    NodeType,
     checkpoints_from_file::read_checkpoints_from_csv_file,
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
-    NodeType,
 };
 
 const CONFIG_NAME: &str = "config.toml";
@@ -301,6 +301,14 @@ pub struct RunOptions {
     #[clap(long, value_name = "COUNT")]
     pub max_orphan_blocks: Option<usize>,
 
+    /// The maximum number of transactions that a single mempool transaction cluster may have.
+    #[clap(long, value_name = "COUNT")]
+    pub mempool_max_cluster_transaction_count: Option<usize>,
+
+    /// The maximum size in bytes that a single mempool transaction cluster may have.
+    #[clap(long, value_name = "SIZE")]
+    pub mempool_max_cluster_size_bytes: Option<usize>,
+
     /// Whether p2p networking should be enabled.
     #[clap(long, value_name = "VAL")]
     pub p2p_networking_enabled: Option<bool>,
@@ -449,7 +457,7 @@ mod tests {
 
     use common::{
         chain::config::Checkpoints,
-        primitives::{BlockHeight, Id, Idable as _, H256},
+        primitives::{BlockHeight, H256, Id, Idable as _},
     };
     use utils::concatln;
 
@@ -478,6 +486,8 @@ mod tests {
             max_db_commit_attempts: Default::default(),
             enable_db_reckless_mode_in_ibd: Default::default(),
             max_orphan_blocks: Default::default(),
+            mempool_max_cluster_transaction_count: Default::default(),
+            mempool_max_cluster_size_bytes: Default::default(),
             p2p_networking_enabled: Default::default(),
             p2p_bind_addresses: Default::default(),
             p2p_socks5_proxy: Default::default(),

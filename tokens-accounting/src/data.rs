@@ -18,11 +18,11 @@ use std::collections::BTreeMap;
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::{
     chain::{
+        Destination,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        Destination,
     },
     primitives::Amount,
 };

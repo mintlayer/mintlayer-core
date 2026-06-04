@@ -16,9 +16,9 @@
 use chainstate_types::{BlockIndexHandle, EpochStorageRead};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockHeader, ConsensusData},
-        config::ChainConfig,
         PoSStatus, PoWStatus, RequiredConsensus,
+        block::{BlockHeader, ConsensusData, signed_block_header::SignedBlockHeader},
+        config::ChainConfig,
     },
     primitives::Idable,
 };

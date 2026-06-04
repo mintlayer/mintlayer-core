@@ -18,23 +18,23 @@ use std::{
     sync::Arc,
 };
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex};
+use chainstate::{BlockIndex, chainstate_interface::ChainstateInterface};
 use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{
-    address::Address,
-    chain::{self, config::ChainType, ChainConfig, Genesis},
-    primitives::id::WithId,
     Uint256,
+    address::Address,
+    chain::{self, ChainConfig, Genesis, config::ChainType},
+    primitives::id::WithId,
 };
 use logging::log;
 use utils::ensure;
 
 use crate::{
+    BlockOutputField, Error,
     utils::{
         create_chainstate, get_pos_consensus_data, map_output_write_err, write_comma_if_needed,
         write_eol,
     },
-    BlockOutputField, Error,
 };
 
 // Note: this function will fail if the genesis id in the created chain config doesn't

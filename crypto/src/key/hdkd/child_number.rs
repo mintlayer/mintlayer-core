@@ -127,11 +127,11 @@ mod test {
     use crate::key::hdkd::child_number::ChildNumber;
     use crate::key::hdkd::u31;
     use crate::key::hdkd::u31::U31;
-    use randomness::RngCore;
+    use randomness::Rng;
     use rstest::rstest;
     use std::str::FromStr;
-    use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
+    use test_utils::random::make_seedable_rng;
 
     fn examine_child_number(num: ChildNumber, encoded_num: u32, is_hardened: bool) {
         assert_eq!(num.is_normal(), !is_hardened);

@@ -21,20 +21,19 @@ use rstest::rstest;
 use chainstate::{BlockSource, ChainstateConfig, Locator};
 use common::{
     chain,
-    primitives::{user_agent::mintlayer_core_user_agent, Id, Idable as _},
+    primitives::{Id, Idable as _, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use networking::{
     test_helpers::{TestTransportChannel, TestTransportMaker},
-    transport::{new_message_stream, TransportSocket},
+    transport::{TransportSocket, new_message_stream},
 };
 use p2p_test_utils::run_with_timeout;
-use randomness::Rng;
+use randomness::RngExt;
 use serialization::Encode as _;
 use test_utils::{
-    assert_matches, assert_matches_return_val,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches, assert_matches_return_val,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
@@ -45,7 +44,7 @@ use crate::{
         types::PeerManagerMessageExtTag,
     },
     sync::test_helpers::make_new_blocks,
-    test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, test_p2p_config},
     tests::helpers::{PeerManagerNotification, TestNode},
 };
 
@@ -141,7 +140,7 @@ async fn no_connection_lockup_when_socket_not_read(#[case] seed: Seed) {
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -343,7 +342,7 @@ async fn timeout_when_socket_not_read(
             TestTransportChannel::make_address().into(),
             TEST_PROTOCOL_VERSION.into(),
             None,
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 

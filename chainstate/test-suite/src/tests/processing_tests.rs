@@ -16,51 +16,50 @@
 use std::{borrow::Cow, sync::Arc};
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, make_chainstate, BlockError,
-    BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource, ChainstateConfig,
-    ChainstateError, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-    DefaultTransactionVerificationStrategy, OrphanCheckError,
+    BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
+    ChainstateConfig, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, DefaultTransactionVerificationStrategy, OrphanCheckError,
+    chainstate_interface::ChainstateInterface, make_chainstate,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, get_output_value, TestFramework, TestStore,
-    TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address, empty_witness,
+    get_output_value,
 };
 use chainstate_types::{
     BlockStatus, BlockValidationStage, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
+    Uint256,
     chain::{
-        self,
-        block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
-        config::{create_unit_test_config, Builder as ConfigBuilder},
+        self, Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
+        block::{ConsensusData, consensus_data::PoWData, timestamp::BlockTimestamp},
+        config::{Builder as ConfigBuilder, create_unit_test_config},
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
             DestinationSigError,
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
+            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
         },
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
     },
     primitives::{
-        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Compact, Id, Idable, H256,
+        Amount, BlockCount, BlockHeight, Compact, H256, Id, Idable, per_thousand::PerThousand,
     },
-    Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
 use test_utils::{
     assert_matches, assert_matches_return_val,
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
 };
 use tx_verifier::{
     error::{InputCheckError, ScriptError, TimelockError},
@@ -446,7 +445,7 @@ fn straight_chain(#[case] seed: Seed) {
         let mut block_index = GenBlockIndex::genesis(chain_config_clone);
         let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
-        for _ in 0..rng.gen_range(100..200) {
+        for _ in 0..rng.random_range(100..200) {
             assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_blk_id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
@@ -973,10 +972,10 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         .get_proof_of_work_config()
         .reward_maturity_distance();
 
-    let block_reward_output_count = rng.gen::<usize>() % 20;
+    let block_reward_output_count = rng.random_range(0..20);
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
-            let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
+            let amount = Amount::from_atoms(rng.random::<u128>() % 50);
             let pub_key = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1;
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount),

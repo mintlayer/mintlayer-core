@@ -17,17 +17,17 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use tokio::task::JoinHandle;
 
-use blockprod::{test_blockprod_config, BlockProductionHandle};
+use blockprod::{BlockProductionHandle, test_blockprod_config};
 use chainstate::{
-    make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig, ChainstateHandle,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy, make_chainstate,
+    rpc::ChainstateRpcServer,
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         Block, ChainConfig,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
     },
-    primitives::{Idable, H256},
+    primitives::{H256, Idable},
 };
 use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
@@ -91,7 +91,8 @@ pub async fn start_subsystems(
         mempool_config,
         chainstate_handle.clone(),
         Default::default(),
-    );
+    )
+    .unwrap();
     let mempool_handle =
         manager.add_custom_subsystem("test-mempool", |hdl, _| mempool_init.init(hdl));
 
@@ -102,6 +103,7 @@ pub async fn start_subsystems(
         Arc::new(p2p_config),
         chainstate_handle.clone(),
         mempool_handle.clone(),
+        Default::default(),
         Default::default(),
         peerdb_storage,
     )

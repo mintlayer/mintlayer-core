@@ -147,7 +147,7 @@ impl Decode for SeedPhrase {
 mod tests {
     use super::*;
     use hex::FromHex;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use serialization::DecodeAll;
 
@@ -157,7 +157,7 @@ mod tests {
     fn seed_phrase_encode_decode(#[case] seed: test_utils::random::Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let entropy = rng.gen::<[u8; MNEMONIC_24_WORDS_ENTROPY_SIZE]>();
+        let entropy = rng.random::<[u8; MNEMONIC_24_WORDS_ENTROPY_SIZE]>();
 
         let seed_phrase = SeedPhrase::new(zeroize::Zeroizing::new(
             bip39::Mnemonic::from_entropy(&entropy).unwrap(),

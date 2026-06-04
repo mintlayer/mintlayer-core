@@ -21,11 +21,11 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
-use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
+use mempool_types::{TxOptions, tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin};
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_log::TapLog;
 
-use crate::{rpc_event::RpcEvent, FeeRate, MempoolMaxSize, TxStatus};
+use crate::{FeeRate, MempoolMaxSize, RpcMempoolConfig, TxStatus, rpc_event::RpcEvent};
 
 use rpc::RpcResult;
 
@@ -65,8 +65,8 @@ trait MempoolRpc {
 
     /// Submit a transaction to the mempool.
     ///
-    /// Note that submitting a transaction to the mempool does not guarantee broadcasting it.
-    /// Use the p2p rpc interface for that.
+    /// Note that transactions submitted to the mempool this way will not be relayed to the peers.
+    /// Use the p2p rpc interface if you need that.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(
         &self,
@@ -102,6 +102,10 @@ trait MempoolRpc {
     /// Get the curve data points that represent the fee rate as a function of transaction size.
     #[method(name = "get_fee_rate_points")]
     async fn get_fee_rate_points(&self) -> RpcResult<Vec<(usize, FeeRate)>>;
+
+    /// Get the mempool config.
+    #[method(name = "get_config")]
+    async fn get_config(&self) -> RpcResult<RpcMempoolConfig>;
 
     /// Subscribe to mempool events, such as tx processed.
     ///
@@ -157,7 +161,7 @@ impl MempoolRpcServer for super::MempoolHandle {
         let origin = LocalTxOrigin::Mempool;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
         let res = self
-            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options))
+            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options).map(|_| ()))
             .await
             .log_err();
         rpc::handle_result(res)
@@ -187,6 +191,10 @@ impl MempoolRpcServer for super::MempoolHandle {
         // MIN(1) + 9 = 10, to keep it as const
         const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
         rpc::handle_result(self.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await)
+    }
+
+    async fn get_config(&self) -> RpcResult<RpcMempoolConfig> {
+        rpc::handle_result(self.call(move |this| this.config().to_rpc_type()).await)
     }
 
     async fn subscribe_to_events(

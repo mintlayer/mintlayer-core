@@ -17,9 +17,9 @@ use std::collections::BTreeSet;
 
 use chainstate_types::BlockStatus;
 use common::{
+    Uint256,
     chain::Block,
     primitives::{BlockHeight, Id},
-    Uint256,
 };
 
 use super::best_chain_candidates::BestChainCandidates;
@@ -49,7 +49,7 @@ fn bad_status() -> BlockStatus {
 // G----m0-----m1-----m2----m3----m4----m5----m6
 #[test]
 fn the_test() {
-    use test_framework::{make_block_id, TestChainstate};
+    use test_framework::{TestChainstate, make_block_id};
 
     let mut tc = TestChainstate::new(BlockHeight::zero());
     let m0 = tc.add_block(make_block_id(0), good_status(), true);

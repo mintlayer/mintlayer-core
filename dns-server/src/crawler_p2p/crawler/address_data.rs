@@ -20,7 +20,7 @@ use common::{
     primitives::{
         semver::SemVer,
         time::Time,
-        user_agent::{mintlayer_core_user_agent, UserAgent},
+        user_agent::{UserAgent, mintlayer_core_user_agent},
     },
 };
 use serialization::{Decode, Encode};

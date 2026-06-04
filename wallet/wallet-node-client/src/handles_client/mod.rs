@@ -25,30 +25,30 @@ use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    event::MempoolEvent, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate,
-    MempoolHandle,
+    FeeRate, MempoolConfig, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
+    tx_options::TxOptionsOverrides,
 };
 use p2p::{
+    P2pHandle,
     error::P2pError,
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
-    P2pHandle,
 };
 use serialization::hex::HexError;
 use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
-use crate::node_traits::{MempoolEvents, NodeInterface};
+use crate::node_traits::{MempoolEvents, NodeInterface, NodeInterfaceError};
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
@@ -104,6 +104,51 @@ impl WalletHandlesClient {
         let _best_block = self.chainstate.call(move |this| this.get_best_block_id()).await??;
 
         Ok(())
+    }
+}
+
+impl NodeInterfaceError for WalletHandlesClientError {
+    fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
+        match self {
+            WalletHandlesClientError::BlockProduction(err) => match err {
+                BlockProductionError::RecoverableMempoolError => true,
+
+                BlockProductionError::ChainstateInfoRetrievalError
+                | BlockProductionError::ChainstateWaitForSync
+                | BlockProductionError::SubsystemCallError(_)
+                | BlockProductionError::FailedToAddTransaction(_, _)
+                | BlockProductionError::FailedToConstructBlock(_)
+                | BlockProductionError::FailedConsensusInitialization(_)
+                | BlockProductionError::Cancelled
+                | BlockProductionError::PeerCountRetrievalError(_)
+                | BlockProductionError::PeerCountBelowRequiredThreshold(_, _)
+                | BlockProductionError::TryAgainLater
+                | BlockProductionError::JobAlreadyExists(_)
+                | BlockProductionError::JobManagerError(_)
+                | BlockProductionError::MempoolBlockConstruction(_)
+                | BlockProductionError::E2eError(_)
+                | BlockProductionError::TimestampOverflow(_, _)
+                | BlockProductionError::ChainstateError(_)
+                | BlockProductionError::WrongHeightRange(_, _)
+                | BlockProductionError::NoBlockForHeight(_)
+                | BlockProductionError::InconsistentDbMissingBlockIndex(_)
+                | BlockProductionError::UnexpectedConsensusTypeNone
+                | BlockProductionError::UnexpectedConsensusTypePoW
+                | BlockProductionError::PoolDataNotFound(_)
+                | BlockProductionError::PoolBalanceNotFound(_)
+                | BlockProductionError::PoSAccountingError(_)
+                | BlockProductionError::PoSInputDataProvidedWhenIgnoringConsensus
+                | BlockProductionError::PoWInputDataProvidedWhenIgnoringConsensus
+                | BlockProductionError::TaskExitedPrematurely => false,
+            },
+
+            WalletHandlesClientError::CallError(_)
+            | WalletHandlesClientError::Chainstate(_)
+            | WalletHandlesClientError::P2p(_)
+            | WalletHandlesClientError::Hex(_)
+            | WalletHandlesClientError::MempoolError(_)
+            | WalletHandlesClientError::AttemptedExit => false,
+        }
     }
 }
 
@@ -462,16 +507,15 @@ impl NodeInterface for WalletHandlesClient {
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         let res = self.mempool.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
 
-        let subscription =
-            res.into_stream().filter_map(|event| {
-                futures::future::ready(match event {
-                    MempoolEvent::NewTip { .. } => None,
+        let subscription = res.into_stream().filter_map(|event| {
+            futures::future::ready(match event {
+                MempoolEvent::NewTip { .. } => None,
 
-                    MempoolEvent::TransactionProcessed(tx) => tx.was_accepted().then_some(
-                        crate::node_traits::MempoolEvent::NewTransaction { tx_id: *tx.tx_id() },
-                    ),
-                })
-            });
+                MempoolEvent::TransactionProcessed(tx) => tx.new_tx_accepted().then_some(
+                    crate::node_traits::MempoolEvent::NewTransaction { tx_id: *tx.tx_id() },
+                ),
+            })
+        });
         Ok(Box::new(subscription))
     }
 
@@ -486,5 +530,10 @@ impl NodeInterface for WalletHandlesClient {
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
         let res = self.mempool.call(move |this| this.get_all()).await?;
         Ok(res)
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        let config = self.mempool.call(move |this| this.config().clone()).await?;
+        Ok(Some(config))
     }
 }

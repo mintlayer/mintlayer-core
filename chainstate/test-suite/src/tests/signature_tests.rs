@@ -19,34 +19,34 @@ use rstest::rstest;
 
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    TestFramework, TransactionBuilder, anyonecanspend_address, empty_witness,
 };
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        self,
+        self, ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         config::ChainType,
         output_value::OutputValue,
         signature::{
+            DestinationSigError,
             inputsig::{
+                InputWitness,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                standard_signature::StandardInputSignature, InputWitness,
+                standard_signature::StandardInputSignature,
             },
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
-        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{Rng, SliceRandom};
+use randomness::{RngExt as _, SliceRandom};
 use serialization::Encode;
-use test_utils::random::{gen_random_bytes, Seed};
+use test_utils::random::{Seed, gen_random_bytes};
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 #[rstest]
@@ -190,9 +190,9 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
 
         let chain_config = tf.chainstate.get_chain_config().clone();
 
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures = (rng.random::<u8>() % 10) + 1;
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties: u8 = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties: u8 = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -356,9 +356,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
 
         let chain_config = tf.chainstate.get_chain_config().clone();
 
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures = (rng.random::<u8>() % 10) + 1;
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties: u8 = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let total_parties: u8 = (rng.random::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -499,9 +499,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true)]
 #[case(Seed::from_entropy(), false)]
+#[trace]
 fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
@@ -519,7 +519,7 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
         };
 
         {
-            let data: Vec<u8> = (0..data_size).map(|_| rng.gen::<u8>()).collect();
+            let data: Vec<u8> = (0..data_size).map(|_| rng.random::<u8>()).collect();
 
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -567,11 +567,11 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true, true)]
 #[case(Seed::from_entropy(), true, false)]
 #[case(Seed::from_entropy(), false, true)]
 #[case(Seed::from_entropy(), false, false)]
+#[trace]
 fn no_sig_data_not_allowed(
     #[case] seed: Seed,
     #[case] data_allowed: bool,
@@ -598,7 +598,7 @@ fn no_sig_data_not_allowed(
         let max_no_sig_data_size =
             tf.chainstate.get_chain_config().data_in_no_signature_witness_max_size();
 
-        let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.gen::<u8>()).collect();
+        let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.random::<u8>()).collect();
         let data = if data_provided { Some(data) } else { None };
 
         let tx = TransactionBuilder::new()

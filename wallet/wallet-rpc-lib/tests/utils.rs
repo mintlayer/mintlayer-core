@@ -19,22 +19,22 @@ use std::{sync::Arc, time::Duration};
 
 use common::{
     chain::config::{
-        regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions, ChainConfig,
+        ChainConfig, regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions,
     },
     primitives::BlockHeight,
 };
+use randomness::Rng;
 use rpc::RpcAuthData;
 use test_utils::{test_dir::TestRoot, test_root};
 use wallet::signer::software_signer::SoftwareSignerProvider;
 use wallet_controller::NodeRpcClient;
-use wallet_rpc_lib::{config::WalletServiceConfig, types::AccountArg, WalletHandle, WalletService};
+use wallet_rpc_lib::{WalletHandle, WalletService, config::WalletServiceConfig, types::AccountArg};
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
-pub use randomness::Rng;
 pub use rpc::test_support::{ClientT, Subscription, SubscriptionClientT};
 pub use serde_json::Value as JsonValue;
-pub use test_utils::random::{make_seedable_rng, Seed};
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
+pub use test_utils::random::{Seed, make_seedable_rng};
 
 pub const ACCOUNT0_ARG: AccountArg = AccountArg(0);
 pub const ACCOUNT1_ARG: AccountArg = AccountArg(1);
@@ -67,6 +67,7 @@ impl TestFramework {
 
             let _wallet = wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                Default::default(),
                 db,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,

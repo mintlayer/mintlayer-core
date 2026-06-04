@@ -48,7 +48,7 @@ fn fill_accumulator(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
-    let size_limit = rng.gen_range(10_000..=200_000);
+    let size_limit = rng.random_range(10_000..=200_000);
 
     let mut accumulator = DefaultTxAccumulator::new(size_limit, genesis_id.into(), DUMMY_TIMESTAMP);
 
@@ -58,7 +58,7 @@ fn fill_accumulator(#[case] seed: Seed) {
     while accumulator.transactions().encoded_size() + 15_000 <= size_limit {
         let tx = make_tx(&mut rng, &[(source, 0)], &[amount]);
         source = OutPointSourceId::Transaction(tx.transaction().get_id());
-        amount -= rng.gen_range(1_000_000..=5_000_000);
+        amount -= rng.random_range(1_000_000..=5_000_000);
         accumulator.add_tx(tx, Fee::new(Amount::from_atoms(0))).unwrap();
         assert!(!accumulator.done());
     }
@@ -162,7 +162,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
     let txs_by_id: BTreeMap<_, _> = txs.into_iter().map(|tx| (*tx.tx_id(), tx)).collect();
 
     // Pick a number of transaction IDs to be explicitly requested by the user.
-    let user_tx_ids = txs_by_id.keys().filter(|_| rng.gen_bool(0.1)).copied().collect();
+    let user_tx_ids = txs_by_id.keys().filter(|_| rng.random_bool(0.1)).copied().collect();
 
     let accumulator = Box::new(DefaultTxAccumulator::new(
         10_000_000,
@@ -298,42 +298,25 @@ fn timelock_secs_after_genesis(n: u64) -> OutputTimeLock {
 }
 
 #[rstest]
-#[trace]
 #[case::until_blk1(Seed::from_entropy(), OutputTimeLock::UntilHeight(1.into()), 0b1111)]
-#[trace]
 #[case::until_blk2(Seed::from_entropy(), OutputTimeLock::UntilHeight(2.into()), 0b1011)]
-#[trace]
 #[case::until_blk4(Seed::from_entropy(), OutputTimeLock::UntilHeight(4.into()), 0b1010)]
-#[trace]
 #[case::until_blk20(Seed::from_entropy(), OutputTimeLock::UntilHeight(20.into()), 0b0000)]
-#[trace]
 #[case::for_1blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(1), 0b0011)]
-#[trace]
 #[case::for_2blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(2), 0b0010)]
-#[trace]
 #[case::for_20blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(20), 0b0000)]
-#[trace]
 #[case::until_5s(Seed::from_entropy(), timelock_secs_after_genesis(5), 0b1111)]
-#[trace]
 #[case::until_10s(Seed::from_entropy(), timelock_secs_after_genesis(10), 0b1111)]
-#[trace]
 #[case::until_11s(Seed::from_entropy(), timelock_secs_after_genesis(11), 0b1011)]
-#[trace]
 #[case::until_30s(Seed::from_entropy(), timelock_secs_after_genesis(30), 0b1011)]
-#[trace]
 #[case::until_31s(Seed::from_entropy(), timelock_secs_after_genesis(31), 0b1010)]
-#[trace]
 #[case::until_500s(Seed::from_entropy(), timelock_secs_after_genesis(500), 0b0000)]
-#[trace]
 #[case::for_1s(Seed::from_entropy(), OutputTimeLock::ForSeconds(1), 0b0011)]
-#[trace]
 #[case::for_10s(Seed::from_entropy(), OutputTimeLock::ForSeconds(10), 0b0011)]
-#[trace]
 #[case::for_20s(Seed::from_entropy(), OutputTimeLock::ForSeconds(20), 0b0011)]
-#[trace]
 #[case::for_21s(Seed::from_entropy(), OutputTimeLock::ForSeconds(21), 0b0010)]
-#[trace]
 #[case::for_500s(Seed::from_entropy(), OutputTimeLock::ForSeconds(500), 0b0000)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case] expected: u32) {
     // Unpack expected results:
@@ -435,42 +418,25 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
 }
 
 #[rstest]
-#[trace]
 #[case::until_blk1(Seed::from_entropy(), OutputTimeLock::UntilHeight(1.into()), 0b1111)]
-#[trace]
 #[case::until_blk2(Seed::from_entropy(), OutputTimeLock::UntilHeight(2.into()), 0b1011)]
-#[trace]
 #[case::until_blk4(Seed::from_entropy(), OutputTimeLock::UntilHeight(4.into()), 0b1010)]
-#[trace]
 #[case::until_blk20(Seed::from_entropy(), OutputTimeLock::UntilHeight(20.into()), 0b0000)]
-#[trace]
 #[case::for_1blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(1), 0b0011)]
-#[trace]
 #[case::for_2blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(2), 0b0010)]
-#[trace]
 #[case::for_20blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(20), 0b0000)]
-#[trace]
 #[case::until_5s(Seed::from_entropy(), timelock_secs_after_genesis(5), 0b1111)]
-#[trace]
 #[case::until_10s(Seed::from_entropy(), timelock_secs_after_genesis(10), 0b1111)]
-#[trace]
 #[case::until_11s(Seed::from_entropy(), timelock_secs_after_genesis(11), 0b1011)]
-#[trace]
 #[case::until_30s(Seed::from_entropy(), timelock_secs_after_genesis(30), 0b1011)]
-#[trace]
 #[case::until_31s(Seed::from_entropy(), timelock_secs_after_genesis(31), 0b1010)]
-#[trace]
 #[case::until_500s(Seed::from_entropy(), timelock_secs_after_genesis(500), 0b0000)]
-#[trace]
 #[case::for_1s(Seed::from_entropy(), OutputTimeLock::ForSeconds(1), 0b0011)]
-#[trace]
 #[case::for_10s(Seed::from_entropy(), OutputTimeLock::ForSeconds(10), 0b0011)]
-#[trace]
 #[case::for_20s(Seed::from_entropy(), OutputTimeLock::ForSeconds(20), 0b0011)]
-#[trace]
 #[case::for_21s(Seed::from_entropy(), OutputTimeLock::ForSeconds(21), 0b0010)]
-#[trace]
 #[case::for_500s(Seed::from_entropy(), OutputTimeLock::ForSeconds(500), 0b0000)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn timelocked_htlc_refund(
     #[case] seed: Seed,

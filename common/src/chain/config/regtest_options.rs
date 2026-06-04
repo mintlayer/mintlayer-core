@@ -18,24 +18,24 @@ use std::{str::FromStr, time::Duration};
 use clap::Args;
 
 use crate::{
+    Uint256,
     chain::{
+        ChainstateUpgradeBuilder, ChainstateUpgradesBuilder, ConsensusUpgrade, Destination,
+        NetUpgrades, OrdersVersion, PoSChainConfig, PoSConsensusVersion,
         config::{
+            Builder, ChainType, EmissionScheduleTabular, MagicBytes,
             builder::default_regtest_chainstate_upgrade_at_genesis,
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
-            Builder, ChainType, EmissionScheduleTabular, MagicBytes,
         },
         pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0},
-        pos_initial_difficulty, ChainstateUpgradeBuilder, ChainstateUpgradesBuilder,
-        ConsensusUpgrade, Destination, NetUpgrades, OrdersVersion, PoSChainConfig,
-        PoSConsensusVersion,
+        pos_initial_difficulty,
     },
-    primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
-    Uint256,
+    primitives::{self, BlockHeight, per_thousand::PerThousand, semver::SemVer},
 };
 
-use super::{regtest::GenesisStakingSettings, ChainConfig};
+use super::{ChainConfig, regtest::GenesisStakingSettings};
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 use paste::paste;
 
 #[derive(Args, Clone, Debug, Default)]

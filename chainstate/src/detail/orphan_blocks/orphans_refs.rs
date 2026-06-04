@@ -16,7 +16,7 @@
 use super::OrphanAddError;
 use common::{
     chain::{Block, GenBlock},
-    primitives::{id::WithId, Id},
+    primitives::{Id, id::WithId},
 };
 
 pub trait OrphanBlocksRef {

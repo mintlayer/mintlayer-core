@@ -16,8 +16,8 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 
-use randomness::{make_true_rng, CryptoRng, Rng};
-use serialization::{hex_encoded::HexEncoded, Decode, Encode};
+use randomness::{CryptoRng, make_true_rng};
+use serialization::{Decode, Encode, hex_encoded::HexEncoded};
 
 use crate::{
     key::hdkd::{
@@ -111,7 +111,7 @@ impl VRFPrivateKey {
     }
 
     pub fn new_from_rng(
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         key_kind: VRFKeyKind,
     ) -> (VRFPrivateKey, VRFPublicKey) {
         match key_kind {
@@ -174,7 +174,7 @@ impl VRFPrivateKey {
 impl VRFPublicKey {
     pub fn from_private_key(private_key: &VRFPrivateKey) -> Self {
         match private_key.internal_key() {
-            VRFPrivateKeyHolder::Schnorrkel(ref k) => VRFPublicKey {
+            VRFPrivateKeyHolder::Schnorrkel(k) => VRFPublicKey {
                 pub_key: VRFPublicKeyHolder::Schnorrkel(SchnorrkelPublicKey::from_private_key(k)),
             },
         }
@@ -341,8 +341,8 @@ mod tests {
     use hex::FromHex;
     use rstest::rstest;
     use serialization::DecodeAll;
-    use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
+    use test_utils::random::make_seedable_rng;
 
     use self::transcript::no_rng::VRFTranscript;
 

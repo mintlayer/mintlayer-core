@@ -16,13 +16,9 @@
 use clap::Parser;
 use wallet_address_generator_lib::CliArgs;
 
+utils::enable_rust_backtrace!();
+
 fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     let args = CliArgs::parse();
     wallet_address_generator_lib::run(args).unwrap_or_else(|err| {
         eprintln!("{}", err);

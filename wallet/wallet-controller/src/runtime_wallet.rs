@@ -16,41 +16,42 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::{Address, pubkeyhash::PublicKeyHash},
     chain::{
+        AccountCommand, AccountOutPoint, Currency, DelegationId, Destination, GenBlock,
+        OrderAccountCommand, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
-        AccountCommand, AccountOutPoint, Currency, DelegationId, Destination, GenBlock,
-        OrderAccountCommand, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id, id::WithId},
 };
 use crypto::{
     key::{
+        PrivateKey, PublicKey,
         extended::ExtendedPublicKey,
         hdkd::{child_number::ChildNumber, u31::U31},
-        PrivateKey, PublicKey,
     },
     vrf::VRFPublicKey,
 };
 use mempool::FeeRate;
 use wallet::{
+    Wallet, WalletError, WalletResult,
     account::{
-        transaction_list::TransactionList, CoinSelectionAlgo, DelegationData, OrderData, PoolData,
-        TxInfo, UnconfirmedTokenInfo,
+        CoinSelectionAlgo, DelegationData, OrderData, PoolData, TxInfo, UnconfirmedTokenInfo,
+        transaction_list::TransactionList,
     },
     destination_getters::HtlcSpendingCondition,
     send_request::{SelectedInputs, StakePoolCreationArguments},
     signer::software_signer::SoftwareSignerProvider,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    Wallet, WalletError, WalletResult,
 };
 use wallet_types::{
+    KeyPurpose, KeychainUsageState, SignedTxWithFees,
     account_info::{StandaloneAddressDetails, StandaloneAddresses},
     hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
@@ -61,7 +62,6 @@ use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    KeyPurpose, KeychainUsageState, SignedTxWithFees,
 };
 
 #[cfg(feature = "ledger")]

@@ -15,15 +15,15 @@
 
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
-    primitives::{BlockHeight, Id, Idable},
     TokenDecimalsProvider,
+    chain::{Block, ChainConfig, GenBlock, block::timestamp::BlockTimestamp},
+    primitives::{BlockHeight, Id, Idable},
 };
 use serialization::hex_encoded::HexEncoded;
 
 use super::{
-    block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
-    signed_transaction::RpcSignedTransaction, RpcTypeError,
+    RpcTypeError, block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
+    signed_transaction::RpcSignedTransaction,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]

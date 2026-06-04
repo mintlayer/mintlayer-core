@@ -21,17 +21,19 @@ pub mod schema;
 
 use common::{
     address::{Address, AddressError},
-    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
+    chain::{Destination, SignedTransaction, block::timestamp::BlockTimestamp},
 };
 use crypto::{
     kdf::KdfChallenge,
-    key::{extended::ExtendedPublicKey, PrivateKey},
+    key::{PrivateKey, extended::ExtendedPublicKey},
     symkey::SymmetricKey,
 };
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
     account_id::{AccountAddress, AccountPublicKey},
     account_info::{AccountVrfKeys, StandaloneMultisig, StandaloneWatchOnlyKey},
     chain_info::ChainInfo,
@@ -39,8 +41,6 @@ use wallet_types::{
     keys::RootKeys,
     seed_phrase::SerializableSeedPhrase,
     wallet_type::WalletType,
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -83,7 +83,7 @@ pub trait WalletStorageReadLocked {
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
-        -> Result<Option<AccountVrfKeys>>;
+    -> Result<Option<AccountVrfKeys>>;
     fn get_account_standalone_watch_only_keys(
         &self,
         account_id: &AccountId,

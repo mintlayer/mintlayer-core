@@ -20,11 +20,14 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
+        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         make_token_id,
         output_value::OutputValue,
         signature::{
+            DestinationSigError,
             inputsig::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
@@ -38,13 +41,10 @@ use common::{
             sighash::{
                 input_commitments::SighashInputCommitment, sighashtype::SigHashType, signature_hash,
             },
-            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         timelock::OutputTimeLock,
         tokens::{TokenData, TokenIssuance, TokenTransfer},
-        AccountCommand, AccountNonce, ChainConfig, ChainstateUpgradeBuilder, Destination,
-        HtlcActivated, TokenIssuanceVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -66,7 +66,7 @@ struct TestFixture {
 }
 
 impl TestFixture {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let secret = HtlcSecret::new_from_rng(rng);
 
         let (alice_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);

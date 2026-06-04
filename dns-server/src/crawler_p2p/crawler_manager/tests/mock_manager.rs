@@ -24,7 +24,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use randomness::Rng;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -33,31 +32,32 @@ use tokio::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use networking::test_helpers::TestAddressMaker;
 use p2p::{
+    P2pEventHandler,
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
-        types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
+        types::{ConnectivityEvent, PeerInfo, SyncingEvent},
     },
     test_helpers::TEST_PROTOCOL_VERSION,
     types::{
         bannable_address::BannableAddress, peer_id::PeerId, services::Services,
         socket_address::SocketAddress,
     },
-    P2pEventHandler,
 };
+use randomness::Rng;
 use test_utils::BasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
     crawler_p2p::{
-        crawler::{address_data::SoftwareInfo, CrawlerConfig},
+        crawler::{CrawlerConfig, address_data::SoftwareInfo},
         crawler_manager::{
-            storage::DnsServerStorage, storage_impl::DnsServerStorageImpl, CrawlerManager,
-            CrawlerManagerConfig,
+            CrawlerManager, CrawlerManagerConfig, storage::DnsServerStorage,
+            storage_impl::DnsServerStorageImpl,
         },
     },
     dns_server::DnsServerCommand,

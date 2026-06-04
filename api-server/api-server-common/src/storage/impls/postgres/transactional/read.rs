@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, DelegationId, Destination, OrderId,
-        PoolId,
+        DelegationId, Destination, OrderId, PoolId, block::timestamp::BlockTimestamp,
+        tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -24,10 +24,10 @@ use common::{
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, AmountWithDecimals, ApiServerStorageError,
-        ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo, TokenTransaction,
-        TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        AmountWithDecimals, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, NftWithOwner, Order, PoolBlockStats,
+        PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+        UtxoWithExtraInfo, block_aux_data::BlockAuxData,
     },
 };
 use std::collections::BTreeMap;

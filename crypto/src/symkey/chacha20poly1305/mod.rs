@@ -16,7 +16,7 @@
 use crate::symkey::Error;
 use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use serialization::{Decode, Encode};
 use zeroize::ZeroizeOnDrop;
 
@@ -31,8 +31,8 @@ impl Chacha20poly1305Key {
     pub const KEY_LEN: usize = 32;
 
     #[allow(dead_code)]
-    pub fn new_from_rng<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        let k = rng.gen::<[u8; Self::KEY_LEN]>();
+    pub fn new_from_rng<R: CryptoRng>(rng: &mut R) -> Self {
+        let k = rng.random::<[u8; Self::KEY_LEN]>();
 
         Self { key_data: k.into() }
     }
@@ -67,13 +67,13 @@ impl Chacha20poly1305Key {
         Ok(result)
     }
 
-    pub fn encrypt<T: AsRef<[u8]>, R: Rng + CryptoRng>(
+    pub fn encrypt<T: AsRef<[u8]>, R: CryptoRng>(
         &self,
         message: T,
         rng: &mut R,
         associated_data: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        let nonce = rng.gen::<[u8; Self::NONCE_LEN]>();
+        let nonce = rng.random::<[u8; Self::NONCE_LEN]>();
         self.encrypt_with_nonce_and_aead(&nonce, message, associated_data)
     }
 
@@ -162,8 +162,8 @@ mod test {
     fn encrypt_then_decrypt() {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
-        let message_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let message_len = 1 + rng.random::<u32>() % 10000;
+        let message = (0..message_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, b"").unwrap();
         let decrypted = key.decrypt(encrypted, None).unwrap();
         assert_eq!(message, decrypted);
@@ -173,10 +173,10 @@ mod test {
     fn encrypt_then_decrypt_with_associated_data() {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
-        let message_len = 1 + rng.gen::<u32>() % 10000;
-        let aead_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
-        let aead = (0..aead_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let message_len = 1 + rng.random::<u32>() % 10000;
+        let aead_len = 1 + rng.random::<u32>() % 10000;
+        let message = (0..message_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
+        let aead = (0..aead_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, &aead).unwrap();
         let decrypted = key.decrypt(encrypted, Some(&aead)).unwrap();
         assert_eq!(message, decrypted);
@@ -186,8 +186,8 @@ mod test {
     fn decrypt_too_short_cipher_text() {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
-        let cipher_text_len = rng.gen::<usize>() % Chacha20poly1305Key::NONCE_LEN;
-        let cipher_text = (0..cipher_text_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let cipher_text_len = rng.random_range(0..Chacha20poly1305Key::NONCE_LEN);
+        let cipher_text = (0..cipher_text_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         let decrypt_err = key.decrypt(cipher_text, None).unwrap_err();
         assert_eq!(
             decrypt_err,

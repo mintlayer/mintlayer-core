@@ -35,11 +35,7 @@ pub enum IsFresh {
 
 impl From<bool> for IsFresh {
     fn from(v: bool) -> Self {
-        if v {
-            IsFresh::Yes
-        } else {
-            IsFresh::No
-        }
+        if v { IsFresh::Yes } else { IsFresh::No }
     }
 }
 
@@ -52,11 +48,7 @@ pub enum IsDirty {
 
 impl From<bool> for IsDirty {
     fn from(v: bool) -> Self {
-        if v {
-            IsDirty::Yes
-        } else {
-            IsDirty::No
-        }
+        if v { IsDirty::Yes } else { IsDirty::No }
     }
 }
 
@@ -138,7 +130,7 @@ mod unit_test {
     use super::*;
     use crate::UtxoSource;
     use common::{
-        chain::{output_value::OutputValue, Destination, TxOutput},
+        chain::{Destination, TxOutput, output_value::OutputValue},
         primitives::Amount,
     };
     use rstest::rstest;

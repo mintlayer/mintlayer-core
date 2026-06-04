@@ -16,30 +16,30 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate::rpc::RpcOutputValueIn;
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use futures::{TryStreamExt, stream::FuturesUnordered};
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::{Address, pubkeyhash::PublicKeyHash},
     chain::{
+        ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
-            get_referenced_token_ids_ignore_issuance, IsTokenFreezable, IsTokenUnfreezable,
-            Metadata, RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
+            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            get_referenced_token_ids_ignore_issuance,
         },
-        ChainConfig, Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo,
-        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{amount::RpcAmountIn, per_thousand::PerThousand, Amount, Id},
+    primitives::{Amount, Id, amount::RpcAmountIn, per_thousand::PerThousand},
 };
 use crypto::{
     key::{
-        hdkd::{child_number::ChildNumber, u31::U31},
         PrivateKey, PublicKey,
+        hdkd::{child_number::ChildNumber, u31::U31},
     },
     vrf::VRFPublicKey,
 };
@@ -48,17 +48,18 @@ use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use utils::ensure;
 use wallet::{
+    WalletError, WalletResult,
     account::{CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo},
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     send_request::{
-        make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, SelectedInputs, StakePoolCreationArguments,
+        SelectedInputs, StakePoolCreationArguments, make_address_output, make_address_output_token,
+        make_create_delegation_output, make_data_deposit_output,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    WalletError, WalletResult,
 };
 use wallet_types::{
+    SignedTxWithFees,
     partially_signed_transaction::{
         OrderAdditionalInfo, PartiallySignedTransaction, PtxAdditionalInfo, TokenAdditionalInfo,
         TokensAdditionalInfo, TxAdditionalInfo,
@@ -66,10 +67,10 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
-    SignedTxWithFees,
 };
 
 use crate::{
+    ControllerConfig, ControllerError,
     helpers::{
         fetch_order_info, fetch_rpc_token_info, fetch_token_infos, fetch_token_infos_into,
         fetch_utxo, get_referenced_token_ids_from_partially_signed_transaction, into_balances,
@@ -79,7 +80,6 @@ use crate::{
     types::{
         Balances, GenericCurrencyTransfer, NewTransaction, PreparedTransaction, SweepFromAddresses,
     },
-    ControllerConfig, ControllerError,
 };
 
 pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {

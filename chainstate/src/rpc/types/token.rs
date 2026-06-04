@@ -16,8 +16,8 @@
 use common::{
     address::RpcAddress,
     chain::{
-        tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenTotalSupply},
         ChainConfig, Destination,
+        tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenTotalSupply},
     },
     primitives::amount::RpcAmountOut,
 };

@@ -20,17 +20,16 @@ use chainstate_storage::{BlockchainStorageRead as _, Transactional};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        make_token_id,
+        Block, Transaction, TxOutput, make_token_id,
         tokens::{
             IsTokenFrozen, Metadata, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo,
             RPCNonFungibleTokenInfo, RPCTokenInfo, TokenAuxiliaryData, TokenId, TokenIssuance,
             TokenIssuanceV1,
         },
-        Block, Transaction, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 use test_utils::assert_matches_return_val;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
 
@@ -65,7 +64,7 @@ pub fn make_expected_rpc_token_info_from_token_issuance(
 
 pub fn check_fungible_token(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     token_id: &TokenId,
     expected_data: &ExpectedFungibleTokenData,
     no_other_tokens_present: bool,
@@ -234,7 +233,7 @@ pub fn make_expected_rpc_token_info_from_nft_metadata(
 
 pub fn check_nft(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     token_id: &TokenId,
     expected_data: &ExpectedNftData,
 ) {

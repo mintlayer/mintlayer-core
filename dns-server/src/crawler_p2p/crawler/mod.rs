@@ -29,7 +29,7 @@
 pub mod address_data;
 
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     sync::Arc,
     time::Duration,
 };
@@ -44,7 +44,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
     utils::rate_limiter::RateLimiter,
 };
-use randomness::{seq::IteratorRandom, Rng};
+use randomness::{Rng, seq::IteratorRandom};
 use utils::make_config_setting;
 
 use crate::crawler_p2p::crawler::address_data::{AddressStateTransitionTo, SoftwareInfo};
@@ -591,7 +591,7 @@ impl Crawler {
                 address_data.connect_now(self.now)
                     && !self.banned_addresses.contains_key(&address.as_bannable())
             })
-            .choose_multiple(rng, MAX_CONNECTS_PER_HEARTBEAT);
+            .sample(rng, MAX_CONNECTS_PER_HEARTBEAT);
 
         for (address, address_data) in connecting_addresses {
             Self::change_address_state(

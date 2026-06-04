@@ -16,20 +16,20 @@
 use rstest::rstest;
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, get_output_value};
 use common::{
     chain::{
+        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
+        TxInput, TxOutput, UtxoOutPoint,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{NftIssuance, TokenId},
-        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
-        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
-use randomness::Rng;
+use randomness::RngExt;
 use test_utils::{
-    random::{make_seedable_rng, Seed},
+    random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
 
@@ -60,9 +60,10 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        assert!(tf
-            .outputs_from_genblock(block.get_id().into())
-            .contains_key(&issuance_outpoint_id));
+        assert!(
+            tf.outputs_from_genblock(block.get_id().into())
+                .contains_key(&issuance_outpoint_id)
+        );
 
         // Try to transfer NFT with wrong ID
         let random_token_id = TokenId::random_using(&mut rng);
@@ -129,7 +130,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(2..123))),
+                OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(2..123))),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -196,7 +197,7 @@ fn nft_zero_transfer(#[case] seed: Seed) {
         // and optionally a normal output as well.
         let mut tx_builder = TransactionBuilder::new()
             .add_input(issuance_outpoint.into(), InputWitness::NoSignature(None));
-        let zero_outputs_count = rng.gen_range(1..5);
+        let zero_outputs_count = rng.random_range(1..5);
         for _ in 0..zero_outputs_count {
             tx_builder = tx_builder.add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::ZERO),
@@ -204,7 +205,7 @@ fn nft_zero_transfer(#[case] seed: Seed) {
             ));
         }
 
-        if rng.gen_bool(0.5) {
+        if rng.random_bool(0.5) {
             // Also make the actual transfer
             tx_builder = tx_builder.add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::from_atoms(1)),

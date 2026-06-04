@@ -18,7 +18,7 @@ pub mod write;
 
 use std::sync::Arc;
 
-use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
+use bb8_postgres::{PostgresConnectionManager, bb8::PooledConnection};
 use common::{
     chain::{Block, ChainConfig, PoolId, Transaction},
     primitives::{BlockHeight, Id},
@@ -26,11 +26,11 @@ use common::{
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo,
-    ApiServerTransactionRw, BlockInfo, PoolDataWithExtraInfo, TransactionInfo, Transactional,
+    ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo, ApiServerTransactionRw,
+    BlockInfo, PoolDataWithExtraInfo, TransactionInfo, Transactional, block_aux_data::BlockAuxData,
 };
 
-use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
+use super::{TransactionalApiServerPostgresStorage, queries::QueryFromConnection};
 
 const CONN_ERR: &str = "CRITICAL: failed to get postgres tx connection. Invariant broken.";
 

@@ -21,8 +21,8 @@ use chainstate::{
 use chainstate_launcher::check_storage_compatibility;
 use chainstate_storage::Transactional as _;
 use common::chain::{
-    block::{consensus_data::PoSData, ConsensusData},
     ChainConfig,
+    block::{ConsensusData, consensus_data::PoSData},
 };
 use logging::log;
 use storage_lmdb::resize_callback::MapResizeCallback;

@@ -15,7 +15,7 @@
 
 use std::sync::RwLock;
 
-use api_web_server::{api::json_helpers::txoutput_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::txoutput_to_json};
 use common::primitives::time::get_time;
 
 use crate::DummyRPC;
@@ -67,8 +67,8 @@ async fn no_reward(#[case] seed: Seed) {
         async move {
             let web_server_state = {
                 let mut rng = make_seedable_rng(seed);
-                let block_height = rng.gen_range(1..50);
-                let n_blocks = rng.gen_range(block_height..100);
+                let block_height = rng.random_range(1..50);
+                let n_blocks = rng.random_range(block_height..100);
 
                 let chain_config = create_unit_test_config();
 

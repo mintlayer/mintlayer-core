@@ -14,11 +14,11 @@
 // limitations under the License.
 
 use common::{
-    chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, Destination, GenBlock},
+    chain::{ChainConfig, Destination, GenBlock, classic_multisig::ClassicMultisigChallenge},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey, PublicKey},
+    key::{PrivateKey, PublicKey, extended::ExtendedPublicKey, hdkd::u31::U31},
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};

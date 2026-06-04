@@ -16,7 +16,7 @@
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use common::chain::config::create_unit_test_config;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use networking::test_helpers::TestAddressMaker;
 use p2p::{

@@ -21,35 +21,34 @@ use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
-    TestFramework, TestStore, TransactionBuilder,
+    TestFramework, TestStore, TransactionBuilder, anyonecanspend_address,
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness,
 };
 use common::{
     chain::{
-        config::{create_unit_test_config, Builder as ConfigBuilder},
+        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
+        PoolId, TxInput, TxOutput, UtxoOutPoint,
+        config::{Builder as ConfigBuilder, create_unit_test_config},
         make_delegation_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
-        PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
+    primitives::{Amount, H256, Id, Idable, per_thousand::PerThousand},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoSAccountingDeltaData;
-use randomness::Rng;
+use randomness::RngExt;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 // Block `a` and block `c` have stake pool operation.
 // Check that after reorg all accounting data from block `a` was removed and from block `c` added to storage.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 0)]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 1)]
 #[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 2)]
@@ -59,6 +58,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 0)]
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 1)]
 #[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 2)]
+#[trace]
 fn stake_pool_reorg(
     #[case] seed: Seed,
     #[case] epoch_length: NonZeroU64,
@@ -78,8 +78,9 @@ fn stake_pool_reorg(
         let genesis_id = tf.genesis().get_id();
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-        let pledge_amount =
-            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let pledge_amount = Amount::from_atoms(
+            rng.random_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+        );
 
         // prepare tx_a
         let destination_a = new_pub_key_destination(&mut rng);
@@ -649,7 +650,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
             Amount::ZERO,
         );
 
-        let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let mint_amount = Amount::from_atoms(rng.random_range(100..100_000));
         let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
             &mut rng,
             mint_amount,

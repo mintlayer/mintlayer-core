@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use strum::EnumCount;
+
 use accounting::DataDeltaUndo;
 use common::{
     chain::{
-        tokens::{IsTokenUnfreezable, TokenId},
         Destination,
+        tokens::{IsTokenUnfreezable, TokenId},
     },
     primitives::{Amount, H256},
 };
-use randomness::Rng;
+use randomness::{Rng, RngExt as _};
 use serialization::{Decode, Encode};
-use strum::EnumCount;
 
 use crate::{data::TokenData, error::Result};
 
@@ -98,7 +99,7 @@ pub enum TokenAccountingUndo {
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> TokenAccountingUndo {
     let id: TokenId = H256::random_using(rng).into();
-    let amount_to_add = Amount::from_atoms(rng.gen_range(0..100_000));
+    let amount_to_add = Amount::from_atoms(rng.random_range(0..100_000));
 
     // TODO: return other undo types
     TokenAccountingUndo::MintTokens(MintTokenUndo { id, amount_to_add })
@@ -109,7 +110,7 @@ pub trait TokensAccountingOperations {
 
     fn mint_tokens(&mut self, id: TokenId, amount_to_add: Amount) -> Result<TokenAccountingUndo>;
     fn unmint_tokens(&mut self, id: TokenId, amount_to_burn: Amount)
-        -> Result<TokenAccountingUndo>;
+    -> Result<TokenAccountingUndo>;
 
     fn lock_circulating_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
 

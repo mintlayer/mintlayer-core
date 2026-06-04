@@ -20,7 +20,7 @@ use common::{
     primitives::Id,
 };
 use crypto::key::hdkd::derivation_path::DerivationPath;
-use crypto::key::{extended::ExtendedPublicKey, PublicKey};
+use crypto::key::{PublicKey, extended::ExtendedPublicKey};
 use serialization::{Decode, Encode};
 use storage::HasPrefix;
 

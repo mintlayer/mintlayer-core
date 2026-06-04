@@ -33,11 +33,13 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::StreamExt;
-use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
+use futures::{TryStreamExt, never::Never, stream::FuturesOrdered};
 use helpers::{
     fetch_input_infos, fetch_rpc_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances,
 };
 use itertools::Itertools as _;
+use mempool::MempoolConfig;
+use node_comm::node_traits::NodeInterfaceError as _;
 use runtime_wallet::RuntimeWallet;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -62,19 +64,19 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
+        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
         signature::{
-            inputsig::InputWitness, sighash::input_commitments::SighashInputCommitment,
-            DestinationSigError, Transactable,
+            DestinationSigError, Transactable, inputsig::InputWitness,
+            sighash::input_commitments::SighashInputCommitment,
         },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        time::{get_time, Time},
         Amount, BlockHeight, Id, Idable,
+        time::{Time, get_time},
     },
 };
 use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
@@ -88,36 +90,38 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
 };
-use randomness::{make_pseudo_rng, make_true_rng, Rng};
+use randomness::{RngExt as _, make_pseudo_rng, make_true_rng};
+#[cfg(feature = "trezor")]
+use wallet::signer::SignerError;
 #[cfg(feature = "ledger")]
 use wallet::signer::ledger_signer::LedgerSignerProvider;
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::{SelectedDevice, TrezorSignerProvider};
-#[cfg(feature = "trezor")]
-use wallet::signer::SignerError;
 
 use wallet::{
+    WalletError, WalletResult,
     account::{
-        currency_grouper::{self},
         TransactionToSign,
+        currency_grouper::{self},
     },
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     signer::software_signer::SoftwareSignerProvider,
     wallet::{WalletCreation, WalletPoolsFilter},
     wallet_events::WalletEvents,
-    WalletError, WalletResult,
 };
 
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
+
+#[cfg(any(feature = "trezor", feature = "ledger"))]
+use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::{
-    hw_data::HardwareWalletFullInfo,
     partially_signed_transaction::{
-        make_sighash_input_commitments, PartiallySignedTransaction,
-        PartiallySignedTransactionError, PartiallySignedTransactionWalletExt as _,
-        PtxAdditionalInfo, SighashInputCommitmentCreationError,
+        PartiallySignedTransaction, PartiallySignedTransactionError,
+        PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
+        SighashInputCommitmentCreationError, make_sighash_input_commitments,
     },
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
@@ -301,6 +305,7 @@ where
 
     pub async fn create_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         best_block: (BlockHeight, Id<GenBlock>),
@@ -327,6 +332,7 @@ where
 
                 wallet::Wallet::create_new_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     best_block,
                     wallet_type,
@@ -348,6 +354,7 @@ where
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor { device_id } => wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                mempool_config,
                 db,
                 best_block,
                 wallet_type,
@@ -365,6 +372,7 @@ where
             #[cfg(feature = "ledger")]
             WalletTypeArgsComputed::Ledger => wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
+                mempool_config,
                 db,
                 best_block,
                 wallet_type,
@@ -381,6 +389,7 @@ where
 
     pub async fn recover_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
@@ -406,6 +415,7 @@ where
 
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |db_tx| {
@@ -427,6 +437,7 @@ where
             WalletTypeArgsComputed::Trezor { device_id } => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |_db_tx| {
@@ -445,6 +456,7 @@ where
             WalletTypeArgsComputed::Ledger => {
                 let wallet = wallet::Wallet::recover_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     wallet_type,
                     async |_db_tx| LedgerSignerProvider::new().await.map_err(Into::into),
@@ -472,6 +484,7 @@ where
                 WalletCreation::Wallet(_) => false,
                 // Wallet was not created successfully. The caller will need to handle this result
                 // and either fail or try again.
+                #[cfg(feature = "trezor")]
                 WalletCreation::MultipleAvailableTrezorDevices(_) => true,
             },
         };
@@ -508,14 +521,16 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn open_wallet(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
         current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
-        device_id: Option<String>,
+        #[cfg_attr(not(feature = "trezor"), allow(unused_variables))] device_id: Option<String>,
     ) -> Result<WalletCreation<RuntimeWallet<DefaultBackend>>, ControllerError<N>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -532,6 +547,7 @@ where
             WalletType::Cold | WalletType::Hot => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -549,6 +565,7 @@ where
             WalletType::Trezor => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -570,6 +587,7 @@ where
             WalletType::Ledger => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
+                    mempool_config,
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
@@ -772,26 +790,116 @@ where
 
     /// Try to generate the `block_count` number of blocks.
     /// The function may return an error early if some attempt fails.
+    ///
+    /// Note that this function is intended to be used on regtest/signet to populate the chainstate
+    /// and it won't work reliably if a large number of blocks enters the chainstate via other means
+    /// at the same time (e.g. via p2p during initial block download).
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
         block_count: u32,
     ) -> Result<(), ControllerError<N>> {
-        for _ in 0..block_count {
-            self.sync_once().await?;
-            let block = self
-                .generate_block(
-                    account_index,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
-                .await?;
+        let mut recoverable_errors_seen_count = 0;
 
-            self.rpc_client
-                .submit_block(block)
-                .await
-                .map_err(ControllerError::NodeCallError)?;
+        for block_idx in 0..block_count {
+            // Perform a few attempts to produce a block, retrying on a "recoverable mempool error",
+            // which indicates that the block production was aborted because the tip has changed
+            // when collecting transactions from the mempool.
+            // This may happen either because the mempool is lagging behind chainstate (so the
+            // new tip is one of the previously produced blocks) or if blocks enter the chainstate
+            // via other means (e.g. p2p).
+            // Note:
+            // 1) Potentially we may see a "recoverable mempool error" for each of the blocks
+            //    we produce here, so the retry count should be at least "the number of blocks we
+            //    produced so far" minus "the number of recoverable errors seen so far". We add
+            //    a small number to that to have some leeway in case blocks are also entering
+            //    the chainstate via other means.
+            // 2) The alternative to retrying is to wait for a NewTip event from the mempool after
+            //    each block; this would make the function more reliable in the case of the mempool
+            //    lagging, but less reliable in the case when blocks enter chainstate via p2p
+            //    (in which case a newly produced block may not become a tip at all).
+            //    I.e. there seems to be no way to make this function 100% reliable.
+            let recoverable_error_retry_count =
+                (block_idx + 1).saturating_sub(recoverable_errors_seen_count) + 5;
+            let mut recoverable_error_retry_idx = 0;
+            loop {
+                self.sync_once().await?;
+                let block_gen_result = self
+                    .generate_block(
+                        account_index,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await;
+
+                match block_gen_result {
+                    Ok(block) => {
+                        self.rpc_client
+                            .submit_block(block)
+                            .await
+                            .map_err(ControllerError::NodeCallError)?;
+                        break;
+                    }
+                    Err(err) => {
+                        let is_recoverable_err = match &err {
+                            ControllerError::NodeCallError(err) => {
+                                err.is_recoverable_mempool_error_during_block_production()
+                            }
+                            ControllerError::SyncError(_)
+                            | ControllerError::NotEnoughBlockHeight(_, _)
+                            | ControllerError::WalletFileError(_, _)
+                            | ControllerError::WalletError(_)
+                            | ControllerError::AddressEncodingError(_)
+                            | ControllerError::NoStakingPool
+                            | ControllerError::FrozenToken(_)
+                            | ControllerError::WalletIsLocked
+                            | ControllerError::StakingRunning
+                            | ControllerError::EndToEndEncryptionError(_)
+                            | ControllerError::NodeNotInSyncYet
+                            | ControllerError::InvalidLookaheadSize
+                            | ControllerError::WalletFileAlreadyOpen
+                            | ControllerError::NoWallet
+                            | ControllerError::SearchForTimestampsFailed(_)
+                            | ControllerError::ExpectingNonEmptyInputs
+                            | ControllerError::ExpectingNonEmptyOutputs
+                            | ControllerError::NoCoinUtxosToPayFeeFrom
+                            | ControllerError::InvalidTxOutput(_)
+                            | ControllerError::NotFungibleToken(_)
+                            | ControllerError::InvalidCoinAmount
+                            | ControllerError::PartiallySignedTransactionError(_)
+                            | ControllerError::InvalidTokenId
+                            | ControllerError::SighashInputCommitmentCreationError(_)
+                            | ControllerError::InvalidHtlcSecretsCount => false,
+                        };
+
+                        if !is_recoverable_err {
+                            return Err(err);
+                        }
+
+                        recoverable_errors_seen_count += 1;
+                        recoverable_error_retry_idx += 1;
+
+                        if recoverable_error_retry_idx >= recoverable_error_retry_count {
+                            log::warn!(
+                                "Too many recoverable mempool errors happened during block production, aborting"
+                            );
+
+                            return Err(err);
+                        }
+
+                        log::info!(
+                            "A recoverable mempool error happened during block production, retrying"
+                        );
+
+                        // Sleep for some amount of time, increasing it as the number of retries grows,
+                        // with the cap of 1 sec.
+                        let delay = Duration::from_millis(100 * recoverable_error_retry_idx as u64);
+                        let delay = std::cmp::min(delay, Duration::from_secs(1));
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
         }
 
         self.sync_once().await
@@ -1576,7 +1684,7 @@ where
             }
 
             // Reset the timer with a new random interval between 2 and 5 minutes
-            let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
+            let sleep_interval_sec = make_pseudo_rng().random_range(120..=300);
             *rebroadcast_txs_again_at = (get_time() + Duration::from_secs(sleep_interval_sec))
                 .expect("Sleep intervals cannot be this large");
         }

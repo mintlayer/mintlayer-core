@@ -18,6 +18,8 @@ use strum::IntoEnumIterator as _;
 
 use common::{
     chain::{
+        AccountCommandTag, AccountNonce, AccountSpendingTag, DestinationTag,
+        OrderAccountCommandTag, OutPointSourceIdTag, TxInputTag, TxOutputTag,
         block::timestamp::BlockTimestamp,
         config::{Builder, ChainType},
         output_value::OutputValueTag,
@@ -27,16 +29,14 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, NftIssuanceTag, TokenIssuanceTag,
             TokenTotalSupplyTag,
         },
-        AccountCommandTag, AccountNonce, AccountSpendingTag, DestinationTag,
-        OrderAccountCommandTag, OutPointSourceIdTag, TxInputTag, TxOutputTag,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, H256, Id, per_thousand::PerThousand},
     primitives_converters::TryConvertInto as _,
 };
 use crypto::{key::KeyKind, vrf::VRFKeyKind};
-use randomness::Rng as _;
+use randomness::RngExt as _;
 use serialization::Encode;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::utils::{
     make_test_values_for_compact_encoding,
@@ -411,7 +411,7 @@ fn test_id_encoding(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     for _ in 0..100 {
-        let ref_obj: RefCustomId = H256(rng.gen()).into();
+        let ref_obj: RefCustomId = H256(rng.random()).into();
         let test_obj = TestCustomId::new(ref_obj.to_hash().try_convert_into().unwrap());
 
         let encoded_ref_obj = ref_obj.encode();

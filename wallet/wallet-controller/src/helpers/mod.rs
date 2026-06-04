@@ -18,33 +18,33 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use futures::{
-    stream::{FuturesOrdered, FuturesUnordered},
     TryStreamExt,
+    stream::{FuturesOrdered, FuturesUnordered},
 };
 
 use common::{
     address::RpcAddress,
     chain::{
+        AccountCommand, ChainConfig, Currency, Destination, OrderAccountCommand, OrderId, PoolId,
+        RpcOrderInfo, Transaction, TxInput, TxOutput, UtxoOutPoint,
         htlc::HtlcSecret,
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
-        AccountCommand, ChainConfig, Currency, Destination, OrderAccountCommand, OrderId, PoolId,
-        RpcOrderInfo, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{amount::RpcAmountOut, Amount},
+    primitives::{Amount, amount::RpcAmountOut},
 };
 use node_comm::node_traits::NodeInterface;
 use utils::ensure;
 use wallet::{
-    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError,
+    destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
 };
 use wallet_types::partially_signed_transaction::{
     OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionWalletExt as _,
     PoolAdditionalInfo, PtxAdditionalInfo, TokenAdditionalInfo, TokensAdditionalInfo,
 };
 
-use crate::{runtime_wallet::RuntimeWallet, types::Balances, ControllerError};
+use crate::{ControllerError, runtime_wallet::RuntimeWallet, types::Balances};
 
 pub async fn fetch_rpc_token_info<T: NodeInterface>(
     rpc_client: &T,

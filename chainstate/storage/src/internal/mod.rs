@@ -33,7 +33,7 @@ use pos_accounting::{
 use utils::log_error;
 
 use crate::{
-    schema::Schema, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+    BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional, schema::Schema,
 };
 
 pub use blockchain_storage::{

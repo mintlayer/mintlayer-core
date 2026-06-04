@@ -20,19 +20,19 @@ use std::{
 };
 
 use crate::{
-    detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
-    NonZeroPoolBalances,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, NonZeroPoolBalances,
+    detail::BlockSource,
 };
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
-            GenBlock,
-        },
-        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
         RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
+        block::{
+            Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp,
+        },
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -236,7 +236,7 @@ pub trait ChainstateInterface: Send + Sync {
         id: &TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError>;
     fn get_token_circulating_supply(&self, id: &TokenId)
-        -> Result<Option<Amount>, ChainstateError>;
+    -> Result<Option<Amount>, ChainstateError>;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError>;
     fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;

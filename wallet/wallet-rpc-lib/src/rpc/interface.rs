@@ -23,10 +23,10 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp,
-        tokens::{RPCTokenInfo, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcCurrency,
         SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        block::timestamp::BlockTimestamp,
+        tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{BlockHeight, Id},
 };
@@ -35,8 +35,8 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
+    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
@@ -622,7 +622,7 @@ trait WalletRpc {
     /// List delegation ids controlled by the selected account in this wallet, with their balances
     #[method(name = "delegation_list_ids")]
     async fn list_delegation_ids(&self, account: AccountArg)
-        -> rpc::RpcResult<Vec<DelegationInfo>>;
+    -> rpc::RpcResult<Vec<DelegationInfo>>;
 
     /// List the blocks created by the selected account in this wallet through staking/mining/etc
     #[method(name = "staking_list_created_block_ids")]

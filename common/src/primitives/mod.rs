@@ -31,7 +31,7 @@ pub use amount::{Amount, DecimalAmount, DisplayAmount};
 pub use bech32_encoding::Bech32Error;
 pub use compact::Compact;
 pub use height::{BlockCount, BlockDistance, BlockHeight};
-pub use id::{Id, Idable, H256};
+pub use id::{H256, Id, Idable};
 pub use version_tag::VersionTag;
 
 use crate::chain::{output_value::OutputValue, tokens::TokenId};

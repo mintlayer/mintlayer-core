@@ -21,8 +21,9 @@ mod service;
 #[cfg(any(feature = "trezor", feature = "ledger"))]
 use rpc::types::HardwareWalletType;
 pub use rpc::{
-    types, ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
+    ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
     WalletEventsRpcServer, WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+    types,
 };
 pub use service::{Event, EventStream, TxState, WalletHandle, /* WalletResult, */ WalletService,};
 use wallet_controller::{NodeInterface, NodeRpcClient};

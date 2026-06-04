@@ -18,20 +18,21 @@ pub use crate::types::services;
 use std::fmt::{Debug, Display};
 
 use common::{
-    chain::{config::MagicBytes, ChainConfig},
+    chain::{ChainConfig, config::MagicBytes},
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
+use networking::types::ConnectionDirection;
 use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
+    P2pError,
     error::ConnectionValidationError,
     message::{
         BlockSyncMessage, PeerManagerMessage, PeerManagerMessageTag, TransactionSyncMessage,
     },
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
-    P2pError,
 };
 
 use self::services::Services;
@@ -308,6 +309,7 @@ pub enum SyncingEvent {
     Connected {
         peer_id: PeerId,
         common_services: Services,
+        direction: ConnectionDirection,
         protocol_version: SupportedProtocolVersion,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
         transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,

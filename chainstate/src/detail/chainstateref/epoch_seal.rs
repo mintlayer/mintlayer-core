@@ -15,13 +15,13 @@
 
 use chainstate_storage::BlockchainStorageWrite;
 use chainstate_types::{
-    pos_randomness::{PoSRandomness, PoSRandomnessError},
     EpochData, EpochStorageRead, EpochStorageWrite, SealedStorageTag,
+    pos_randomness::{PoSRandomness, PoSRandomnessError},
 };
 use common::{
     chain::{
-        block::{consensus_data::PoSData, ConsensusData},
         Block, ChainConfig, PoolId, TxOutput,
+        block::{ConsensusData, consensus_data::PoSData},
     },
     primitives::BlockHeight,
 };
@@ -274,16 +274,16 @@ mod tests {
 
     use super::*;
     use chainstate_storage::mock::MockStoreTxRw;
-    use chainstate_types::{vrf_tools::construct_transcript, EpochDataCache, TipStorageTag};
+    use chainstate_types::{EpochDataCache, TipStorageTag, vrf_tools::construct_transcript};
     use common::{
         chain::{
-            block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
+            Block, Destination, PoolId, TxOutput,
+            block::{BlockReward, consensus_data::PoSData, timestamp::BlockTimestamp},
             config::{Builder as ConfigBuilder, ChainType, EpochIndex},
             get_initial_randomness,
             stakelock::StakePoolData,
-            Block, Destination, PoolId, TxOutput,
         },
-        primitives::{per_thousand::PerThousand, Amount, Compact, H256},
+        primitives::{Amount, Compact, H256, per_thousand::PerThousand},
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use mockall::predicate::eq;

@@ -21,23 +21,23 @@ use std::{borrow::Cow, convert::Infallible};
 use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
+        ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, TxInput, TxOutput,
         block::timestamp::BlockTimestamp,
         signature::{
+            DestinationSigError, Transactable,
             inputsig::InputWitness,
             sighash::{
                 self,
                 input_commitments::{SighashInputCommitment, SighashInputCommitmentCreationError},
             },
-            DestinationSigError, Transactable,
         },
         tokens::TokenId,
-        ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
 use mintscript::{
-    translate::InputInfoProvider, InputInfo, SignatureContext, TimelockContext, TranslateInput,
-    WitnessScript,
+    InputInfo, SignatureContext, TimelockContext, TranslateInput, WitnessScript,
+    translate::InputInfoProvider,
 };
 use utils::debug_assert_or_log;
 

@@ -16,15 +16,15 @@
 use std::collections::BTreeMap;
 
 use common::chain::{
-    htlc::HtlcSecret, partially_signed_transaction::PartiallySignedTransactionConsistencyCheck,
-    signature::inputsig::InputWitness, tokens::TokenId, Destination, OrderId, PoolId, Transaction,
-    TxOutput,
+    Destination, OrderId, PoolId, Transaction, TxOutput, htlc::HtlcSecret,
+    partially_signed_transaction::PartiallySignedTransactionConsistencyCheck,
+    signature::inputsig::InputWitness, tokens::TokenId,
 };
 
 pub use common::chain::partially_signed_transaction::{
-    make_sighash_input_commitments, OrderAdditionalInfo, PartiallySignedTransaction,
-    PartiallySignedTransactionError, PoolAdditionalInfo, SighashInputCommitmentCreationError,
-    TxAdditionalInfo as PtxAdditionalInfo,
+    OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionError,
+    PoolAdditionalInfo, SighashInputCommitmentCreationError, TxAdditionalInfo as PtxAdditionalInfo,
+    make_sighash_input_commitments,
 };
 
 pub trait PartiallySignedTransactionWalletExt {

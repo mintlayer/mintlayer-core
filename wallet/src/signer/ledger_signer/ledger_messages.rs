@@ -19,7 +19,7 @@ use crate::signer::ledger_signer::LedgerError;
 use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivation_path::DerivationPath},
-    secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
+    secp256k1::{Secp256k1PublicKey, extended_keys::Secp256k1ExtendedPublicKey},
 };
 use utils::ensure;
 

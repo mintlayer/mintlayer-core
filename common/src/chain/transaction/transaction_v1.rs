@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use crate::chain::transaction::TransactionCreationError;
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
-pub use crate::chain::transaction::TransactionCreationError;
 use crate::primitives::H256;
-use crate::primitives::{id, Id, Idable, VersionTag};
+use crate::primitives::{Id, Idable, VersionTag, id};
 use serialization::{Decode, Encode, Tagged};
 
 use super::Transaction;

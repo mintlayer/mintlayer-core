@@ -15,10 +15,10 @@
 
 pub mod client_impl;
 
-use rpc::new_http_client;
 use rpc::ClientError;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
+use rpc::new_http_client;
 
 use crate::wallet_rpc_traits::WalletInterface;
 

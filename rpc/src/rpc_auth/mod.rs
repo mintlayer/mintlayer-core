@@ -15,7 +15,7 @@
 
 use base64::Engine;
 use crypto::{
-    kdf::{argon2::Argon2Config, hash_password, verify_password, KdfConfig, KdfResult},
+    kdf::{KdfConfig, KdfResult, argon2::Argon2Config, hash_password, verify_password},
     util::eq::SliceEqualityCheckMethod,
 };
 use hyper::{Request, Response};

@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, time::Duration};
 
 use common::{
     chain::Transaction,
-    primitives::{time::Time, Id},
+    primitives::{Id, time::Time},
     time_getter::TimeGetter,
 };
 

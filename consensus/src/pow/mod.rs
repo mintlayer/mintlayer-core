@@ -15,7 +15,7 @@
 
 pub use self::{
     error::ConsensusPoWError,
-    work::{calculate_work_required, check_pow_consensus, check_proof_of_work, mine, MiningResult},
+    work::{MiningResult, calculate_work_required, check_pow_consensus, check_proof_of_work, mine},
 };
 
 mod error;
@@ -26,8 +26,8 @@ mod work;
 use std::{num::NonZeroU64, time::Duration};
 
 use common::{
-    chain::{ChainConfig, PoWChainConfig},
     Uint256,
+    chain::{ChainConfig, PoWChainConfig},
 };
 
 struct PoW(PoWChainConfig);

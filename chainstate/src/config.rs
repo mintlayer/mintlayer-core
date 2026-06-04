@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use common::chain::{config::ChainType, ChainConfig};
+use common::chain::{ChainConfig, config::ChainType};
 use utils::make_config_setting;
 
 make_config_setting!(MaxDbCommitAttempts, usize, 10);

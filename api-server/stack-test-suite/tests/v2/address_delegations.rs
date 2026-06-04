@@ -15,7 +15,7 @@
 
 use std::sync::RwLock;
 
-use api_web_server::{api::json_helpers::amount_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::amount_to_json};
 use common::{
     chain::{AccountNonce, UtxoOutPoint},
     primitives::time::get_time,
@@ -119,7 +119,7 @@ async fn ok(#[case] seed: Seed) {
                     &mut tf,
                 );
 
-                let (_transfer_outpoint, mut delegations) = (0..rng.gen_range(0..5)).fold(
+                let (_transfer_outpoint, mut delegations) = (0..rng.random_range(0..5)).fold(
                     (transfer_outpoint, vec![]),
                     |(transfer_outpoint, mut delegations), _| {
                         if available_amount == Amount::ZERO {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
+use crate::{DataDelta, DeltaDataCollection, combine_data_with_delta};
 
 use rstest::rstest;
 

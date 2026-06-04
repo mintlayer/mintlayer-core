@@ -16,7 +16,7 @@
 //! Broadcaster is a reliable version of [tokio::sync::broadcast].
 
 use tokio::sync::mpsc;
-use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
+use tokio_stream::{Stream, wrappers::UnboundedReceiverStream};
 
 /// A reliable version of [tokio::sync::broadcast], sender part.
 ///

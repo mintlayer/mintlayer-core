@@ -16,16 +16,16 @@
 use rstest::rstest;
 
 use common::chain::SighashInputCommitmentVersion;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::signer::tests::{
     generic_fixed_signature_tests::{
-        test_fixed_signatures_generic, test_fixed_signatures_generic2,
-        test_fixed_signatures_generic_htlc_refunding, test_fixed_signatures_generic_no_legacy,
+        test_fixed_signatures_generic, test_fixed_signatures_generic_htlc_refunding,
+        test_fixed_signatures_generic_no_legacy, test_fixed_signatures_generic2,
     },
     generic_tests::{
-        test_sign_message_generic, test_sign_transaction_generic,
-        test_sign_transaction_intent_generic, MessageToSign,
+        MessageToSign, test_sign_message_generic, test_sign_transaction_generic,
+        test_sign_transaction_intent_generic,
     },
     make_deterministic_software_signer, make_software_signer, make_software_signer_for_cold_wallet,
     no_another_signer,
@@ -58,10 +58,9 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction(
     #[case] seed: Seed,
@@ -114,10 +113,9 @@ async fn test_fixed_signatures(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fixed_signatures2(
     #[case] seed: Seed,
@@ -144,10 +142,9 @@ async fn test_fixed_signatures_no_legacy(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fixed_signatures_htlc_refunding(
     #[case] seed: Seed,

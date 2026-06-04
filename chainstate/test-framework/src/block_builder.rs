@@ -15,25 +15,25 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::TestFramework;
 use crate::framework::BlockOutputs;
 use crate::signature_destination_getter::SignatureDestinationGetter;
 use crate::utils::{create_new_outputs, outputs_from_block, sign_witnesses};
-use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_types::BlockIndex;
+use common::chain::block::BlockHeader;
 use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
-use common::chain::block::BlockHeader;
 use common::chain::{AccountNonce, AccountType, OutPointSourceId, UtxoOutPoint};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        Block, GenBlock, Transaction, TxInput, TxOutput,
+        block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Block, GenBlock, Transaction, TxInput, TxOutput,
     },
-    primitives::{Id, H256},
+    primitives::{H256, Id},
 };
 use crypto::key::PrivateKey;
 use itertools::Itertools;
@@ -139,7 +139,7 @@ impl<'f> BlockBuilder<'f> {
 
     /// Adds a transaction that uses random utxos and accounts
     // TODO: this function is currently unused. Remove it?
-    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn add_test_transaction(mut self, rng: &mut impl CryptoRng) -> Self {
         let utxo_set = self
             .framework
             .storage
@@ -345,7 +345,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut impl CryptoRng) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
@@ -372,14 +372,14 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+    pub fn build(self, rng: &mut impl CryptoRng) -> Block {
         self.build_impl(rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(
         self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let block_source = self.block_source;
         let (block, framework) = self.build_impl(rng);

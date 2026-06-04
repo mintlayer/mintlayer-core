@@ -24,6 +24,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    MessagingService, P2p, P2pEvent, PeerManagerEvent,
     disconnection_reason::DisconnectionReason,
     error::P2pError,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
@@ -31,7 +32,6 @@ use crate::{
     peer_manager_event::PeerDisconnectionDbAction,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, P2p, P2pEvent, PeerManagerEvent,
 };
 
 #[async_trait::async_trait]
@@ -167,11 +167,11 @@ where
     ) -> crate::Result<()> {
         let origin = LocalTxOrigin::P2p;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
-        let res = self
+        let _tx_duplicate_status = self
             .mempool_handle
             .call_mut(move |mempool| mempool.add_transaction_local(tx, origin, options))
             .await??;
-        Ok(res)
+        Ok(())
     }
 
     fn subscribe_to_events(

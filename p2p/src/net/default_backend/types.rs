@@ -18,8 +18,8 @@ use std::time::Duration;
 use tokio::sync::{mpsc::Sender, oneshot};
 
 use common::{
-    chain::{config::MagicBytes, Transaction},
-    primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id, Idable as _},
+    chain::{Transaction, config::MagicBytes},
+    primitives::{Id, Idable as _, semver::SemVer, time::Time, user_agent::UserAgent},
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
@@ -33,7 +33,7 @@ use crate::{
         BlockSyncMessage, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
         PingResponse, TransactionResponse, TransactionSyncMessage, WillDisconnectMessage,
     },
-    net::types::{services::Services, PeerManagerMessageExt},
+    net::types::{PeerManagerMessageExt, services::Services},
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
@@ -427,12 +427,12 @@ mod tests {
     use chainstate_test_framework::TestFramework;
     use common::{
         chain::config::MagicBytes,
-        primitives::{semver::SemVer, Id},
+        primitives::{Id, semver::SemVer},
     };
-    use networking::test_helpers::{get_two_connected_sockets, TestTransportChannel};
-    use networking::transport::{new_message_stream, MpscChannelTransport};
+    use networking::test_helpers::{TestTransportChannel, get_two_connected_sockets};
+    use networking::transport::{MpscChannelTransport, new_message_stream};
     use p2p_types::services::Service;
-    use randomness::Rng;
+    use randomness::RngExt;
     use test_utils::random::Seed;
 
     use crate::{
@@ -466,76 +466,102 @@ mod tests {
 
         let messages = [
             Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: ProtocolVersion::new(rng.gen()),
-                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
+                protocol_version: ProtocolVersion::new(rng.random()),
+                network: MagicBytes::new([rng.random(), rng.random(), rng.random(), rng.random()]),
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: SemVer {
-                    major: rng.gen(),
-                    minor: rng.gen(),
-                    patch: rng.gen(),
+                    major: rng.random(),
+                    minor: rng.random(),
+                    patch: rng.random(),
                 },
                 receiver_address: Some(
                     SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                        rng.gen(),
+                        IpAddr::V4(Ipv4Addr::new(
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                        )),
+                        rng.random(),
                     )
                     .into(),
                 ),
-                current_time: P2pTimestamp::from_int_seconds(rng.gen()),
-                handshake_nonce: rng.gen(),
+                current_time: P2pTimestamp::from_int_seconds(rng.random()),
+                handshake_nonce: rng.random(),
             }),
             Message::Handshake(HandshakeMessage::HelloAck {
-                protocol_version: ProtocolVersion::new(rng.gen()),
-                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
+                protocol_version: ProtocolVersion::new(rng.random()),
+                network: MagicBytes::new([rng.random(), rng.random(), rng.random(), rng.random()]),
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: SemVer {
-                    major: rng.gen(),
-                    minor: rng.gen(),
-                    patch: rng.gen(),
+                    major: rng.random(),
+                    minor: rng.random(),
+                    patch: rng.random(),
                 },
                 receiver_address: Some(
                     SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                        rng.gen(),
+                        IpAddr::V4(Ipv4Addr::new(
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                        )),
+                        rng.random(),
                     )
                     .into(),
                 ),
-                current_time: P2pTimestamp::from_int_seconds(rng.gen()),
+                current_time: P2pTimestamp::from_int_seconds(rng.random()),
             }),
-            Message::PingRequest(PingRequest { nonce: rng.gen() }),
-            Message::PingResponse(PingResponse { nonce: rng.gen() }),
-            Message::NewTransaction(Id::new(rng.gen())),
+            Message::PingRequest(PingRequest {
+                nonce: rng.random(),
+            }),
+            Message::PingResponse(PingResponse {
+                nonce: rng.random(),
+            }),
+            Message::NewTransaction(Id::new(rng.random())),
             Message::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![
-                Id::new(rng.gen()),
-                Id::new(rng.gen()),
+                Id::new(rng.random()),
+                Id::new(rng.random()),
             ]))),
             Message::HeaderList(HeaderList::new(vec![block.header().clone()])),
             Message::BlockListRequest(BlockListRequest::new(vec![
-                Id::new(rng.gen()),
-                Id::new(rng.gen()),
+                Id::new(rng.random()),
+                Id::new(rng.random()),
             ])),
             Message::BlockResponse(BlockResponse::new(block.clone())),
-            Message::TransactionRequest(Id::new(rng.gen())),
-            Message::TransactionResponse(TransactionResponse::NotFound(Id::new(rng.gen()))),
+            Message::TransactionRequest(Id::new(rng.random())),
+            Message::TransactionResponse(TransactionResponse::NotFound(Id::new(rng.random()))),
             Message::TransactionResponse(TransactionResponse::Found(
                 block.transactions()[0].clone(),
             )),
             Message::AnnounceAddrRequest(AnnounceAddrRequest {
                 address: SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                    rng.gen(),
+                    IpAddr::V4(Ipv4Addr::new(
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                        rng.random(),
+                    )),
+                    rng.random(),
                 )
                 .into(),
             }),
             Message::AddrListRequest(AddrListRequest {}),
             Message::AddrListResponse(AddrListResponse {
-                addresses: vec![SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                    rng.gen(),
-                )
-                .into()],
+                addresses: vec![
+                    SocketAddr::new(
+                        IpAddr::V4(Ipv4Addr::new(
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                            rng.random(),
+                        )),
+                        rng.random(),
+                    )
+                    .into(),
+                ],
             }),
         ];
 

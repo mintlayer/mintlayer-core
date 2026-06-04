@@ -33,7 +33,7 @@ pub mod storage_impl;
 mod storage_load;
 
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     sync::Arc,
     time::Duration,
 };
@@ -41,7 +41,7 @@ use std::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, Rng, SliceRandom};
+use randomness::{Rng, RngExt as _, SliceRandom, seq::IteratorRandom};
 
 use crate::{config::P2pConfig, net::types::OutboundPeerRole};
 
@@ -58,7 +58,7 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
-pub use storage_load::{open_storage, CURRENT_STORAGE_VERSION};
+pub use storage_load::{CURRENT_STORAGE_VERSION, open_storage};
 
 pub struct PeerDb<S> {
     /// P2P configuration
@@ -166,7 +166,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
             if let Entry::Vacant(entry) = addresses.entry(*addr) {
                 let discarded_addr = address_tables.force_add_to_new(addr);
                 if let Some(discarded_addr) = discarded_addr {
-                    log::info!("Previously loaded 'new' address {discarded_addr} replaced with boot address {addr} when loading PeerDb");
+                    log::info!(
+                        "Previously loaded 'new' address {discarded_addr} replaced with boot address {addr} when loading PeerDb"
+                    );
                 }
 
                 entry.insert(AddressData::new(false, false, now));
@@ -248,10 +250,10 @@ impl<S: PeerDbStorage> PeerDb<S> {
         // To do so, we first select "count" addresses of each kind, shuffle the results and then
         // iteratively choose addresses from one of the vectors based on a randomly generated value.
         let mut selected_new =
-            self.address_tables.new_addresses().filter(filter).choose_multiple(rng, count);
+            self.address_tables.new_addresses().filter(filter).sample(rng, count);
         selected_new.shuffle(rng);
         let mut selected_tried =
-            self.address_tables.tried_addresses().filter(filter).choose_multiple(rng, count);
+            self.address_tables.tried_addresses().filter(filter).sample(rng, count);
         selected_tried.shuffle(rng);
 
         let mut selected_new_iter = selected_new.into_iter().peekable();
@@ -266,7 +268,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 (false, false) => {
                     break;
                 }
-                (true, true) => rng.gen_bool(0.5),
+                (true, true) => rng.random_bool(0.5),
                 _ => have_new,
             };
 
@@ -509,13 +511,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     // Note: this function assumes that the address has already been removed from `address_tables`.
     fn remove_from_addresses_if_some_non_reserved(&mut self, address: Option<SocketAddress>) {
-        if let Some(address) = address {
-            if !self.reserved_nodes.contains(&address) {
-                self.addresses.remove(&address);
+        if let Some(address) = address
+            && !self.reserved_nodes.contains(&address)
+        {
+            self.addresses.remove(&address);
 
-                update_db(&self.storage, |tx| tx.del_known_address(&address))
-                    .expect("DB failure when deleting known address {address}");
-            }
+            update_db(&self.storage, |tx| tx.del_known_address(&address))
+                .expect("DB failure when deleting known address {address}");
         }
     }
 

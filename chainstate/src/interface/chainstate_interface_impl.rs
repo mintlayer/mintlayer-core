@@ -20,25 +20,25 @@ use std::{
 };
 
 use crate::{
-    detail::{
-        self, block_checking::BlockChecker, bootstrap::export_bootstrap_stream,
-        calculate_median_time_past, tx_verification_strategy::TransactionVerificationStrategy,
-        BlockSource, OrphanBlocksRef, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS,
-    },
     ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
     NonZeroPoolBalances,
+    detail::{
+        self, BlockSource, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS, OrphanBlocksRef,
+        block_checking::BlockChecker, bootstrap::export_bootstrap_stream,
+        calculate_median_time_past, tx_verification_strategy::TransactionVerificationStrategy,
+    },
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
-        config::ChainConfig,
-        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Currency, DelegationId, OrderId, PoolId, RpcOrderInfo,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
+        block::{Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader},
+        config::ChainConfig,
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id::WithId},
 };
 use orders_accounting::OrderData;
 use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoolData};

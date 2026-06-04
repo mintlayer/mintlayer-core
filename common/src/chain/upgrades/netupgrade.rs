@@ -79,12 +79,12 @@ impl<T: Ord> NetUpgrades<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Uint256;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::{
         ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
     };
     use crate::primitives::BlockHeight;
-    use crate::Uint256;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
     pub enum MockVersion {

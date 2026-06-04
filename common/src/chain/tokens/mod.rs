@@ -94,6 +94,7 @@ pub struct TokenIssuanceV0 {
     pub metadata_uri: Vec<u8>,
 }
 
+// TODO: rename this to TokenDataV0, same for TokenTransfer above.
 #[derive(
     Debug,
     Clone,

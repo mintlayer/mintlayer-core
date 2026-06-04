@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use super::{
+    CachedOperation, TransactionVerifierDelta,
     storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
-    CachedOperation, TransactionVerifierDelta,
 };
 use orders_accounting::FlushableOrdersAccountingView;
 use pos_accounting::FlushablePoSAccountingView;

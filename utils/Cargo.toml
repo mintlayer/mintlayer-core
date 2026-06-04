@@ -14,8 +14,10 @@ serialization = { path = "../serialization" }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["env", "string", "derive"] }
+ctor.workspace = true
 directories.workspace = true
 fix-hidden-lifetime-bug.workspace = true
+fixed-hash.workspace = true
 heck.workspace = true
 num-traits.workspace = true
 parity-scale-codec.workspace = true
@@ -28,6 +30,8 @@ tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+serial_test.workspace = true
+
 test-utils = { path = "../test-utils" }
 
 criterion.workspace = true
@@ -41,6 +45,7 @@ loom.workspace = true
 
 [features]
 tokio-console = ["logging/tokio-console"]
+dev = [] # used by fixed-hash
 
 [[bench]]
 name = "benches"

@@ -19,15 +19,14 @@ use std::{
     time::Duration,
 };
 
-use logging::log;
-use randomness::Rng;
 use rstest::rstest;
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use common::{
-    chain::{self, config, ChainConfig},
+    chain::{self, ChainConfig, config},
     primitives::user_agent::mintlayer_core_user_agent,
 };
+use logging::log;
 use networking::test_helpers::{
     TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportTcp,
 };
@@ -39,38 +38,37 @@ use p2p_test_utils::{expect_future_val, expect_no_recv};
 use p2p_types::{
     peer_address::PeerAddress, socket_addr_ext::SocketAddrExt, socket_address::SocketAddress,
 };
+use randomness::{Rng, RngExt as _};
 use test_utils::{
-    assert_matches,
-    random::{make_seedable_rng, Seed},
-    BasicTestTimeGetter,
+    BasicTestTimeGetter, assert_matches,
+    random::{Seed, make_seedable_rng},
 };
 use utils::tokio_spawn_in_current_tracing_span;
 
 use crate::{
+    PeerManagerEvent,
     config::{NodeType, P2pConfig},
     error::{DialError, P2pError},
     message::{AddrListRequest, AnnounceAddrRequest, PeerManagerMessage},
     net::{
+        ConnectivityService, NetworkingService,
         default_backend::{
-            types::{CategorizedMessage, Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
+            types::{CategorizedMessage, Command, Message},
         },
         types::{ConnectivityEvent, PeerInfo},
-        ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        self,
+        self, DNS_SEED_QUERY_INTERVAL, OutboundConnectType, PeerManager,
         tests::{
             make_peer_manager_custom,
             utils::{cmd_to_peer_man_msg, expect_cmd_connect_to, make_full_relay_peer_info},
         },
-        OutboundConnectType, PeerManager, DNS_SEED_QUERY_INTERVAL,
     },
-    test_helpers::{peerdb_inmemory_store, test_p2p_config, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, peerdb_inmemory_store, test_p2p_config},
     tests::helpers::TestDnsSeed,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent,
 };
 
 fn get_new_discoverable_address(rng: &mut impl Rng) -> PeerAddress {
@@ -101,7 +99,7 @@ where
             Arc::clone(&config),
             p2p_config,
             time_getter.get_time_getter(),
-            make_seedable_rng(rng.gen()),
+            make_seedable_rng(rng.random()),
         )
         .await;
 
@@ -189,7 +187,7 @@ fn test_addr_list_handling_inbound(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -281,7 +279,7 @@ fn test_addr_list_handling_outbound(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -399,7 +397,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
         peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -463,14 +461,12 @@ async fn resend_own_addresses(#[case] seed: Seed) {
             peer_id: _,
             message,
         } = cmd
+            && let CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AnnounceAddrRequest(
+                AnnounceAddrRequest { address },
+            )) = message.categorize()
         {
-            if let CategorizedMessage::PeerManagerMessage(
-                PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }),
-            ) = message.categorize()
-            {
-                let announced_addr = address.as_discoverable_socket_address(false).unwrap();
-                listening_addresses.remove(&announced_addr);
-            }
+            let announced_addr = address.as_discoverable_socket_address(false).unwrap();
+            listening_addresses.remove(&announced_addr);
         }
     }
 }
@@ -515,7 +511,7 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
         peerdb_inmemory_store(),
         None,
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(Vec::new())))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -586,7 +582,7 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -660,7 +656,7 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 
@@ -762,7 +758,7 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
         Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
             seeded_peer_address,
         ])))),
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .unwrap();
 

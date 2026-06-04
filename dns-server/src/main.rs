@@ -186,10 +186,10 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
     }
 }
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() {
-    utils::rust_backtrace::enable();
-
     logging::init_logging();
 
     let run_options = DnsServerRunOptions::parse();

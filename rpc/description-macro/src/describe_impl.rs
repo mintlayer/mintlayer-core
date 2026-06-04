@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use quote::quote;
-use syn::{parse_quote, spanned::Spanned, ItemTrait, TraitItem, TraitItemFn};
+use syn::{ItemTrait, TraitItem, TraitItemFn, parse_quote, spanned::Spanned};
 
 fn for_attr<'a>(
     name: &str,
@@ -126,7 +126,7 @@ impl<'a> MethodMeta<'a> {
                 return Err(syn::Error::new(
                     item.span(),
                     "Neither method nor subscription",
-                ))
+                ));
             }
             (Some(method_name), None) => {
                 let return_type = match &item.sig.output {
@@ -146,7 +146,7 @@ impl<'a> MethodMeta<'a> {
                 return Err(syn::Error::new(
                     item.span(),
                     "Method AND subscription at the same time",
-                ))
+                ));
             }
         };
 

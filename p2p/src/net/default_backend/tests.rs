@@ -41,8 +41,9 @@ use crate::{
     config::NodeType,
     error::{DialError, P2pError},
     net::{
+        ConnectivityService, NetworkingService,
         default_backend::default_networking_service::get_preferred_protocol_version_for_tests,
-        types::ConnectivityEvent, ConnectivityService, NetworkingService,
+        types::ConnectivityEvent,
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     test_helpers::test_p2p_config,

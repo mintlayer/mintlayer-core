@@ -24,19 +24,19 @@ use std::{future::Future, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
 use chainstate::{
-    make_chainstate, ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
-    DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
+    DefaultTransactionVerificationStrategy, make_chainstate,
 };
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::ChainConfig, Block},
+    chain::{Block, config::ChainConfig},
     primitives::Idable,
     time_getter::TimeGetter,
 };
 use logging::log;
 use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::random::{CryptoRng, Rng};
+use test_utils::random::CryptoRng;
 
 use crate::panic_handling::get_panic_notification;
 
@@ -93,7 +93,8 @@ pub fn start_subsystems_generic(
         mempool_config,
         chainstate.clone(),
         time_getter,
-    );
+    )
+    .unwrap();
     let mempool =
         manager.add_custom_subsystem("p2p-test-mempool", |handle, _| mempool_init.init(handle));
 
@@ -104,11 +105,7 @@ pub fn start_subsystems_generic(
 
 // TODO: unify block creation utilities in p2p tests (others are in p2p/src/sync/tests/helpers,
 // may be in some other places too).
-pub fn create_n_blocks(
-    rng: &mut (impl Rng + CryptoRng),
-    tf: &mut TestFramework,
-    n: usize,
-) -> Vec<Block> {
+pub fn create_n_blocks(rng: &mut impl CryptoRng, tf: &mut TestFramework, n: usize) -> Vec<Block> {
     assert!(n > 0);
 
     let mut blocks = Vec::with_capacity(n);

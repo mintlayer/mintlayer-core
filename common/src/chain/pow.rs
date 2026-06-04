@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Uint256;
 use crate::chain::config::ChainType;
 use crate::primitives::BlockCount;
-use crate::Uint256;
 use std::time::Duration;
 
 /// Chain Parameters for Proof of Work.
@@ -153,9 +153,9 @@ pub(crate) const fn limit(chain_type: ChainType) -> Uint256 {
 
 #[cfg(test)]
 mod tests {
-    use crate::chain::config::{create_mainnet, ChainType};
-    use crate::chain::pow::{allow_min_difficulty_blocks, limit, no_retargeting};
     use crate::Uint256;
+    use crate::chain::config::{ChainType, create_mainnet};
+    use crate::chain::pow::{allow_min_difficulty_blocks, limit, no_retargeting};
 
     #[test]
     fn check_mainnet_powconfig() {

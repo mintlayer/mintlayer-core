@@ -15,10 +15,10 @@
 
 //! Per-peer work processing schedule queue and related tools.
 
-use std::collections::{btree_map, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map};
 
 use p2p_types::PeerId;
-use randomness::{self, Rng, SliceRandom};
+use randomness::{self, RngExt as _, SliceRandom};
 
 /// Per-peer work schedule queue
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -151,7 +151,7 @@ impl<W: Ord> WorkQueue<W> {
                 // mutability issues, it's slightly awkward. We first push it at the end and then
                 // swap it with a random other element in the vec.
                 self.scheduled.push(peer);
-                let pos = randomness::make_pseudo_rng().gen_range(0..self.scheduled.len());
+                let pos = randomness::make_pseudo_rng().random_range(0..self.scheduled.len());
                 let last = self.scheduled.len() - 1;
                 self.scheduled.swap(pos, last);
 

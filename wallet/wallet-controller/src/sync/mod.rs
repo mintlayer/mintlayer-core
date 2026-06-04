@@ -18,7 +18,7 @@ use std::{cmp::Reverse, collections::BTreeMap, iter};
 use async_trait::async_trait;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
+    chain::{Block, ChainConfig, GenBlock, block::timestamp::BlockTimestamp},
     primitives::{BlockHeight, Id},
 };
 use crypto::key::hdkd::u31::U31;
@@ -26,8 +26,8 @@ use logging::log;
 use node_comm::node_traits::NodeInterface;
 use utils::{once_destructor::OnceDestructor, set_flag::SetFlag};
 use wallet::{
-    signer::SignerProvider, wallet::WalletSyncingState, wallet_events::WalletEvents, Wallet,
-    WalletResult,
+    Wallet, WalletResult, signer::SignerProvider, wallet::WalletSyncingState,
+    wallet_events::WalletEvents,
 };
 
 use crate::ControllerError;

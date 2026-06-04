@@ -16,25 +16,25 @@
 use super::helpers::pos::create_custom_genesis_with_stake_pool;
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder, empty_witness};
 use common::{
+    Uint256,
     chain::{
+        AccountNonce, AccountSpending, ConsensusUpgrade, Destination, NetUpgrades,
+        OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput, UtxoOutPoint,
         config::Builder as ConfigBuilder, make_delegation_id, output_value::OutputValue,
-        stakelock::StakePoolData, timelock::OutputTimeLock, AccountNonce, AccountSpending,
-        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
-        PoolId, TxInput, TxOutput, UtxoOutPoint,
+        stakelock::StakePoolData, timelock::OutputTimeLock,
     },
     primitives::{
-        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable,
+        Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, per_thousand::PerThousand,
     },
-    Uint256,
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 #[rstest]
 #[trace]

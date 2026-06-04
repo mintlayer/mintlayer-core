@@ -32,11 +32,10 @@ use tokio::{
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
-    config,
+    P2pEventHandler, config,
     disconnection_reason::DisconnectionReason,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     types::peer_id::PeerId,
-    P2pEventHandler,
 };
 
 /// [NetworkingService] provides the low-level network interface

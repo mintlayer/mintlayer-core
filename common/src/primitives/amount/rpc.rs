@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::{
-    chain::{ChainConfig, Currency},
     TokenDecimalsProvider, TokenDecimalsUnavailableError,
+    chain::{ChainConfig, Currency},
 };
 
 use super::{Amount, DecimalAmount, RpcAmountInSerde, RpcAmountOutSerde};

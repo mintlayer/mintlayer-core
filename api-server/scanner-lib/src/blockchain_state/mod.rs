@@ -19,13 +19,13 @@ use std::{
     sync::Arc,
 };
 
-use futures::{stream::FuturesOrdered, TryStreamExt};
+use futures::{TryStreamExt, stream::FuturesOrdered};
 
 use api_server_common::storage::storage_api::{
-    block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
     ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
     PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
@@ -34,21 +34,21 @@ use chainstate::{
 use common::{
     address::Address,
     chain::{
-        block::{timestamp::BlockTimestamp, ConsensusData},
+        AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
+        block::{ConsensusData, timestamp::BlockTimestamp},
         config::ChainConfig,
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::{
-            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             InputWitness,
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         },
-        tokens::{get_referenced_token_ids_ignore_issuance, IsTokenFrozen, TokenId, TokenIssuance},
+        tokens::{IsTokenFrozen, TokenId, TokenIssuance, get_referenced_token_ids_ignore_issuance},
         transaction::OutPointSourceId,
-        AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, OrderAccountCommand, OrderId, PoolId, SignedTransaction, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, H256, Id, Idable, id::WithId},
 };
 use orders_accounting::OrderData;
 use pos_accounting::{PoSAccountingView, PoolData};

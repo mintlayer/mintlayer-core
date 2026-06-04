@@ -42,7 +42,7 @@ pub mod error;
 pub mod wrappers;
 
 pub use crate::{
-    calls::{blocking, CallResponse, CallResult, Handle, SubmitOnlyHandle},
+    calls::{CallResponse, CallResult, Handle, SubmitOnlyHandle, blocking},
     manager::{Manager, ManagerConfig, ManagerJoinHandle, ShutdownTrigger},
     subsystem::Subsystem,
 };

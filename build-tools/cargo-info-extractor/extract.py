@@ -26,11 +26,16 @@ def get_trezor_repo_rev(workspace_settings):
     return workspace_settings["dependencies"]["trezor-client"]["rev"]
 
 
+def get_ledger_repo_rev(workspace_settings):
+    return workspace_settings["dependencies"]["mintlayer-ledger-messages"]["rev"]
+
+
 def main():
     parser = argparse.ArgumentParser()
     mutex_group = parser.add_mutually_exclusive_group(required=True)
     mutex_group.add_argument('--rust-version', action='store_true', help='extract Rust version')
     mutex_group.add_argument('--trezor-repo-rev', action='store_true', help='extract Trezor repo revision')
+    mutex_group.add_argument('--ledger-repo-rev', action='store_true', help='extract Ledger repo revision')
     args = parser.parse_args()
 
     with open(ROOT_CARGO_TOML, "rb") as file:
@@ -43,6 +48,9 @@ def main():
         print(result)
     elif args.trezor_repo_rev:
         result = get_trezor_repo_rev(workspace_settings)
+        print(result)
+    elif args.ledger_repo_rev:
+        result = get_ledger_repo_rev(workspace_settings)
         print(result)
 
 

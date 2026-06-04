@@ -17,24 +17,27 @@ use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use common::{
     chain::{
-        make_token_id,
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
+        OrdersVersion, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderId,
-        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use orders_accounting::{OrdersAccountingDB, OrdersAccountingView as _};
-use randomness::{CryptoRng, Rng, SliceRandom as _};
+use randomness::{CryptoRng, Rng, RngExt as _, SliceRandom as _};
 use test_utils::{random_ascii_alphanumeric_string, token_utils::random_nft_issuance};
 
-use crate::{get_output_value, TestFramework, TransactionBuilder};
+use crate::{
+    TestFramework, TransactionBuilder, get_output_value,
+    utils::{EMPTY_WITNESS_DEFAULT_SIZE, empty_witness_with_size},
+};
 
 // Note: this function will create 2 blocks
 pub fn issue_and_mint_random_token_from_best_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     utxo_to_pay_fee: UtxoOutPoint,
     amount_to_mint: Amount,
@@ -55,7 +58,7 @@ pub fn issue_and_mint_random_token_from_best_block(
             token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
                 .as_bytes()
                 .to_vec(),
-            number_of_decimals: rng.gen_range(1..max_dec_count),
+            number_of_decimals: rng.random_range(1..max_dec_count),
             metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
             total_supply,
             is_freezable,
@@ -86,7 +89,7 @@ pub fn issue_and_mint_random_token_from_best_block(
 }
 
 pub fn issue_token_from_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
@@ -139,7 +142,7 @@ pub fn make_token_issuance(
 ) -> TokenIssuance {
     TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
-        number_of_decimals: rng.gen_range(1..18),
+        number_of_decimals: rng.random_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         authority: Destination::AnyoneCanSpend,
@@ -148,7 +151,7 @@ pub fn make_token_issuance(
 }
 
 pub fn issue_token_from_genesis(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     supply: TokenTotalSupply,
     freezable: IsTokenFreezable,
@@ -179,7 +182,7 @@ pub fn issue_token_from_genesis(
 }
 
 pub fn mint_tokens_in_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
@@ -237,7 +240,7 @@ pub fn mint_tokens_in_block(
 }
 
 pub fn issue_random_nft_from_best_block(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     utxo_to_pay_fee: UtxoOutPoint,
 ) -> (
@@ -320,7 +323,7 @@ pub fn order_min_non_zero_fill_amount(
 
 /// Split an u128 value into the specified number of "randomish" parts (the min part size is half
 /// the average part size).
-pub fn split_u128(rng: &mut (impl Rng + CryptoRng), amount: u128, parts_count: usize) -> Vec<u128> {
+pub fn split_u128(rng: &mut impl CryptoRng, amount: u128, parts_count: usize) -> Vec<u128> {
     assert!(parts_count > 0);
     let mut result = Vec::with_capacity(parts_count);
     let parts_count = parts_count as u128;
@@ -331,7 +334,7 @@ pub fn split_u128(rng: &mut (impl Rng + CryptoRng), amount: u128, parts_count: u
         let amount_part_above_min = if i == parts_count - 1 {
             remaining_amount_above_min
         } else {
-            rng.gen_range(0..remaining_amount_above_min / 2)
+            rng.random_range(0..remaining_amount_above_min / 2)
         };
 
         result.push(min_part_amount + amount_part_above_min);
@@ -348,7 +351,7 @@ pub fn split_u128(rng: &mut (impl Rng + CryptoRng), amount: u128, parts_count: u
 ///
 /// The "fee" parameter only makes sense if the outpoint's currency is coins.
 pub fn make_tx_builder_to_split_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     outpoint: UtxoOutPoint,
     parts_count: usize,
@@ -372,7 +375,7 @@ pub fn make_tx_builder_to_split_utxo(
 }
 
 pub fn split_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     outpoint: UtxoOutPoint,
     parts_count: usize,
@@ -392,4 +395,40 @@ pub fn output_value_with_amount(output_value: &OutputValue, new_amount: Amount) 
         }
         OutputValue::TokenV1(id, _) => OutputValue::TokenV1(*id, new_amount),
     }
+}
+
+pub fn make_simple_coin_tx(
+    rng: &mut impl CryptoRng,
+    ins: impl IntoIterator<Item = (OutPointSourceId, u32)>,
+    outs: impl IntoIterator<Item = u128>,
+) -> SignedTransaction {
+    make_simple_coin_tx_with_witness_sizes(
+        rng,
+        ins.into_iter()
+            .map(|(utxo_src, utxo_idx)| (utxo_src, utxo_idx, EMPTY_WITNESS_DEFAULT_SIZE)),
+        outs,
+    )
+}
+
+pub fn make_simple_coin_tx_with_witness_sizes(
+    rng: &mut impl CryptoRng,
+    ins: impl IntoIterator<Item = (OutPointSourceId, u32, usize)>,
+    outs: impl IntoIterator<Item = u128>,
+) -> SignedTransaction {
+    let builder = ins.into_iter().fold(
+        TransactionBuilder::new(),
+        |tx_builder, (utxo_src, utxo_idx, witness_size)| {
+            tx_builder.add_input(
+                TxInput::from_utxo(utxo_src.clone(), utxo_idx),
+                empty_witness_with_size(rng, witness_size),
+            )
+        },
+    );
+    let builder = outs.into_iter().fold(builder, |tx_builder, output_amount| {
+        tx_builder.add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(output_amount)),
+            Destination::AnyoneCanSpend,
+        ))
+    });
+    builder.build()
 }

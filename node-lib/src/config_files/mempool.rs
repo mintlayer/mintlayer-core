@@ -27,6 +27,12 @@ use crate::RunOptions;
 pub struct MempoolConfigFile {
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
     pub min_tx_relay_fee_rate: Option<u64>,
+
+    /// Maximum number of transactions that a single cluster can contain.
+    pub max_cluster_tx_count: Option<usize>,
+
+    /// Maximum total size of transactions that is allowed in a single cluster.
+    pub max_cluster_size_bytes: Option<usize>,
 }
 
 impl MempoolConfigFile {
@@ -37,12 +43,20 @@ impl MempoolConfigFile {
     pub fn with_run_options(config: MempoolConfigFile, options: &RunOptions) -> MempoolConfigFile {
         let MempoolConfigFile {
             min_tx_relay_fee_rate,
+            max_cluster_tx_count,
+            max_cluster_size_bytes,
         } = config;
 
         let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
+        let max_cluster_tx_count =
+            max_cluster_tx_count.or(options.mempool_max_cluster_transaction_count);
+        let max_cluster_size_bytes =
+            max_cluster_size_bytes.or(options.mempool_max_cluster_size_bytes);
 
         MempoolConfigFile {
             min_tx_relay_fee_rate,
+            max_cluster_tx_count,
+            max_cluster_size_bytes,
         }
     }
 }
@@ -51,12 +65,16 @@ impl From<MempoolConfigFile> for MempoolConfig {
     fn from(config_file: MempoolConfigFile) -> Self {
         let MempoolConfigFile {
             min_tx_relay_fee_rate,
+            max_cluster_tx_count,
+            max_cluster_size_bytes,
         } = config_file;
 
         Self {
             min_tx_relay_fee_rate: min_tx_relay_fee_rate
                 .map(|val| FeeRate::from_amount_per_kb(Amount::from_atoms(val.into())))
                 .into(),
+            max_cluster_tx_count: max_cluster_tx_count.into(),
+            max_cluster_size_bytes: max_cluster_size_bytes.into(),
         }
     }
 }

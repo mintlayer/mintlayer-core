@@ -307,7 +307,7 @@ fn main() -> anyhow::Result<()> {
                         "Failed to open file {} to check docs: {e}\n
                         Does it really exist?",
                         file_path.display()
-                    ))
+                    ));
                 }
             };
 

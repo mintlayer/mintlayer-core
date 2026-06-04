@@ -15,6 +15,8 @@
 
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OrderData,
+        OrderId, PoolId, TxInput, TxOutput,
         htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         stakelock::StakePoolData,
@@ -23,10 +25,8 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OrderData,
-        OrderId, PoolId, TxInput, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, H256},
+    primitives::{Amount, H256, per_thousand::PerThousand},
 };
 use serialization::extras::non_empty_vec::DataOrNoVec;
 

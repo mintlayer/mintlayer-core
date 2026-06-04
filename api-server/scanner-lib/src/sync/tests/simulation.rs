@@ -29,21 +29,21 @@ use api_server_common::storage::{
     },
 };
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateConfig};
+use chainstate::{BlockSource, ChainstateConfig, chainstate_interface::ChainstateInterface};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
+        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig,
+        ChainstateUpgradeBuilder, ConsensusUpgrade, DelegationId, Destination, GenBlockId,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
         make_delegation_id, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
         tokens::{IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
-        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig,
-        ChainstateUpgradeBuilder, ConsensusUpgrade, DelegationId, Destination, GenBlockId,
-        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
-        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
+    primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, H256, Idable},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use crypto::{
@@ -52,9 +52,9 @@ use crypto::{
 };
 use orders_accounting::{OrderData, OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::PoSAccountingView;
-use randomness::Rng;
+use randomness::RngExt as _;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tokens_accounting::TokensAccountingView;
 
 struct PoSAccountingAdapterToCheckFees<'a> {
@@ -188,7 +188,7 @@ async fn simulation(
     let mut statistics: BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, Amount>> =
         BTreeMap::new();
 
-    let num_blocks = rng.gen_range((max_blocks / 2)..max_blocks);
+    let num_blocks = rng.random_range((max_blocks / 2)..max_blocks);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (config_builder, genesis_pool_id) =
@@ -207,10 +207,10 @@ async fn simulation(
     )];
     let consensus_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
 
-    let epoch_length = NonZeroU64::new(rng.gen_range(1..10)).unwrap();
-    let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
+    let epoch_length = NonZeroU64::new(rng.random_range(1..10)).unwrap();
+    let sealed_epoch_distance_from_tip = rng.random_range(1..10);
     let token_id_generation_v1_fork_height =
-        BlockHeight::new(rng.gen_range(1..=num_blocks + 1) as u64);
+        BlockHeight::new(rng.random_range(1..=num_blocks + 1) as u64);
     let chain_config = config_builder
         .consensus_upgrades(consensus_upgrades)
         .max_future_block_time_offset(Some(std::time::Duration::from_secs(1_000_000)))
@@ -309,9 +309,9 @@ async fn simulation(
 
     // Generate a random chain
     for current_height in 0..num_blocks {
-        let create_reorg = rng.gen_bool(0.1);
+        let create_reorg = rng.random_bool(0.1);
         let height_to_continue_from = if create_reorg {
-            rng.gen_range(0..=current_height)
+            rng.random_range(0..=current_height)
         } else {
             current_height
         };
@@ -376,7 +376,7 @@ async fn simulation(
 
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
-            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+            for _ in 0..rng.random_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 

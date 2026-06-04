@@ -31,10 +31,10 @@ use wallet_types::{
 };
 
 use crate::{
-    signer::{software_signer::SoftwareSignerProvider, SignerProvider},
+    DefaultWallet, Wallet,
+    signer::{SignerProvider, software_signer::SoftwareSignerProvider},
     wallet::create_wallet_in_memory,
     wallet_events::WalletEventsNoOp,
-    DefaultWallet, Wallet,
 };
 
 pub async fn create_wallet_with_mnemonic(
@@ -82,6 +82,7 @@ pub async fn create_wallet_generic(
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config.clone(),
+        Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
         wallet_type,
@@ -112,6 +113,7 @@ pub async fn load_wallet(
 
     Wallet::load_wallet(
         Arc::clone(&chain_config),
+        Default::default(),
         db,
         None,
         |_| Ok(()),

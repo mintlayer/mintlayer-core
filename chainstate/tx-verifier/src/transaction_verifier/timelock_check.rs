@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, timelock::OutputTimeLock, UtxoOutPoint},
+    chain::{UtxoOutPoint, block::timestamp::BlockTimestamp, timelock::OutputTimeLock},
     primitives::{BlockCount, BlockHeight},
 };
 use mintscript::checker::TimelockChecker as _;

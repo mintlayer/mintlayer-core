@@ -13,23 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use common::{
     chain::{
-        make_token_id,
+        Block, ChainConfig, Transaction, TxOutput, make_token_id,
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, Transaction, TxOutput,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{BlockHeight, H256, Id, Idable},
 };
 use utils::ensure;
 
 use crate::error::TokenIssuanceError;
 
 use super::{
-    error::{ConnectTransactionError, TokensError},
     CachedOperation,
+    error::{ConnectTransactionError, TokensError},
 };
 
 pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
@@ -164,7 +163,7 @@ impl TokenIssuanceCache {
             Entry::Vacant(_) => {
                 return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
                     token_id,
-                ))
+                ));
             }
         }
         self.del_token_id(&tx.get_id())?;

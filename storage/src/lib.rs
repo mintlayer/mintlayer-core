@@ -100,8 +100,8 @@ pub mod schema;
 // Re-export user-facing items from core
 pub use order_preserving_value::OrderPreservingValue;
 pub use storage_core::{
-    error, Backend, BackendImpl, BackendWithSendableTransactions, DbDesc, Error, Result,
-    SharedBackend, SharedBackendImpl,
+    Backend, BackendImpl, BackendWithSendableTransactions, DbDesc, Error, Result, SharedBackend,
+    SharedBackendImpl, error,
 };
 
 // Re-export the interface types

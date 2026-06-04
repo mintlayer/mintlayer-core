@@ -15,9 +15,9 @@
 
 use crate::{chain::ChainConfig, primitives::bech32_encoding};
 
-use super::{traits::Addressable, Address};
+use super::{Address, traits::Addressable};
 use regex::Regex;
-use serde::{de::Error, Deserialize};
+use serde::{Deserialize, de::Error};
 use serialization::DecodeAll;
 
 const REGEX_SUFFIX: &str = r"\{0x([0-9a-fA-F]+)\}";
@@ -207,22 +207,24 @@ impl<A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'_, A> 
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use serde::de::value::Error as SerdeErr;
+    use strum::EnumCount as _;
+
     use crypto::{
         key::{KeyKind, PrivateKey},
         vrf::VRFPublicKey,
     };
-    use rstest::rstest;
-    use serde::de::value::Error as SerdeErr;
+    use randomness::Rng;
     use serialization::{Decode, DecodeAll, Encode};
-    use strum::EnumCount as _;
-    use test_utils::random::{make_seedable_rng, Rng, Seed};
+    use test_utils::random::{RngExt as _, Seed, make_seedable_rng};
 
     use crate::{
         address::{
-            hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
-            AddressError,
+            Address, AddressError, hexified::HexifiedAddress, pubkeyhash::PublicKeyHash,
+            traits::Addressable,
         },
-        chain::{config::create_regtest, ChainConfig, Destination},
+        chain::{ChainConfig, Destination, config::create_regtest},
         primitives::H256,
     };
 
@@ -291,13 +293,13 @@ mod tests {
 
         let strings = (0..100)
             .map(|_| {
-                let size = rng.gen::<usize>() % 50;
+                let size = rng.random_range(0..50);
                 random_string(size, &mut rng)
             })
             .collect::<Vec<String>>();
 
         let keys = (0..strings.len())
-            .map(|_| match rng.gen::<usize>() % Destination::COUNT {
+            .map(|_| match rng.random_range(0..Destination::COUNT) {
                 0 => Destination::AnyoneCanSpend,
                 1 => {
                     let (_private_key, public_key) =

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{htlc::HtlcSecret, Destination, PoolId, TxOutput};
+use common::chain::{Destination, PoolId, TxOutput, htlc::HtlcSecret};
 
 use crate::account::PoolData;
 

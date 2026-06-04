@@ -18,20 +18,19 @@ use wasm_bindgen::JsValue;
 use common::{
     address::AddressError,
     chain::{
+        IdCreationError, SignedTransactionIntentError, TransactionCreationError,
         classic_multisig::ClassicMultisigChallengeError,
         partially_signed_transaction::{
             PartiallySignedTransactionError, SighashInputCommitmentCreationError,
         },
         signature::{
+            DestinationSigError,
             inputsig::{
-                arbitrary_message::SignArbitraryMessageError,
+                InputWitnessTag, arbitrary_message::SignArbitraryMessageError,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpendTag,
                 classical_multisig::authorize_classical_multisig::ClassicalMultisigSigningError,
-                InputWitnessTag,
             },
-            DestinationSigError,
         },
-        IdCreationError, SignedTransactionIntentError, TransactionCreationError,
     },
     size_estimation::SizeEstimationError,
 };

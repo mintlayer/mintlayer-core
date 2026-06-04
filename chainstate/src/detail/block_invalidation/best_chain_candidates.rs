@@ -17,13 +17,13 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
+use crate::{TransactionVerificationStrategy, detail::chainstateref::ChainstateRef};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
 use common::{
+    Uint256,
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
-    Uint256,
 };
 use utils::{log_error, tap_log::TapLog};
 

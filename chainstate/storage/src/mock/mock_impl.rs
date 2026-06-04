@@ -20,11 +20,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
+        block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };

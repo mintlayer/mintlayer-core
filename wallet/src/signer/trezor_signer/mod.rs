@@ -19,15 +19,20 @@ use std::{
 };
 
 use async_trait::async_trait;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 
 use common::{
     address::Address,
     chain::{
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
+        OrderAccountCommand, OutPointSourceId, SighashInputCommitmentVersion,
+        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
         config::ChainType,
         output_value::OutputValue,
         signature::{
+            DestinationSigError,
             inputsig::{
+                InputWitness,
                 arbitrary_message::ArbitraryMessageSignature,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
@@ -37,35 +42,29 @@ use common::{
                     multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
                 },
                 standard_signature::StandardInputSignature,
-                InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
-            DestinationSigError,
         },
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderAccountCommand, OutPointSourceId, SighashInputCommitmentVersion,
-        SignedTransactionIntent, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Idable, H256},
+    primitives::{BlockHeight, H256, Idable},
 };
 use crypto::key::{
+    SigAuxDataProvider, Signature, SignatureError,
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
-    secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
+    secp256k1::{Secp256k1PublicKey, extended_keys::Secp256k1ExtendedPublicKey},
     signature::SignatureKind,
-    SigAuxDataProvider, Signature, SignatureError,
 };
 use logging::log;
 use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
-    client::{mintlayer::MintlayerSignature, TransactionId},
+    Features, Model,
+    client::{TransactionId, mintlayer::MintlayerSignature},
     find_devices,
     protos::{
-        features::Capability,
-        mintlayer_tx_ack::{MintlayerTxInput, MintlayerTxOutput},
         MintlayerAccountCommandTxInput, MintlayerAccountSpendingDelegationBalance,
         MintlayerAccountTxInput, MintlayerAddressPath, MintlayerAddressType, MintlayerBurnTxOutput,
         MintlayerChainType, MintlayerChangeTokenAuthority, MintlayerChangeTokenMetadataUri,
@@ -78,18 +77,20 @@ use trezor_client::{
         MintlayerOrderCommandTxInput, MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput,
         MintlayerTokenOutputValue, MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType,
         MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
+        features::Capability,
+        mintlayer_tx_ack::{MintlayerTxInput, MintlayerTxOutput},
     },
-    Features, Model,
 };
 use trezor_client::{
-    protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
+    protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
 };
 use utils::ensure;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
+    AccountId,
     account_info::DEFAULT_ACCOUNT_INDEX,
     hw_data::{HardwareWalletData, HardwareWalletFullInfo, TrezorFullInfo},
     partially_signed_transaction::{
@@ -97,22 +98,21 @@ use wallet_types::{
         TokensAdditionalInfo,
     },
     signature_status::SignatureStatus,
-    AccountId,
 };
 
 use crate::{
-    key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
+    Account, WalletError, WalletResult,
+    key_chain::{AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path},
     signer::{
         hardware_signer_utils::{
-            arbitrary_message_signature_from_raw_sig, sign_with_standalone_private_keys,
-            StandaloneInput, StandaloneInputs,
+            StandaloneInput, StandaloneInputs, arbitrary_message_signature_from_raw_sig,
+            sign_with_standalone_private_keys,
         },
         utils::produce_uniparty_signature_for_input,
     },
-    Account, WalletError, WalletResult,
 };
 
-use super::{utils::is_htlc_utxo, Signer, SignerError, SignerProvider, SignerResult};
+use super::{Signer, SignerError, SignerProvider, SignerResult, utils::is_htlc_utxo};
 
 const REQUIRED_FIRMWARE_MAJOR_VERSION: u32 = 1;
 
@@ -138,7 +138,9 @@ pub enum TrezorError {
     NoUniqueDeviceFound(Vec<FoundDevice>),
     #[error("Cannot get the supported features for the connected Trezor device")]
     CannotGetDeviceFeatures,
-    #[error("The connected Trezor device does not support the Mintlayer capabilities, please install the correct firmware")]
+    #[error(
+        "The connected Trezor device does not support the Mintlayer capabilities, please install the correct firmware"
+    )]
     MintlayerFeaturesNotSupported,
     #[error("Trezor device error: {0}")]
     DeviceError(String),
@@ -152,14 +154,18 @@ pub enum TrezorError {
     MultipleSignaturesReturned,
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
-    #[error("The file being loaded is a Ledger wallet and cannot be used with the connected Trezor wallet")]
+    #[error(
+        "The file being loaded is a Ledger wallet and cannot be used with the connected Trezor wallet"
+    )]
     WalletFileIsLedgerWallet,
-    #[error("The file being loaded is a software wallet and cannot be used with the connected Trezor wallet")]
+    #[error(
+        "The file being loaded is a software wallet and cannot be used with the connected Trezor wallet"
+    )]
     WalletFileIsSoftwareWallet,
     #[error(
         "Public keys mismatch - wrong device or passphrase.\n\
          Last used device id: \"{file_device_id}\", connected device id: \"{connected_device_id}\".\n\
-         Last used device name: \"{file_device_name}\", connected device name: \"{connected_device_name}\".",
+         Last used device name: \"{file_device_name}\", connected device name: \"{connected_device_name}\"."
     )]
     HardwareWalletDifferentMnemonicOrPassphrase {
         file_device_id: String,
@@ -167,7 +173,9 @@ pub enum TrezorError {
         file_device_name: String,
         connected_device_name: String,
     },
-    #[error("The file being loaded corresponds to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?")]
+    #[error(
+        "The file being loaded corresponds to the connected hardware wallet, but public keys are different. Maybe a wrong passphrase was entered?"
+    )]
     HardwareWalletDifferentPassphrase,
     #[error("Missing hardware wallet data in database")]
     MissingHardwareWalletData,

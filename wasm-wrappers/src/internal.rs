@@ -19,16 +19,17 @@ use wasm_bindgen::prelude::*;
 
 use common::{
     chain::{
+        Transaction, TxOutput,
         config::Builder,
         partially_signed_transaction::make_sighash_input_commitments_at_height,
         signature::{
             inputsig::{
+                InputWitness,
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-                standard_signature::StandardInputSignature, InputWitness,
+                standard_signature::StandardInputSignature,
             },
             sighash::signature_hash,
         },
-        Transaction, TxOutput,
     },
     primitives::BlockHeight,
 };

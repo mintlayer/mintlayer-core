@@ -15,11 +15,11 @@
 
 use common::{
     address::RpcAddress,
-    chain::{block::ConsensusData, ChainConfig, PoolId},
+    chain::{ChainConfig, PoolId, block::ConsensusData},
 };
 use rpc::types::RpcHexString;
 
-use super::{input::RpcTxInput, RpcTypeError};
+use super::{RpcTypeError, input::RpcTxInput};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type", content = "content")]

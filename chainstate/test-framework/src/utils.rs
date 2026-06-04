@@ -16,53 +16,60 @@
 use std::borrow::Cow;
 
 use crate::{
-    framework::BlockOutputs, key_manager::KeyManager,
-    signature_destination_getter::SignatureDestinationGetter, TestBlockIndexHandle, TestFramework,
+    TestBlockIndexHandle, TestFramework, framework::BlockOutputs, key_manager::KeyManager,
+    signature_destination_getter::SignatureDestinationGetter,
 };
 use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
-use chainstate_types::{pos_randomness::PoSRandomness, TipStorageTag};
+use chainstate_types::{TipStorageTag, pos_randomness::PoSRandomness};
 use common::{
+    Uint256,
     chain::{
+        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoSStatus,
+        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
         block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
-            ConsensusData,
+            BlockRewardTransactable, ConsensusData, consensus_data::PoSData,
+            timestamp::BlockTimestamp,
         },
-        config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
+        config::{Builder as ConfigBuilder, ChainType, EpochIndex, create_unit_test_config},
         output_value::OutputValue,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            inputsig::{InputWitness, standard_signature::StandardInputSignature},
             sighash::{
                 self,
                 input_commitments::{
-                    make_sighash_input_commitments_for_transaction_inputs_at_height,
                     SighashInputCommitment,
+                    make_sighash_input_commitments_for_transaction_inputs_at_height,
                 },
                 sighashtype::SigHashType,
             },
         },
         stakelock::StakePoolData,
-        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OrderId, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoSStatus,
-        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
-    Uint256,
+    primitives::{Amount, BlockHeight, Compact, H256, Id, Idable, per_thousand::PerThousand},
 };
-use consensus::{find_timestamp_for_staking, ConsensusPoSError};
+use consensus::{ConsensusPoSError, find_timestamp_for_staking};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use orders_accounting::OrdersAccountingView;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _};
+use test_utils::random::gen_random_bytes;
 use utxo::UtxosView;
 
+// Note: 99 is because originally `empty_witness` returned a randomly shuffled vec of numbers (0..100)
+// and now some tests that check transaction sizes depend on this.
+pub const EMPTY_WITNESS_DEFAULT_SIZE: usize = 99;
+
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
-    use randomness::SliceRandom;
-    let mut msg: Vec<u8> = (1..100).collect();
-    msg.shuffle(rng);
+    empty_witness_with_size(rng, EMPTY_WITNESS_DEFAULT_SIZE)
+}
+
+pub fn empty_witness_with_size(rng: &mut impl Rng, size: usize) -> InputWitness {
+    let msg = gen_random_bytes(rng, size, size);
     InputWitness::NoSignature(Some(msg))
 }
 
@@ -126,7 +133,7 @@ pub fn create_utxo_data(
             let new_output = match v {
                 OutputValue::Coin(output_value) => {
                     let spent_value =
-                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                        Amount::from_atoms(rng.random_range(0..output_value.into_atoms()));
                     let new_value = (*output_value - spent_value).unwrap();
                     utils::ensure!(new_value >= Amount::from_atoms(1));
                     TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
@@ -134,7 +141,7 @@ pub fn create_utxo_data(
                 OutputValue::TokenV0(_) => return None, // ignore
                 OutputValue::TokenV1(token_id, output_value) => {
                     let spent_value =
-                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                        Amount::from_atoms(rng.random_range(0..output_value.into_atoms()));
                     let new_value = (*output_value - spent_value).unwrap();
                     utils::ensure!(new_value >= Amount::from_atoms(1));
                     TxOutput::Transfer(
@@ -238,7 +245,7 @@ pub fn create_chain_config_with_staking_pool(
 
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(rng.gen_range(0..1639975460)),
+        BlockTimestamp::from_int_seconds(rng.random_range(0..1639975460)),
         vec![mint_output, pool],
     );
 
@@ -250,7 +257,7 @@ pub fn create_chain_config_with_staking_pool(
 
 pub fn produce_kernel_signature(
     tf: &TestFramework,
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
     staking_destination: Destination,
@@ -291,7 +298,7 @@ pub fn produce_kernel_signature(
 
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     storage: &impl BlockchainStorageRead,
     pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
@@ -374,7 +381,7 @@ pub fn assert_gen_block_index_opt_identical_to(
 
 #[allow(clippy::too_many_arguments)]
 pub fn sign_witnesses(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     key_manager: &KeyManager,
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
@@ -451,7 +458,7 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
 // Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
 // with this pool data
 pub fn create_stake_pool_data_with_all_reward_to_staker(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     amount: Amount,
     vrf_pk: VRFPublicKey,
 ) -> (StakePoolData, PrivateKey) {

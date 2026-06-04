@@ -15,7 +15,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap, sync::RwLock};
 
-use api_web_server::{api::json_helpers::utxo_outpoint_to_json, CachedValues};
+use api_web_server::{CachedValues, api::json_helpers::utxo_outpoint_to_json};
 use common::{chain::UtxoOutPoint, primitives::time::get_time};
 
 use crate::DummyRPC;
@@ -135,18 +135,19 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                     .unwrap(),
                 );
 
-                let mut chainstate_block_ids = vec![*tf
-                    .make_block_builder()
-                    .add_transaction(transaction.clone())
-                    .build_and_process(&mut rng)
-                    .unwrap()
-                    .unwrap()
-                    .block_id()];
+                let mut chainstate_block_ids = vec![
+                    *tf.make_block_builder()
+                        .add_transaction(transaction.clone())
+                        .build_and_process(&mut rng)
+                        .unwrap()
+                        .unwrap()
+                        .block_id(),
+                ];
 
                 // Generate two outputs for a single transaction
 
-                let random_coin_amount1 = rng.gen_range(1..10);
-                let random_coin_amount2 = rng.gen_range(1..10);
+                let random_coin_amount1 = rng.random_range(1..10);
+                let random_coin_amount2 = rng.random_range(1..10);
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
@@ -384,16 +385,17 @@ async fn ok(#[case] seed: Seed) {
                     .unwrap(),
                 );
 
-                let mut chainstate_block_ids = vec![*tf
-                    .make_block_builder()
-                    .add_transaction(transaction.clone())
-                    .build_and_process(&mut rng)
-                    .unwrap()
-                    .unwrap()
-                    .block_id()];
+                let mut chainstate_block_ids = vec![
+                    *tf.make_block_builder()
+                        .add_transaction(transaction.clone())
+                        .build_and_process(&mut rng)
+                        .unwrap()
+                        .unwrap()
+                        .block_id(),
+                ];
 
-                for _ in 0..rng.gen_range(1..100) {
-                    let random_coin_amount = rng.gen_range(1..10);
+                for _ in 0..rng.random_range(1..100) {
+                    let random_coin_amount = rng.random_range(1..10);
 
                     alice_balance =
                         (alice_balance - Amount::from_atoms(random_coin_amount)).unwrap();

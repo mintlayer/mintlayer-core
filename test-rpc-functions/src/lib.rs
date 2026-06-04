@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use chainstate_types::vrf_tools::ProofOfStakeVRFError;
-use common::chain::{signature::DestinationSigError, ChainConfig};
+use common::chain::{ChainConfig, signature::DestinationSigError};
 use crypto::key::SignatureError;
 use interface::{
     rpc_test_interface::RpcTestFunctionsInterface, rpc_test_interface_impl::RpcTestFunctionsImpl,

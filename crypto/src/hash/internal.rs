@@ -17,7 +17,7 @@
 // but this saves us from adding digest manually to cargo
 // and managing a different version
 pub use blake2::digest::{
-    generic_array::GenericArray, Digest, FixedOutputReset, OutputSizeUser, Reset, Update,
+    Digest, FixedOutputReset, OutputSizeUser, Reset, Update, generic_array::GenericArray,
 };
 
 pub fn hash<D: Digest, T: AsRef<[u8]>>(

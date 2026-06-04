@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::chain::{block::timestamp::BlockTimestamp, config::create_unit_test_config};
-use test_utils::{random::Seed, BasicTestTimeGetter};
+use test_utils::{BasicTestTimeGetter, random::Seed};
 
 use crate::{
     message::{BlockSyncMessage, HeaderList},

@@ -16,7 +16,7 @@
 use crypto::vrf::VRFPublicKey;
 use serialization::json_encoded::JsonEncoded;
 
-use crate::chain::{tokens::TokenId, ChainConfig, DelegationId, Destination, OrderId, PoolId};
+use crate::chain::{ChainConfig, DelegationId, Destination, OrderId, PoolId, tokens::TokenId};
 
 use super::hexified::HexifiedAddress;
 
@@ -51,13 +51,13 @@ mod tests {
         key::{KeyKind, PrivateKey},
         vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
     };
-    use test_utils::random::{gen_random_alnum_string, make_seedable_rng, Seed};
+    use test_utils::random::{Seed, gen_random_alnum_string, make_seedable_rng};
 
     use crate::{
-        address::{hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, Address},
+        address::{Address, hexified::HexifiedAddress, pubkeyhash::PublicKeyHash},
         chain::{
-            config::create_regtest, tokens::TokenId, DelegationId, Destination, DestinationTag,
-            OrderId, PoolId,
+            DelegationId, Destination, DestinationTag, OrderId, PoolId, config::create_regtest,
+            tokens::TokenId,
         },
         primitives::H256,
     };

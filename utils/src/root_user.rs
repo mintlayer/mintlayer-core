@@ -44,7 +44,9 @@ impl ForceRunAsRootOptions {
                 match uid {
                     Ok(id) => {
                         if id == 0 {
-                            return Err(anyhow::anyhow!("ERROR: It is a mistake to run as root (user with uid=0), as it gives the this software power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `{FORCE_ALLOW_ROOT_FLAG}`"));
+                            return Err(anyhow::anyhow!(
+                                "ERROR: It is a mistake to run as root (user with uid=0), as it gives the this software power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `{FORCE_ALLOW_ROOT_FLAG}`"
+                            ));
                         }
                     }
                     Err(e) => log::error!("Failed to get user id to prevent running as root: {e}"),

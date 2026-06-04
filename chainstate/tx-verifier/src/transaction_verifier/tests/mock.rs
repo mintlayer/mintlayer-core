@@ -18,19 +18,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::transaction_verifier::TransactionSource;
 
 use super::{
+    CachedUtxosBlockUndo,
     accounting_undo_cache::CachedBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
-    CachedUtxosBlockUndo,
 };
-use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
+use chainstate_types::{GenBlockIndex, TipStorageTag, storage_result};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, Id},
 };

@@ -20,11 +20,12 @@ serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
-wallet-types = { path = "../types" }
+wallet-types = { path = "../types", default-features = false }
 
 anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+derive_more.workspace = true
 futures.workspace = true
 mockall.workspace = true
 serde_json.workspace = true
@@ -47,4 +48,4 @@ build_utils = { path = "../../utils/build_utils" }
 [features]
 trezor = ["wallet-types/trezor"]
 ledger = ["wallet-types/ledger"]
-default = ["trezor"]
+default = ["trezor", "ledger"]

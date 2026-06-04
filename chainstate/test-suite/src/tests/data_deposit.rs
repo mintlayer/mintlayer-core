@@ -19,20 +19,19 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
-    output_value::OutputValue, signature::inputsig::InputWitness, Destination, OutPointSourceId,
-    TxInput, TxOutput, UtxoOutPoint,
+    Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint, output_value::OutputValue,
+    signature::inputsig::InputWitness,
 };
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
-use randomness::Rng;
+use randomness::RngExt as _;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 use tx_verifier::CheckTransactionError;
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true)]
-#[trace]
 #[case(Seed::from_entropy(), false)]
+#[trace]
 fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -45,7 +44,8 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
         } else {
             tf.chain_config().data_deposit_max_size(BlockHeight::zero()) + 1
         };
-        let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let deposited_data =
+            (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -83,14 +83,11 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), true, 1)]
-#[trace]
 #[case(Seed::from_entropy(), false, 1)]
-#[trace]
 #[case(Seed::from_entropy(), true, 2)]
-#[trace]
 #[case(Seed::from_entropy(), false, 2)]
+#[trace]
 fn data_deposit_insufficient_fee(
     #[case] seed: Seed,
     #[case] expect_success: bool,
@@ -103,8 +100,9 @@ fn data_deposit_insufficient_fee(
         let mut rng = make_seedable_rng(seed);
 
         let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
-        let deposited_data_len = rng.gen_range(0..deposited_data_len);
-        let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let deposited_data_len = rng.random_range(0..deposited_data_len);
+        let deposited_data =
+            (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let data_fee = if expect_success {
             (tf.chain_config().data_deposit_fee(BlockHeight::zero())
@@ -182,8 +180,9 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
-        let deposited_data_len = rng.gen_range(0..deposited_data_len);
-        let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let deposited_data_len = rng.random_range(0..deposited_data_len);
+        let deposited_data =
+            (0..deposited_data_len).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
 
         let at_least_data_fee =
             (tf.chain_config().data_deposit_fee(BlockHeight::zero()) * 10).unwrap();

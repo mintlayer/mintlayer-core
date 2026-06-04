@@ -883,8 +883,8 @@ Returns:
 
 Submit a transaction to the mempool.
 
-Note that submitting a transaction to the mempool does not guarantee broadcasting it.
-Use the p2p rpc interface for that.
+Note that transactions submitted to the mempool this way will not be relayed to the peers.
+Use the p2p rpc interface if you need that.
 
 
 Parameters:
@@ -998,6 +998,25 @@ Returns:
     number,
     { "amount_per_kb": { "atoms": number string } },
 ], .. ]
+```
+
+### Method `mempool_get_config`
+
+Get the mempool config.
+
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+{
+    "min_tx_relay_fee_rate": { "amount_per_kb": { "atoms": number string } },
+    "max_cluster_tx_count": number,
+    "max_cluster_size_bytes": number,
+}
 ```
 
 ### Subscription `mempool_subscribe_to_events`

@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 use std::fmt::Debug;
 
 use accounting::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo};
 use common::{chain::Transaction, primitives::Id};
 
-use crate::transaction_verifier::{cached_operation::combine, CachedOperation};
+use crate::transaction_verifier::{CachedOperation, cached_operation::combine};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CachedBlockUndo<T> {

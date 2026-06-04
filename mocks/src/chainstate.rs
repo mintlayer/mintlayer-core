@@ -25,13 +25,13 @@ use chainstate::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
     chain::{
-        block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
-            GenBlock,
-        },
-        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
         RpcOrderInfo, TxInput, UtxoOutPoint,
+        block::{
+            Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp,
+        },
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, BlockHeight, Id},
 };

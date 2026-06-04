@@ -25,18 +25,20 @@ use tokio::sync::{Mutex, MutexGuard};
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
+use mempool::{
+    FeeRate, MempoolConfig, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
+};
 use p2p::{
     interface::types::ConnectedPeer,
-    types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
+    types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress},
 };
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -328,6 +330,10 @@ impl NodeInterface for ClonableMockNodeInterface {
 
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         self.lock().await.mempool_subscribe_to_events().await
+    }
+
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        self.lock().await.mempool_get_config().await
     }
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error> {

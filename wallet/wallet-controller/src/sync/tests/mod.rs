@@ -29,24 +29,24 @@ use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
         Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
         Transaction,
+        tokens::{RPCTokenInfo, TokenId},
     },
-    primitives::{time::Time, Amount},
+    primitives::{Amount, time::Time},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use logging::log;
-use mempool::{tx_accumulator::PackingStrategy, FeeRate};
+use mempool::{FeeRate, MempoolConfig, tx_accumulator::PackingStrategy};
 use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
     node_traits::{ConnectedPeer, MempoolEvents, PeerId},
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::{seq::IteratorRandom, CryptoRng, Rng};
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::{CryptoRng, RngExt as _, seq::IteratorRandom};
+use test_utils::random::{Seed, make_seedable_rng};
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletControllerMode};
@@ -194,7 +194,7 @@ struct MockNode {
 }
 
 impl MockNode {
-    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+    fn new(rng: &mut impl CryptoRng) -> Self {
         let tf = Arc::new(Mutex::new(TestFramework::builder(rng).build()));
         Self { tf }
     }
@@ -450,12 +450,16 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn mempool_get_config(&self) -> Result<Option<MempoolConfig>, Self::Error> {
+        unreachable!()
+    }
+
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
         unreachable!()
     }
 }
 
-fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
+fn create_chain(node: &MockNode, rng: &mut impl CryptoRng, parent: u64, count: usize) {
     let mut tf = node.tf.lock().unwrap();
     let parent_id = tf.chainstate.get_block_id_from_height(parent.into()).unwrap().unwrap();
     tf.create_chain(&parent_id, count, rng).unwrap();
@@ -600,7 +604,7 @@ async fn account_out_of_sync(#[case] seed: Seed) {
     let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
     wait_new_tip(&node, &mut new_tip_rx).await;
 
-    let reset_to = rng.gen_range(1..9);
+    let reset_to = rng.random_range(1..9);
     wallet.reset_unused_account_to_height(reset_to);
 
     // Build new blocks

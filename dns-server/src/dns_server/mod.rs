@@ -25,25 +25,25 @@ use futures::never::Never;
 use hickory_client::{
     proto::rr::{LowerName, RrKey},
     rr::{
-        rdata::{NS, SOA},
         Name, RData, RecordSet, RecordType,
+        rdata::{NS, SOA},
     },
 };
 use hickory_server::{
+    ServerFuture,
     authority::{
         AuthLookup, Authority, Catalog, LookupError, LookupOptions, MessageRequest, UpdateResult,
         ZoneType,
     },
     server::RequestInfo,
     store::in_memory::InMemoryAuthority,
-    ServerFuture,
 };
 use itertools::Itertools;
 use tokio::{net::UdpSocket, sync::mpsc};
 
 use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use logging::log;
-use randomness::{make_pseudo_rng, Rng, SliceRandom};
+use randomness::{IndexedRandom as _, Rng, SliceRandom as _, make_pseudo_rng};
 use utils::{atomics::RelaxedAtomicU32, make_config_setting, tokio_spawn};
 
 use crate::{
@@ -309,11 +309,11 @@ impl AuthorityImpl {
             });
 
         let mut selected_same_version_addrs =
-            same_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+            same_version_addrs.sample(rng, count).cloned().collect::<Vec<_>>();
         selected_same_version_addrs.shuffle(rng);
 
         let mut selected_other_version_addrs =
-            other_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+            other_version_addrs.sample(rng, count).cloned().collect::<Vec<_>>();
         selected_other_version_addrs.shuffle(rng);
 
         #[allow(clippy::float_arithmetic)]

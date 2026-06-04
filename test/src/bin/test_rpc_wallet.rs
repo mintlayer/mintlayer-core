@@ -25,14 +25,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+utils::enable_rust_backtrace!();
+
 #[tokio::main]
 async fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     logging::init_logging();
 
     let run_result = run().await;

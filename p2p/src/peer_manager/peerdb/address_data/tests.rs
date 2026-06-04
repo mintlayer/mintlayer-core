@@ -18,12 +18,12 @@ use strum::IntoEnumIterator as _;
 
 use logging::log;
 use randomness::{
+    RngExt as _,
     distributions::{Distribution, WeightedIndex},
-    rngs::StepRng,
     seq::IteratorRandom as _,
-    Rng,
 };
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, StepRng, make_seedable_rng};
+use utils::exp_rand::EXPONENTIAL_RAND_UPPER_LIMIT;
 
 use super::*;
 
@@ -41,8 +41,8 @@ fn randomized(#[case] seed: Seed) {
     let weights = WeightedIndex::new(weights).unwrap();
 
     for _ in 0..100 {
-        let was_reachable = rng.gen_bool(0.2);
-        let reserved = rng.gen_bool(0.1);
+        let was_reachable = rng.random_bool(0.2);
+        let reserved = rng.random_bool(0.1);
 
         let mut address_data = AddressData::new(was_reachable, reserved, started_at);
 
@@ -115,8 +115,11 @@ fn reachable_reconnects(#[case] seed: Seed) {
 }
 
 fn next_connect_time_test_impl(rng: &mut impl Rng) {
-    let limit_reserved = MAX_DELAY_RESERVED * MAX_DELAY_FACTOR;
-    let limit_reachable = MAX_DELAY_REACHABLE * MAX_DELAY_FACTOR;
+    // Factors are produced by exponential_rand, which can't generate numbers bigger than this.
+    let max_delay_factor = EXPONENTIAL_RAND_UPPER_LIMIT;
+
+    let limit_reserved = MAX_DELAY_RESERVED * max_delay_factor;
+    let limit_reachable = MAX_DELAY_REACHABLE * max_delay_factor;
 
     let start_time = Time::from_secs_since_epoch(0);
     let max_time_reserved = (start_time + limit_reserved).unwrap();
@@ -124,7 +127,9 @@ fn next_connect_time_test_impl(rng: &mut impl Rng) {
 
     for fail_count in [0, u32::MAX] {
         for connections_without_activity_count in [0, u32::MAX] {
-            log::debug!("fail_count = {fail_count}, connections_without_activity_count = {connections_without_activity_count}");
+            log::debug!(
+                "fail_count = {fail_count}, connections_without_activity_count = {connections_without_activity_count}"
+            );
 
             let time = AddressData::next_connect_time(
                 start_time,

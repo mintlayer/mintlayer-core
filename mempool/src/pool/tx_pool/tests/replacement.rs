@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use common::chain::output_value::OutputValue;
-use randomness::{CryptoRng, Rng};
+use randomness::CryptoRng;
 
 use super::*;
 
 async fn test_replace_tx(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     original_fee: Fee,
     replacement_fee: Fee,
 ) -> Result<(), Error> {

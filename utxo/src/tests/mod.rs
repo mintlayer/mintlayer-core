@@ -24,35 +24,34 @@ use rstest::rstest;
 
 use common::{
     chain::{
+        AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{
+            Block, BlockReward, ConsensusData,
             consensus_data::{PoSData, PoWData},
             timestamp::BlockTimestamp,
-            Block, BlockReward, ConsensusData,
         },
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, Compact, H256, Id, Idable},
 };
 use crypto::vrf::VRFKeyKind;
-use randomness::{seq, CryptoRng, Rng};
+use randomness::{CryptoRng, Rng, RngExt as _, seq};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     UnwrapInfallible as _,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
-    flush_to_base,
-    tests::test_helper::{
-        create_tx_outputs, empty_test_utxos_view,
-        Presence::{self, *},
-    },
-    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::{self, *},
-    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosTxUndo, UtxosView,
+    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosTxUndo, UtxosView, flush_to_base,
+    tests::test_helper::{
+        Presence::{self, *},
+        create_tx_outputs, empty_test_utxos_view,
+    },
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
 };
 
 fn make_pool_id(rng: &mut impl Rng) -> PoolId {
@@ -79,7 +78,7 @@ fn make_create_delegation_output() -> TxOutput {
 /// `result_flags` - the result ( dirty/not, fresh/not ) after calling the `add_utxo` method.
 /// `op_result` - the result of calling `add_utxo` method, whether it succeeded or not.
 fn check_add_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     possible_overwrite: bool,
@@ -112,7 +111,7 @@ fn check_add_utxo(
 /// `cache_flags` - The flags of a utxo entry in a cache.
 /// `result_flags` - the result ( dirty/not, fresh/not ) after performing `spend_utxo`.
 fn check_spend_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
@@ -176,7 +175,7 @@ fn check_spend_utxo(
 /// `result` - The result of the parent after performing the `batch_write`.
 /// `result_flags` - the pair of `result`, indicating whether it is dirty/not, fresh/not or nothing at all.
 fn check_write_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     parent_presence: Presence,
     child_presence: Presence,
     result: Result<Presence, Error>,
@@ -238,7 +237,7 @@ fn check_write_utxo(
 
 /// Checks the `get_mut_utxo` method behavior.
 fn check_get_mut_utxo(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     parent_presence: Presence,
     cache_presence: Presence,
     result_presence: Presence,
@@ -506,9 +505,11 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // let's test `add_utxos`
     let tx = Transaction::new(0x00, vec![], create_tx_outputs(&mut rng, 10)).unwrap();
-    assert!(cache
-        .add_utxos_from_tx(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false)
-        .is_ok());
+    assert!(
+        cache
+            .add_utxos_from_tx(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false)
+            .is_ok()
+    );
 
     // check that the outputs of tx are added in the cache.
     tx.outputs().iter().enumerate().for_each(|(i, x)| {
@@ -575,14 +576,16 @@ fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
     let block_reward = BlockReward::new(create_tx_outputs(&mut rng, 10));
 
     let block_id = Id::new(H256::random_using(&mut rng));
-    assert!(cache
-        .add_utxos_from_block_reward(
-            &block_reward,
-            UtxoSource::Blockchain(BlockHeight::new(2)),
-            &block_id,
-            false
-        )
-        .is_ok());
+    assert!(
+        cache
+            .add_utxos_from_block_reward(
+                &block_reward,
+                UtxoSource::Blockchain(BlockHeight::new(2)),
+                &block_id,
+                false
+            )
+            .is_ok()
+    );
 
     block_reward.outputs().iter().enumerate().for_each(|(i, x)| {
         let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id), i as u32);
@@ -627,10 +630,10 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), make_burn_output())]
 #[case(Seed::from_entropy(), make_create_delegation_output())]
 #[case(Seed::from_entropy(), make_delegate_staking_output())]
+#[trace]
 fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());
@@ -916,10 +919,10 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
 
     // spend from an account in a transaction
     let input = TxInput::from_account(
-        AccountNonce::new(rng.gen()),
+        AccountNonce::new(rng.random()),
         AccountSpending::DelegationBalance(
             DelegationId::new(H256::random_using(&mut rng)),
-            Amount::from_atoms(rng.gen()),
+            Amount::from_atoms(rng.random()),
         ),
     );
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();

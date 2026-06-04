@@ -33,7 +33,7 @@ pub enum PublicKeyHashError {
 
 const HASH_SIZE: usize = 20;
 
-fixed_hash::construct_fixed_hash! {
+utils::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct PublicKeyHash(HASH_SIZE);
 }

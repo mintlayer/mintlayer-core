@@ -89,7 +89,7 @@ impl<T: Display> Display for Rational<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
     use test_utils::random::Seed;
 
@@ -98,10 +98,10 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn check_comparison_against_num(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let a1 = rng.gen_range(1..u128::MAX);
-        let a2 = rng.gen_range(1..u128::MAX);
-        let b1 = rng.gen_range(1..u128::MAX);
-        let b2 = rng.gen_range(1..u128::MAX);
+        let a1 = rng.random_range(1..u128::MAX);
+        let a2 = rng.random_range(1..u128::MAX);
+        let b1 = rng.random_range(1..u128::MAX);
+        let b2 = rng.random_range(1..u128::MAX);
 
         let expected =
             num::rational::Ratio::<u128>::new_raw(a1, a2)
@@ -120,10 +120,10 @@ mod tests {
 
         let a = Rational::new(
             Uint256::MAX,
-            Uint256::from_u128(rng.gen_range(1..u128::MAX)),
+            Uint256::from_u128(rng.random_range(1..u128::MAX)),
         );
         let b = Rational::new(
-            Uint256::from_u128(rng.gen_range(1..u128::MAX)),
+            Uint256::from_u128(rng.random_range(1..u128::MAX)),
             Uint256::MAX,
         );
 

@@ -19,7 +19,7 @@ use utils::default_data_dir::default_data_dir_for_chain;
 
 use chainstate_db_dumper_lib::{dump_blocks_to_file, parse_block_output_fields_list};
 
-use crate::options::{default_fields, Options};
+use crate::options::{Options, default_fields};
 
 mod options;
 
@@ -45,13 +45,9 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+utils::enable_rust_backtrace!();
+
 fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
     init_logging();
 
     run().unwrap_or_else(|err| {

@@ -19,22 +19,22 @@ use crate::signer::{DestinationSigError, SignatureStatus, SignerError, SignerRes
 
 use common::{
     chain::{
+        ChainConfig, DestinationTag,
         signature::inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
             authorize_pubkey_spend::AuthorizedPublicKeySpend,
             authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
             classical_multisig::authorize_classical_multisig::{
-                sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                ClassicalMultisigCompletionStatus,
+                AuthorizedClassicalMultisigSpend, ClassicalMultisigCompletionStatus,
+                sign_classical_multisig_spending,
             },
         },
-        ChainConfig, DestinationTag,
     },
     primitives::H256,
 };
 use crypto::key::{
-    extended::ExtendedPublicKey, signature::SignatureKind, PrivateKey, SigAuxDataProvider,
-    Signature, SignatureError,
+    PrivateKey, SigAuxDataProvider, Signature, SignatureError, extended::ExtendedPublicKey,
+    signature::SignatureKind,
 };
 use serialization::Encode;
 

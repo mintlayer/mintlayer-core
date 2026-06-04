@@ -18,14 +18,15 @@ mod cli_test_framework;
 use rstest::rstest;
 
 use common::{address::Address, chain::PoolId, primitives::H256};
-use randomness::Rng;
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::RngExt;
+use test_utils::random::{Seed, make_seedable_rng};
 use utils::app_version_with_git_info;
 
 use crate::cli_test_framework::CliTestFramework;
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn wallet_cli_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -42,6 +43,7 @@ async fn wallet_cli_basic(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn wallet_cli_file(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -57,11 +59,12 @@ async fn wallet_cli_file(#[case] seed: Seed) {
         .unwrap()
         .to_owned();
 
-    assert!(test
-        .exec(&format!(
+    assert!(
+        test.exec(&format!(
             "wallet-create software \"{file_name}\" store-seed-phrase"
         ))
-        .starts_with("New wallet created successfully\n"));
+        .starts_with("New wallet created successfully\n")
+    );
     assert_eq!(test.exec("wallet-close"), "Successfully closed the wallet.");
 
     assert_eq!(
@@ -75,6 +78,7 @@ async fn wallet_cli_file(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn produce_blocks(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -91,6 +95,7 @@ async fn produce_blocks(#[case] seed: Seed) {
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
+#[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
@@ -103,14 +108,15 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
 
     // create a new pool
     let address = test.exec("address-new");
-    assert!(test
-        .exec(&format!(
+    assert!(
+        test.exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
-        .contains("The transaction was submitted successfully with ID"));
+            .contains("The transaction was submitted successfully with ID")
+    );
     // create some blocks
     assert_eq!(test.exec("node-generate-blocks 20"), "Success");
 
@@ -122,21 +128,23 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert_eq!(test.exec("account-select 1"), "Success");
     let acc2_address = test.exec("address-new");
     assert_eq!(test.exec("account-select 0"), "Success");
-    assert!(test
-        .exec(&format!("address-send {} 50000", acc2_address))
-        .contains("The transaction was submitted successfully with ID"));
+    assert!(
+        test.exec(&format!("address-send {} 50000", acc2_address))
+            .contains("The transaction was submitted successfully with ID")
+    );
     // create a block
     assert_eq!(test.exec("node-generate-blocks 1"), "Success");
 
     assert_eq!(test.exec("account-select 1"), "Success");
-    assert!(test
-        .exec(&format!(
+    assert!(
+        test.exec(&format!(
             "staking-create-pool 40000 {} 0.{} {}",
-            rng.gen_range(0..100),
-            rng.gen_range(1..100),
+            rng.random_range(0..100),
+            rng.random_range(1..100),
             address,
         ),)
-        .contains("The transaction was submitted successfully with ID"));
+            .contains("The transaction was submitted successfully with ID")
+    );
     assert_eq!(test.exec("account-select 0"), "Success");
 
     // create some blocks
@@ -166,9 +174,10 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     // submit the tx
     test.create_genesis_wallet();
     assert_eq!(test.exec("wallet-sync"), "Success");
-    assert!(test
-        .exec(&format!("node-submit-transaction {signed_tx}"))
-        .contains("The transaction was submitted successfully with ID"));
+    assert!(
+        test.exec(&format!("node-submit-transaction {signed_tx}"))
+            .contains("The transaction was submitted successfully with ID")
+    );
 
     // stake with the other acc
     assert_eq!(test.exec("account-select 1"), "Success");

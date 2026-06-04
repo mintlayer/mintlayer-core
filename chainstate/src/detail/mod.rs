@@ -37,19 +37,19 @@ use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
-    EpochStorageWrite, GenBlockIndexRef, PropertyQueryError, SealedStorageTag, TipStorageTag,
+    BlockIndex, BlockStatus, BlockValidationStage, EpochData, EpochStorageWrite, GenBlockIndexRef,
+    PropertyQueryError, SealedStorageTag, TipStorageTag, pos_randomness::PoSRandomness,
 };
 use chainstateref::{ChainstateRef, ReorgError};
 use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, ConsensusData},
-        config::ChainConfig,
-        Block, GenBlock, TxOutput,
-    },
-    primitives::{id::WithId, BlockHeight, Compact, Id, Idable},
-    time_getter::TimeGetter,
     Uint256,
+    chain::{
+        Block, GenBlock, TxOutput,
+        block::{ConsensusData, timestamp::BlockTimestamp},
+        config::ChainConfig,
+    },
+    primitives::{BlockHeight, Compact, Id, Idable, id::WithId},
+    time_getter::TimeGetter,
 };
 use logging::log;
 use pos_accounting::{
@@ -69,8 +69,8 @@ use utils_networking::broadcaster;
 use utxo::UtxosDB;
 
 use crate::{
-    detail::bootstrap::import_bootstrap_stream, BlockInvalidatorError, BootstrapError,
-    ChainstateConfig, ChainstateError, ChainstateEvent,
+    BlockInvalidatorError, BootstrapError, ChainstateConfig, ChainstateError, ChainstateEvent,
+    detail::bootstrap::import_bootstrap_stream,
 };
 
 use self::{
@@ -81,8 +81,9 @@ use self::{
 };
 
 pub use self::{
-    error::*, info::ChainInfo, median_time::calculate_median_time_past,
-    median_time::calculate_median_time_past_from_blocktimestamps, median_time::MEDIAN_TIME_SPAN,
+    error::*, info::ChainInfo, median_time::MEDIAN_TIME_SPAN,
+    median_time::calculate_median_time_past,
+    median_time::calculate_median_time_past_from_blocktimestamps,
 };
 pub use chainstate_types::Locator;
 pub use chainstateref::NonZeroPoolBalances;
@@ -93,9 +94,9 @@ pub use error::{
 pub use error_classification::{BlockProcessingErrorClass, BlockProcessingErrorClassification};
 pub use orphan_blocks::OrphanBlocksRef;
 pub use transaction_verifier::{
+    IOPolicyError,
     error::{ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError},
     storage::TransactionVerifierStorageError,
-    IOPolicyError,
 };
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
@@ -461,7 +462,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     attempts_count,
                     db_err,
                     DbCommittingContext::Block(block_id),
-                ))
+                ));
             }
             Err(BlockIntegrationError::OtherNonValidationError(err)) => {
                 return Err(err);
@@ -930,7 +931,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 /// The error type for integrate_block.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 enum BlockIntegrationError {
-    #[error("Reorg error during block integration: {0}; resulting block status is {1}; first bad block id is {2}")]
+    #[error(
+        "Reorg error during block integration: {0}; resulting block status is {1}; first bad block id is {2}"
+    )]
     ConnectBlockErrorDuringReorg(BlockError, BlockStatus, Id<Block>),
     #[error("Reorg error during block integration: {0}; resulting block status is {1}")]
     OtherReorgError(BlockError, BlockStatus),

@@ -16,8 +16,8 @@
 use chainstate_test_framework::TestFramework;
 use common::primitives::Idable;
 use rstest::rstest;
-use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
+use test_utils::random::make_seedable_rng;
 
 #[rstest]
 #[trace]

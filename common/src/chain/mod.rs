@@ -40,13 +40,13 @@ pub use currency::{Currency, RpcCurrency};
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use make_id::{
-    make_delegation_id, make_order_id, make_pool_id, make_token_id, make_token_id_with_version,
-    IdCreationError,
+    IdCreationError, make_delegation_id, make_order_id, make_pool_id, make_token_id,
+    make_token_id_with_version,
 };
 pub use order::{OrderData, OrderId, RpcOrderInfo};
 pub use pos::{
-    config::PoSChainConfig, config_builder::PoSChainConfigBuilder, delegation_id::DelegationId,
-    get_initial_randomness, pool_id::PoolId, pos_initial_difficulty, PoSConsensusVersion,
+    PoSConsensusVersion, config::PoSChainConfig, config_builder::PoSChainConfigBuilder,
+    delegation_id::DelegationId, get_initial_randomness, pool_id::PoolId, pos_initial_difficulty,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

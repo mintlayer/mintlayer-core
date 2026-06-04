@@ -15,10 +15,10 @@
 
 use crypto::{
     kdf::{
-        argon2::Argon2Config, hash_from_challenge, hash_password, KdfChallenge, KdfConfig,
-        KdfResult,
+        KdfChallenge, KdfConfig, KdfResult, argon2::Argon2Config, hash_from_challenge,
+        hash_password,
     },
-    symkey::{key_size, SymmetricKey, SymmetricKeyKind},
+    symkey::{SymmetricKey, SymmetricKeyKind, key_size},
 };
 use randomness::make_true_rng;
 use utils::const_nz_usize;
@@ -103,9 +103,9 @@ pub fn challenge_to_sym_key(
 
 #[cfg(test)]
 mod test {
-    use randomness::Rng;
+    use randomness::RngExt;
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{Seed, make_seedable_rng};
 
     use super::{challenge_to_sym_key, password_to_sym_key};
 
@@ -115,7 +115,8 @@ mod test {
     fn test_password_to_challenge_and_back(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let password: String = (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect();
+        let password: String =
+            (0..rng.random_range(1..100)).map(|_| rng.random::<char>()).collect();
         let (original_key, kdf_challenge) = password_to_sym_key(&password).unwrap();
 
         let reconstructed_key = challenge_to_sym_key(&password, kdf_challenge).unwrap();

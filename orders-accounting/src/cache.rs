@@ -24,7 +24,7 @@ use logging::log;
 use utils::{debug_panic_or_log, ensure};
 
 use crate::{
-    calculate_fill_order,
+    FlushableOrdersAccountingView, OrderData, OrdersAccountingDeltaUndoData, calculate_fill_order,
     data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
@@ -32,7 +32,6 @@ use crate::{
         OrdersAccountingOperations, OrdersAccountingUndo,
     },
     view::OrdersAccountingView,
-    FlushableOrdersAccountingView, OrderData, OrdersAccountingDeltaUndoData,
 };
 
 pub struct OrdersAccountingCache<P> {

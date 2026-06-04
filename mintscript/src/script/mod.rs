@@ -16,7 +16,7 @@
 mod display;
 mod verify;
 
-use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{Destination, signature::EvaluatedInputWitness, timelock::OutputTimeLock};
 use utils::ensure;
 
 pub use verify::{ScriptError, ScriptErrorOf, ScriptResult, ScriptVisitor};

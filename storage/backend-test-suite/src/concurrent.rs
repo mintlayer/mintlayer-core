@@ -61,8 +61,10 @@ fn read_write_race<B: SharedBackend, F: BackendFactory<B>>(backend_factory: Arc<
 
     let dbtx = store.transaction_ro().unwrap();
     let expected = [[0u8].as_ref(), [2].as_ref()];
-    assert!(expected
-        .contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap()));
+    assert!(
+        expected
+            .contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap())
+    );
     drop(dbtx);
 
     thr0.join().unwrap();

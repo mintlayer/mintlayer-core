@@ -17,31 +17,32 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use rstest::rstest;
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
+use chainstate::{BlockSource, ChainstateError, chainstate_interface::ChainstateInterface};
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex,
-    TipStorageTag,
+    BlockIndex, BlockStatus, EpochStorageRead as _, GenBlockIndex, TipStorageTag,
+    pos_randomness::PoSRandomness,
 };
 use common::{
     chain::{
-        signature::sighash::{self, input_commitments::SighashInputCommitment},
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxInput,
         TxOutput, UtxoOutPoint,
+        signature::sighash::{self, input_commitments::SighashInputCommitment},
     },
-    primitives::{id::WithId, time::Time, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, id::WithId, time::Time},
     time_getter::TimeGetter,
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use orders_accounting::OrdersAccountingDB;
 use pos_accounting::{PoSAccountingDB, PoSAccountingData};
-use randomness::{CryptoRng, Rng};
+use randomness::{CryptoRng, RngExt as _};
 use utils::atomics::SeqCstAtomicU64;
 use utxo::{Utxo, UtxosDB};
 
 use crate::{
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
     framework_builder::TestFrameworkBuilderValue,
     get_output_value,
     key_manager::KeyManager,
@@ -49,11 +50,10 @@ use crate::{
     random_tx_maker::StakingPoolsObserver,
     staking_pools::StakingPools,
     utils::{
-        assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
-        assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
-        outputs_from_block, outputs_from_genesis, SighashInputCommitmentInfoProvider,
+        SighashInputCommitmentInfoProvider, assert_block_index_opt_identical_to,
+        assert_gen_block_index_identical_to, assert_gen_block_index_opt_identical_to,
+        find_create_pool_tx_in_genesis, outputs_from_block, outputs_from_genesis,
     },
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore, TxVerificationStrategy,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
@@ -80,7 +80,7 @@ pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
 
 impl TestFramework {
     /// Creates a new test framework instance using a builder api.
-    pub fn builder(rng: &mut (impl Rng + CryptoRng)) -> TestFrameworkBuilder {
+    pub fn builder(rng: &mut impl CryptoRng) -> TestFrameworkBuilder {
         TestFrameworkBuilder::new(rng)
     }
 
@@ -198,10 +198,10 @@ impl TestFramework {
                 // persistence flag set.
                 assert_eq!(was_persisted, is_persisted);
 
-                if let Some(new_block_index) = &new_block_index_opt {
-                    if orig_block_index_opt.is_none() {
-                        assert!(!new_block_index.status().is_ok());
-                    }
+                if let Some(new_block_index) = &new_block_index_opt
+                    && orig_block_index_opt.is_none()
+                {
+                    assert!(!new_block_index.status().is_ok());
                 }
 
                 assert_gen_block_index_identical_to(&new_best_block_index, &orig_best_block_index);
@@ -230,7 +230,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         self.create_chain_return_ids_impl(parent_block, blocks_count, false, rng)
     }
@@ -243,7 +243,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         self.create_chain_return_ids_impl(parent_block, blocks_count, true, rng)
     }
@@ -253,7 +253,7 @@ impl TestFramework {
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
         advance_time: bool,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let target_block_time = self.chain_config().target_block_spacing();
 
@@ -262,7 +262,7 @@ impl TestFramework {
             let mut ids = Vec::with_capacity(blocks_count);
             for _ in 0..blocks_count {
                 if advance_time {
-                    let seconds = rng.gen_range(1..target_block_time.as_secs() * 2);
+                    let seconds = rng.random_range(1..target_block_time.as_secs() * 2);
                     self.progress_time_seconds_since_epoch(seconds);
                 }
 
@@ -288,7 +288,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
@@ -301,7 +301,7 @@ impl TestFramework {
     /// will be identical.
     pub fn create_chain_pos(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -325,7 +325,7 @@ impl TestFramework {
     /// based on "target_block_spacing".
     pub fn create_chain_pos_randomizing_time(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -346,7 +346,7 @@ impl TestFramework {
     #[allow(clippy::too_many_arguments)]
     fn create_chain_pos_impl(
         &mut self,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -382,7 +382,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        rng: &mut impl CryptoRng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
@@ -714,8 +714,8 @@ impl TestFramework {
 fn build_test_framework(#[case] seed: test_utils::random::Seed) {
     use chainstate::ChainstateConfig;
     use common::chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
         Destination, NetUpgrades,
+        config::{Builder as ChainConfigBuilder, ChainType},
     };
     use common::time_getter::TimeGetter;
     let chain_type = ChainType::Mainnet;
@@ -753,8 +753,8 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
     use crate::TransactionBuilder;
     use common::{
         chain::{
-            output_value::OutputValue, signature::inputsig::InputWitness, Destination, GenBlock,
-            OutPointSourceId, TxInput, TxOutput,
+            Destination, GenBlock, OutPointSourceId, TxInput, TxOutput, output_value::OutputValue,
+            signature::inputsig::InputWitness,
         },
         primitives::{Amount, Id, Idable},
     };

@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
+    CachedOperation, TransactionSource, TransactionVerifier,
     accounting_undo_cache::CachedBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
@@ -23,14 +24,13 @@ use super::{
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
     utxos_undo_cache::CachedUtxosBlockUndo,
-    CachedOperation, TransactionSource, TransactionVerifier,
 };
-use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
+use chainstate_types::{GenBlockIndex, TipStorageTag, storage_result};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, DelegationId, GenBlock, OrderId, PoolId, Transaction,
         UtxoOutPoint,
+        tokens::{TokenAuxiliaryData, TokenId},
     },
     primitives::{Amount, Id},
 };
@@ -50,13 +50,13 @@ use tokens_accounting::{
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
 impl<
-        C,
-        S: TransactionVerifierStorageRef,
-        U: UtxosView,
-        A: PoSAccountingView,
-        T: TokensAccountingView,
-        O: OrdersAccountingView,
-    > TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A, T, O>
+    C,
+    S: TransactionVerifierStorageRef,
+    U: UtxosView,
+    A: PoSAccountingView,
+    T: TokensAccountingView,
+    O: OrdersAccountingView,
+> TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A, T, O>
 where
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {

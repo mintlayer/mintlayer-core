@@ -21,9 +21,8 @@ use api_server_backend_test_suite::podman::{Container, Podman};
 use api_server_common::storage::{
     impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
 };
-use common::chain::{config::create_unit_test_config, ChainConfig};
+use common::chain::{ChainConfig, config::create_unit_test_config};
 use containers::with_container::ApiServerStorageWithContainer;
-use utils::rust_backtrace;
 
 #[must_use]
 async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
@@ -56,9 +55,9 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
     ApiServerStorageWithContainer::new(storage, podman)
 }
 
-fn main() {
-    rust_backtrace::enable();
+utils::enable_rust_backtrace!();
 
+fn main() {
     // Only run the test if the env var is defined
     if std::env::var("ML_CONTAINERIZED_TESTS").is_err() {
         eprintln!("Warning: Skipping Postgres containerized tests");

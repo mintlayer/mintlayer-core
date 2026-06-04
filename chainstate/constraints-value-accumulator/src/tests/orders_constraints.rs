@@ -19,18 +19,18 @@ use rstest::rstest;
 
 use common::{
     chain::{
+        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
+        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
         config::{create_unit_test_config, create_unit_test_config_builder},
         output_value::OutputValue,
         tokens::TokenId,
-        AccountCommand, AccountNonce, ChainstateUpgradeBuilder, Destination, OrderAccountCommand,
-        OrderData, OrderId, OrdersVersion, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, H256, Id},
 };
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
-use randomness::Rng;
-use test_utils::random::{make_seedable_rng, Seed};
+use randomness::RngExt as _;
+use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::{ConstrainedValueAccumulator, Error};
 
@@ -46,9 +46,9 @@ fn create_order_constraints(#[case] seed: Seed) {
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = Box::new(OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
@@ -254,10 +254,9 @@ fn create_order_constraints(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -279,9 +278,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
@@ -608,10 +607,9 @@ fn fill_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
 }
 
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[trace]
 #[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[trace]
 fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion) {
     let mut rng = make_seedable_rng(seed);
 
@@ -633,9 +631,9 @@ fn conclude_order_constraints(#[case] seed: Seed, #[case] version: OrdersVersion
     let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
-    let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let give_amount = Amount::from_atoms(rng.random_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
-    let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
+    let ask_amount = Amount::from_atoms(rng.random_range(100..1000));
     let order_data = OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),

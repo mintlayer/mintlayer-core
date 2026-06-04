@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{chain::Transaction, primitives::Id};
 use logging::log;
 use mempool_types::TxStatus;
-use randomness::{make_pseudo_rng, Rng};
+use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time, TxDependency};
@@ -249,7 +249,7 @@ impl TxOrphanPool {
 
         let mut n_evicted = 0;
         while self.len() > max_size {
-            self.remove_at(InternalId::new(rng.gen_range(0..self.len())));
+            self.remove_at(InternalId::new(rng.random_range(0..self.len())));
             n_evicted += 1;
         }
 
@@ -279,6 +279,10 @@ impl TxOrphanPool {
             .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))
             .map(|(_origin, iid)| *iid)
             .next()
+    }
+
+    pub fn get_all_transaction_ids(&self) -> Vec<Id<Transaction>> {
+        self.transactions.iter().map(|entry| *entry.tx_id()).collect()
     }
 }
 

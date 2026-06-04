@@ -29,16 +29,16 @@ pub use rpc_types as types;
 use std::{net::SocketAddr, path::PathBuf};
 
 use base64::Engine;
-use http::{header, HeaderValue};
+use http::{HeaderValue, header};
 use jsonrpsee::{
     core::middleware::RpcServiceBuilder,
-    http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder, RpcService},
+    http_client::{HttpClient, HttpClientBuilder, RpcService, transport::HttpBackend},
     server::{ServerBuilder, ServerHandle},
 };
 
 use logging::log;
 
-pub use error::{handle_result, ClientError, Error, RpcCallResult, RpcClientResult, RpcResult};
+pub use error::{ClientError, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;

@@ -24,14 +24,14 @@ use super::utils::*;
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        Destination,
         config::create_mainnet,
         signature::{
-            sighash::sighashtype::{OutputsMode, SigHashType},
             DestinationSigError,
+            sighash::sighashtype::{OutputsMode, SigHashType},
         },
-        Destination,
     },
-    primitives::{Id, H256},
+    primitives::{H256, Id},
 };
 
 // Generate a transaction with a different number of inputs and outputs, then sign it as a whole.

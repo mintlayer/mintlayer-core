@@ -17,7 +17,7 @@ mod hashlock;
 mod signature;
 mod timelock;
 
-use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{Destination, signature::EvaluatedInputWitness, timelock::OutputTimeLock};
 
 pub use hashlock::HashlockError;
 use hashlock::{HashlockChecker, NoOpHashlockChecker, StandardHashlockChecker};

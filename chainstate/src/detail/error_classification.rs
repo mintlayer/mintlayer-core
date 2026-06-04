@@ -14,32 +14,32 @@
 // limitations under the License.
 
 use chainstate_types::{
-    pos_randomness::PoSRandomnessError, storage_result, GetAncestorError, PropertyQueryError,
+    GetAncestorError, PropertyQueryError, pos_randomness::PoSRandomnessError, storage_result,
 };
 use common::{
-    chain::{
-        block::block_body::BlockMerkleTreeError, signature::DestinationSigError, IdCreationError,
-    },
     UintConversionError,
+    chain::{
+        IdCreationError, block::block_body::BlockMerkleTreeError, signature::DestinationSigError,
+    },
 };
 use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
     EffectivePoolBalanceError,
 };
 use tx_verifier::{
+    CheckTransactionError, TransactionVerifierStorageError,
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     timelock_check,
-    transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
-    CheckTransactionError, TransactionVerifierStorageError,
+    transaction_verifier::{RewardDistributionError, error::SignatureDestinationGetterError},
 };
 use utxo::UtxosBlockUndoError;
 
 use crate::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
 
 use super::{
+    BlockSizeError,
     block_invalidation::BestChainCandidatesError,
     chainstateref::{EpochSealError, InMemoryReorgError},
-    BlockSizeError,
 };
 
 /// When handling errors during block processing, we need to differentiate between errors that

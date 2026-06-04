@@ -20,7 +20,7 @@ use common::{
     primitives::Amount,
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::random::{Seed, make_seedable_rng};
 
 use super::{
     create_pool, create_pool_data, create_storage_with_pool,
@@ -28,9 +28,9 @@ use super::{
 };
 
 use crate::{
+    Error, PoSAccountingOperations,
     pool::{delta::PoSAccountingDelta, storage::PoSAccountingDB, view::FlushablePoSAccountingView},
     storage::in_memory::InMemoryPoSAccounting,
-    Error, PoSAccountingOperations,
 };
 
 #[rstest]

@@ -76,8 +76,8 @@ async fn height_past_tip() {
 #[tokio::test]
 async fn height_n(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let block_height = rng.gen_range(1..50);
-    let n_blocks = rng.gen_range(block_height..100);
+    let block_height = rng.random_range(1..50);
+    let n_blocks = rng.random_range(block_height..100);
     let url = format!("/api/v2/chain/{block_height}");
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

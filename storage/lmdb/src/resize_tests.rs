@@ -19,13 +19,13 @@ use rstest::rstest;
 
 use memsize::MemSize;
 use storage_core::backend::{Backend, BackendImpl, ReadOps, SharedBackendImpl, TxRw, WriteOps};
-use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
+use test_utils::random::{CryptoRng, RngExt as _, Seed, make_seedable_rng};
 
 use super::*;
 
 #[must_use]
 fn create_random_data_map_with_target_byte_size(
-    rng: &mut (impl Rng + CryptoRng),
+    rng: &mut impl CryptoRng,
     required_size: usize,
     key_max_size: usize,
     val_max_size: usize,
@@ -35,10 +35,10 @@ fn create_random_data_map_with_target_byte_size(
     let mut total_size = 0;
 
     while total_size < required_size {
-        let key_size = 1 + rng.gen::<usize>() % key_max_size;
-        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
-        let val_size = 1 + rng.gen::<usize>() % val_max_size;
-        let val = (0..val_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let key_size = rng.random_range(1..=key_max_size);
+        let key = (0..key_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
+        let val_size = rng.random_range(1..=val_max_size);
+        let val = (0..val_size).map(|_| rng.random::<u8>()).collect::<Vec<_>>();
         result.insert(key, val);
 
         total_size += key_size;
@@ -115,7 +115,10 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             assert_eq!(ro_tx.get(DbMapId::new(0), &key).unwrap().unwrap(), val);
         }
 
-        assert!(resizes_via_commit_count > 0, "Not a single resize was scheduled after a transaction... this is very unlikely based on the test structure");
+        assert!(
+            resizes_via_commit_count > 0,
+            "Not a single resize was scheduled after a transaction... this is very unlikely based on the test structure"
+        );
     })
 }
 
@@ -211,8 +214,8 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         }
 
         assert!(
-        resizes_via_put_count > 0,
-        "Not a single resize was scheduled after a write/put... this is very unlikely based on the test structure"
-    );
+            resizes_via_put_count > 0,
+            "Not a single resize was scheduled after a write/put... this is very unlikely based on the test structure"
+        );
     })
 }

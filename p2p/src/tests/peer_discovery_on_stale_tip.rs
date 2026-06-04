@@ -18,16 +18,16 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use chainstate::{BlockSource, ChainstateConfig};
 use common::{
     chain::{Block, ChainConfig},
-    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+    primitives::{Idable, user_agent::mintlayer_core_user_agent},
 };
 use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
-use p2p_test_utils::{run_with_timeout, SHORT_TIMEOUT};
+use p2p_test_utils::{SHORT_TIMEOUT, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
-use randomness::{Rng as _, RngCore};
+use randomness::{Rng, RngExt as _};
 use test_utils::{
-    random::{make_seedable_rng, Seed},
     BasicTestTimeGetter,
+    random::{Seed, make_seedable_rng},
 };
 
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
     net::types::PeerRole,
     peer_manager::{self, address_groups::AddressGroup, config::PeerManagerConfig},
     sync::test_helpers::make_new_block,
-    test_helpers::{make_transport_with_local_addr_in_group, TEST_PROTOCOL_VERSION},
+    test_helpers::{TEST_PROTOCOL_VERSION, make_transport_with_local_addr_in_group},
     tests::helpers::{PeerManagerNotification, TestNode, TestNodeGroup},
 };
 
@@ -158,7 +158,7 @@ async fn peer_discovery_on_stale_tip_impl(
                 i + 1,
                 initial_block.clone(),
                 &format!("node{i}"),
-                make_seedable_rng(rng.gen()),
+                make_seedable_rng(rng.random()),
             )
             .await,
         );
@@ -222,7 +222,7 @@ async fn peer_discovery_on_stale_tip_impl(
         new_node_idx,
         initial_block.clone(),
         "new_node",
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let new_node_addr = *new_node.local_address();
@@ -370,7 +370,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         0,
         Some(initial_block.clone()),
         "main",
-        make_seedable_rng(rng.gen()),
+        make_seedable_rng(rng.random()),
     )
     .await;
     let main_node_address = *main_node.local_address();
@@ -386,7 +386,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
                 i + 1,
                 Some(initial_block.clone()),
                 &format!("extra{i}"),
-                make_seedable_rng(rng.gen()),
+                make_seedable_rng(rng.random()),
             )
             .await,
         );
@@ -533,7 +533,7 @@ async fn start_node(
     node_index: usize,
     initial_block: Option<Block>,
     name: &str,
-    rng: impl RngCore + Send + 'static,
+    rng: impl Rng + Send + 'static,
 ) -> TestNode<Transport> {
     let node = TestNode::<Transport>::start(
         true,

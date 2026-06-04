@@ -15,34 +15,35 @@
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
-use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
+use chainstate::{ChainInfo, rpc::RpcOutputValueIn};
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
+        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         output_values_holder::collect_token_v1_ids_from_output_values_holders,
         tokens::{IsTokenUnfreezable, RPCTokenInfo},
-        Block, GenBlock, RpcCurrency, SignedTransaction, SignedTransactionIntent, Transaction,
-        TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
+    primitives::{BlockHeight, DecimalAmount, H256, Id, Idable},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey};
+use crypto::key::{PrivateKey, hdkd::u31::U31};
 use node_comm::node_traits::NodeInterface;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use p2p_types::{PeerId, bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
     types::{
         CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletCreationOptions,
         WalletInfo, WalletTypeArgs,
     },
-    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
+    RpcError, WalletRpc,
     types::{
         AccountExtendedPublicKey, ActiveOrderInfo, AddressInfo, AddressWithUsageInfo, Balances,
         BlockInfo, ComposedTransaction, CreatedWallet, DelegationInfo, HardwareWalletType,
@@ -54,7 +55,6 @@ use wallet_rpc_lib::{
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
-    RpcError, WalletRpc,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,

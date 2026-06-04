@@ -15,7 +15,7 @@
 
 use crate::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::{block::BlockReward, Block, GenBlock},
+    chain::{Block, GenBlock, block::BlockReward},
     primitives::{BlockHeight, Id},
 };
 
