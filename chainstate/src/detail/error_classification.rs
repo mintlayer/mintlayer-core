@@ -663,7 +663,8 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::FiniteTotalSupplyIsRequired
             | ConsensusPoSError::UnsupportedConsensusVersion
             | ConsensusPoSError::FailedToCalculateCappedBalance
-            | ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => {
+            | ConsensusPoSError::InvalidOutputTypeInStakeKernel(_)
+            | ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch { .. } => {
                 BlockProcessingErrorClass::BadBlock
             }
 

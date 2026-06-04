@@ -18,8 +18,8 @@ use std::{borrow::Cow, num::NonZeroU64, time::Duration};
 use rstest::rstest;
 
 use chainstate::{
-    BlockError, BlockSource, ChainstateError, CheckBlockError, ConnectTransactionError,
-    SpendStakeError, chainstate_interface::ChainstateInterface,
+    BlockError, BlockIndex, BlockSource, ChainstateError, CheckBlockError, ConnectTransactionError,
+    EpochSealError, SpendStakeError, chainstate_interface::ChainstateInterface,
 };
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
@@ -36,8 +36,9 @@ use common::{
     chain::{
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
         ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
-        PoSChainConfigBuilder, PoolId, RequiredConsensus, SignedTransaction,
-        StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
+        PoSChainConfigBuilder, PoolId, PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+        RequiredConsensus, SignedTransaction, StakerDestinationUpdateForbidden, TxInput, TxOutput,
+        UtxoOutPoint,
         block::{
             BlockRewardTransactable, ConsensusData, consensus_data::PoSData,
             timestamp::BlockTimestamp,
@@ -273,13 +274,9 @@ fn produce_kernel_signature(
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
     staking_destination: Destination,
-    kernel_utxo_block_id: Id<GenBlock>,
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
-    let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-
-    let kernel_input_utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
-        [kernel_outpoint.output_index() as usize];
+    let kernel_input_utxo = tf.utxo(&kernel_outpoint).take_output();
     let kernel_inputs = vec![kernel_outpoint.into()];
 
     let block_reward_tx =
@@ -289,7 +286,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        &[SighashInputCommitment::Utxo(Cow::Borrowed(kernel_input_utxo))],
+        &[SighashInputCommitment::Utxo(Cow::Borrowed(&kernel_input_utxo))],
         0,
         rng,
     )
@@ -369,7 +366,6 @@ fn pos_basic(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
 
@@ -551,7 +547,6 @@ fn pos_block_signature(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
     let new_block_height = tf.best_block_index().block_height().next_height();
@@ -694,7 +689,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
 
@@ -850,7 +844,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
 
@@ -1018,7 +1011,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
 
@@ -1067,7 +1059,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         block_2_reward_outpoint.clone(),
     );
     let new_block_height = tf.best_block_index().block_height().next_height();
@@ -1113,7 +1104,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         block_3_reward_outpoint.clone(),
     );
 
@@ -1407,8 +1397,6 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     ) = setup_test_chain_with_2_stake_pools(&mut rng, vrf_pk_1, vrf_pk_2);
     let target_block_time = tf.chain_config().target_block_spacing();
 
-    let stake_pool_block_id = tf.best_block_id();
-
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk1));
     let reward_outputs =
@@ -1420,7 +1408,6 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         &staking_sk1,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint1.clone(),
     );
 
@@ -1466,7 +1453,6 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         &staking_sk2,
         reward_outputs.as_slice(),
         staking_destination,
-        stake_pool_block_id,
         stake_pool_outpoint2.clone(),
     );
     let block_2_reward_outpoint = UtxoOutPoint::new(
@@ -1575,7 +1561,6 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         &staking_sk1,
         produce_block_output.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         stake_pool_outpoint1.clone(),
     );
 
@@ -1704,7 +1689,6 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         &staker_sk,
         reward_outputs.as_slice(),
         staking_destination.clone(),
-        tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
 
@@ -1758,7 +1742,6 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         &staker_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         block_1_reward_outpoint.clone(),
     );
 
@@ -2018,7 +2001,6 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         &genesis_staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         genesis_outpoint_1.clone(),
     );
 
@@ -2093,7 +2075,6 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        tf.best_block_id(),
         UtxoOutPoint::new(create_new_pool_tx_id.into(), 0),
     );
 
@@ -2431,7 +2412,6 @@ mod staker_destination_change_test_utils {
             cur_staking_sk,
             reward_outputs.as_slice(),
             cur_staking_destination,
-            tf.best_block_id(),
             kernel_outpoint.clone(),
         );
 
@@ -2459,5 +2439,375 @@ mod staker_destination_change_test_utils {
         .unwrap();
 
         (pos_data, block_timestamp, reward_outputs)
+    }
+}
+
+// Check that using mismatched PoSData and kernel input is allowed before the corresponding
+// fork and prohibited afterwards.
+// * The fork height is several blocks above the height 2 (where the chain switches to PoS);
+//   there are 2 pools.
+// * Produce blocks until the fork height is reached, using mismatched data: PoSData is based on
+//   one pool and the kernel utxo is from the other one.
+//   Note that this can only be done if the produced block is not the last one in the epoch.
+//   If it is the last one, try the mismatched data, expect vrf verification error, and then
+//   produce the block using consistent data.
+// * At the fork height try producing a block using mismatched data - it fails with a specific
+//   error related to the mismatch.
+// * Produce a few more blocks using consistent data - it succeeds.
+// * Try producing a block using mismatched data - it still fails, with the same error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pool_id_mismatch_in_kernel_utxo_and_pos_data(#[case] seed: Seed) {
+    use pool_id_mismatch_in_kernel_utxo_and_pos_data_test_utils::*;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let pos_height = BlockHeight::new(2);
+    let block_count_before_fork =
+        rng.random_range((TEST_EPOCH_LENGTH.get() * 2)..(TEST_EPOCH_LENGTH.get() * 5));
+    let fork_height = BlockHeight::new(pos_height.into_int() + block_count_before_fork);
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(consensus_upgrades_with_pos_at_height(pos_height))
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .chainstate_upgrades(
+            NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::zero(),
+                    ChainstateUpgradeBuilder::latest()
+                        .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                        )
+                        .build(),
+                ),
+                (
+                    fork_height,
+                    ChainstateUpgradeBuilder::latest()
+                        .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                        )
+                        .build(),
+                ),
+            ])
+            .unwrap(),
+        )
+        .build();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let (mut pool1_data, mut pool2_data) = create_pools(&mut tf, &mut rng);
+
+    let min_pool_pledge = tf.chainstate.get_chain_config().min_stake_pool_pledge();
+    let mut pool1_balance = min_pool_pledge;
+    let mut pool2_balance = min_pool_pledge;
+
+    // Create blocks using mismatched PoSData and kernel input until the fork height is reached.
+    // Note: at epoch boundaries, randomness sealing verifies block's vrf_data using the vrf key
+    // corresponding to the kernel utxo's pool id. So if a block is the last block in an epoch,
+    // the mismatch will lead to vrf verification error.
+    {
+        let initial_block_height = tf.best_block_index().block_height().next_height();
+
+        for new_block_height in initial_block_height.iter_up_to(fork_height) {
+            let (pool_data, pool_balance, pool_outpoint) = if rng.random_bool(0.5) {
+                (
+                    pool1_data.with_kernel_outpoint_from(&pool2_data),
+                    &mut pool1_balance,
+                    &mut pool2_data.kernel_outpoint,
+                )
+            } else {
+                (
+                    pool2_data.with_kernel_outpoint_from(&pool1_data),
+                    &mut pool2_balance,
+                    &mut pool1_data.kernel_outpoint,
+                )
+            };
+
+            let (block_id, pool_data, pool_balance, pool_outpoint) =
+                if !tf.chain_config().is_last_block_in_epoch(&new_block_height) {
+                    let block_id =
+                        *mine_block(&mut tf, &pool_data, &mut rng).unwrap().unwrap().block_id();
+                    (block_id, pool_data, pool_balance, pool_outpoint)
+                } else {
+                    let err = mine_block(&mut tf, &pool_data, &mut rng).unwrap_err();
+                    assert_eq!(
+                        err,
+                        ChainstateError::ProcessBlockError(BlockError::EpochSealError(
+                            EpochSealError::RandomnessError(
+                                PoSRandomnessError::VRFDataVerificationFailed(
+                                    ProofOfStakeVRFError::VRFDataVerificationFailed(
+                                        VRFError::VerificationError
+                                    )
+                                )
+                            )
+                        ))
+                    );
+
+                    let (pool_data, pool_balance, pool_outpoint) = if rng.random_bool(0.5) {
+                        (
+                            pool1_data.as_generic(),
+                            &mut pool1_balance,
+                            &mut pool1_data.kernel_outpoint,
+                        )
+                    } else {
+                        (
+                            pool2_data.as_generic(),
+                            &mut pool2_balance,
+                            &mut pool2_data.kernel_outpoint,
+                        )
+                    };
+
+                    let block_id =
+                        *mine_block(&mut tf, &pool_data, &mut rng).unwrap().unwrap().block_id();
+
+                    (block_id, pool_data, pool_balance, pool_outpoint)
+                };
+
+            let new_pool_balance = PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(
+                &tf.storage,
+                pool_data.pool_id_in_pos_data,
+            )
+            .unwrap()
+            .unwrap();
+            let subsidy =
+                tf.chainstate.get_chain_config().block_subsidy_at_height(&new_block_height);
+            let expected_pool_balance = (*pool_balance + subsidy).unwrap();
+            assert_eq!(new_pool_balance, expected_pool_balance);
+
+            *pool_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
+            *pool_balance = new_pool_balance;
+
+            tf.progress_time_seconds_since_epoch(rng.random_range(1..10));
+        }
+    };
+
+    // Sanity check
+    {
+        let new_block_height = tf.best_block_index().block_height().next_height();
+        assert_eq!(new_block_height, fork_height);
+    }
+
+    // The fork height has been reached, so attempts to use mismatched PoSData and kernel input
+    // should fail with ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch.
+    {
+        let pool_data = if rng.random_bool(0.5) {
+            pool1_data.with_kernel_outpoint_from(&pool2_data)
+        } else {
+            pool2_data.with_kernel_outpoint_from(&pool1_data)
+        };
+
+        let err = mine_block(&mut tf, &pool_data, &mut rng).unwrap_err();
+
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                    ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch {
+                        kernel_utxo_pool_id: pool_data.pool_id_in_kernel_utxo,
+                        pos_data_pool_id: pool_data.pool_id_in_pos_data
+                    }
+                ))
+            ))
+        );
+    }
+
+    // Produce a few blocks using matching PoSData and kernel input.
+    let block_count_after_fork = rng.random_range(1..(TEST_EPOCH_LENGTH.get() * 3));
+    for i in 0..block_count_after_fork {
+        let new_block_height = fork_height.checked_add(i).unwrap();
+        let (pool_data, pool_balance, pool_outpoint) = if rng.random_bool(0.5) {
+            (
+                pool1_data.as_generic(),
+                &mut pool1_balance,
+                &mut pool1_data.kernel_outpoint,
+            )
+        } else {
+            (
+                pool2_data.as_generic(),
+                &mut pool2_balance,
+                &mut pool2_data.kernel_outpoint,
+            )
+        };
+
+        let block_id = *mine_block(&mut tf, &pool_data, &mut rng).unwrap().unwrap().block_id();
+
+        let new_pool_balance = PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(
+            &tf.storage,
+            pool_data.pool_id_in_pos_data,
+        )
+        .unwrap()
+        .unwrap();
+        let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&new_block_height);
+        let expected_pool_balance = (*pool_balance + subsidy).unwrap();
+        assert_eq!(new_pool_balance, expected_pool_balance);
+
+        *pool_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id.into()), 0);
+        *pool_balance = new_pool_balance;
+
+        tf.progress_time_seconds_since_epoch(rng.random_range(1..10));
+    }
+
+    // Attempt to use mismatched PoSData and kernel input again - it still fails, with the same
+    // error.
+    {
+        let pool_data = if rng.random_bool(0.5) {
+            pool1_data.with_kernel_outpoint_from(&pool2_data)
+        } else {
+            pool2_data.with_kernel_outpoint_from(&pool1_data)
+        };
+
+        let err = mine_block(&mut tf, &pool_data, &mut rng).unwrap_err();
+
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                    ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch {
+                        kernel_utxo_pool_id: pool_data.pool_id_in_kernel_utxo,
+                        pos_data_pool_id: pool_data.pool_id_in_pos_data
+                    }
+                ))
+            ))
+        );
+    }
+}
+
+mod pool_id_mismatch_in_kernel_utxo_and_pos_data_test_utils {
+    use super::*;
+
+    pub struct PoolData {
+        pub pool_id: PoolId,
+        pub staking_sk: PrivateKey,
+        pub vrf_sk: VRFPrivateKey,
+        pub kernel_outpoint: UtxoOutPoint,
+    }
+
+    impl PoolData {
+        pub fn with_kernel_outpoint_from(&self, other_data: &Self) -> GenericPoolData {
+            GenericPoolData {
+                pool_id_in_pos_data: self.pool_id,
+                vrf_sk: self.vrf_sk.clone(),
+
+                pool_id_in_kernel_utxo: other_data.pool_id,
+                kernel_outpoint: other_data.kernel_outpoint.clone(),
+                staking_sk: other_data.staking_sk.clone(),
+            }
+        }
+
+        pub fn as_generic(&self) -> GenericPoolData {
+            GenericPoolData {
+                pool_id_in_pos_data: self.pool_id,
+                vrf_sk: self.vrf_sk.clone(),
+
+                pool_id_in_kernel_utxo: self.pool_id,
+                kernel_outpoint: self.kernel_outpoint.clone(),
+                staking_sk: self.staking_sk.clone(),
+            }
+        }
+    }
+
+    pub struct GenericPoolData {
+        pub pool_id_in_pos_data: PoolId,
+        pub vrf_sk: VRFPrivateKey,
+
+        pub pool_id_in_kernel_utxo: PoolId,
+        pub kernel_outpoint: UtxoOutPoint,
+        pub staking_sk: PrivateKey,
+    }
+
+    pub fn create_pools(tf: &mut TestFramework, rng: &mut impl CryptoRng) -> (PoolData, PoolData) {
+        let (vrf_sk1, vrf_pk1) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+        let (vrf_sk2, vrf_pk2) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+        let (stake_pool_data1, staking_sk1) = create_stake_pool_data_with_all_reward_to_staker(
+            rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk1,
+        );
+        let (stake_pool_data2, staking_sk2) = create_stake_pool_data_with_all_reward_to_staker(
+            rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk2,
+        );
+
+        let (kernel_outpoint1, pool1_id, kernel_outpoint2, pool2_id) =
+            add_block_with_2_stake_pools(rng, tf, stake_pool_data1, stake_pool_data2);
+
+        let pool_data1 = PoolData {
+            pool_id: pool1_id,
+            staking_sk: staking_sk1,
+            vrf_sk: vrf_sk1,
+            kernel_outpoint: kernel_outpoint1,
+        };
+        let pool_data2 = PoolData {
+            pool_id: pool2_id,
+            staking_sk: staking_sk2,
+            vrf_sk: vrf_sk2,
+            kernel_outpoint: kernel_outpoint2,
+        };
+        (pool_data1, pool_data2)
+    }
+
+    fn pos_mine(
+        tf: &TestFramework,
+        pool_data: &GenericPoolData,
+        rng: &mut impl CryptoRng,
+    ) -> (PoSData, BlockTimestamp, Vec<TxOutput>) {
+        let staking_destination =
+            Destination::PublicKey(PublicKey::from_private_key(&pool_data.staking_sk));
+
+        let reward_outputs = vec![TxOutput::ProduceBlockFromStake(
+            staking_destination.clone(),
+            pool_data.pool_id_in_kernel_utxo,
+        )];
+
+        let kernel_sig = produce_kernel_signature(
+            rng,
+            tf,
+            &pool_data.staking_sk,
+            reward_outputs.as_slice(),
+            staking_destination,
+            pool_data.kernel_outpoint.clone(),
+        );
+
+        let chain_config = tf.chainstate.get_chain_config();
+        let new_block_height = tf.best_block_index().block_height().next_height();
+        let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+        let final_supply = chain_config.final_supply().unwrap();
+        let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+        let randomness = tf.pos_randomness_for_height(&new_block_height);
+
+        let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+            rng,
+            &tf.storage.transaction_ro().unwrap(),
+            &get_pos_chain_config(chain_config, new_block_height),
+            BlockTimestamp::from_time(tf.current_time()),
+            pool_data.kernel_outpoint.clone(),
+            InputWitness::Standard(kernel_sig),
+            &pool_data.vrf_sk,
+            randomness,
+            pool_data.pool_id_in_pos_data,
+            final_supply,
+            epoch_index,
+            current_difficulty,
+        )
+        .unwrap();
+
+        (pos_data, block_timestamp, reward_outputs)
+    }
+
+    pub fn mine_block(
+        tf: &mut TestFramework,
+        pool_data: &GenericPoolData,
+        rng: &mut impl CryptoRng,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        let (pos_data, block_timestamp, reward_outputs) = pos_mine(tf, pool_data, rng);
+
+        tf.make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_block_signing_key(pool_data.staking_sk.clone())
+            .with_timestamp(block_timestamp)
+            .with_reward(reward_outputs)
+            .build_and_process(rng)
     }
 }

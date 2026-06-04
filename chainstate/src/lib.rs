@@ -39,9 +39,9 @@ pub use crate::{
     detail::{
         BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
         ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-        IOPolicyError, InitializationError, Locator, MEDIAN_TIME_SPAN, NonZeroPoolBalances,
-        OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError,
-        TokensError, TransactionVerifierStorageError, ban_score,
+        EpochSealError, IOPolicyError, InitializationError, Locator, MEDIAN_TIME_SPAN,
+        NonZeroPoolBalances, OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError,
+        TokenIssuanceError, TokensError, TransactionVerifierStorageError, ban_score,
         block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
         calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
     },

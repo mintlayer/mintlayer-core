@@ -30,7 +30,8 @@ use common::{
     Uint256,
     address::Address,
     chain::{
-        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
+        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus,
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden, TxOutput,
         block::{
             BlockHeader, ConsensusData, consensus_data::PoSData,
             signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp,
@@ -166,7 +167,7 @@ where
         .get_pool_data(pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
 
-    let staker_dest = {
+    let (pool_id_in_kernel_utxo, staker_dest) = {
         let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
 
         match kernel_output {
@@ -184,10 +185,29 @@ where
                     header.get_id(),
                 ));
             }
-            TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker().clone(),
-            TxOutput::ProduceBlockFromStake(dest, _) => dest,
+            TxOutput::CreateStakePool(pool_id, pool_data) => (pool_id, pool_data.staker().clone()),
+            TxOutput::ProduceBlockFromStake(dest, pool_id) => (pool_id, dest),
         }
     };
+
+    let pool_id_mismatch_forbidden = chain_config
+        .chainstate_upgrades()
+        .version_at_height(current_height)
+        .1
+        .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden();
+
+    match pool_id_mismatch_forbidden {
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes => {
+            ensure!(
+                pool_id == pool_id_in_kernel_utxo,
+                ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch {
+                    kernel_utxo_pool_id: pool_id_in_kernel_utxo,
+                    pos_data_pool_id: pool_id
+                }
+            );
+        }
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No => {}
+    }
 
     // Proof of stake mandates signing the block with the same key of the kernel output
     check_block_signature(header, &staker_dest)?;

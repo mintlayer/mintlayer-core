@@ -116,6 +116,18 @@ pub enum SighashInputCommitmentVersion {
     V1,
 }
 
+// The original implementation allows pool ids in the kernel stake utxo and PoSData to be different.
+// TODO: same as StakerDestinationUpdateForbidden, this upgrade can probably be removed after
+// the "fork height + reorg limit" height has been passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
+    Yes,
+    No,
+}
+
+// Note: we have 2 upgrade types - `ConsensusUpgrade` and `ChainstateUpgrade`. Despite the names,
+// they both represent consensus upgrades. All upgrades not directly related to target difficulty
+// calculation should probably go to `ChainstateUpgrade`.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -130,6 +142,8 @@ pub struct ChainstateUpgrade {
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
     token_id_generation_version: TokenIdGenerationVersion,
     sighash_input_commitment_version: SighashInputCommitmentVersion,
+    pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
 }
 
 impl ChainstateUpgrade {
@@ -147,6 +161,8 @@ impl ChainstateUpgrade {
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
         token_id_generation_version: TokenIdGenerationVersion,
         sighash_input_commitment_version: SighashInputCommitmentVersion,
+        pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -161,6 +177,7 @@ impl ChainstateUpgrade {
             staker_destination_update_forbidden,
             token_id_generation_version,
             sighash_input_commitment_version,
+            pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden,
         }
     }
 
@@ -210,5 +227,11 @@ impl ChainstateUpgrade {
 
     pub fn sighash_input_commitment_version(&self) -> SighashInputCommitmentVersion {
         self.sighash_input_commitment_version
+    }
+
+    pub fn pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+        &self,
+    ) -> PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
+        self.pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden
     }
 }

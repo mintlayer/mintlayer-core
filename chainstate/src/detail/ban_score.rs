@@ -476,6 +476,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::EmptyTimespan => 100,
             ConsensusPoSError::FailedToCalculateCappedBalance => 100,
             ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => 100,
+            ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch { .. } => 100,
         }
     }
 }
