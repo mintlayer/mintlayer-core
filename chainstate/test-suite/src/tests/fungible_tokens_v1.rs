@@ -30,9 +30,10 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder, Destination,
-        GenBlock, OrderAccountCommand, OrderData, OutPointSourceId, SignedTransaction, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        self, AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder,
+        Destination, GenBlock, NetUpgrades, OrderAccountCommand, OrderData, OutPointSourceId,
+        SignedTransaction, Transaction, TxInput, TxOutput, TxOutputTag, UtxoOutPoint,
+        ZeroTokenTransferForbidden,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_order_id, make_token_id,
         output_value::OutputValue,
@@ -50,9 +51,10 @@ use common::{
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, amount::SignedAmount},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::{CryptoRng, RngExt as _};
+use randomness::{CryptoRng, Rng, RngExt as _};
+use strum::IntoEnumIterator as _;
 use test_utils::{
-    assert_matches_return_val, gen_text_with_non_ascii,
+    assert_matches, assert_matches_return_val, gen_text_with_non_ascii,
     random::{Seed, make_seedable_rng},
     random_ascii_alphanumeric_string, split_value,
 };
@@ -7530,47 +7532,219 @@ fn token_id_generation_v1_activation(#[case] seed: Seed) {
     });
 }
 
-// Transferring zero tokens is allowed.
-// TODO: perhaps we should prohibit it?
+// Transferring zero tokens is allowed before the corresponding fork and forbidden after.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy())]
+#[trace]
 fn zero_amount_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
+        // We'll be creating 1 or 2 blocks after the genesis, so the fork height should be at least 3.
+        let fork_height = BlockHeight::new(rng.random_range(3..=5));
+        let chain_config = chain::config::create_unit_test_config_builder()
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::No)
+                            .build(),
+                    ),
+                    (
+                        fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build();
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+        let (real_token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
             &mut tf,
             TokenTotalSupply::Unlimited,
             IsTokenFreezable::No,
         );
 
-        let tx = TransactionBuilder::new()
-            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::ZERO),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
+        // Optionally, mint some tokens.
+        let mut utxo_with_change = if rng.random_bool(0.5) {
+            let amount_to_mint = Amount::from_atoms(rng.random_range(1..100_000));
+            let best_block_id = tf.best_block_id();
+            let (_, mint_tx_id) = mint_tokens_in_block(
+                &mut rng,
+                &mut tf,
+                best_block_id,
+                utxo_with_change,
+                real_token_id,
+                amount_to_mint,
+                true,
+            );
 
-        tf.make_block_builder()
-            .add_transaction(tx)
-            .build_and_process(&mut rng)
-            .unwrap()
-            .unwrap();
+            UtxoOutPoint::new(mint_tx_id.into(), 1)
+        } else {
+            utxo_with_change
+        };
+        let coins_amount = tf.coin_amount_from_utxo(&utxo_with_change);
+
+        let bogus_token_id = TokenId::random_using(&mut rng);
+
+        let zero_transfer_outputs_with_real_token =
+            make_zero_transfer_outputs_for_token_zero_amount_transfer_test(
+                &real_token_id,
+                &mut rng,
+            );
+        let zero_transfer_outputs_with_bogus_token =
+            make_zero_transfer_outputs_for_token_zero_amount_transfer_test(
+                &bogus_token_id,
+                &mut rng,
+            );
+
+        // Before the fork zero transfers are allowed.
+        {
+            let initial_block_height = tf.best_block_index().block_height().next_height();
+            for _ in initial_block_height.iter_up_to(fork_height) {
+                let mut block_builder = tf.make_block_builder();
+
+                for tx_output in zero_transfer_outputs_with_real_token
+                    .iter()
+                    .chain(zero_transfer_outputs_with_bogus_token.iter())
+                {
+                    let tx = TransactionBuilder::new()
+                        .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+                        .add_output(TxOutput::Transfer(
+                            OutputValue::Coin(coins_amount),
+                            Destination::AnyoneCanSpend,
+                        ))
+                        .add_output(tx_output.clone())
+                        .build();
+                    let tx_id = tx.transaction().get_id();
+
+                    block_builder = block_builder.add_transaction(tx);
+
+                    utxo_with_change = UtxoOutPoint::new(tx_id.into(), 0)
+                }
+
+                block_builder.build_and_process(&mut rng).unwrap().unwrap();
+            }
+        }
+
+        // Sanity check
+        {
+            let new_block_height = tf.best_block_index().block_height().next_height();
+            assert_eq!(new_block_height, fork_height);
+        }
+
+        // After the fork zero transfers are not allowed.
+        {
+            for tx_output in zero_transfer_outputs_with_real_token
+                .iter()
+                .chain(zero_transfer_outputs_with_bogus_token.iter())
+            {
+                let tx = TransactionBuilder::new()
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(tx_output.clone())
+                    .build();
+
+                let err = tf
+                    .make_block_builder()
+                    .add_transaction(tx)
+                    .build_and_process(&mut rng)
+                    .unwrap_err();
+                assert_matches!(
+                    err,
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ZeroTokenTransfer(_),
+                    ))
+                )
+            }
+        }
     });
 }
 
-// For a frozen token, even zero amount transfers are not allowed.
+// Create zero amount transfer outputs for the given token. This is used in the zero amount transfer
+// tests - the one above and the one in nft_transfer tests.
+// Note: CreateOrder output is missing here; this is because orders with zero value are checked
+// separately, see order_with_zero_value in orders_tests.
+pub fn make_zero_transfer_outputs_for_token_zero_amount_transfer_test(
+    token_id: &TokenId,
+    rng: &mut impl Rng,
+) -> Vec<TxOutput> {
+    TxOutputTag::iter()
+        .filter_map(|tag| match tag {
+            TxOutputTag::Transfer => Some(TxOutput::Transfer(
+                OutputValue::TokenV1(*token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            )),
+            TxOutputTag::LockThenTransfer => Some(TxOutput::LockThenTransfer(
+                OutputValue::TokenV1(*token_id, Amount::ZERO),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::UntilHeight(BlockHeight::new(rng.random())),
+            )),
+            TxOutputTag::Burn => Some(TxOutput::Burn(OutputValue::TokenV1(
+                *token_id,
+                Amount::ZERO,
+            ))),
+            TxOutputTag::Htlc => Some(TxOutput::Htlc(
+                OutputValue::TokenV1(*token_id, Amount::ZERO),
+                Box::new(HashedTimelockContract {
+                    secret_hash: rng.random(),
+                    spend_key: Destination::AnyoneCanSpend,
+                    refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.random())),
+                    refund_key: Destination::AnyoneCanSpend,
+                }),
+            )),
+
+            TxOutputTag::CreateStakePool
+            | TxOutputTag::ProduceBlockFromStake
+            | TxOutputTag::CreateDelegationId
+            | TxOutputTag::DelegateStaking
+            | TxOutputTag::IssueFungibleToken
+            | TxOutputTag::IssueNft
+            | TxOutputTag::DataDeposit
+            | TxOutputTag::CreateOrder => None,
+        })
+        .collect()
+}
+
+// For a frozen token, zero amount transfers are not allowed even before the fork.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn zero_amount_transfer_of_frozen_token(#[case] seed: Seed) {
+fn zero_amount_transfer_of_frozen_token(
+    #[case] seed: Seed,
+    #[values(ZeroTokenTransferForbidden::Yes, ZeroTokenTransferForbidden::No)]
+    zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                chain::config::create_unit_test_config_builder()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgradeBuilder::latest()
+                                .zero_token_transfer_forbidden(zero_token_transfer_forbidden)
+                                .build(),
+                        )])
+                        .unwrap(),
+                    )
+                    .build(),
+            )
+            .build();
 
         let (token_id, _, _, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -7616,11 +7790,17 @@ fn zero_amount_transfer_of_frozen_token(#[case] seed: Seed) {
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
-            ))
-        );
+        let expected_err = match zero_token_transfer_forbidden {
+            ZeroTokenTransferForbidden::Yes => ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::ZeroTokenTransfer(token_id)),
+            ),
+            ZeroTokenTransferForbidden::No => {
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::AttemptToSpendFrozenToken(token_id),
+                ))
+            }
+        };
+
+        assert_eq!(result.unwrap_err(), expected_err);
     });
 }

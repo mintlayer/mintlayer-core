@@ -59,7 +59,8 @@ use super::{
     DestinationTag, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RequiredConsensus, RewardDistributionVersion,
     SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-    TokenIssuanceVersion, TokensFeeVersion, output_value::OutputValue, stakelock::StakePoolData,
+    TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden, output_value::OutputValue,
+    stakelock::StakePoolData,
 };
 
 use self::emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT};
@@ -923,6 +924,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     TokenIdGenerationVersion::V1,
                     SighashInputCommitmentVersion::V1,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    ZeroTokenTransferForbidden::Yes,
                 ),
             )])
             .expect("cannot fail"),

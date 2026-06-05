@@ -19,8 +19,8 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder, get_output_value};
 use common::{
     chain::{
-        ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId, TokenIssuanceVersion,
-        TxInput, TxOutput, UtxoOutPoint,
+        self, ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId,
+        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint, ZeroTokenTransferForbidden,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{NftIssuance, TokenId},
@@ -29,9 +29,12 @@ use common::{
 };
 use randomness::RngExt;
 use test_utils::{
+    assert_matches,
     random::{Seed, make_seedable_rng},
     token_utils::random_nft_issuance,
 };
+
+use crate::tests::fungible_tokens_v1::make_zero_transfer_outputs_for_token_zero_amount_transfer_test;
 
 #[rstest]
 #[trace]
@@ -151,15 +154,37 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
     })
 }
 
-// Transferring zero amount of NFTs is allowed.
-// TODO: perhaps we should prohibit it?
+// Transferring zero amount of NFTs is allowed before the corresponding fork and forbidden after.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy())]
+#[trace]
 fn nft_zero_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+
+        // We'll be creating 1 block after the genesis, so the fork height should be at least 2.
+        let fork_height = BlockHeight::new(rng.random_range(2..=5));
+        let chain_config = chain::config::create_unit_test_config_builder()
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::No)
+                            .build(),
+                    ),
+                    (
+                        fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build();
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
         let coins_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -185,57 +210,78 @@ fn nft_zero_transfer(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let issuance_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
-        let coins_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 1);
+        let mut utxo_with_change = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 1);
         tf.make_block_builder()
             .add_transaction(tx.clone())
             .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        // Create a tx that consumes the NFT in an input and produces a bunch of zero amount outputs
-        // and optionally a normal output as well.
-        let mut tx_builder = TransactionBuilder::new()
-            .add_input(issuance_outpoint.into(), InputWitness::NoSignature(None));
-        let zero_outputs_count = rng.random_range(1..5);
-        for _ in 0..zero_outputs_count {
-            tx_builder = tx_builder.add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::ZERO),
-                Destination::AnyoneCanSpend,
-            ));
+        let coins_amount = tf.coin_amount_from_utxo(&utxo_with_change);
+
+        let zero_transfer_outputs =
+            make_zero_transfer_outputs_for_token_zero_amount_transfer_test(&token_id, &mut rng);
+
+        // Before the fork zero transfers are allowed.
+        {
+            let initial_block_height = tf.best_block_index().block_height().next_height();
+            for _ in initial_block_height.iter_up_to(fork_height) {
+                let mut block_builder = tf.make_block_builder();
+
+                for tx_output in &zero_transfer_outputs {
+                    let tx = TransactionBuilder::new()
+                        .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+                        .add_output(TxOutput::Transfer(
+                            OutputValue::Coin(coins_amount),
+                            Destination::AnyoneCanSpend,
+                        ))
+                        .add_output(tx_output.clone())
+                        .build();
+                    let tx_id = tx.transaction().get_id();
+
+                    block_builder = block_builder.add_transaction(tx);
+
+                    utxo_with_change = UtxoOutPoint::new(tx_id.into(), 0)
+                }
+
+                block_builder.build_and_process(&mut rng).unwrap().unwrap();
+            }
         }
 
-        if rng.random_bool(0.5) {
-            // Also make the actual transfer
-            tx_builder = tx_builder.add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-                Destination::AnyoneCanSpend,
-            ));
+        // Sanity check
+        {
+            let new_block_height = tf.best_block_index().block_height().next_height();
+            assert_eq!(new_block_height, fork_height);
         }
 
-        let tx = tx_builder.build();
-        tf.make_block_builder()
-            .add_transaction(tx)
-            .build_and_process(&mut rng)
-            .unwrap()
-            .unwrap();
+        // After the fork zero transfers are not allowed.
+        {
+            for tx_output in &zero_transfer_outputs {
+                let tx = TransactionBuilder::new()
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(tx_output.clone())
+                    .build();
 
-        // Special case - transfer zero amount of the NFT when it's not present in the inputs.
-        let mut tx_builder = TransactionBuilder::new()
-            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None));
-        for _ in 0..zero_outputs_count {
-            tx_builder = tx_builder.add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::ZERO),
-                Destination::AnyoneCanSpend,
-            ));
+                let err = tf
+                    .make_block_builder()
+                    .add_transaction(tx)
+                    .build_and_process(&mut rng)
+                    .unwrap_err();
+                assert_matches!(
+                    err,
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ZeroTokenTransfer(_),
+                    ))
+                )
+            }
         }
-
-        let tx = tx_builder.build();
-        tf.make_block_builder()
-            .add_transaction(tx)
-            .build_and_process(&mut rng)
-            .unwrap()
-            .unwrap();
     })
 }
 

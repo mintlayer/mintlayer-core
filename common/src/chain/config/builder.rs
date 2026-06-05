@@ -24,7 +24,7 @@ use crate::{
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
         SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-        TokenIssuanceVersion, TokensFeeVersion,
+        TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
         config::{
             ChainConfig, ChainType, EmissionScheduleTabular, create_mainnet_genesis,
             create_testnet_genesis, create_unit_test_genesis, emission_schedule,
@@ -87,6 +87,7 @@ const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566_060);
 
 // The fork where we tighten certain consensus rules:
 // * Using mismatched kernel utxo and PoSData is no longer allowed.
+// * Transferring zero amount of a token is no longer allowed.
 const TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(999_999_999);
 
 // The fork at which:
@@ -106,6 +107,7 @@ const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(517_700);
 
 // The fork where we tighten certain consensus rules:
 // * Using mismatched kernel utxo and PoSData is no longer allowed.
+// * Transferring zero amount of a token is no longer allowed.
 const MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(999_999_999);
 
 impl ChainType {
@@ -226,6 +228,7 @@ impl ChainType {
                 TokenIdGenerationVersion::V0,
                 SighashInputCommitmentVersion::V0,
                 PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                ZeroTokenTransferForbidden::No,
             ))
             .then(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS, |builder| {
                 builder
@@ -243,9 +246,11 @@ impl ChainType {
                     .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
             })
             .then(MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING, |builder| {
-                builder.pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
-                    PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
-                )
+                builder
+                    .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    )
+                    .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
             })
             .build(),
             ChainType::Regtest | ChainType::Signet => {
@@ -269,6 +274,7 @@ impl ChainType {
                 TokenIdGenerationVersion::V0,
                 SighashInputCommitmentVersion::V0,
                 PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                ZeroTokenTransferForbidden::No,
             ))
             .then(TESTNET_FORK_HEIGHT_1_TOKENS_V1, |builder| {
                 builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -300,9 +306,11 @@ impl ChainType {
                     .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
             })
             .then(TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING, |builder| {
-                builder.pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
-                    PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
-                )
+                builder
+                    .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    )
+                    .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
             })
             .build(),
         }
@@ -324,6 +332,7 @@ pub fn default_regtest_chainstate_upgrade_at_genesis() -> ChainstateUpgrade {
         TokenIdGenerationVersion::V1,
         SighashInputCommitmentVersion::V1,
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+        ZeroTokenTransferForbidden::Yes,
     )
 }
 
@@ -785,6 +794,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -803,6 +813,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -821,6 +832,7 @@ mod tests {
                             TokenIdGenerationVersion::V1,
                             SighashInputCommitmentVersion::V1,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -839,6 +851,7 @@ mod tests {
                             TokenIdGenerationVersion::V1,
                             SighashInputCommitmentVersion::V1,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                            ZeroTokenTransferForbidden::Yes,
                         ),
                     ),
                 ])
@@ -869,6 +882,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -887,6 +901,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -905,6 +920,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -923,6 +939,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -941,6 +958,7 @@ mod tests {
                             TokenIdGenerationVersion::V0,
                             SighashInputCommitmentVersion::V0,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -959,6 +977,7 @@ mod tests {
                             TokenIdGenerationVersion::V1,
                             SighashInputCommitmentVersion::V1,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
                         ),
                     ),
                     (
@@ -977,6 +996,7 @@ mod tests {
                             TokenIdGenerationVersion::V1,
                             SighashInputCommitmentVersion::V1,
                             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                            ZeroTokenTransferForbidden::Yes,
                         ),
                     ),
                 ])

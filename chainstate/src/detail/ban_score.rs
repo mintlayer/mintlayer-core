@@ -144,6 +144,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 100,
             ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => 100,
             ConnectTransactionError::IdCreationError(err) => err.ban_score(),
+            ConnectTransactionError::ZeroTokenTransfer(_) => 100,
         }
     }
 }

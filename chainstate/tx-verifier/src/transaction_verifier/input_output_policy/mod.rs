@@ -16,6 +16,7 @@
 use common::{
     chain::{
         Block, ChainConfig, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
+        ZeroTokenTransferForbidden,
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
@@ -162,13 +163,10 @@ pub fn check_tx_inputs_outputs_policy(
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
+    let cs_upgrades = &chain_config.chainstate_upgrades().version_at_height(block_height).1;
+
     // For TokenIssuanceVersion::V0 it is required to provide explicit Burn outputs as token issuance fee.
-    let latest_token_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(block_height)
-        .1
-        .token_issuance_version();
-    match latest_token_version {
+    match cs_upgrades.token_issuance_version() {
         TokenIssuanceVersion::V0 => {
             check_issuance_fee_burn_v0(chain_config, tx)?;
         }
@@ -215,6 +213,11 @@ pub fn check_tx_inputs_outputs_policy(
             ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
         })?;
 
+    match cs_upgrades.zero_token_transfer_forbidden() {
+        ZeroTokenTransferForbidden::Yes => check_zero_token_transfers(tx)?,
+        ZeroTokenTransferForbidden::No => { /* do nothing */ }
+    }
+
     Ok(consumed_accumulator)
 }
 
@@ -249,6 +252,53 @@ fn check_issuance_fee_burn_v0(
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(tx.get_id()),
             ));
+        }
+    }
+
+    Ok(())
+}
+
+// Forbid transferring/burning zero amount of tokens. Note:
+// 1) Zero coin transfers/burns are still allowed. This is because, logically, transferring/burning
+//    a zero amount of coins is similar to transferring/burning a few atoms - the transfers just produce
+//    dust utxos, the burns just reduce the total coin supply by an insignificant amount.
+//    Zero token transfers/burns are different, because, depending on the token, they may create token
+//    activity that is not supposed to happen. E.g.
+//    a) it makes no sense to have more than 1 utxo for an NFT;
+//    b) burning a zero amount of an NFT can be a source of bugs in external tools, which might
+//       check the fact of burning but not the amount;
+//    c) the issuer of a fungible token may want to control who can own the token, and the ability
+//       to create transactions mentioning the token without owning it can mess this up.
+// 2) Fungible tokens v0 are ignored, because they were already obsolete when this check was added.
+fn check_zero_token_transfers(tx: &Transaction) -> Result<(), ConnectTransactionError> {
+    for tx_output in tx.outputs() {
+        let output_value = match tx_output {
+            TxOutput::Transfer(output_value, _) => Some(output_value),
+            TxOutput::LockThenTransfer(output_value, _, _) => Some(output_value),
+            TxOutput::Burn(output_value) => Some(output_value),
+            TxOutput::CreateStakePool(_, _) => None,
+            TxOutput::ProduceBlockFromStake(_, _) => None,
+            TxOutput::CreateDelegationId(_, _) => None,
+            TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::IssueFungibleToken(_) => None,
+            TxOutput::IssueNft(_, _, _) => None,
+            TxOutput::DataDeposit(_) => None,
+            TxOutput::Htlc(output_value, _) => Some(output_value),
+            // Note: creating orders with zero values is not allowed in general, see the error
+            // `OrderWithZeroValue` in orders-accounting. So we don't check token ids inside
+            // `OrderData` here.
+            TxOutput::CreateOrder(_) => None,
+        };
+
+        if let Some(output_value) = output_value {
+            match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
+                OutputValue::TokenV1(token_id, amount) => {
+                    if amount == &Amount::ZERO {
+                        return Err(ConnectTransactionError::ZeroTokenTransfer(*token_id));
+                    }
+                }
+            }
         }
     }
 

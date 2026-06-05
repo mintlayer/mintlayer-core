@@ -125,6 +125,16 @@ pub enum PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
     No,
 }
 
+// Originally, it was allowed to have zero amount of a token in a TxOutput; after the fork
+// we prohibit both transferring and burning zero amount of a token.
+// TODO: after the "fork height + reorg limit" height has been passed, check if we really had
+// zero-token outputs; if not, this fork can be removed completely after that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ZeroTokenTransferForbidden {
+    Yes,
+    No,
+}
+
 // Note: we have 2 upgrade types - `ConsensusUpgrade` and `ChainstateUpgrade`. Despite the names,
 // they both represent consensus upgrades. All upgrades not directly related to target difficulty
 // calculation should probably go to `ChainstateUpgrade`.
@@ -144,6 +154,7 @@ pub struct ChainstateUpgrade {
     sighash_input_commitment_version: SighashInputCommitmentVersion,
     pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+    zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
 }
 
 impl ChainstateUpgrade {
@@ -163,6 +174,7 @@ impl ChainstateUpgrade {
         sighash_input_commitment_version: SighashInputCommitmentVersion,
         pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+        zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -178,6 +190,7 @@ impl ChainstateUpgrade {
             token_id_generation_version,
             sighash_input_commitment_version,
             pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden,
+            zero_token_transfer_forbidden,
         }
     }
 
@@ -233,5 +246,9 @@ impl ChainstateUpgrade {
         &self,
     ) -> PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
         self.pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden
+    }
+
+    pub fn zero_token_transfer_forbidden(&self) -> ZeroTokenTransferForbidden {
+        self.zero_token_transfer_forbidden
     }
 }

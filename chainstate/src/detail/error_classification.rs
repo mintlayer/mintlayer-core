@@ -304,9 +304,8 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_)
             | ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _)
-            | ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => {
-                BlockProcessingErrorClass::BadBlock
-            }
+            | ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            | ConnectTransactionError::ZeroTokenTransfer(_) => BlockProcessingErrorClass::BadBlock,
 
             ConnectTransactionError::StorageError(err) => err.classify(),
             ConnectTransactionError::UtxoError(err) => err.classify(),

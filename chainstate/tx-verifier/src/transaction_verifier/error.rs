@@ -43,19 +43,19 @@ pub enum ConnectTransactionError {
     StorageError(chainstate_storage::Error),
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
-    #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
+    #[error("While disconnecting a block, undo info for transaction `{0:x}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0:?}`")]
     MissingBlockUndo(TransactionSource),
-    #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
+    #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0:x}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(GetAncestorError, BlockHeight),
-    #[error("Unable to find block index")]
+    #[error("Unable to find block index for block {0:x}")]
     BlockIndexCouldNotBeLoaded(Id<GenBlock>),
-    #[error("Addition of all fees in block `{0}` failed")]
+    #[error("Addition of all fees in block `{0:x}` failed")]
     FailedToAddAllFeesOfBlock(Id<Block>),
-    #[error("Block reward addition error for block {0}")]
+    #[error("Block reward addition error for block {0:x}")]
     RewardAdditionError(Id<Block>),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
@@ -67,7 +67,7 @@ pub enum ConnectTransactionError {
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("Accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] accounting::BlockUndoError),
-    #[error("Failed to sum amounts of burns in transaction: {0}")]
+    #[error("Failed to sum amounts of burns in transaction: {0:x}")]
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
     AttemptToSpendBurnedAmount,
@@ -75,9 +75,9 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
-    #[error("Staker balance of pool {0} not found")]
+    #[error("Staker balance of pool {0:x} not found")]
     StakerBalanceNotFound(PoolId),
-    #[error("Pool id provided in the tx output {0} doesn't match calculated pool id {1}")]
+    #[error("Pool id provided in the tx output {0:x} doesn't match calculated pool id {1:x}")]
     UnexpectedPoolId(PoolId, PoolId),
 
     // TODO The following should contain more granular inner error information
@@ -92,7 +92,7 @@ pub enum ConnectTransactionError {
     #[error("Nonce is not found: {0:?}")]
     MissingTransactionNonce(AccountType),
     #[error(
-        "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
+        "Transaction {0:x} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]
     NotEnoughPledgeToCreateStakePool(Id<Transaction>, Amount, Amount),
     #[error("Failed to increment account nonce")]
@@ -107,7 +107,7 @@ pub enum ConnectTransactionError {
     TotalFeeRequiredOverflow,
     #[error("Insufficient coins fee provided in a transaction: {0:?} actual, {1:?} required")]
     InsufficientCoinsFee(Amount, Amount),
-    #[error("Cannot perform any operations for frozen token {0}")]
+    #[error("Cannot perform any operations for frozen token {0:x}")]
     AttemptToSpendFrozenToken(TokenId),
     #[error("Reward distribution error: {0}")]
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
@@ -117,14 +117,18 @@ pub enum ConnectTransactionError {
     OrdersAccountingError(#[from] orders_accounting::Error),
     #[error(transparent)]
     InputCheck(#[from] InputCheckError),
-    #[error("Transaction {0} has conclude order input {1} with amounts that don't match the db")]
+    #[error(
+        "Transaction {0:x} has conclude input for order {1:x} with amounts that don't match the db"
+    )]
     ConcludeInputAmountsDontMatch(Id<Transaction>, OrderId),
     #[error(
-        "ProduceBlockFromStake for block {0} modifies staker destination for pool {1}; this is no longer allowed"
+        "ProduceBlockFromStake for block {0:x} modifies staker destination for pool {1:x}; this is no longer allowed"
     )]
     ProduceBlockFromStakeChangesStakerDestination(Id<Block>, PoolId),
     #[error("Id creation error: {0}")]
     IdCreationError(#[from] IdCreationError),
+    #[error("Zero amount token transfers are not allowed (token id = {0:x})")]
+    ZeroTokenTransfer(TokenId),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {

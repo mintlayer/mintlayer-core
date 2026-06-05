@@ -17,7 +17,7 @@ use crate::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RewardDistributionVersion, SighashInputCommitmentVersion, StakerDestinationUpdateForbidden,
-    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
+    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
     upgrades::chainstate_upgrade::PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
 };
 
@@ -77,6 +77,7 @@ impl ChainstateUpgradeBuilder {
             sighash_input_commitment_version: SighashInputCommitmentVersion::V1,
             pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
                 PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+            zero_token_transfer_forbidden: ZeroTokenTransferForbidden::Yes,
         })
     }
 
@@ -97,4 +98,5 @@ impl ChainstateUpgradeBuilder {
     builder_method!(token_id_generation_version: TokenIdGenerationVersion);
     builder_method!(sighash_input_commitment_version: SighashInputCommitmentVersion);
     builder_method!(pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden: PoolIdMismatchInKernelUtxoAndPoSDataForbidden);
+    builder_method!(zero_token_transfer_forbidden: ZeroTokenTransferForbidden);
 }

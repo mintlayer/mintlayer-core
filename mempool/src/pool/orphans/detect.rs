@@ -87,6 +87,7 @@ impl OrphanType {
             | CTE::ConcludeInputAmountsDontMatch(_, _)
             | CTE::IOPolicyError(_, _)
             | CTE::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            | CTE::ZeroTokenTransfer(_)
             | CTE::IdCreationError(_) => Err(err),
         }
     }

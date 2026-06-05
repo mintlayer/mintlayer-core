@@ -26,7 +26,7 @@ use chainstate_test_framework::{
     TestFramework, TransactionBuilder,
     helpers::{
         calculate_fill_order, issue_and_mint_random_token_from_best_block,
-        issue_random_nft_from_best_block, order_min_non_zero_fill_amount,
+        issue_random_nft_from_best_block, order_min_non_zero_fill_amount, output_value_with_amount,
     },
     output_value_amount,
 };
@@ -35,8 +35,8 @@ use common::{
     chain::{
         self, AccountCommand, AccountNonce, AccountType, ChainstateUpgradeBuilder, Currency,
         Destination, IdCreationError, OrderAccountCommand, OrderData, OrderId, OrdersVersion,
-        RpcOrderInfo, SignedTransaction, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
-        UtxoOutPoint, make_order_id, make_token_id,
+        OutPointSourceId, RpcOrderInfo, SignedTransaction, TokenIssuanceVersion, Transaction,
+        TxInput, TxOutput, UtxoOutPoint, ZeroTokenTransferForbidden, make_order_id, make_token_id,
         output_value::{OutputValue, RpcOutputValue},
         signature::{
             DestinationSigError, EvaluatedInputWitness,
@@ -57,6 +57,7 @@ use randomness::{CryptoRng, RngExt as _, SliceRandom};
 use test_utils::{
     random::{Seed, gen_random_bytes, make_seedable_rng},
     random_ascii_alphanumeric_string,
+    token_utils::random_nft_issuance,
 };
 use tx_verifier::{
     CheckTransactionError,
@@ -2159,6 +2160,9 @@ fn partially_fill_order_with_nft_v0(#[case] seed: Seed) {
                             BlockHeight::zero(),
                             ChainstateUpgradeBuilder::latest()
                                 .orders_version(OrdersVersion::V0)
+                                // ZeroTokenTransferForbidden was introduced after orders v1 activation,
+                                // no point in testing ZeroTokenTransferForbidden::Yes with orders v0.
+                                .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::No)
                                 .build(),
                         )])
                         .unwrap(),
@@ -3490,70 +3494,130 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
 
 // Orders with zero values are not allowed.
 #[rstest]
-#[case(Seed::from_entropy(), OrdersVersion::V0)]
-#[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[case(Seed::from_entropy())]
 #[trace]
-fn order_with_zero_value(#[case] seed: Seed, #[case] version: OrdersVersion) {
+fn order_with_zero_value(
+    #[case] seed: Seed,
+    #[values(OrdersVersion::V0, OrdersVersion::V1)] version: OrdersVersion,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = create_test_framework_with_orders(&mut rng, version);
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
-        let tokens_circulating_supply =
-            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+        let coins_amount = tf.coin_amount_from_utxo(&coins_outpoint);
+        let token_amount = tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
-        let (coins, tokens) = match rng.random_range(0..3) {
-            0 => {
-                let token_amount = Amount::from_atoms(
-                    rng.random_range(1u128..=tokens_circulating_supply.into_atoms()),
-                );
-                (
-                    OutputValue::Coin(Amount::ZERO),
-                    OutputValue::TokenV1(token_id, token_amount),
-                )
-            }
-            1 => {
-                let coin_amount = Amount::from_atoms(rng.random_range(1u128..1000));
-                (
-                    OutputValue::Coin(coin_amount),
-                    OutputValue::TokenV1(token_id, Amount::ZERO),
-                )
-            }
-            _ => (
-                OutputValue::Coin(Amount::ZERO),
-                OutputValue::TokenV1(token_id, Amount::ZERO),
-            ),
-        };
+        let nft_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
-        let (ask, give) = if rng.random_bool(0.5) {
-            (coins, tokens)
-        } else {
-            (tokens, coins)
-        };
+        let nft_issuance_tx_first_input = TxInput::Utxo(coins_outpoint.clone());
+        let nft_id = TokenId::from_tx_input(&nft_issuance_tx_first_input);
 
-        log::debug!("ask = {ask:?}, give = {give:?}");
-
-        let order_data = OrderData::new(Destination::AnyoneCanSpend, ask, give);
-
-        let tx = TransactionBuilder::new()
-            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
-            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())))
+        let nft_issuance_tx = TransactionBuilder::new()
+            .add_input(nft_issuance_tx_first_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::IssueNft(
+                nft_id,
+                Box::new(random_nft_issuance(tf.chain_config().as_ref(), &mut rng).into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((coins_amount - nft_issuance_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
             .build();
-        let order_id = make_order_id(tx.inputs()).unwrap();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+        let nft_issuance_tx_id = nft_issuance_tx.transaction().get_id();
+        let nft_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(nft_issuance_tx_id), 0);
 
-        assert_eq!(
-            result.unwrap_err(),
-            chainstate::ChainstateError::ProcessBlockError(
-                chainstate::BlockError::StateUpdateFailed(
-                    ConnectTransactionError::OrdersAccountingError(
-                        orders_accounting::Error::OrderWithZeroValue(order_id)
-                    )
-                )
-            )
-        );
+        tf.make_block_builder()
+            .add_transaction(nft_issuance_tx)
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        let coins_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(nft_issuance_tx_id), 1);
+        let coins_amount = tf.coin_amount_from_utxo(&coins_outpoint);
+
+        let assets = [
+            (OutputValue::Coin(coins_amount), coins_outpoint),
+            (
+                OutputValue::TokenV1(token_id, token_amount),
+                tokens_outpoint,
+            ),
+            (
+                OutputValue::TokenV1(nft_id, Amount::from_atoms(1)),
+                nft_outpoint,
+            ),
+        ];
+
+        for asked in &assets {
+            for given in &assets {
+                if asked != given {
+                    for (ask_zero, give_zero) in [(true, false), (false, true), (true, true)] {
+                        let ask_value = if ask_zero {
+                            output_value_with_amount(&asked.0, Amount::ZERO)
+                        } else {
+                            asked.0.clone()
+                        };
+                        let give_value = if give_zero {
+                            output_value_with_amount(&given.0, Amount::ZERO)
+                        } else {
+                            given.0.clone()
+                        };
+
+                        log::debug!("ask_value = {ask_value:?}, give_value = {give_value:?}");
+
+                        let order_data =
+                            OrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);
+
+                        let mut tx_builder = TransactionBuilder::new();
+
+                        if !give_zero {
+                            tx_builder = tx_builder
+                                .add_input(given.1.clone().into(), InputWitness::NoSignature(None));
+                        } else {
+                            // Since we're giving zero, the given currency may not be present in
+                            // the inputs. But if we omit it, we should add something else,
+                            // because order creation needs a utxo input. So we add the asked
+                            // currency utxo instead.
+                            if rng.random_bool(0.5) {
+                                tx_builder = tx_builder.add_input(
+                                    given.1.clone().into(),
+                                    InputWitness::NoSignature(None),
+                                );
+                            } else {
+                                tx_builder = tx_builder.add_input(
+                                    asked.1.clone().into(),
+                                    InputWitness::NoSignature(None),
+                                );
+                            }
+                        }
+
+                        tx_builder = tx_builder
+                            .add_output(TxOutput::CreateOrder(Box::new(order_data.clone())));
+
+                        let tx = tx_builder.build();
+
+                        let order_id = make_order_id(tx.inputs()).unwrap();
+                        let result =
+                            tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+                        assert_eq!(
+                            result.unwrap_err(),
+                            chainstate::ChainstateError::ProcessBlockError(
+                                chainstate::BlockError::StateUpdateFailed(
+                                    ConnectTransactionError::OrdersAccountingError(
+                                        orders_accounting::Error::OrderWithZeroValue(order_id)
+                                    )
+                                )
+                            )
+                        );
+                    }
+                }
+            }
+        }
     });
 }
 
