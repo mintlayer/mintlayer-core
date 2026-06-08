@@ -24,7 +24,7 @@ use common::chain::{
 use serialization::{DecodeAll, Encode};
 use utils::ensure;
 
-mod check_utils;
+pub mod check_utils;
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,

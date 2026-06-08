@@ -20,8 +20,9 @@ mod netupgrade;
 
 pub use chainstate_upgrade::{
     ChainstateUpgrade, ChainstateUpgradeBuilder, ChangeTokenMetadataUriActivated,
-    DataDepositFeeVersion, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
-    OrdersVersion, PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
+    ChangeTokenMetadataUriValidityCheckRequired, DataDepositFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
     SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
     TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
 };

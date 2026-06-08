@@ -31,9 +31,9 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         self, AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgradeBuilder,
-        Destination, GenBlock, NetUpgrades, OrderAccountCommand, OrderData, OutPointSourceId,
-        SignedTransaction, Transaction, TxInput, TxOutput, TxOutputTag, UtxoOutPoint,
-        ZeroTokenTransferForbidden,
+        ChangeTokenMetadataUriValidityCheckRequired, Destination, GenBlock, NetUpgrades,
+        OrderAccountCommand, OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput,
+        TxOutput, TxOutputTag, UtxoOutPoint, ZeroTokenTransferForbidden,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_order_id, make_token_id,
         output_value::OutputValue,
@@ -6675,6 +6675,164 @@ fn check_change_metadata_uri(#[case] seed: Seed) {
                 is_frozen: IsTokenFrozen::No(IsTokenFreezable::No),
             },
             true,
+        );
+    });
+}
+
+// Historically, we allowed changing token's metadata uri to one with invalid (non-alphanum and
+// non-rfc3986) chars even though issuing a token with such a uri would fail. After the corresponding
+// fork, ChangeTokenMetadataUri commands having a uri with invalid chars are no longer allowed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_metadata_uri_invalid_chars(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        // We'll be creating 1 block after the genesis, so the fork height should be at least 2.
+        let fork_height = BlockHeight::new(rng.random_range(2..=5));
+        let chain_config = chain::config::create_unit_test_config_builder()
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        ChainstateUpgradeBuilder::latest()
+                            .change_token_metadata_uri_validity_check_required(
+                                ChangeTokenMetadataUriValidityCheckRequired::No,
+                            )
+                            .build(),
+                    ),
+                    (
+                        fork_height,
+                        ChainstateUpgradeBuilder::latest()
+                            .change_token_metadata_uri_validity_check_required(
+                                ChangeTokenMetadataUriValidityCheckRequired::Yes,
+                            )
+                            .build(),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build();
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+        let (token_id, issuance_block_id, issuance_tx, issuance, mut utxo_with_change) =
+            issue_token_from_genesis(
+                &mut rng,
+                &mut tf,
+                TokenTotalSupply::Lockable,
+                IsTokenFreezable::No,
+            );
+        let issuance_v1 =
+            assert_matches_return_val!(issuance, TokenIssuance::V1(issuance), issuance);
+        let uri_with_invalid_chars = "https://💖🚁🌭.🦠🚀🚖🚧";
+        let fee = tf.chain_config().token_change_metadata_uri_fee();
+
+        let mut next_nonce = AccountNonce::new(0);
+        let mut coins_amount = tf.coin_amount_from_utxo(&utxo_with_change);
+
+        // Before the fork, changing the uri to one with invalid chars is allowed.
+        {
+            let initial_block_height = tf.best_block_index().block_height().next_height();
+            let block_count = (fork_height - initial_block_height).unwrap().to_int();
+            for i in 0..block_count {
+                coins_amount = (coins_amount - fee).unwrap();
+
+                // Make sure the uri is different every time.
+                let new_metadata_uri = format!("{uri_with_invalid_chars}{i}").as_bytes().to_vec();
+
+                let tx = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            next_nonce,
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_amount),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+
+                let tx_id = tx.transaction().get_id();
+                utxo_with_change = UtxoOutPoint::new(tx_id.into(), 0);
+                next_nonce = next_nonce.increment().unwrap();
+
+                tf.make_block_builder()
+                    .add_transaction(tx)
+                    .build_and_process(&mut rng)
+                    .unwrap()
+                    .unwrap();
+
+                check_fungible_token(
+                    &tf,
+                    &mut rng,
+                    &token_id,
+                    &ExpectedFungibleTokenData {
+                        issuance: TokenIssuance::V1(TokenIssuanceV1 {
+                            token_ticker: issuance_v1.token_ticker.clone(),
+                            number_of_decimals: issuance_v1.number_of_decimals,
+                            metadata_uri: new_metadata_uri,
+                            total_supply: issuance_v1.total_supply,
+                            authority: issuance_v1.authority.clone(),
+                            is_freezable: issuance_v1.is_freezable,
+                        }),
+                        issuance_tx: issuance_tx.clone(),
+                        issuance_block_id,
+                        circulating_supply: None,
+                        is_locked: false,
+                        is_frozen: IsTokenFrozen::No(IsTokenFreezable::No),
+                    },
+                    true,
+                );
+            }
+        }
+
+        // Sanity check
+        {
+            let new_block_height = tf.best_block_index().block_height().next_height();
+            assert_eq!(new_block_height, fork_height);
+        }
+
+        // After the fork, changing the uri to one with invalid chars is forbidden.
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            next_nonce,
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                uri_with_invalid_chars.as_bytes().to_vec(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::CheckTransactionFailed(
+                    chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                        tx_verifier::CheckTransactionError::TokensError(
+                            TokensError::IncorrectMetadataUri(token_id)
+                        )
+                    )
+                )
+            ))
         );
     });
 }

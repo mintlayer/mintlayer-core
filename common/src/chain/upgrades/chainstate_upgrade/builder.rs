@@ -18,7 +18,9 @@ use crate::chain::{
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RewardDistributionVersion, SighashInputCommitmentVersion, StakerDestinationUpdateForbidden,
     TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
-    upgrades::chainstate_upgrade::PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+    upgrades::chainstate_upgrade::{
+        ChangeTokenMetadataUriValidityCheckRequired, PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+    },
 };
 
 /// A builder for `ChainstateUpgrade`.
@@ -78,6 +80,8 @@ impl ChainstateUpgradeBuilder {
             pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
                 PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
             zero_token_transfer_forbidden: ZeroTokenTransferForbidden::Yes,
+            change_token_metadata_uri_validity_check_required:
+                ChangeTokenMetadataUriValidityCheckRequired::Yes,
         })
     }
 
@@ -99,4 +103,5 @@ impl ChainstateUpgradeBuilder {
     builder_method!(sighash_input_commitment_version: SighashInputCommitmentVersion);
     builder_method!(pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden: PoolIdMismatchInKernelUtxoAndPoSDataForbidden);
     builder_method!(zero_token_transfer_forbidden: ZeroTokenTransferForbidden);
+    builder_method!(change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired);
 }

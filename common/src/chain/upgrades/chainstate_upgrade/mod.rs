@@ -135,6 +135,20 @@ pub enum ZeroTokenTransferForbidden {
     No,
 }
 
+// During token issuance, a metadata uri validity check has always been performed (which at the
+// moment ensures that the uri only contains alphanumeric or valid rfc 3986 characters, see
+// `is_uri_valid` in the tx verifier). But during `AccountCommand::ChangeTokenMetadataUri` handling,
+// this check historically has not been performed. After the fork we perform the validation in
+// ChangeTokenMetadataUri too.
+// TODO: same as for the similar upgrades above, after it's complete, check whether we've ever had
+// a ChangeTokenMetadataUri transaction with a uri for which the uri validity check would fail;
+// if not, the upgrade can be removed completely after that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ChangeTokenMetadataUriValidityCheckRequired {
+    Yes,
+    No,
+}
+
 // Note: we have 2 upgrade types - `ConsensusUpgrade` and `ChainstateUpgrade`. Despite the names,
 // they both represent consensus upgrades. All upgrades not directly related to target difficulty
 // calculation should probably go to `ChainstateUpgrade`.
@@ -155,6 +169,7 @@ pub struct ChainstateUpgrade {
     pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
     zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+    change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired,
 }
 
 impl ChainstateUpgrade {
@@ -175,6 +190,7 @@ impl ChainstateUpgrade {
         pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
         PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
         zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+        change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -191,6 +207,7 @@ impl ChainstateUpgrade {
             sighash_input_commitment_version,
             pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden,
             zero_token_transfer_forbidden,
+            change_token_metadata_uri_validity_check_required,
         }
     }
 
@@ -250,5 +267,11 @@ impl ChainstateUpgrade {
 
     pub fn zero_token_transfer_forbidden(&self) -> ZeroTokenTransferForbidden {
         self.zero_token_transfer_forbidden
+    }
+
+    pub fn change_token_metadata_uri_validity_check_required(
+        &self,
+    ) -> ChangeTokenMetadataUriValidityCheckRequired {
+        self.change_token_metadata_uri_validity_check_required
     }
 }

@@ -18,9 +18,9 @@ use std::collections::BTreeSet;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
-        AccountCommand, ChainConfig, ChangeTokenMetadataUriActivated, HtlcActivated, OrderId,
-        OrdersVersion, SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize,
-        TxInput, TxOutput,
+        AccountCommand, ChainConfig, ChangeTokenMetadataUriActivated,
+        ChangeTokenMetadataUriValidityCheckRequired, HtlcActivated, OrderId, OrdersVersion,
+        SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize, TxInput, TxOutput,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{NftIssuance, get_tokens_issuance_count},
@@ -32,7 +32,9 @@ use utils::ensure;
 
 use crate::{
     error::TokensError,
-    transaction_verifier::tokens_check::{check_nft_issuance_data, check_tokens_issuance},
+    transaction_verifier::tokens_check::{
+        check_nft_issuance_data, check_tokens_issuance, check_utils::is_uri_valid,
+    },
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -152,12 +154,10 @@ fn check_tokens_tx(
     block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
+    let cs_upgrade = &chain_config.chainstate_upgrades().version_at_height(block_height).1;
+
     // Check if v0 tokens are allowed to be used at this height
-    let latest_token_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(block_height)
-        .1
-        .token_issuance_version();
+    let latest_token_version = cs_upgrade.token_issuance_version();
 
     match latest_token_version {
         TokenIssuanceVersion::V0 => { /* do nothing */ }
@@ -208,11 +208,9 @@ fn check_tokens_tx(
         ),)
     );
 
-    let change_token_metadata_uri_activated = chain_config
-        .chainstate_upgrades()
-        .version_at_height(block_height)
-        .1
-        .change_token_metadata_uri_activated();
+    let change_token_metadata_uri_activated = cs_upgrade.change_token_metadata_uri_activated();
+    let change_token_metadata_uri_validity_check_required =
+        cs_upgrade.change_token_metadata_uri_validity_check_required();
 
     // Check token metadata uri change
     tx.inputs().iter().try_for_each(|input| match input {
@@ -240,6 +238,19 @@ fn check_tokens_tx(
                         *token_id
                     ))
                 );
+
+                match change_token_metadata_uri_validity_check_required {
+                    ChangeTokenMetadataUriValidityCheckRequired::Yes => {
+                        ensure!(
+                            is_uri_valid(metadata_uri),
+                            CheckTransactionError::TokensError(TokensError::IncorrectMetadataUri(
+                                *token_id
+                            ))
+                        );
+                    }
+                    ChangeTokenMetadataUriValidityCheckRequired::No => { /* do nothing */ }
+                }
+
                 Ok(())
             }
         },

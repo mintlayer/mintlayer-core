@@ -153,13 +153,13 @@ pub enum SignatureDestinationGetterError {
     SpendingFromAccountInBlockReward,
     #[error("Attempted to verify signature for not spendable output")]
     SigVerifyOfNotSpendableOutput,
-    #[error("Pool data not found for signature verification {0}")]
+    #[error("Pool data not found for signature verification {0:x}")]
     PoolDataNotFound(PoolId),
-    #[error("Delegation data not found for signature verification {0}")]
+    #[error("Delegation data not found for signature verification {0:x}")]
     DelegationDataNotFound(DelegationId),
-    #[error("Token data not found for signature verification {0}")]
+    #[error("Token data not found for signature verification {0:x}")]
     TokenDataNotFound(TokenId),
-    #[error("Order data not found for signature verification {0}")]
+    #[error("Order data not found for signature verification {0:x}")]
     OrderDataNotFound(OrderId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
     UtxoOutputNotFound(UtxoOutPoint),
@@ -201,7 +201,7 @@ pub enum TokenIssuanceError {
     MediaHashTooShort,
     #[error("The media hash is too long")]
     MediaHashTooLong,
-    #[error("Token id {0} from issuance does not match calculated token id {1}")]
+    #[error("Token id {0:x} from issuance does not match calculated token id {1:x}")]
     TokenIdMismatch(TokenId, TokenId),
 }
 
@@ -209,20 +209,22 @@ pub enum TokenIssuanceError {
 pub enum TokensError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Issuance error {0} in transaction {1}")]
+    #[error("Issuance error {0} in transaction {1:x}")]
     IssueError(TokenIssuanceError, Id<Transaction>),
-    #[error("Too many tokens issuance in transaction {0}")]
+    #[error("Too many tokens issuance in transaction {0:x}")]
     MultipleTokenIssuanceInTransaction(Id<Transaction>),
     #[error("Coin or token overflow {0:?}")]
     CoinOrTokenOverflow(CoinOrTokenId),
-    #[error("Insufficient token issuance fee in transaction {0}")]
+    #[error("Insufficient token issuance fee in transaction {0:x}")]
     InsufficientTokenFees(Id<Transaction>),
-    #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
+    #[error("Invariant broken - attempt undo issuance on non-existent token {0:x}")]
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
-    #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
+    #[error("Invariant broken - attempt register issuance on non-existent token {0:x}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
-    #[error("Token {0} metadata uri is to large")]
+    #[error("Token {0:x} metadata uri is to large")]
     TokenMetadataUriTooLarge(TokenId),
+    #[error("Token {0:x} metadata URI is incorrect")]
+    IncorrectMetadataUri(TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -235,7 +237,7 @@ pub enum SpendStakeError {
     InvalidBlockRewardOutputType,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
-    #[error("Pool id in kernel {0} doesn't match the expected pool id {1}")]
+    #[error("Pool id in kernel {0:x} doesn't match the expected pool id {1:x}")]
     StakePoolIdMismatch(PoolId, PoolId),
     #[error("Consensus PoS error: {0}")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),

@@ -55,7 +55,8 @@ use crate::{
 };
 
 use super::{
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
+    ChainstateUpgrade, ChangeTokenMetadataUriActivated,
+    ChangeTokenMetadataUriValidityCheckRequired, ConsensusUpgrade, DataDepositFeeVersion,
     DestinationTag, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RequiredConsensus, RewardDistributionVersion,
     SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
@@ -925,6 +926,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     SighashInputCommitmentVersion::V1,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
                     ZeroTokenTransferForbidden::Yes,
+                    ChangeTokenMetadataUriValidityCheckRequired::Yes,
                 ),
             )])
             .expect("cannot fail"),

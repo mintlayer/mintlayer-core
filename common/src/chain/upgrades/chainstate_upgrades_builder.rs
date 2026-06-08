@@ -52,9 +52,9 @@ impl ChainstateUpgradesBuilder {
 #[cfg(test)]
 mod tests {
     use crate::chain::{
-        ChangeTokenMetadataUriActivated, DataDepositFeeVersion, FrozenTokensValidationVersion,
-        HtlcActivated, OrdersActivated, OrdersVersion,
-        PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
+        ChangeTokenMetadataUriActivated, ChangeTokenMetadataUriValidityCheckRequired,
+        DataDepositFeeVersion, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
+        OrdersVersion, PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
         SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
         TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
     };
@@ -78,6 +78,7 @@ mod tests {
             SighashInputCommitmentVersion::V0,
             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
             ZeroTokenTransferForbidden::No,
+            ChangeTokenMetadataUriValidityCheckRequired::No,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -123,6 +124,11 @@ mod tests {
         .then(BlockHeight::new(14), |builder| {
             builder.zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
         })
+        .then(BlockHeight::new(15), |builder| {
+            builder.change_token_metadata_uri_validity_check_required(
+                ChangeTokenMetadataUriValidityCheckRequired::Yes,
+            )
+        })
         .build();
 
         let expected_upgrades = NetUpgrades::initialize(vec![
@@ -143,6 +149,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -162,6 +169,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -181,6 +189,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -200,6 +209,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -219,6 +229,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -238,6 +249,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -257,6 +269,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -276,6 +289,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -295,6 +309,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -314,6 +329,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -333,6 +349,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -352,6 +369,7 @@ mod tests {
                     SighashInputCommitmentVersion::V0,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -371,6 +389,7 @@ mod tests {
                     SighashInputCommitmentVersion::V1,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -390,6 +409,7 @@ mod tests {
                     SighashInputCommitmentVersion::V1,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
                     ZeroTokenTransferForbidden::No,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
                 ),
             ),
             (
@@ -409,6 +429,27 @@ mod tests {
                     SighashInputCommitmentVersion::V1,
                     PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
                     ZeroTokenTransferForbidden::Yes,
+                    ChangeTokenMetadataUriValidityCheckRequired::No,
+                ),
+            ),
+            (
+                BlockHeight::new(15),
+                ChainstateUpgrade::new(
+                    TokenIssuanceVersion::V1,
+                    RewardDistributionVersion::V1,
+                    TokensFeeVersion::V1,
+                    DataDepositFeeVersion::V1,
+                    ChangeTokenMetadataUriActivated::Yes,
+                    FrozenTokensValidationVersion::V1,
+                    HtlcActivated::Yes,
+                    OrdersActivated::Yes,
+                    OrdersVersion::V1,
+                    StakerDestinationUpdateForbidden::Yes,
+                    TokenIdGenerationVersion::V1,
+                    SighashInputCommitmentVersion::V1,
+                    PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    ZeroTokenTransferForbidden::Yes,
+                    ChangeTokenMetadataUriValidityCheckRequired::Yes,
                 ),
             ),
         ])
@@ -435,6 +476,7 @@ mod tests {
             SighashInputCommitmentVersion::V0,
             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
             ZeroTokenTransferForbidden::No,
+            ChangeTokenMetadataUriValidityCheckRequired::No,
         ))
         .then(BlockHeight::new(2), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -463,6 +505,7 @@ mod tests {
             SighashInputCommitmentVersion::V0,
             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
             ZeroTokenTransferForbidden::No,
+            ChangeTokenMetadataUriValidityCheckRequired::No,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -491,6 +534,7 @@ mod tests {
             SighashInputCommitmentVersion::V0,
             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
             ZeroTokenTransferForbidden::No,
+            ChangeTokenMetadataUriValidityCheckRequired::No,
         ))
         .then(BlockHeight::new(0), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -516,6 +560,7 @@ mod tests {
             SighashInputCommitmentVersion::V0,
             PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
             ZeroTokenTransferForbidden::No,
+            ChangeTokenMetadataUriValidityCheckRequired::No,
         ))
         .then(BlockHeight::new(1), |builder| {
             builder.token_issuance_version(TokenIssuanceVersion::V0)

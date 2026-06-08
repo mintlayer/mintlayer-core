@@ -493,6 +493,7 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::CoinOrTokenOverflow(_)
             | TokensError::InsufficientTokenFees(_)
             | TokensError::TokenMetadataUriTooLarge(_)
+            | TokensError::IncorrectMetadataUri(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
             | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
                 BlockProcessingErrorClass::BadBlock
