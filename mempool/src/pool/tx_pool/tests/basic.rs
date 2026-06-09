@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use mempool_types::tx_origin::LocalTxOrigin;
+
 use crate::pool::tx_pool::store::{StoreHashSet, TxMempoolEntryWithAncestors};
 
 use super::*;
@@ -1314,7 +1316,6 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 
 #[rstest]
 #[case(Seed::from_entropy())]
-#[case::fail(Seed(1))]
 #[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full_real(#[case] seed: Seed) {
@@ -1370,7 +1371,14 @@ async fn mempool_full_real(#[case] seed: Seed) {
 
     // Bump the memory limit again, and re-insert the evicted transaction(s). Also reset the
     // rolling fee since recently evicted transactions bump it up.
-    mempool.max_size = MempoolMaxSize::from_bytes(memory_size);
+    // Note: since the switch to using hashbrown tables in the mempool store, simply resetting
+    // `mempool.max_size` back to `memory_size` may not be enough for the previously evicted
+    // txs to fit back in. This is because hashbrown tables are probing tables that leave tombstones
+    // during element removal and tombstones may not always be reused during insertion. In such a
+    // case insertion will eat up one additional capacity element, and if the capacity is already at
+    // the maximum, reallocation will occur, doubling the number of buckets, which will contribute
+    // to the current mempool size and will cause some of the previously fitting txs to be evicted.
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size * 2);
     mempool.drop_rolling_fee();
 
     for tx in txs {
@@ -1719,4 +1727,68 @@ fn stack_overflow_on_transaction_addition(
         .await
         .unwrap();
     });
+}
+
+// Note: this is not a real test; it's just a piece of code to estimate the maximum number
+// of transactions that can fit into a store of the default size. I.e. it fills the store
+// with txs of minimally possible size, stops when it's full and prints the count.
+// In the end, it removes all txs from the store and prints the resulting memory usage, which
+// will be the capacity overhead introduced by the 2 hashbrown tables.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn estimate_max_tx_count_in_store() {
+    let make_minimal_tx = |input| {
+        let tx = Transaction::new(
+            0,
+            vec![input],
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)],
+        )
+        .unwrap();
+        SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+    };
+
+    let fake_source = OutPointSourceId::Transaction(Id::new(common::primitives::H256::zero()));
+    let minimal_tx = make_minimal_tx(TxInput::from_utxo(fake_source.clone(), 0));
+    log::info!("minimal tx size = {}", minimal_tx.encoded_size());
+
+    let time = TimeGetter::default().get_time();
+    let origin = TxOrigin::Local(LocalTxOrigin::P2p);
+    let options = TxOptions::default_for(origin);
+    let fee = Amount::from_atoms(1_000_000).into();
+
+    let mut storage = MempoolStore::new(Default::default());
+    storage.disable_heavy_validity_checks();
+
+    loop {
+        let tx_count = storage.txs_by_id.len();
+
+        let tx = make_minimal_tx(TxInput::from_utxo(fake_source.clone(), tx_count as u32));
+        let entry = TxEntry::new(tx, time, origin, options.clone());
+        storage.add_transaction(TxEntryWithFee::new(entry, fee)).unwrap();
+
+        if storage.memory_usage() > MAX_MEMPOOL_SIZE_BYTES {
+            log::info!("max tx count: {tx_count}",);
+            break;
+        }
+    }
+
+    let tx_ids = storage.txs_by_id.keys().copied().collect::<Vec<_>>();
+
+    for tx_id in tx_ids {
+        storage.remove_tx(&tx_id, MempoolRemovalReason::Expiry);
+    }
+
+    assert!(storage.txs_by_id.is_empty());
+
+    // After all txs have been removed, the only thing that can occupy storage is allocated capacity
+    // of containers that have it, which at the moment of writing this are the 2 hash tables -
+    // `txs_by_id` and `seq_nos_by_tx`.
+    // Note though that this value will not exactly represent what will happen in the actual app,
+    // because in `cfg(test)` builds AssertDropPolicy is used as StrictDropPolicy, which contains
+    // an additional bool, which will turn into 8 extra bytes for each bucket of `txs_by_id`, due
+    // to alignment.
+    log::info!(
+        "memory usage after store cleanup: {}",
+        storage.memory_usage()
+    );
 }

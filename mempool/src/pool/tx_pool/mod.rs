@@ -653,7 +653,13 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
     fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-        while !self.store.is_empty() && self.memory_usage() > self.max_size.as_bytes() {
+        loop {
+            self.store.shrink_capacity_if_needed();
+
+            if self.store.is_empty() || self.memory_usage() <= self.max_size.as_bytes() {
+                break;
+            }
+
             // TODO sort by descendant score, not by fee
             let removed_id = self
                 .store
@@ -673,6 +679,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             removed_fees.push(FeeRate::from_total_tx_fee(removed.fee(), removed.size())?);
             self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
+
         Ok(removed_fees)
     }
 

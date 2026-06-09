@@ -663,7 +663,86 @@ impl MempoolStore {
         let entry = self.get_existing_entry(tx_id)?;
         entry.collect_cluster(self)
     }
+
+    /// For internal containers that have capacity, check if the capacity is excessive; shrink
+    /// the container if it is.
+    pub fn shrink_capacity_if_needed(&mut self) {
+        // Note:
+        // * Hashbrown tables never shrink their capacity automatically.
+        // * According to the pseudo-test `estimate_max_tx_count_in_store`, the store with the default
+        //   size of 300Mb can fit over 230'000 txs of the smallest possible size. Due to how hashbrown
+        //   tables work (1/8 of all buckets should always be empty, and reallocation doubles the number
+        //   of buckets), `txs_by_id` and `seq_nos_by_tx` may end up with more than 500'000 buckets each.
+        //   Given that the bucket size in each table is 40 bytes (in non-test builds), this results in
+        //   roughly 20Mb of allocated memory per table, which will not go down even if the tables'
+        //   element counts become zero. Since table's entire allocation_size counts towards the
+        //   mempool size, this will effectively reduce the max mempool size by 40Mb.
+        // * On the other hand, the mempool re-creates its store completely every time a new block
+        //   arrives, so the situation described above can only exist for a few minutes. Still,
+        //   it's better for the store not to depend on such a behavior of its owner code and
+        //   manage the capacities explicitly.
+
+        // Implementation notes:
+        // * table's `capacity` doesn't count the tombstones, so in a degenerate case like the one
+        //   described above it's possible to have a table with a huge allocation size and small
+        //   capacity. So below we don't use capacity when deciding whether to shrink, and estimate
+        //   (roughly) the number of buckets instead.
+        // * even though `shrink_to` accepts capacity, it'll compare the estimated number of buckets
+        //   (from the passed capacity) with the current one and reallocate/rehash the table if the
+        //   latter is bigger.
+
+        fn maybe_shrink<K, V>(
+            table: &mut TrackedHashMap<K, V>,
+            mem_tracker: &mut MemUsageTracker,
+            table_name: &str,
+        ) where
+            K: Eq + std::hash::Hash,
+        {
+            let bucket_size = hash_map_bucket_size(table);
+            let bucket_count = hash_map_bucket_count_upper_bound(table);
+
+            let max_bucket_count = table.len() * HASH_TABLE_MAX_BUCKET_COUNT_FACTOR;
+            let adjusted_capacity = table.len() * HASH_TABLE_ADJUSTED_CAPACITY_FACTOR;
+
+            if bucket_count > max_bucket_count {
+                let potentially_reclaimable_mem_size =
+                    (bucket_count - adjusted_capacity) * bucket_size;
+
+                // Only bother shrinking if the win is noticeable.
+                if potentially_reclaimable_mem_size >= HASH_TABLE_MIN_RECLAIMABLE_MEM_SIZE {
+                    log::debug!("Shrinking {table_name} to {adjusted_capacity}");
+                    mem_tracker.modify(table, |table, _| table.shrink_to(adjusted_capacity));
+                }
+            }
+        }
+
+        maybe_shrink(&mut self.txs_by_id, &mut self.mem_tracker, "txs_by_id");
+        maybe_shrink(
+            &mut self.seq_nos_by_tx,
+            &mut self.mem_tracker,
+            "seq_nos_by_tx",
+        );
+    }
 }
+
+pub fn hash_map_bucket_size<K, V>(_: &StoreHashMap<K, V>) -> usize {
+    std::mem::size_of::<(K, V)>()
+}
+
+// Return the upper bound for the number of buckets in the map.
+pub fn hash_map_bucket_count_upper_bound<K, V>(map: &StoreHashMap<K, V>) -> usize
+where
+    K: Eq + std::hash::Hash,
+{
+    // Note: the actual number of buckets will be smaller than this, because `allocation_size` also
+    // includes control bytes and padding.
+    map.allocation_size() / hash_map_bucket_size(map)
+}
+
+// Constants that determine whether store's hash tables should be shrunk and, if yes, to what capacity.
+pub const HASH_TABLE_MAX_BUCKET_COUNT_FACTOR: usize = 5;
+pub const HASH_TABLE_ADJUSTED_CAPACITY_FACTOR: usize = 2;
+pub const HASH_TABLE_MIN_RECLAIMABLE_MEM_SIZE: usize = 10_000;
 
 #[cfg(test)]
 impl Drop for MempoolStore {
