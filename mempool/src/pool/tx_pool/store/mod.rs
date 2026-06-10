@@ -124,7 +124,7 @@ pub struct MempoolStore {
     // and doesn't free the memory when an item is removed - it's only replaced with a tombstone.
     // Since TxMempoolEntry is relatively big (size_of = 350+ bytes), we'd waste a noticeable
     // amount of memory without boxing.)
-    pub txs_by_id: TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
+    txs_by_id: TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>>,
 
     // Mempool entries sorted by descendant score.
     // We keep this index so that when the mempool grows full, we know which transactions are the
@@ -136,22 +136,22 @@ pub struct MempoolStore {
     //  max(fee/size of entry's tx, fee/size with all descendants).
     //  TODO if we wish to follow Bitcoin Core, "size" is not simply the encoded size, but
     // rather a value that takes into account witness and sigop data (see CTxMemPoolEntry::GetTxSize).
-    pub txs_by_descendant_score: TrackedTxIdMultiMap<DescendantScore>,
+    txs_by_descendant_score: TrackedTxIdMultiMap<DescendantScore>,
 
     // Mempool entries sorted by ancestor score.
     // This is used to select the most economically attractive transactions for block production.
     // The ancestor score of an entry is defined as
     //  min(fee/size of entry's tx, fee/size with all ancestors).
-    pub txs_by_ancestor_score: TrackedTxIdMultiMap<AncestorScore>,
+    txs_by_ancestor_score: TrackedTxIdMultiMap<AncestorScore>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
     // evicted. To efficiently know which entries to evict, we store the mempool entries sorted by
     // their creation time, from earliest to latest.
-    pub txs_by_creation_time: TrackedTxIdMultiMap<Time>,
+    txs_by_creation_time: TrackedTxIdMultiMap<Time>,
 
     // We keep the information of which inputs are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
-    pub spender_txs: Tracked<BTreeMap<TxDependency, Id<Transaction>>>,
+    spender_txs: Tracked<BTreeMap<TxDependency, Id<Transaction>>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
     // which the transactions have been inserted into the mempool, so they can be re-inserted in
@@ -241,6 +241,29 @@ impl MempoolStore {
 
     pub fn memory_usage(&self) -> usize {
         self.mem_tracker.get_usage()
+    }
+
+    pub fn txs_by_id(
+        &self,
+    ) -> &TrackedHashMap<Id<Transaction>, Tracked<Box<TxMempoolEntry>, StrictDropPolicy>> {
+        &self.txs_by_id
+    }
+
+    pub fn txs_by_descendant_score(&self) -> &TrackedTxIdMultiMap<DescendantScore> {
+        &self.txs_by_descendant_score
+    }
+
+    pub fn txs_by_ancestor_score(&self) -> &TrackedTxIdMultiMap<AncestorScore> {
+        &self.txs_by_ancestor_score
+    }
+
+    pub fn txs_by_creation_time(&self) -> &TrackedTxIdMultiMap<Time> {
+        &self.txs_by_creation_time
+    }
+
+    #[cfg(test)]
+    pub fn seq_nos_by_tx(&self) -> &TrackedHashMap<Id<Transaction>, usize> {
+        &self.seq_nos_by_tx
     }
 
     pub fn assert_valid(&self) {
