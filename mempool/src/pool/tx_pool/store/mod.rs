@@ -910,7 +910,6 @@ impl TxMempoolEntry {
     }
 
     pub fn ancestor_score(&self) -> AncestorScore {
-        log::debug!("ancestor score for {:x}", self.tx_id());
         log::debug!(
             "fees with ancestors: {:?}, size_with_ancestors: {}, fee: {:?}, size: {}",
             self.fees_with_ancestors,
@@ -922,7 +921,10 @@ impl TxMempoolEntry {
             .expect("cannot overflow due to max supply");
         let b = FeeRate::from_total_tx_fee(self.fee, self.size())
             .expect("cannot overflow due to max supply");
-        std::cmp::min(a, b).into()
+        let score = std::cmp::min(a, b).into();
+
+        log::debug!("ancestor score for {:x}: {score:?}", self.tx_id());
+        score
     }
 
     pub fn tx_id(&self) -> &Id<Transaction> {

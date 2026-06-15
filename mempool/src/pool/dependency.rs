@@ -19,12 +19,13 @@ use strum::IntoEnumIterator as _;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, IdCreationError,
-        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, make_token_id_with_version,
-        tokens::TokenId,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, IdCreationError, PoolId,
+        TokenIdGenerationVersion, Transaction, TxInput, TxOutput, make_delegation_id,
+        make_token_id_with_version, tokens::TokenId,
     },
     primitives::Id,
 };
+use utils::{debug_assert_or_log, debug_panic_or_log};
 
 use crate::pool::entry::TxEntry;
 
@@ -35,9 +36,11 @@ use crate::pool::entry::TxEntry;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxProvidedDependency {
     TxOutput(Id<Transaction>, u32),
-    DelegationAccount(DelegationId, AccountNonce),
-    TokenAccount(TokenId, AccountNonce),
+    PoolCreation(PoolId),
+    DelegationCreation(DelegationId),
+    DelegationSpending(DelegationId, AccountNonce),
     TokenCreation(TokenId),
+    TokenAccountManagement(TokenId, AccountNonce),
 }
 
 // FIXME TxProvidedNonUtxoDependency?
@@ -52,7 +55,7 @@ impl TxProvidedDependency {
                 .outputs()
                 .iter()
                 .enumerate()
-                .filter_map(|(output_idx, output)| {
+                .flat_map(|(output_idx, output)| {
                     Self::from_output(
                         output,
                         output_idx as u32,
@@ -78,7 +81,10 @@ impl TxProvidedDependency {
         output_idx: u32,
         tx_id: &Id<Transaction>,
         inputs: &[TxInput],
-    ) -> Option<Self> {
+    ) -> impl Iterator<Item = Self> {
+        // Use SmallVec to avoid allocations (we'll be producing at most 2 values here).
+        let mut result = SmallVec::<[_; 2]>::new();
+
         match output {
             TxOutput::IssueFungibleToken(_) => {
                 // This will produce a compilation failure if TokenIdGenerationVersion gets a new
@@ -89,32 +95,61 @@ impl TxProvidedDependency {
                     }
                 }
 
-                // FIXME return Result?
-                let token_id =
-                    make_token_id_with_version(TokenIdGenerationVersion::V1, inputs).ok()?;
+                // Note: an error shouldn't be possible here for a valid tx.
+                // FIXME return Result anyway?
+                match make_token_id_with_version(TokenIdGenerationVersion::V1, inputs) {
+                    Ok(token_id) => {
+                        result.push(Self::TokenCreation(token_id));
+                    }
+                    Err(err) => {
+                        debug_panic_or_log!(
+                            "Error creating token id from inputs of tx {tx_id:x}: {err}"
+                        );
+                    }
+                }
+            }
 
-                Some(Self::TokenCreation(token_id))
+            | TxOutput::CreateDelegationId(_, _) => {
+                // Note: an error shouldn't be possible here for a valid tx.
+                // FIXME return Result anyway?
+                match make_delegation_id(inputs) {
+                    Ok(delegation_id) => {
+                        result.push(Self::DelegationCreation(delegation_id));
+                    }
+                    Err(err) => {
+                        debug_panic_or_log!(
+                            "Error creating delegation id from inputs of tx {tx_id:x}: {err}"
+                        );
+                    }
+                }
+            }
+
+            TxOutput::CreateStakePool(pool_id, _) => {
+                result.push(Self::TxOutput(*tx_id, output_idx));
+                result.push(Self::PoolCreation(*pool_id));
             }
 
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateStakePool(_, _)
-            | TxOutput::ProduceBlockFromStake(_, _) => Some(Self::TxOutput(*tx_id, output_idx)),
+            | TxOutput::ProduceBlockFromStake(_, _) => {
+                result.push(Self::TxOutput(*tx_id, output_idx));
+            }
             // These outputs are not spendable
             | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::CreateOrder(_) => None,
+            | TxOutput::CreateOrder(_) => {}
         }
+
+        result.into_iter()
     }
 
     fn from_account(account: &AccountSpending, nonce: AccountNonce) -> Option<Self> {
         match account {
             AccountSpending::DelegationBalance(delegation_id, _) => {
-                Some(Self::DelegationAccount(*delegation_id, nonce))
+                Some(Self::DelegationSpending(*delegation_id, nonce))
             }
         }
     }
@@ -128,7 +163,7 @@ impl TxProvidedDependency {
             | AccountCommand::UnfreezeToken(token_id)
             | AccountCommand::ChangeTokenMetadataUri(token_id, _)
             | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                Some(Self::TokenAccount(*token_id, nonce))
+                Some(Self::TokenAccountManagement(*token_id, nonce))
             }
             // Orders V0 are not tracked
             AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
@@ -141,13 +176,15 @@ impl TxProvidedDependency {
         // the requiring tx consumes.
         match self {
             Self::TxOutput(tx_id, output_idx) => TxRequiredDependency::TxOutput(tx_id, output_idx),
-            Self::DelegationAccount(delg_id, nonce) => {
-                TxRequiredDependency::DelegationAccount(delg_id, nonce)
-            }
-            Self::TokenAccount(token_id, nonce) => {
-                TxRequiredDependency::TokenAccount(token_id, nonce)
+            Self::PoolCreation(pool_id) => TxRequiredDependency::PoolCreation(pool_id),
+            Self::DelegationCreation(delg_id) => TxRequiredDependency::DelegationCreation(delg_id),
+            Self::DelegationSpending(delg_id, nonce) => {
+                TxRequiredDependency::DelegationSpending(delg_id, nonce)
             }
             Self::TokenCreation(token_id) => TxRequiredDependency::TokenCreation(token_id),
+            Self::TokenAccountManagement(token_id, nonce) => {
+                TxRequiredDependency::TokenAccountManagement(token_id, nonce)
+            }
         }
     }
 
@@ -158,13 +195,15 @@ impl TxProvidedDependency {
         // the requiring tx consumes.
         match req {
             TxRequiredDependency::TxOutput(tx_id, output_idx) => Self::TxOutput(tx_id, output_idx),
-            TxRequiredDependency::DelegationAccount(delg_id, nonce) => {
-                Self::DelegationAccount(delg_id, nonce)
-            }
-            TxRequiredDependency::TokenAccount(token_id, nonce) => {
-                Self::TokenAccount(token_id, nonce)
+            TxRequiredDependency::PoolCreation(pool_id) => Self::PoolCreation(pool_id),
+            TxRequiredDependency::DelegationCreation(delg_id) => Self::DelegationCreation(delg_id),
+            TxRequiredDependency::DelegationSpending(delg_id, nonce) => {
+                Self::DelegationSpending(delg_id, nonce)
             }
             TxRequiredDependency::TokenCreation(token_id) => Self::TokenCreation(token_id),
+            TxRequiredDependency::TokenAccountManagement(token_id, nonce) => {
+                Self::TokenAccountManagement(token_id, nonce)
+            }
         }
     }
 }
@@ -179,14 +218,20 @@ impl TxProvidedDependency {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxRequiredDependency {
     TxOutput(Id<Transaction>, u32),
-    DelegationAccount(DelegationId, AccountNonce),
-    TokenAccount(TokenId, AccountNonce),
+    PoolCreation(PoolId),
+    DelegationCreation(DelegationId),
+    DelegationSpending(DelegationId, AccountNonce),
     TokenCreation(TokenId),
+    TokenAccountManagement(TokenId, AccountNonce),
 }
 
 impl TxRequiredDependency {
     pub fn from_tx<O: IsOrigin>(entry: &TxEntry<O>) -> impl Iterator<Item = Self> {
-        entry.transaction().inputs().iter().flat_map(Self::from_input)
+        let from_inputs = entry.transaction().inputs().iter().flat_map(Self::from_input);
+
+        let from_outputs = entry.transaction().outputs().iter().filter_map(Self::from_output);
+
+        from_inputs.chain(from_outputs)
     }
 
     fn from_input(input: &TxInput) -> impl Iterator<Item = Self> {
@@ -201,7 +246,11 @@ impl TxRequiredDependency {
             }
             TxInput::Account(acct) => match acct.account() {
                 AccountSpending::DelegationBalance(delegation_id, _) => {
-                    result.push(Self::DelegationAccount(*delegation_id, acct.nonce()));
+                    result.push(Self::DelegationSpending(*delegation_id, acct.nonce()));
+
+                    if acct.nonce().value() == 0 {
+                        result.push(Self::DelegationCreation(*delegation_id));
+                    }
                 }
             },
             TxInput::AccountCommand(nonce, cmd) => {
@@ -213,7 +262,7 @@ impl TxRequiredDependency {
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                        result.push(Self::TokenAccount(*token_id, *nonce));
+                        result.push(Self::TokenAccountManagement(*token_id, *nonce));
 
                         if nonce.value() == 0 {
                             result.push(Self::TokenCreation(*token_id));
@@ -229,18 +278,39 @@ impl TxRequiredDependency {
         result.into_iter()
     }
 
+    fn from_output(output: &TxOutput) -> Option<Self> {
+        match output {
+            TxOutput::CreateDelegationId(_, pool_id) => Some(Self::PoolCreation(*pool_id)),
+            TxOutput::DelegateStaking(_, delegation_id) => {
+                Some(Self::DelegationCreation(*delegation_id))
+            }
+
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => None,
+        }
+    }
+
     pub fn into_consumed(self) -> Option<TxConsumedDependency> {
         match self {
             Self::TxOutput(tx_id, output_idx) => {
                 Some(TxConsumedDependency::TxOutput(tx_id, output_idx))
             }
-            Self::DelegationAccount(delg_id, nonce) => {
-                Some(TxConsumedDependency::DelegationAccount(delg_id, nonce))
+            Self::DelegationSpending(delg_id, nonce) => {
+                // FIXME consistent naming
+                Some(TxConsumedDependency::DelegationSpending(delg_id, nonce))
             }
-            Self::TokenAccount(token_id, nonce) => {
-                Some(TxConsumedDependency::TokenAccount(token_id, nonce))
-            }
-            Self::TokenCreation(_) => None,
+            Self::TokenAccountManagement(token_id, nonce) => Some(
+                TxConsumedDependency::TokenAccountManagement(token_id, nonce),
+            ),
+            Self::PoolCreation(_) | Self::DelegationCreation(_) | Self::TokenCreation(_) => None,
         }
     }
 }
@@ -251,8 +321,8 @@ impl TxRequiredDependency {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxConsumedDependency {
     TxOutput(Id<Transaction>, u32),
-    DelegationAccount(DelegationId, AccountNonce),
-    TokenAccount(TokenId, AccountNonce),
+    DelegationSpending(DelegationId, AccountNonce),
+    TokenAccountManagement(TokenId, AccountNonce),
 }
 
 // FIXME

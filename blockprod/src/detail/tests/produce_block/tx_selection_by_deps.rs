@@ -1,5 +1,5 @@
-// Copyright (c) 2026 RBB S.r.l
 // opensource@mintlayer.org
+// Copyright (c) 2026 RBB S.r.l
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
 // you may not use this file except in compliance with the License.
@@ -20,21 +20,27 @@ use randomness::CryptoRng;
 use rstest::rstest;
 use strum::IntoEnumIterator as _;
 
-use chainstate_test_framework::TransactionBuilder;
+use chainstate_test_framework::{
+    TransactionBuilder, create_stake_pool_data_with_all_reward_to_staker,
+};
 use common::{
     chain::{
-        AccountCommand, AccountCommandTag, AccountNonce, ChainConfig, Destination,
-        OutPointSourceId, SignedTransaction, TxOutput, UtxoOutPoint, make_token_id,
+        AccountCommand, AccountCommandTag, AccountNonce, AccountOutPoint, AccountSpending,
+        ChainConfig, CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint, make_delegation_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
+        timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         transaction::TxInput,
     },
-    primitives::{Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use logging::log;
-use mempool::{FeeRate, MempoolConfig, tx_accumulator::PackingStrategy};
+use mempool::{AncestorScore, FeeRate, MempoolConfig, tx_accumulator::PackingStrategy};
+use serialization::Encode as _;
 use test_utils::{
     BasicTestTimeGetter,
     random::{RngExt as _, Seed, make_seedable_rng},
@@ -50,24 +56,15 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum FeesSelection {
     Increasing,
-    // Note: decreasing fees are likely to ensure the correct tx ordering on their own even if
-    // the mempool handles dependencies incorrectly. I.e. this case is not very useful, but we
-    // keep it for completeness.
-    Decreasing,
     Random,
 }
 
 #[rstest_reuse::template]
 pub fn fees_selection_param(
-    #[values(
-        FeesSelection::Increasing,
-        FeesSelection::Decreasing,
-        FeesSelection::Random
-    )]
-    fees_selection: FeesSelection,
+    #[values(FeesSelection::Increasing, FeesSelection::Random)] fees_selection: FeesSelection,
 ) {
 }
 
@@ -85,7 +82,7 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
-    let tx_count = rng.random_range(10..=20);
+    let tx_count = rng.random_range(10..=15);
     log::debug!("tx_count = {tx_count}");
 
     let extra_genesis_txos = (0..tx_count)
@@ -113,7 +110,11 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
         .build();
 
     let base_fee = rng.random_range(10..20);
-    let fees = (0..tx_count).map(|i| Amount::from_atoms(base_fee * 4u128.pow(i))).collect_vec();
+    // Every next fee is much larger than the previous, to ensure that in the Increasing case
+    // each tx's ancestor score is determined by its own fee and not by fees of its ancestors.
+    let fees = (0..tx_count)
+        .map(|i| Amount::from_atoms(base_fee * 10u128.pow(i)))
+        .collect_vec();
     let fees = reorder_fees(fees, fees_selection, &mut rng);
 
     log::debug!("fees = {fees:?}");
@@ -124,8 +125,10 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
     let txs = std::iter::once(token_state.issuance_tx().clone())
         .chain(fees[1..].iter().map(|fee| token_state.make_next_tx(*fee, &mut rng)))
         .collect_vec();
+    let encoded_sizes = txs.iter().map(|tx| tx.encoded_size()).collect_vec();
 
     log::debug!("txs = {txs:?}");
+    log::debug!("encoded_sizes = {encoded_sizes:?}");
 
     let expected_tx_ids = txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
 
@@ -138,12 +141,17 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
             });
 
             assert_fees(&blockprod_setup, &time_getter, &txs, &fees).await;
-
             let block_production = blockprod_setup.make_blockprod_builder().build();
 
             add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
 
-            // FIXME check score - get_tx_score
+            match fees_selection {
+                FeesSelection::Increasing => {
+                    // Sanity check: ancestor scores are ordered the same way as fees.
+                    assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+                }
+                FeesSelection::Random => {}
+            }
 
             let input_data = pos_setup.make_first_pos_block_input_data();
 
@@ -184,10 +192,10 @@ mod token_account_deps_test_details {
             inputsig::standard_signature::StandardInputSignature,
             sighash::input_commitments::SighashInputCommitment,
         },
+        tokens::{IsTokenFreezable, TokenTotalSupplyTag},
     };
     use crypto::key::{KeyKind, PrivateKey};
     use randomness::{CryptoRng, seq::IteratorRandom as _};
-    use test_utils::token_utils::random_token_issuance_v1_with_min_supply;
 
     use super::*;
 
@@ -211,6 +219,12 @@ mod token_account_deps_test_details {
         next_extra_tx_idx: u32,
     }
 
+    fn random_metadata_uri(rng: &mut impl CryptoRng) -> Vec<u8> {
+        // Use a small uri to prevent the corresponding tx from becoming too big, which would
+        // affect its score.
+        random_ascii_alphanumeric_string(rng, 5..=10).as_bytes().to_vec()
+    }
+
     impl TokenState {
         pub fn new(
             chain_config: Arc<ChainConfig>,
@@ -221,12 +235,32 @@ mod token_account_deps_test_details {
                 PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
             let authority = Destination::PublicKey(authority_pk.clone());
 
-            let issuance = random_token_issuance_v1_with_min_supply(
-                &chain_config,
-                authority.clone(),
-                1_000_000,
-                rng,
-            );
+            let issuance = {
+                let max_dec_count = chain_config.token_max_dec_count();
+                let supply = match TokenTotalSupplyTag::iter().choose(rng).unwrap() {
+                    TokenTotalSupplyTag::Fixed => {
+                        let supply = Amount::from_atoms(rng.random_range(1_000_000..=2_000_000));
+                        TokenTotalSupply::Fixed(supply)
+                    }
+                    TokenTotalSupplyTag::Lockable => TokenTotalSupply::Lockable,
+                    TokenTotalSupplyTag::Unlimited => TokenTotalSupply::Unlimited,
+                };
+
+                let is_freezable = if rng.random::<bool>() {
+                    IsTokenFreezable::Yes
+                } else {
+                    IsTokenFreezable::No
+                };
+
+                TokenIssuanceV1 {
+                    token_ticker: random_ascii_alphanumeric_string(rng, 3..=5).as_bytes().to_vec(),
+                    number_of_decimals: rng.random_range(1..=max_dec_count),
+                    metadata_uri: random_metadata_uri(rng),
+                    total_supply: supply,
+                    is_freezable,
+                    authority: authority.clone(),
+                }
+            };
 
             let issuance_tx = make_issuance_tx(
                 issuance.clone(),
@@ -364,14 +398,7 @@ mod token_account_deps_test_details {
                 AccountCommandTag::ChangeTokenMetadataUri => {
                     extra_fee = self.chain_config.token_change_metadata_uri_fee();
 
-                    AccountCommand::ChangeTokenMetadataUri(
-                        self.token_id,
-                        random_ascii_alphanumeric_string(
-                            rng,
-                            1..=self.chain_config.token_max_uri_len(),
-                        )
-                        .into_bytes(),
-                    )
+                    AccountCommand::ChangeTokenMetadataUri(self.token_id, random_metadata_uri(rng))
                 }
 
                 AccountCommandTag::ConcludeOrder | AccountCommandTag::FillOrder => {
@@ -509,21 +536,24 @@ mod token_account_deps_test_details {
     }
 }
 
-#[rstest_reuse::apply(fees_selection_param)]
+// Note: this test creates only 2 txs, so Random case doesn't make much sense, so we only check
+// the Increasing case here.
 #[rstest]
 #[case(Seed::from_entropy())]
 #[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pool_creation_and_decommissioning(#[case] seed: Seed, fees_selection: FeesSelection) {
-    use chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker;
-    use common::chain::{PoolId, config::emission_schedule::DEFAULT_INITIAL_MINT};
-    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-
+async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new().get_time_getter();
 
-    let pos_setup =
-        PoSTestSetupBuilder::new().build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
+    let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
+    let extra_genesis_txo = TxOutput::Transfer(
+        OutputValue::Coin(genesis_extra_txo_amount),
+        Destination::AnyoneCanSpend,
+    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_extra_genesis_txos(vec![extra_genesis_txo.clone(), extra_genesis_txo])
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let chain_config = Arc::clone(&pos_setup.chain_config);
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
@@ -537,10 +567,8 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed, fees_selection: F
         .build();
 
     let base_fee = rng.random_range(10..20);
-    let fees = vec![Amount::from_atoms(base_fee), Amount::from_atoms(base_fee * 2)];
-    let fees = reorder_fees(fees, fees_selection, &mut rng);
-
-    log::debug!("fees = {fees:?}");
+    // The fees are progressively increasing, making the second (decommissioning) tx more lucrative.
+    let fees = vec![Amount::from_atoms(base_fee), Amount::from_atoms(base_fee * 10)];
 
     let min_pledge = chain_config.min_stake_pool_pledge().into_atoms();
     let pool_size = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
@@ -549,32 +577,44 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed, fees_selection: F
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, pool_size, vrf_pk);
 
-    let genesis_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 0);
-    let pool_id = PoolId::from_utxo(&genesis_outpoint);
+    let genesis_outpoint1 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
+    let genesis_outpoint2 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 2);
+    let pool_id = PoolId::from_utxo(&genesis_outpoint1);
     let create_pool_tx = TransactionBuilder::new()
-        .add_input(genesis_outpoint.into(), InputWitness::NoSignature(None))
+        .add_input(genesis_outpoint1.into(), InputWitness::NoSignature(None))
         .add_output(TxOutput::CreateStakePool(
             pool_id,
             Box::new(stake_pool_data),
         ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin(((DEFAULT_INITIAL_MINT - pool_size).unwrap() - fees[0]).unwrap()),
+            OutputValue::Coin(((genesis_extra_txo_amount - pool_size).unwrap() - fees[0]).unwrap()),
             Destination::AnyoneCanSpend,
         ))
         .build();
     let create_pool_tx_id = create_pool_tx.transaction().get_id();
     let create_pool_outpoint = UtxoOutPoint::new(create_pool_tx_id.into(), 0);
 
+    let pool_maturity_block_count =
+        chain_config.staking_pool_spend_maturity_block_count(BlockHeight::one());
     let decommission_pool_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint2.into(), InputWitness::NoSignature(None))
         .add_input(create_pool_outpoint.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(pool_size),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(pool_maturity_block_count.to_int()),
+        ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin((pool_size - fees[1]).unwrap()),
+            OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
             Destination::AnyoneCanSpend,
         ))
         .build();
 
     let txs = vec![create_pool_tx, decommission_pool_tx];
     let expected_tx_ids = txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    log::debug!("fees = {fees:?}");
+    log::debug!("expected_tx_ids = {expected_tx_ids:?}");
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -590,7 +630,317 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed, fees_selection: F
 
             add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
 
-            // FIXME check score - get_tx_score
+            assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+
+            let input_data = pos_setup.make_first_pos_block_input_data();
+
+            let (new_block, job_finished_receiver) = block_production
+                .produce_block(
+                    input_data,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await
+                .unwrap();
+
+            let block_tx_ids = new_block
+                .transactions()
+                .iter()
+                .map(|tx| tx.transaction().get_id())
+                .collect::<Vec<_>>();
+
+            job_finished_receiver.await.unwrap();
+
+            assert_job_count(&block_production, 0).await;
+            blockprod_setup.assert_process_block(new_block).await;
+            assert_eq!(block_tx_ids, expected_tx_ids);
+        }
+    });
+
+    manager.main().await;
+    join_handle.await.unwrap();
+}
+
+#[rstest_reuse::apply(fees_selection_param)]
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSelection) {
+    let mut rng = make_seedable_rng(seed);
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+
+    let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
+    let extra_genesis_txo = TxOutput::Transfer(
+        OutputValue::Coin(genesis_extra_txo_amount),
+        Destination::AnyoneCanSpend,
+    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_extra_genesis_txos(vec![
+            extra_genesis_txo.clone(),
+            extra_genesis_txo.clone(),
+            extra_genesis_txo,
+        ])
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
+
+    let chain_config = Arc::clone(&pos_setup.chain_config);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_mempool_config(MempoolConfig {
+            min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+            max_cluster_tx_count: Default::default(),
+            max_cluster_size_bytes: Default::default(),
+        })
+        .with_time_getter(time_getter.clone())
+        .build();
+
+    let base_fee = rng.random_range(10..20);
+    // The fees are progressively increasing, making the dependent txs more lucrative.
+    let fees = vec![
+        Amount::from_atoms(base_fee),
+        Amount::from_atoms(base_fee * 10),
+        Amount::from_atoms(base_fee * 100),
+    ];
+    let fees = reorder_fees(fees, fees_selection, &mut rng);
+
+    let min_pledge = chain_config.min_stake_pool_pledge().into_atoms();
+    let pool_size = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
+
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (stake_pool_data, _) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, pool_size, vrf_pk);
+
+    let genesis_outpoint1 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
+    let genesis_outpoint2 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 2);
+    let genesis_outpoint3 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 3);
+
+    let pool_id = PoolId::from_utxo(&genesis_outpoint1);
+    let create_pool_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint1.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(((genesis_extra_txo_amount - pool_size).unwrap() - fees[0]).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint2.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_id,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
+
+    let delegation_amount = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
+    let delegate_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint3.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::DelegateStaking(delegation_amount, delegation_id))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(
+                ((genesis_extra_txo_amount - delegation_amount).unwrap() - fees[2]).unwrap(),
+            ),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let txs = vec![create_pool_tx, create_delegation_tx, delegate_tx];
+    let expected_tx_ids = txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    log::debug!("fees = {fees:?}");
+    log::debug!("expected_tx_ids = {expected_tx_ids:?}");
+
+    let join_handle = tokio::spawn({
+        let shutdown_trigger = manager.make_shutdown_trigger();
+        async move {
+            // Ensure a shutdown signal will be sent by the end of the scope
+            let _shutdown_signal = OnceDestructor::new(move || {
+                shutdown_trigger.initiate();
+            });
+
+            assert_fees(&blockprod_setup, &time_getter, &txs, &fees).await;
+
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+
+            add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
+
+            match fees_selection {
+                FeesSelection::Increasing => {
+                    // Sanity check: ancestor scores are ordered the same way as fees.
+                    assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+                }
+                FeesSelection::Random => {}
+            }
+
+            let input_data = pos_setup.make_first_pos_block_input_data();
+
+            let (new_block, job_finished_receiver) = block_production
+                .produce_block(
+                    input_data,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await
+                .unwrap();
+
+            let block_tx_ids = new_block
+                .transactions()
+                .iter()
+                .map(|tx| tx.transaction().get_id())
+                .collect::<Vec<_>>();
+
+            job_finished_receiver.await.unwrap();
+
+            assert_job_count(&block_production, 0).await;
+            blockprod_setup.assert_process_block(new_block).await;
+            assert_eq!(block_tx_ids, expected_tx_ids);
+        }
+    });
+
+    manager.main().await;
+    join_handle.await.unwrap();
+}
+
+// Node: delegations and delegation withdrawals are not ordered with respect to each other,
+// this is why we only test zero withdrawals here.
+#[rstest_reuse::apply(fees_selection_param)]
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pool_creation_and_delegation_withdrawals(
+    #[case] seed: Seed,
+    fees_selection: FeesSelection,
+) {
+    let mut rng = make_seedable_rng(seed);
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+
+    let withdrawal_tx_count = rng.random_range(2..=5);
+    let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
+    let extra_genesis_txos = (0..2 + withdrawal_tx_count)
+        .map(|_| {
+            TxOutput::Transfer(
+                OutputValue::Coin(genesis_extra_txo_amount),
+                Destination::AnyoneCanSpend,
+            )
+        })
+        .collect();
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_extra_genesis_txos(extra_genesis_txos)
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
+
+    let chain_config = Arc::clone(&pos_setup.chain_config);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_mempool_config(MempoolConfig {
+            min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+            max_cluster_tx_count: Default::default(),
+            max_cluster_size_bytes: Default::default(),
+        })
+        .with_time_getter(time_getter.clone())
+        .build();
+
+    let base_fee = rng.random_range(10..20);
+    let fees = (0..2 + withdrawal_tx_count)
+        .map(|i| Amount::from_atoms(base_fee * 10u128.pow(i)))
+        .collect_vec();
+    let fees = reorder_fees(fees, fees_selection, &mut rng);
+
+    let min_pledge = chain_config.min_stake_pool_pledge().into_atoms();
+    let pool_size = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
+
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (stake_pool_data, _) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, pool_size, vrf_pk);
+
+    let genesis_outpoint1 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
+    let genesis_outpoint2 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 2);
+
+    let pool_id = PoolId::from_utxo(&genesis_outpoint1);
+    let create_pool_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint1.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(((genesis_extra_txo_amount - pool_size).unwrap() - fees[0]).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint2.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_id,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
+
+    let withdrawal_txs_iter = (0..withdrawal_tx_count).map(|i| {
+        let genesis_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 3 + i);
+
+        TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::Account(AccountOutPoint::new(
+                    AccountNonce::new(i as u64),
+                    AccountSpending::DelegationBalance(delegation_id, Amount::ZERO),
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((genesis_extra_txo_amount - fees[2 + i as usize]).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build()
+    });
+
+    let txs = [create_pool_tx, create_delegation_tx]
+        .into_iter()
+        .chain(withdrawal_txs_iter)
+        .collect_vec();
+    let expected_tx_ids = txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    log::debug!("fees = {fees:?}");
+    log::debug!("expected_tx_ids = {expected_tx_ids:?}");
+
+    let join_handle = tokio::spawn({
+        let shutdown_trigger = manager.make_shutdown_trigger();
+        async move {
+            // Ensure a shutdown signal will be sent by the end of the scope
+            let _shutdown_signal = OnceDestructor::new(move || {
+                shutdown_trigger.initiate();
+            });
+
+            assert_fees(&blockprod_setup, &time_getter, &txs, &fees).await;
+
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+
+            add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
+
+            match fees_selection {
+                FeesSelection::Increasing => {
+                    // Sanity check: ancestor scores are ordered the same way as fees.
+                    assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+                }
+                FeesSelection::Random => {}
+            }
 
             let input_data = pos_setup.make_first_pos_block_input_data();
 
@@ -627,13 +977,9 @@ fn reorder_fees(
     fees_selection: FeesSelection,
     rng: &mut impl CryptoRng,
 ) -> Vec<Amount> {
-    assert_eq!(fees.clone().sorted(), fees);
-
     match fees_selection {
-        FeesSelection::Increasing => fees,
-        FeesSelection::Decreasing => {
-            let mut fees = fees;
-            fees.reverse();
+        FeesSelection::Increasing => {
+            assert_eq!(fees.clone().sorted(), fees);
             fees
         }
         FeesSelection::Random => fees.shuffled(rng),
@@ -679,4 +1025,38 @@ async fn assert_fees(
             .unwrap();
         assert_eq!(actual_fee.0, *fee);
     }
+}
+
+// Assert that ancestor scores of the specified mempool txs have the same order as their fees.
+async fn assert_ancestor_scores(
+    blockprod_setup: &BlockprodTestSetup,
+    tx_ids: &[Id<Transaction>],
+    fees: &[Amount],
+) {
+    let tx_ids = tx_ids.to_vec();
+    let scores = blockprod_setup
+        .mempool
+        .call(move |mp| {
+            tx_ids
+                .iter()
+                .map(|tx_id| mp.get_tx_score(tx_id).unwrap().unwrap())
+                .collect_vec()
+        })
+        .await
+        .unwrap();
+
+    log::debug!("scores = {scores:?}");
+
+    let fees_with_index = fees.iter().enumerate().collect_vec();
+    let sorted_fees = fees_with_index
+        .sorted_by(|(_, fee1): &(_, &Amount), (_, fee2): &(_, &Amount)| fee1.cmp(fee2));
+    let fees_sort_indices = sorted_fees.iter().map(|(idx, _)| idx).collect_vec();
+
+    let scores_with_index = scores.iter().enumerate().collect_vec();
+    let sorted_scores = scores_with_index.sorted_by(
+        |(_, score1): &(_, &AncestorScore), (_, score2): &(_, &AncestorScore)| score1.cmp(score2),
+    );
+    let score_sort_indices = sorted_scores.iter().map(|(idx, _)| idx).collect_vec();
+
+    assert_eq!(fees_sort_indices, score_sort_indices);
 }

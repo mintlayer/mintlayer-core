@@ -321,8 +321,10 @@ impl<'p> PoolEntry<'p> {
             // multiple potential parents for it in the orphan pool; if one of the parents becomes
             // non-orphan and the other stays in the orphan pool, it will prevent the child from
             // entering the normal mempool even though in reality it's no longer an orphan.
-            TxRequiredDependency::DelegationAccount(_, _)
-            | TxRequiredDependency::TokenAccount(_, _)
+            TxRequiredDependency::DelegationSpending(_, _)
+            | TxRequiredDependency::TokenAccountManagement(_, _)
+            | TxRequiredDependency::PoolCreation(_)
+            | TxRequiredDependency::DelegationCreation(_)
             | TxRequiredDependency::TokenCreation(_) => false,
         })
     }
