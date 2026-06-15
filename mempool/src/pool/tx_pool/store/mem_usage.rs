@@ -30,7 +30,7 @@ use common::chain::{
 };
 use logging::log;
 
-use super::{StoreHashMap, StoreHashSet, TxDependency, TxMempoolEntry};
+use super::{StoreHashMap, StoreHashSet, TxMempoolEntry};
 
 /// Structure that stores the current memory usage and keeps track of its changes
 #[derive(Debug)]
@@ -411,7 +411,6 @@ impl MemoryUsage for InputWitness {
 
 impl_no_indirect_memory_usage!(
     StakePoolData,
-    TxDependency,
     TxInput,
     TokenIssuance,
     NftIssuance,

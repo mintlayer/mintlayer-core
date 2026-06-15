@@ -28,7 +28,7 @@ use common::{
     Uint256, Uint512,
     chain::{
         self, Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        PoSChainConfigBuilder, PoolId, SignedTransaction, TxInput, TxOutput,
         block::timestamp::BlockTimestamp,
         config::{ChainConfig, ChainType, create_unit_test_config},
         pos_initial_difficulty,
@@ -89,6 +89,7 @@ impl BlockprodTestSetup {
 pub struct BlockprodTestSetupBuilder {
     chain_config: Option<Arc<ChainConfig>>,
     time_getter: Option<TimeGetter>,
+    mempool_config: Option<MempoolConfig>,
 }
 
 impl BlockprodTestSetupBuilder {
@@ -96,6 +97,7 @@ impl BlockprodTestSetupBuilder {
         Self {
             chain_config: None,
             time_getter: None,
+            mempool_config: None,
         }
     }
 
@@ -106,6 +108,11 @@ impl BlockprodTestSetupBuilder {
 
     pub fn with_time_getter(mut self, time_getter: TimeGetter) -> Self {
         self.time_getter = Some(time_getter);
+        self
+    }
+
+    pub fn with_mempool_config(mut self, mempool_config: MempoolConfig) -> Self {
+        self.mempool_config = Some(mempool_config);
         self
     }
 
@@ -130,7 +137,7 @@ impl BlockprodTestSetupBuilder {
             allow_checkpoints_mismatch: Default::default(),
         };
 
-        let mempool_config = MempoolConfig::new();
+        let mempool_config = self.mempool_config.unwrap_or_else(MempoolConfig::new);
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
@@ -492,4 +499,18 @@ pub fn build_chain_config_for_pos(builder: chain::config::Builder) -> ChainConfi
     );
 
     chain_config
+}
+
+pub async fn add_local_txs_to_mempool(mempool: &MempoolHandle, txs: Vec<SignedTransaction>) {
+    mempool
+        .call_mut(move |mp| {
+            let origin = mempool::tx_origin::LocalTxOrigin::Mempool;
+            let options = mempool::TxOptions::default_for(origin.into());
+
+            for tx in txs {
+                mp.add_transaction_local(tx, origin, options.clone()).unwrap();
+            }
+        })
+        .await
+        .unwrap()
 }

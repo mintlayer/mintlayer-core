@@ -49,7 +49,7 @@ fn check_integrity(orphans: &TxOrphanPool) {
             "Entry {iid:?} insertion time inconsistent",
         );
     });
-    orphans.maps.by_deps.iter().for_each(|(dep, iid)| {
+    orphans.maps.by_required_deps.iter().for_each(|(dep, iid)| {
         let tx_dep = orphans.get_at(*iid).requires().find(|r| r == dep);
         assert!(tx_dep.is_some(), "Entry {iid:?} outpoint missing");
     });
@@ -113,7 +113,7 @@ fn insert_and_delete(#[case] seed: Seed) {
         orphans.maps.by_tx_id.keys().collect::<Vec<_>>(),
         vec![&tx_id],
     );
-    assert_eq!(orphans.maps.by_deps.len(), n_deps);
+    assert_eq!(orphans.maps.by_required_deps.len(), n_deps);
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
     check_integrity(&orphans);
 
@@ -122,7 +122,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     assert!(orphans.transactions.is_empty());
     assert!(orphans.maps.by_tx_id.is_empty());
     assert!(orphans.maps.by_insertion_time.is_empty());
-    assert!(orphans.maps.by_deps.is_empty());
+    assert!(orphans.maps.by_required_deps.is_empty());
     check_integrity(&orphans);
 }
 

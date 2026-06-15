@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod tx_selection_by_deps;
 mod tx_selection_mtp;
 
 use std::{sync::Arc, time::Duration};

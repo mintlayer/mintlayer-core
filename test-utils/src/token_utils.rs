@@ -77,9 +77,9 @@ pub fn random_token_issuance_v1_with_min_supply(
     };
 
     TokenIssuanceV1 {
-        token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
-        number_of_decimals: rng.random_range(1..max_dec_count),
-        metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..=max_ticker_len).as_bytes().to_vec(),
+        number_of_decimals: rng.random_range(1..=max_dec_count),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..=max_uri_len).as_bytes().to_vec(),
         total_supply: supply,
         is_freezable,
         authority,

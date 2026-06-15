@@ -22,8 +22,8 @@ use common::{
     primitives::Id,
 };
 use mempool::{
-    FeeRate, MempoolConfig, MempoolInterface, MempoolMaxSize, TransactionDuplicateStatus,
-    TxOptions, TxStatus,
+    AncestorScore, FeeRate, MempoolConfig, MempoolInterface, MempoolMaxSize,
+    TransactionDuplicateStatus, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
@@ -77,6 +77,7 @@ mockall::mock! {
         fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
         fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate;
         fn get_fee_rate_points(&self, num_points: NonZeroUsize) -> Result<Vec<(usize, FeeRate)>, Error>;
+        fn get_tx_score(&self, tx_id: &Id<Transaction>)  -> Result<Option<AncestorScore>, Error>;
 
         fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);
         fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent);

@@ -114,7 +114,7 @@ pub enum AccountSpending {
     serde::Deserialize,
     strum::EnumDiscriminants,
 )]
-#[strum_discriminants(name(AccountCommandTag), derive(strum::EnumIter))]
+#[strum_discriminants(name(AccountCommandTag), derive(Ord, PartialOrd, strum::EnumIter))]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]

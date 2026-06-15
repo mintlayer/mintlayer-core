@@ -15,6 +15,9 @@
 
 //! Transaction verifier adapted to mempool
 
+// TODO: this is not mempool-specific and it's currently exposed from mempool for use in blockprod tests.
+// It's better to move it somewhere else.
+
 mod chainstate_handle;
 mod utxo_view;
 

@@ -22,7 +22,7 @@ use common::{
 use mempool_types::TransactionDuplicateStatus;
 
 use crate::{
-    FeeRate, MempoolConfig, MempoolMaxSize, TxOptions, TxStatus,
+    AncestorScore, FeeRate, MempoolConfig, MempoolMaxSize, TxOptions, TxStatus,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
@@ -66,8 +66,8 @@ pub trait MempoolInterface: Send + Sync {
     /// Return the mempool config.
     fn config(&self) -> &MempoolConfig;
 
-    /// Collect transactions by putting them in given accumulator
-    /// Returns the accumulator with the collected transactions
+    /// Collect transactions by putting them in given accumulator.
+    /// Returns the accumulator with the collected transactions.
     /// Ok(None) is returned on recoverable errors, such as if
     /// the tip changed before collecting transactions started.
     fn collect_txs(
@@ -77,7 +77,7 @@ pub trait MempoolInterface: Send + Sync {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
-    /// Return at most `tx_count` transaction ids from `tx_ids`, ordering them by score and ancestry:
+    /// Return at most `tx_count` transaction ids from `tx_ids`, ordering them by "ancestor score" and ancestry:
     /// transactions with better score will come first and ancestors will come before their descendants.
     ///
     /// All transactions in `tx_ids` must be present in the mempool before the call.
@@ -109,6 +109,12 @@ pub trait MempoolInterface: Send + Sync {
     /// Get the fee rate at multiple uniformly distributed points along the mempool's transactions
     fn get_fee_rate_points(&self, num_points: NonZeroUsize)
     -> Result<Vec<(usize, FeeRate)>, Error>;
+
+    /// Get the "ancestor score" of the specified transaction (the bigger the score, the more lucrative
+    /// the transaction is for inclusion in a block).
+    ///
+    /// This is mainly intended for testing purposes.
+    fn get_tx_score(&self, tx_id: &Id<Transaction>) -> Result<Option<AncestorScore>, Error>;
 
     /// Notify mempool given peer has disconnected
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);

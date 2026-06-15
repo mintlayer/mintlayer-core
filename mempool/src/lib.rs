@@ -30,8 +30,7 @@ pub mod tx_accumulator;
 
 pub use {
     config::{MempoolConfig, RpcMempoolConfig},
-    pool::FeeRate,
-    pool::feerate_points::find_interpolated_value,
+    pool::{AncestorScore, FeeRate, feerate_points::find_interpolated_value, tx_verifier},
 };
 
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;

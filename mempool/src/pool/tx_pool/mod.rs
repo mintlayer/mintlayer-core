@@ -19,7 +19,7 @@ pub mod memory_usage_estimator;
 mod reorg;
 mod rolling_fee_rate;
 mod store;
-mod tx_verifier;
+pub mod tx_verifier;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -57,6 +57,7 @@ use crate::{
         ReorgError, TxCollectionError, TxValidationError,
     },
     pool::{
+        dependency::TxRequiredDependency,
         entry::{TxEntry, TxEntryWithFee},
         fee::Fee,
         feerate::FeeRate,
@@ -73,6 +74,8 @@ use self::{
     rolling_fee_rate::RollingFeeRate,
     store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
+
+pub use store::AncestorScore;
 
 pub struct TxPool<M> {
     chain_config: Arc<ChainConfig>,
@@ -366,7 +369,10 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         &'a self,
         entry: &'a TxEntry<O>,
     ) -> impl Iterator<Item = &'a Id<Transaction>> + 'a {
-        entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
+        entry
+            .requires()
+            .filter_map(TxRequiredDependency::into_consumed)
+            .filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
 
     fn spends_unconfirmed(&self, input: &TxInput) -> bool {
@@ -937,6 +943,10 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         tx_count: usize,
     ) -> Result<Vec<Id<Transaction>>, TxCollectionError> {
         collect_txs::get_best_tx_ids_by_score_and_ancestry(self, tx_ids, tx_count)
+    }
+
+    pub fn get_tx_score(&self, tx_id: &Id<Transaction>) -> Result<Option<AncestorScore>, Error> {
+        Ok(self.store.get_entry(tx_id).map(|entry| entry.ancestor_score()))
     }
 
     pub fn reorg(

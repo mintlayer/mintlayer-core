@@ -24,7 +24,7 @@ use std::{
 };
 
 use common::{
-    chain::{SignedTransaction, Transaction, TxInput},
+    chain::{SignedTransaction, Transaction},
     primitives::Id,
 };
 use logging::log;
@@ -35,7 +35,10 @@ use super::{Fee, Time, TxEntry, TxEntryWithFee};
 use crate::{
     FeeRate, MempoolConfig,
     error::{MempoolPolicyError, MempoolStoreError, MempoolStoreInvariantError},
-    pool::{entry::TxDependency, tx_pool::store::mem_usage::MemUsageTracker},
+    pool::{
+        dependency::{TxConsumedDependency, TxProvidedDependency, TxRequiredDependency},
+        tx_pool::store::mem_usage::MemUsageTracker,
+    },
 };
 
 pub use mem_usage::Tracked;
@@ -150,8 +153,11 @@ pub struct MempoolStore {
     txs_by_creation_time: TrackedTxIdMultiMap<Time>,
 
     // We keep the information of which inputs are spent by entries currently in the mempool.
-    // This allows us to recognize conflicts (double-spends) and handle them
-    spender_txs: Tracked<BTreeMap<TxDependency, Id<Transaction>>>,
+    // This allows us to recognize conflicts (double-spends) and handle them.
+    spender_txs: Tracked<BTreeMap<TxConsumedDependency, Id<Transaction>>>,
+
+    // Map from a provided dependency to the tx that provides it.
+    provider_txs: Tracked<BTreeMap<TxProvidedDependency, Id<Transaction>>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
     // which the transactions have been inserted into the mempool, so they can be re-inserted in
@@ -193,6 +199,7 @@ impl MempoolStore {
             txs_by_id: Tracked::default(),
             txs_by_creation_time: Tracked::default(),
             spender_txs: Tracked::default(),
+            provider_txs: Tracked::default(),
             txs_by_seq_no: Tracked::default(),
             seq_nos_by_tx: Tracked::default(),
             next_seq_no: 0,
@@ -295,6 +302,7 @@ impl MempoolStore {
             + self.txs_by_ancestor_score.indirect_memory_usage()
             + self.txs_by_creation_time.indirect_memory_usage()
             + self.spender_txs.indirect_memory_usage()
+            + self.provider_txs.indirect_memory_usage()
             + self.txs_by_seq_no.indirect_memory_usage()
             + self.seq_nos_by_tx.indirect_memory_usage();
         assert_eq!(
@@ -427,15 +435,23 @@ impl MempoolStore {
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
-            spender_txs.extend(entry.tx_entry().requires().map(|dep| (dep, *entry.tx_id())));
+            spender_txs.extend(
+                entry
+                    .tx_entry()
+                    .requires()
+                    .filter_map(TxRequiredDependency::into_consumed)
+                    .map(|dep| (dep, *entry.tx_id())),
+            );
         })
     }
 
     fn unspend_outpoints(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
             entry.tx_entry().requires().for_each(|dep| {
-                let removed = spender_txs.remove(&dep);
-                assert_eq!(removed, Some(*entry.tx_id()));
+                if let Some(dep) = dep.into_consumed() {
+                    let removed = spender_txs.remove(&dep);
+                    assert_eq!(removed, Some(*entry.tx_id()));
+                }
             });
         })
     }
@@ -453,6 +469,7 @@ impl MempoolStore {
         self.append_to_parents(entry);
         self.update_ancestor_state_for_add(&entry_with_ancestors)?;
         self.mark_outpoints_as_spent(entry);
+        self.add_to_provider_txs(entry);
 
         let tx_id = *entry.tx_id();
         let seq_no = self.next_seq_no;
@@ -578,8 +595,10 @@ impl MempoolStore {
             self.drop_tx(&entry);
             Some(*entry)
         } else {
+            //  FIXME: debug assert?
             assert!(!self.txs_by_descendant_score.iter().any(|(_, id)| id == tx_id));
             assert!(!self.spender_txs.iter().any(|(_, id)| *id == *tx_id));
+            assert!(!self.provider_txs.iter().any(|(_, id)| *id == *tx_id));
             None
         }
     }
@@ -595,6 +614,7 @@ impl MempoolStore {
         self.remove_from_ancestor_score_index(entry);
         self.remove_from_creation_time_index(entry);
         self.remove_from_seq_no_index(entry);
+        self.remove_from_provider_txs(entry);
         self.unspend_outpoints(entry);
     }
 
@@ -624,6 +644,21 @@ impl MempoolStore {
         assert_eq!(tx_id_seq, Some(*tx_id), "Inconsistent transaction seq nos");
     }
 
+    fn add_to_provider_txs(&mut self, entry: &TxMempoolEntry) {
+        self.mem_tracker.modify(&mut self.provider_txs, |provider_txs, _| {
+            provider_txs.extend(entry.tx_entry().provides().map(|dep| (dep, *entry.tx_id())));
+        })
+    }
+
+    fn remove_from_provider_txs(&mut self, entry: &TxMempoolEntry) {
+        self.mem_tracker.modify(&mut self.provider_txs, |provider_txs, _| {
+            entry.tx_entry().provides().for_each(|dep| {
+                let removed = provider_txs.remove(&dep);
+                assert_eq!(removed, Some(*entry.tx_id()));
+            });
+        })
+    }
+
     pub fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
             self.remove_tx(&conflict, MempoolRemovalReason::Replaced);
@@ -644,7 +679,7 @@ impl MempoolStore {
         to_remove.into_iter().filter_map(move |tx_id| self.remove_tx(&tx_id, reason))
     }
 
-    pub fn find_conflicting_tx(&self, dep: &TxDependency) -> Option<&Id<Transaction>> {
+    pub fn find_conflicting_tx(&self, dep: &TxConsumedDependency) -> Option<&Id<Transaction>> {
         self.spender_txs.get(dep)
     }
 
@@ -1034,7 +1069,7 @@ pub struct TxMempoolEntryWithAncestors {
 
 impl TxMempoolEntryWithAncestors {
     pub fn new(store: &MempoolStore, entry: TxEntryWithFee) -> Result<Self, MempoolPolicyError> {
-        let parents = collect_tx_parents(store, entry.transaction().transaction());
+        let parents = collect_tx_parents(store, entry.tx_entry());
 
         // Collect the cluster first, checking its size on each iteration.
         // After that, the ancestors may be collected without the tx count check.
@@ -1154,18 +1189,15 @@ where
     Ok(result)
 }
 
-fn collect_tx_parents(store: &MempoolStore, tx: &Transaction) -> StoreHashSet<Id<Transaction>> {
-    // Genesis transaction has no parent, hence the first filter_map
-    tx.inputs()
-        .iter()
-        .filter_map(|input| match input {
-            TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
-            TxInput::Account(..)
-            | TxInput::AccountCommand(..)
-            | TxInput::OrderAccountCommand(..) => None,
+fn collect_tx_parents(store: &MempoolStore, entry: &TxEntry) -> StoreHashSet<Id<Transaction>> {
+    entry
+        .requires()
+        .filter_map(|required_dep| {
+            let provided_dep = TxProvidedDependency::from_requirement(required_dep);
+            store.provider_txs.get(&provided_dep)
         })
-        .filter(|id| store.txs_by_id.contains_key(id))
-        .collect::<StoreHashSet<_>>()
+        .copied()
+        .collect()
 }
 
 fn ensure_cluster_tx_count_limit(

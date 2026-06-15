@@ -42,5 +42,8 @@ pos-accounting = { path = "../pos-accounting" }
 storage-inmemory = { path = "../storage/inmemory" }
 test-utils = { path = "../test-utils" }
 
+ctor.workspace = true
 rstest.workspace = true
+rstest_reuse.workspace = true
 static_assertions.workspace = true
+strum.workspace = true

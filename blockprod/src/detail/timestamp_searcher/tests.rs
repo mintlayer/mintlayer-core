@@ -17,7 +17,7 @@ use rstest::rstest;
 
 use test_utils::random::{Seed, make_seedable_rng};
 
-use logging::{init_logging, log};
+use logging::log;
 use randomness::{CryptoRng, RngExt as _};
 
 use crate::{TimestampSearchData, detail::timestamp_searcher::SearchDataForHeight};
@@ -55,8 +55,6 @@ mod collect_search_data {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test(#[case] seed: Seed) {
-        init_logging();
-
         let mut rng = make_seedable_rng(seed);
 
         let consensus_version = if rng.random_bool(0.5) {
@@ -516,8 +514,6 @@ mod search {
         use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 
         use crate::find_timestamps_for_staking;
-
-        init_logging();
 
         let mut rng = make_seedable_rng(seed);
 

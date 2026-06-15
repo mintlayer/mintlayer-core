@@ -26,7 +26,7 @@ use mempool_types::TransactionDuplicateStatus;
 use utils::{debug_panic_or_log, tap_log::TapLog};
 
 use crate::{
-    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
+    AncestorScore, FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
     config::MempoolConfig,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
@@ -211,6 +211,10 @@ impl MempoolInterface for Mempool {
         num_points: NonZeroUsize,
     ) -> Result<Vec<(usize, FeeRate)>, Error> {
         Ok(self.get_fee_rate_points(num_points)?)
+    }
+
+    fn get_tx_score(&self, tx_id: &Id<Transaction>) -> Result<Option<AncestorScore>, Error> {
+        Ok(self.get_tx_score(tx_id)?)
     }
 
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
