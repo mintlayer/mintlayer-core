@@ -22,11 +22,7 @@ use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time};
-use crate::{
-    config,
-    pool::dependency::{TxProvidedDependency, TxRequiredDependency},
-    tx_origin::RemoteTxOrigin,
-};
+use crate::{config, pool::dependency::TxRequiredDependency, tx_origin::RemoteTxOrigin};
 pub use detect::OrphanType;
 
 mod detect;
@@ -70,11 +66,8 @@ struct TxOrphanPoolMaps {
     /// Transactions indexed by the insertion time. Useful for removing stale transactions
     by_insertion_time: BTreeSet<(Time, InternalId)>,
 
-    /// Transactions indexed by what they require
-    by_required_deps: BTreeSet<(TxRequiredDependency, InternalId)>,
-
-    /// Transactions indexed by what they provide
-    by_provided_deps: BTreeSet<(TxProvidedDependency, InternalId)>,
+    /// Transactions indexed by their required dependencies
+    by_deps: BTreeSet<(TxRequiredDependency, InternalId)>,
 
     /// Transactions indexed by the origin
     by_origin: BTreeSet<(RemoteTxOrigin, InternalId)>,
@@ -85,8 +78,7 @@ impl TxOrphanPoolMaps {
         Self {
             by_tx_id: BTreeMap::new(),
             by_insertion_time: BTreeSet::new(),
-            by_required_deps: BTreeSet::new(),
-            by_provided_deps: BTreeSet::new(),
+            by_deps: BTreeSet::new(),
             by_origin: BTreeSet::new(),
         }
     }
@@ -101,8 +93,7 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_origin.insert((entry.origin(), iid));
         assert!(inserted, "Tx entry already in the origin map");
 
-        self.by_required_deps.extend(entry.requires().map(|dep| (dep, iid)));
-        self.by_provided_deps.extend(entry.provides().map(|dep| (dep, iid)));
+        self.by_deps.extend(entry.requires().map(|dep| (dep, iid)));
     }
 
     fn remove(&mut self, entry: &TxEntry) {
@@ -115,11 +106,7 @@ impl TxOrphanPoolMaps {
         assert!(removed, "Tx entry not present in the origin map");
 
         entry.requires().for_each(|dep| {
-            self.by_required_deps.remove(&(dep, iid));
-        });
-
-        entry.provides().for_each(|dep| {
-            self.by_provided_deps.remove(&(dep, iid));
+            self.by_deps.remove(&(dep, iid));
         });
     }
 }
@@ -173,7 +160,7 @@ impl TxOrphanPool {
         entry.provides().flat_map(move |provided_dep| {
             let required_dep = provided_dep.into_requirement();
             self.maps
-                .by_required_deps
+                .by_deps
                 .range((required_dep.clone(), InternalId::ZERO)..=(required_dep, InternalId::MAX))
                 .map(|(_, iid)| self.get_at(*iid))
         })
@@ -320,18 +307,23 @@ impl<'p> PoolEntry<'p> {
     /// as a candidate to move out.
     ///
     /// Note: this function is allowed to produce false positives - if true is returned but the tx
-    /// is still an orphan (e.g. because none of its orphan parents are in the orphan pool), the tx
-    /// will be returned to the orphan pool.
+    /// is still an orphan, the tx will be returned to the orphan pool.
     pub fn is_ready(&self) -> bool {
         let entry = self.get();
-        !entry.requires().any(|required_dep| {
-            let provided_dep = TxProvidedDependency::from_requirement(required_dep);
-            self.pool
-                .maps
-                .by_provided_deps
-                .range((provided_dep.clone(), InternalId::ZERO)..=(provided_dep, InternalId::MAX))
-                .next()
-                .is_some()
+        !entry.requires().any(|dep| match dep {
+            TxRequiredDependency::TxOutput(tx_id, _) => {
+                self.pool.maps.by_tx_id.contains_key(&tx_id)
+            }
+
+            // Always consider account deps.
+            // Note: simply checking whether any of the orphan txs' provided dependencies are
+            // required by this tx (like we do in the utxo case) won't work because there can be
+            // multiple potential parents for it in the orphan pool; if one of the parents becomes
+            // non-orphan and the other stays in the orphan pool, it will prevent the child from
+            // entering the normal mempool even though in reality it's no longer an orphan.
+            TxRequiredDependency::DelegationAccount(_, _)
+            | TxRequiredDependency::TokenAccount(_, _)
+            | TxRequiredDependency::TokenCreation(_) => false,
         })
     }
 
