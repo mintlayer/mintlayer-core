@@ -16,7 +16,7 @@
 use common::{
     chain::{
         Destination, Transaction, TxInput, TxOutput, output_value::OutputValue,
-        signature::inputsig::InputWitness, signed_transaction::SignedTransaction,
+        signature::inputsig::InputWitness, signed_transaction::SignedTransaction, tokens::TokenId,
     },
     primitives::Amount,
 };
@@ -69,6 +69,21 @@ impl TransactionBuilder {
 
     pub fn add_output(mut self, output: TxOutput) -> Self {
         self.outputs.push(output);
+        self
+    }
+
+    pub fn add_token_transfer_output_if_non_zero(
+        mut self,
+        token_id: TokenId,
+        amount: Amount,
+        destination: Destination,
+    ) -> Self {
+        if amount != Amount::ZERO {
+            self = self.add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount),
+                destination,
+            ));
+        }
         self
     }
 
