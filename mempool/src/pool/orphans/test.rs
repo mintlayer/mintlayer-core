@@ -50,7 +50,7 @@ fn check_integrity(orphans: &TxOrphanPool) {
         );
     });
     orphans.maps.by_deps.iter().for_each(|(dep, iid)| {
-        let tx_dep = orphans.get_at(*iid).requires().find(|r| r == dep);
+        let tx_dep = orphans.get_at(*iid).required_deps().find(|r| r == dep);
         assert!(tx_dep.is_some(), "Entry {iid:?} outpoint missing");
     });
 }
@@ -103,7 +103,7 @@ fn insert_and_delete(#[case] seed: Seed) {
 
     let entry = random_tx_entry(&mut rng);
     let tx_id = *entry.tx_id();
-    let n_deps = BTreeSet::from_iter(entry.requires()).len();
+    let n_deps = BTreeSet::from_iter(entry.required_deps()).len();
 
     assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
 

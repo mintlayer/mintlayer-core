@@ -198,22 +198,22 @@ pub fn collect_txs<M>(
             tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &unlock_timestamp);
 
         if let Err(err) = verification_result {
-            // TODO: this will fire because "parents" only reflect utxo-based relationships and not:
-            // 1) account-nonce-based ones - token commands and delegation withdrawals.
-            // 2) token creation vs token commands.
-            // 3) order creation vs order commands (though it's not a super useful scenario).
-            // 4) delegation id creation vs the delegation itself.
-            // 5) delegation id creation vs delegation withdrawal (not a super useful scenario).
-            // 6) pool creation vs delegation id creation.
-            // Need to update TxDependency to handle these relationships too and use TxDependency
-            // when determining "parents" for TxMempoolEntry.
-            // Also see https://github.com/mintlayer/mintlayer-core/issues/2065.
-            // The old TODO goes below.
-
-            // TODO Narrow down when the critical error is presented. Printing the error may be a
-            // false positive if the tip moves during the execution of this function.
-            log::error!(
-                "CRITICAL: Verifier and mempool do not agree on transaction deps for {}: {err}",
+            // Note: it's still possible to get here because:
+            // 1) Order V1 commands are not ordered with respect to each other, so it's possible
+            //    that e.g. a freeze will be selected before a fill, after which the fill will no
+            //    longer be valid.
+            // 2) Delegations are not ordered with respect to delegation withdrawals, so it's possible
+            //    that a withdrawal is selected first and fails because the delegation has insufficient
+            //    balance.
+            // TODO: the latter is a pathological case and probably isn't worth bothering about,
+            // but the former one should probably be fixed eventually, because otherwise blockprod
+            // may miss some lucrative transactions. One way to fix this is to introduce temporary
+            // pseudo-dependencies between transactions (e.g. where an order freeze depends on all its
+            // fills and a delegation withdrawal depends on all delegations); then, when a tx is selected
+            // but fails to be added to the tx verifier, this function may check if already selected txs
+            // have pseudo-dependencies on this tx and reorder the txs accordingly.
+            log::warn!(
+                "Verifier and mempool do not agree on transaction deps for {}: {err}",
                 next_tx.tx_id()
             );
             continue;

@@ -22,7 +22,7 @@ use common::{
 
 use super::{Fee, Time, TxOptions, TxOrigin};
 use crate::{
-    pool::dependency::{TxProvidedDependency, TxRequiredDependency},
+    pool::dependency::{TxProvidedNonUtxoDependency, TxRequiredDependency},
     tx_origin::IsOrigin,
 };
 
@@ -89,13 +89,13 @@ impl<O: IsOrigin> TxEntry<O> {
     }
 
     /// Dependency graph edges this entry requires
-    pub fn requires(&self) -> impl Iterator<Item = TxRequiredDependency> + '_ {
+    pub fn required_deps(&self) -> impl Iterator<Item = TxRequiredDependency> + '_ {
         TxRequiredDependency::from_tx(self)
     }
 
     /// Dependency graph edges this entry provides
-    pub fn provides(&self) -> impl Iterator<Item = TxProvidedDependency> + '_ {
-        TxProvidedDependency::from_tx(self)
+    pub fn provided_non_utxo_deps(&self) -> impl Iterator<Item = TxProvidedNonUtxoDependency> + '_ {
+        TxProvidedNonUtxoDependency::from_tx(self)
     }
 
     pub fn map_origin<R: IsOrigin>(self, func: impl FnOnce(O) -> R) -> TxEntry<R> {

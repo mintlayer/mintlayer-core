@@ -35,12 +35,20 @@ impl BasicTestTimeGetter {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
-        let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
+        Self::with_millis_since_epoch(current_time.as_millis() as u64)
+    }
+
+    pub fn with_millis_since_epoch(millis: u64) -> Self {
+        let current_time_millis = Arc::new(SeqCstAtomicU64::new(millis as u64));
         let initial_instant_for_monotonic_time_getter = std::time::Instant::now();
         Self {
             current_time_millis,
             initial_instant_for_monotonic_time_getter,
         }
+    }
+
+    pub fn with_secs_since_epoch(secs: u64) -> Self {
+        Self::with_millis_since_epoch(secs * 1000)
     }
 
     pub fn get_time_getter(&self) -> TimeGetter {

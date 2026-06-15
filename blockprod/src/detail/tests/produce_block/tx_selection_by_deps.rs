@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use itertools::Itertools as _;
 use randomness::CryptoRng;
@@ -26,8 +26,9 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         AccountCommand, AccountCommandTag, AccountNonce, AccountOutPoint, AccountSpending,
-        ChainConfig, CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint, make_delegation_id, make_token_id,
+        ChainConfig, CoinUnit, Destination, GenBlock, OrderAccountCommand, OrderAccountCommandTag,
+        OrderData, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint, make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
@@ -45,6 +46,7 @@ use test_utils::{
     BasicTestTimeGetter,
     random::{RngExt as _, Seed, make_seedable_rng},
     random_ascii_alphanumeric_string,
+    token_utils::random_token_issuance_v1_with_min_supply,
 };
 use utils::{once_destructor::OnceDestructor, shuffled::Shuffled as _, sorted::Sorted as _};
 
@@ -80,7 +82,9 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
     use token_account_deps_test_details::*;
 
     let mut rng = make_seedable_rng(seed);
-    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+    let time_getter =
+        BasicTestTimeGetter::with_secs_since_epoch(rng.random_range(1_000_000..1_000_000_000))
+            .get_time_getter();
 
     let tx_count = rng.random_range(10..=15);
     log::debug!("tx_count = {tx_count}");
@@ -544,7 +548,9 @@ mod token_account_deps_test_details {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+    let time_getter =
+        BasicTestTimeGetter::with_secs_since_epoch(rng.random_range(1_000_000..1_000_000_000))
+            .get_time_getter();
 
     let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
     let extra_genesis_txo = TxOutput::Transfer(
@@ -552,7 +558,7 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
         Destination::AnyoneCanSpend,
     );
     let pos_setup = PoSTestSetupBuilder::new()
-        .with_extra_genesis_txos(vec![extra_genesis_txo.clone(), extra_genesis_txo])
+        .with_extra_genesis_txos(vec![extra_genesis_txo])
         .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let chain_config = Arc::clone(&pos_setup.chain_config);
@@ -578,7 +584,6 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, pool_size, vrf_pk);
 
     let genesis_outpoint1 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
-    let genesis_outpoint2 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 2);
     let pool_id = PoolId::from_utxo(&genesis_outpoint1);
     let create_pool_tx = TransactionBuilder::new()
         .add_input(genesis_outpoint1.into(), InputWitness::NoSignature(None))
@@ -594,19 +599,14 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
     let create_pool_tx_id = create_pool_tx.transaction().get_id();
     let create_pool_outpoint = UtxoOutPoint::new(create_pool_tx_id.into(), 0);
 
-    let pool_maturity_block_count =
+    let maturity_block_count =
         chain_config.staking_pool_spend_maturity_block_count(BlockHeight::one());
     let decommission_pool_tx = TransactionBuilder::new()
-        .add_input(genesis_outpoint2.into(), InputWitness::NoSignature(None))
         .add_input(create_pool_outpoint.into(), InputWitness::NoSignature(None))
         .add_output(TxOutput::LockThenTransfer(
-            OutputValue::Coin(pool_size),
+            OutputValue::Coin((pool_size - fees[1]).unwrap()),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(pool_maturity_block_count.to_int()),
-        ))
-        .add_output(TxOutput::Transfer(
-            OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
-            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(maturity_block_count.to_int()),
         ))
         .build();
 
@@ -662,6 +662,11 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
     join_handle.await.unwrap();
 }
 
+// This test checks 2 separate things in 2 different blocks:
+// 1) pool creation, delegation creation and the actual delegation form a dependency chain.
+// 2) delegation withdrawals form a dependency chain (based on their nonce).
+// Note: we can't put everything into one block here, because there is no dependency between
+// actual delegations and delegation withdrawals.
 #[rstest_reuse::apply(fees_selection_param)]
 #[rstest]
 #[case(Seed::from_entropy())]
@@ -669,19 +674,22 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSelection) {
     let mut rng = make_seedable_rng(seed);
-    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+    let time_getter =
+        BasicTestTimeGetter::with_secs_since_epoch(rng.random_range(1_000_000..1_000_000_000))
+            .get_time_getter();
 
+    let withdrawal_tx_count = rng.random_range(2..=5);
     let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
-    let extra_genesis_txo = TxOutput::Transfer(
-        OutputValue::Coin(genesis_extra_txo_amount),
-        Destination::AnyoneCanSpend,
-    );
+    let extra_genesis_txos = (0..2 + withdrawal_tx_count)
+        .map(|_| {
+            TxOutput::Transfer(
+                OutputValue::Coin(genesis_extra_txo_amount),
+                Destination::AnyoneCanSpend,
+            )
+        })
+        .collect();
     let pos_setup = PoSTestSetupBuilder::new()
-        .with_extra_genesis_txos(vec![
-            extra_genesis_txo.clone(),
-            extra_genesis_txo.clone(),
-            extra_genesis_txo,
-        ])
+        .with_extra_genesis_txos(extra_genesis_txos)
         .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
 
     let chain_config = Arc::clone(&pos_setup.chain_config);
@@ -696,13 +704,12 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
         .build();
 
     let base_fee = rng.random_range(10..20);
-    // The fees are progressively increasing, making the dependent txs more lucrative.
-    let fees = vec![
-        Amount::from_atoms(base_fee),
-        Amount::from_atoms(base_fee * 10),
-        Amount::from_atoms(base_fee * 100),
-    ];
-    let fees = reorder_fees(fees, fees_selection, &mut rng);
+    let creation_fees = (0..3).map(|i| Amount::from_atoms(base_fee * 10u128.pow(i))).collect_vec();
+    let creation_fees = reorder_fees(creation_fees, fees_selection, &mut rng);
+    let withdrawal_fees = (0..withdrawal_tx_count)
+        .map(|i| Amount::from_atoms(base_fee * 10u128.pow(i)))
+        .collect_vec();
+    let withdrawal_fees = reorder_fees(withdrawal_fees, fees_selection, &mut rng);
 
     let min_pledge = chain_config.min_stake_pool_pledge().into_atoms();
     let pool_size = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
@@ -723,7 +730,9 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
             Box::new(stake_pool_data),
         ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin(((genesis_extra_txo_amount - pool_size).unwrap() - fees[0]).unwrap()),
+            OutputValue::Coin(
+                ((genesis_extra_txo_amount - pool_size).unwrap() - creation_fees[0]).unwrap(),
+            ),
             Destination::AnyoneCanSpend,
         ))
         .build();
@@ -735,7 +744,7 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
             pool_id,
         ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
+            OutputValue::Coin((genesis_extra_txo_amount - creation_fees[1]).unwrap()),
             Destination::AnyoneCanSpend,
         ))
         .build();
@@ -747,17 +756,56 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
         .add_output(TxOutput::DelegateStaking(delegation_amount, delegation_id))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(
-                ((genesis_extra_txo_amount - delegation_amount).unwrap() - fees[2]).unwrap(),
+                ((genesis_extra_txo_amount - delegation_amount).unwrap() - creation_fees[2])
+                    .unwrap(),
             ),
             Destination::AnyoneCanSpend,
         ))
         .build();
+    let creation_txs = vec![create_pool_tx, create_delegation_tx, delegate_tx];
 
-    let txs = vec![create_pool_tx, create_delegation_tx, delegate_tx];
-    let expected_tx_ids = txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+    log::debug!("delegation_amount = {delegation_amount:?}");
 
-    log::debug!("fees = {fees:?}");
-    log::debug!("expected_tx_ids = {expected_tx_ids:?}");
+    let maturity_block_count =
+        chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(2));
+
+    let withdrawal_txs = (0..withdrawal_tx_count)
+        .map(|i| {
+            let fee = withdrawal_fees[i as usize];
+            let withdrawal_amount_with_fee = Amount::from_atoms(rng.random_range(
+                fee.into_atoms() + 1..delegation_amount.into_atoms() / withdrawal_tx_count as u128,
+            ));
+
+            log::debug!("withdrawal_amount_with_fee = {withdrawal_amount_with_fee:?}");
+
+            TransactionBuilder::new()
+                .add_input(
+                    TxInput::Account(AccountOutPoint::new(
+                        AccountNonce::new(i as u64),
+                        AccountSpending::DelegationBalance(
+                            delegation_id,
+                            withdrawal_amount_with_fee,
+                        ),
+                    )),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::LockThenTransfer(
+                    OutputValue::Coin((withdrawal_amount_with_fee - fee).unwrap()),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(maturity_block_count.to_int()),
+                ))
+                .build()
+        })
+        .collect_vec();
+
+    let expected_creation_tx_ids =
+        creation_txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+    let expected_withdrawal_tx_ids =
+        withdrawal_txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    log::debug!("fees = {creation_fees:?}");
+    log::debug!("expected_creation_tx_ids = {expected_creation_tx_ids:?}");
+    log::debug!("expected_withdrawal_tx_ids = {expected_withdrawal_tx_ids:?}");
 
     let join_handle = tokio::spawn({
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -767,43 +815,66 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
                 shutdown_trigger.initiate();
             });
 
-            assert_fees(&blockprod_setup, &time_getter, &txs, &fees).await;
-
             let block_production = blockprod_setup.make_blockprod_builder().build();
 
-            add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
+            let mut expected_best_block_id = chain_config.genesis_block_id();
+            for (txs, fees, expected_tx_ids, description) in [
+                (
+                    creation_txs,
+                    creation_fees,
+                    expected_creation_tx_ids,
+                    "creation",
+                ),
+                (
+                    withdrawal_txs,
+                    withdrawal_fees,
+                    expected_withdrawal_tx_ids,
+                    "withdrawal",
+                ),
+            ] {
+                log::debug!("Adding block with {description} txs");
 
-            match fees_selection {
-                FeesSelection::Increasing => {
-                    // Sanity check: ancestor scores are ordered the same way as fees.
-                    assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+                mempool_wait_for_best_block(&blockprod_setup, expected_best_block_id).await;
+
+                assert_fees(&blockprod_setup, &time_getter, &txs, &fees).await;
+
+                add_local_txs_to_mempool(&blockprod_setup.mempool, txs).await;
+
+                match fees_selection {
+                    FeesSelection::Increasing => {
+                        // Sanity check: ancestor scores are ordered the same way as fees.
+                        assert_ancestor_scores(&blockprod_setup, &expected_tx_ids, &fees).await;
+                    }
+                    FeesSelection::Random => {}
                 }
-                FeesSelection::Random => {}
+
+                let input_data = pos_setup.make_block_input_data(expected_best_block_id);
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        input_data,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await
+                    .unwrap();
+                let new_block_id = new_block.get_id();
+
+                let block_tx_ids = new_block
+                    .transactions()
+                    .iter()
+                    .map(|tx| tx.transaction().get_id())
+                    .collect::<Vec<_>>();
+
+                job_finished_receiver.await.unwrap();
+
+                assert_job_count(&block_production, 0).await;
+                blockprod_setup.assert_process_block(new_block).await;
+                assert_eq!(block_tx_ids, expected_tx_ids);
+
+                expected_best_block_id = new_block_id.into();
             }
-
-            let input_data = pos_setup.make_first_pos_block_input_data();
-
-            let (new_block, job_finished_receiver) = block_production
-                .produce_block(
-                    input_data,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
-                .await
-                .unwrap();
-
-            let block_tx_ids = new_block
-                .transactions()
-                .iter()
-                .map(|tx| tx.transaction().get_id())
-                .collect::<Vec<_>>();
-
-            job_finished_receiver.await.unwrap();
-
-            assert_job_count(&block_production, 0).await;
-            blockprod_setup.assert_process_block(new_block).await;
-            assert_eq!(block_tx_ids, expected_tx_ids);
         }
     });
 
@@ -811,8 +882,12 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
     join_handle.await.unwrap();
 }
 
-// Node: delegations and delegation withdrawals are not ordered with respect to each other,
-// this is why we only test zero withdrawals here.
+// This test checks that pool creation, delegation creation and delegation withdrawal
+// form a dependency chain.
+// Note that this is not a super useful scenario, we mostly check it just because it's implemented
+// in the mempool.
+// Also node: since delegations and delegation withdrawals are not ordered with respect to each
+// other, we don't delegate and, instead, always withdraw zero amounts.
 #[rstest_reuse::apply(fees_selection_param)]
 #[rstest]
 #[case(Seed::from_entropy())]
@@ -823,7 +898,9 @@ async fn pool_creation_and_delegation_withdrawals(
     fees_selection: FeesSelection,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+    let time_getter =
+        BasicTestTimeGetter::with_secs_since_epoch(rng.random_range(1_000_000..1_000_000_000))
+            .get_time_getter();
 
     let withdrawal_tx_count = rng.random_range(2..=5);
     let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
@@ -972,6 +1049,257 @@ async fn pool_creation_and_delegation_withdrawals(
     join_handle.await.unwrap();
 }
 
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn order_creation_and_usage(
+    #[case] seed: Seed,
+    #[values(
+        OrderAccountCommandTag::FillOrder,
+        OrderAccountCommandTag::FreezeOrder,
+        OrderAccountCommandTag::ConcludeOrder
+    )]
+    command_tag: OrderAccountCommandTag,
+) {
+    let mut rng = make_seedable_rng(seed);
+    let time_getter = BasicTestTimeGetter::new().get_time_getter();
+
+    let genesis_extra_txo_amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
+    let extra_genesis_txo = TxOutput::Transfer(
+        OutputValue::Coin(genesis_extra_txo_amount),
+        Destination::AnyoneCanSpend,
+    );
+    let pos_setup = PoSTestSetupBuilder::new()
+        .with_extra_genesis_txos(vec![
+            extra_genesis_txo.clone(),
+            extra_genesis_txo.clone(),
+            extra_genesis_txo,
+        ])
+        .build(make_genesis_timestamp(&time_getter, &mut rng), &mut rng);
+
+    let chain_config = Arc::clone(&pos_setup.chain_config);
+    let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_mempool_config(MempoolConfig {
+            min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+            max_cluster_tx_count: Default::default(),
+            max_cluster_size_bytes: Default::default(),
+        })
+        .with_time_getter(time_getter.clone())
+        .build();
+
+    let token_mint_amount = Amount::from_atoms(rng.random_range(100..=1000));
+    let token_issuance = random_token_issuance_v1_with_min_supply(
+        &chain_config,
+        Destination::AnyoneCanSpend,
+        token_mint_amount.into_atoms(),
+        &mut rng,
+    );
+
+    let genesis_outpoint1 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
+    let genesis_outpoint2 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 2);
+    let genesis_outpoint3 = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 3);
+
+    let token_issuance_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint1.into(), InputWitness::NoSignature(None))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(
+                (genesis_extra_txo_amount - chain_config.fungible_token_issuance_fee()).unwrap(),
+            ),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+            token_issuance,
+        ))))
+        .build();
+    let token_issuance_tx_id = token_issuance_tx.transaction().get_id();
+    // Note: the height in make_token_id doesn't matter because the issuance tx's first input is a utxo.
+    let token_id = make_token_id(
+        chain_config.as_ref(),
+        BlockHeight::new(1),
+        token_issuance_tx.transaction().inputs(),
+    )
+    .unwrap();
+
+    let token_mint_tx = TransactionBuilder::new()
+        // Use a utxo dep between token creation and token minting, because the purpose of this
+        // test is not to check token tx deps.
+        .add_input(
+            UtxoOutPoint::new(token_issuance_tx_id.into(), 0).into(),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::MintTokens(token_id, token_mint_amount),
+            ),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, token_mint_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let token_mint_tx_id = token_mint_tx.transaction().get_id();
+
+    let base_fee = rng.random_range(10..20);
+    // The fees are progressively increasing, making the second (decommissioning) tx more lucrative.
+    let fees = vec![Amount::from_atoms(base_fee), Amount::from_atoms(base_fee * 10)];
+
+    // The order gives tokens for the same amount of coins.
+    let order_creation_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint2.into(), InputWitness::NoSignature(None))
+        .add_input(
+            UtxoOutPoint::new(token_mint_tx_id.into(), 0).into(),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(token_mint_amount),
+            OutputValue::TokenV1(token_id, token_mint_amount),
+        ))))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((genesis_extra_txo_amount - fees[0]).unwrap()),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let order_id = make_order_id(order_creation_tx.inputs()).unwrap();
+
+    let order_command_tx = match command_tag {
+        OrderAccountCommandTag::FillOrder => TransactionBuilder::new()
+            .add_input(genesis_outpoint3.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(
+                    order_id,
+                    token_mint_amount,
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(
+                    ((genesis_extra_txo_amount - token_mint_amount).unwrap() - fees[1]).unwrap(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, token_mint_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build(),
+        OrderAccountCommandTag::FreezeOrder => TransactionBuilder::new()
+            .add_input(genesis_outpoint3.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build(),
+        OrderAccountCommandTag::ConcludeOrder => TransactionBuilder::new()
+            .add_input(genesis_outpoint3.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((genesis_extra_txo_amount - fees[1]).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build(),
+    };
+
+    let preparation_txs = vec![token_issuance_tx, token_mint_tx];
+    let expected_preparation_tx_ids =
+        preparation_txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    let test_txs = vec![order_creation_tx, order_command_tx];
+    let expected_test_tx_ids = test_txs.iter().map(|tx| tx.transaction().get_id()).collect_vec();
+
+    log::debug!("fees = {fees:?}");
+    log::debug!("expected_preparation_tx_ids = {expected_preparation_tx_ids:?}");
+    log::debug!("expected_test_tx_ids = {expected_test_tx_ids:?}");
+
+    let join_handle = tokio::spawn({
+        let shutdown_trigger = manager.make_shutdown_trigger();
+        async move {
+            // Ensure a shutdown signal will be sent by the end of the scope
+            let _shutdown_signal = OnceDestructor::new(move || {
+                shutdown_trigger.initiate();
+            });
+
+            let block_production = blockprod_setup.make_blockprod_builder().build();
+
+            let preparation_block_id = {
+                add_local_txs_to_mempool(&blockprod_setup.mempool, preparation_txs).await;
+                let input_data = pos_setup.make_first_pos_block_input_data();
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        input_data,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await
+                    .unwrap();
+                let new_block_id = new_block.get_id();
+
+                let block_tx_ids = new_block
+                    .transactions()
+                    .iter()
+                    .map(|tx| tx.transaction().get_id())
+                    .collect::<Vec<_>>();
+
+                job_finished_receiver.await.unwrap();
+
+                assert_job_count(&block_production, 0).await;
+                blockprod_setup.assert_process_block(new_block).await;
+                assert_eq!(block_tx_ids, expected_preparation_tx_ids);
+
+                new_block_id
+            };
+
+            mempool_wait_for_best_block(&blockprod_setup, preparation_block_id.into()).await;
+
+            assert_fees(&blockprod_setup, &time_getter, &test_txs, &fees).await;
+
+            add_local_txs_to_mempool(&blockprod_setup.mempool, test_txs).await;
+
+            assert_ancestor_scores(&blockprod_setup, &expected_test_tx_ids, &fees).await;
+
+            let input_data = pos_setup.make_next_block_input_data(preparation_block_id.into());
+
+            let (new_block, job_finished_receiver) = block_production
+                .produce_block(
+                    input_data,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await
+                .unwrap();
+
+            let block_tx_ids = new_block
+                .transactions()
+                .iter()
+                .map(|tx| tx.transaction().get_id())
+                .collect::<Vec<_>>();
+
+            job_finished_receiver.await.unwrap();
+
+            assert_job_count(&block_production, 0).await;
+            blockprod_setup.assert_process_block(new_block).await;
+            assert_eq!(block_tx_ids, expected_test_tx_ids);
+        }
+    });
+
+    manager.main().await;
+    join_handle.await.unwrap();
+}
+
 fn reorder_fees(
     fees: Vec<Amount>,
     fees_selection: FeesSelection,
@@ -1007,21 +1335,19 @@ async fn assert_fees(
         .await
         .unwrap();
 
+    let height = best_block_index.block_height().next_height();
     for (tx, fee) in txs.iter().zip_eq(fees.iter()) {
         use chainstate::tx_verifier::transaction_verifier::TransactionSourceForConnect;
         use common::chain::block::timestamp::BlockTimestamp;
 
         let actual_fee = tx_verifier
             .connect_transaction(
-                &TransactionSourceForConnect::for_mempool_with_height(
-                    &best_block_index,
-                    BlockHeight::new(1),
-                ),
+                &TransactionSourceForConnect::for_mempool_with_height(&best_block_index, height),
                 &tx,
                 &BlockTimestamp::from_time(time_getter.get_time()),
             )
             .unwrap()
-            .map_into_block_fees(&blockprod_setup.chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&blockprod_setup.chain_config, height)
             .unwrap();
         assert_eq!(actual_fee.0, *fee);
     }
@@ -1059,4 +1385,51 @@ async fn assert_ancestor_scores(
     let score_sort_indices = sorted_scores.iter().map(|(idx, _)| idx).collect_vec();
 
     assert_eq!(fees_sort_indices, score_sort_indices);
+}
+
+async fn mempool_wait_for_best_block(
+    blockprod_setup: &BlockprodTestSetup,
+    expected_best_block_id: Id<GenBlock>,
+) {
+    let wait_loop = async {
+        loop {
+            let best_block_id =
+                blockprod_setup.mempool.call(move |mp| mp.best_block_id()).await.unwrap();
+
+            if best_block_id == expected_best_block_id {
+                break;
+            }
+        }
+    };
+
+    tokio::time::timeout(Duration::from_secs(10), wait_loop).await.unwrap();
+}
+
+fn make_token_issuance_tx_from_genesis(
+    issuance: TokenIssuanceV1,
+    chain_config: &ChainConfig,
+    fee: Amount,
+    genesis_txo_idx: u32,
+    genesis_txo_amount: Amount,
+) -> SignedTransaction {
+    let total_fee = (chain_config.fungible_token_issuance_fee() + fee).unwrap();
+    let change = (genesis_txo_amount - total_fee).unwrap();
+    assert!(change > Amount::ZERO);
+
+    TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                genesis_txo_idx,
+            ),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(change),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+            issuance,
+        ))))
+        .build()
 }

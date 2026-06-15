@@ -24,7 +24,7 @@ use std::{
 };
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{SignedTransaction, Transaction, TxInput},
     primitives::Id,
 };
 use logging::log;
@@ -36,7 +36,7 @@ use crate::{
     FeeRate, MempoolConfig,
     error::{MempoolPolicyError, MempoolStoreError, MempoolStoreInvariantError},
     pool::{
-        dependency::{TxConsumedDependency, TxProvidedDependency, TxRequiredDependency},
+        dependency::{TxConsumedDependency, TxProvidedNonUtxoDependency, TxRequiredDependency},
         tx_pool::store::mem_usage::MemUsageTracker,
     },
 };
@@ -157,7 +157,7 @@ pub struct MempoolStore {
     spender_txs: Tracked<BTreeMap<TxConsumedDependency, Id<Transaction>>>,
 
     // Map from a provided dependency to the tx that provides it.
-    provider_txs: Tracked<BTreeMap<TxProvidedDependency, Id<Transaction>>>,
+    non_utxo_dep_provider_txs: Tracked<BTreeMap<TxProvidedNonUtxoDependency, Id<Transaction>>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
     // which the transactions have been inserted into the mempool, so they can be re-inserted in
@@ -199,7 +199,7 @@ impl MempoolStore {
             txs_by_id: Tracked::default(),
             txs_by_creation_time: Tracked::default(),
             spender_txs: Tracked::default(),
-            provider_txs: Tracked::default(),
+            non_utxo_dep_provider_txs: Tracked::default(),
             txs_by_seq_no: Tracked::default(),
             seq_nos_by_tx: Tracked::default(),
             next_seq_no: 0,
@@ -302,7 +302,7 @@ impl MempoolStore {
             + self.txs_by_ancestor_score.indirect_memory_usage()
             + self.txs_by_creation_time.indirect_memory_usage()
             + self.spender_txs.indirect_memory_usage()
-            + self.provider_txs.indirect_memory_usage()
+            + self.non_utxo_dep_provider_txs.indirect_memory_usage()
             + self.txs_by_seq_no.indirect_memory_usage()
             + self.seq_nos_by_tx.indirect_memory_usage();
         assert_eq!(
@@ -438,7 +438,7 @@ impl MempoolStore {
             spender_txs.extend(
                 entry
                     .tx_entry()
-                    .requires()
+                    .required_deps()
                     .filter_map(TxRequiredDependency::into_consumed)
                     .map(|dep| (dep, *entry.tx_id())),
             );
@@ -447,7 +447,7 @@ impl MempoolStore {
 
     fn unspend_outpoints(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
-            entry.tx_entry().requires().for_each(|dep| {
+            entry.tx_entry().required_deps().for_each(|dep| {
                 if let Some(dep) = dep.into_consumed() {
                     let removed = spender_txs.remove(&dep);
                     assert_eq!(removed, Some(*entry.tx_id()));
@@ -595,10 +595,9 @@ impl MempoolStore {
             self.drop_tx(&entry);
             Some(*entry)
         } else {
-            //  FIXME: debug assert?
-            assert!(!self.txs_by_descendant_score.iter().any(|(_, id)| id == tx_id));
-            assert!(!self.spender_txs.iter().any(|(_, id)| *id == *tx_id));
-            assert!(!self.provider_txs.iter().any(|(_, id)| *id == *tx_id));
+            debug_assert!(!self.txs_by_descendant_score.iter().any(|(_, id)| id == tx_id));
+            debug_assert!(!self.spender_txs.iter().any(|(_, id)| *id == *tx_id));
+            debug_assert!(!self.non_utxo_dep_provider_txs.iter().any(|(_, id)| *id == *tx_id));
             None
         }
     }
@@ -645,14 +644,15 @@ impl MempoolStore {
     }
 
     fn add_to_provider_txs(&mut self, entry: &TxMempoolEntry) {
-        self.mem_tracker.modify(&mut self.provider_txs, |provider_txs, _| {
-            provider_txs.extend(entry.tx_entry().provides().map(|dep| (dep, *entry.tx_id())));
+        self.mem_tracker.modify(&mut self.non_utxo_dep_provider_txs, |provider_txs, _| {
+            provider_txs
+                .extend(entry.tx_entry().provided_non_utxo_deps().map(|dep| (dep, *entry.tx_id())));
         })
     }
 
     fn remove_from_provider_txs(&mut self, entry: &TxMempoolEntry) {
-        self.mem_tracker.modify(&mut self.provider_txs, |provider_txs, _| {
-            entry.tx_entry().provides().for_each(|dep| {
+        self.mem_tracker.modify(&mut self.non_utxo_dep_provider_txs, |provider_txs, _| {
+            entry.tx_entry().provided_non_utxo_deps().for_each(|dep| {
                 let removed = provider_txs.remove(&dep);
                 assert_eq!(removed, Some(*entry.tx_id()));
             });
@@ -1192,14 +1192,27 @@ where
 }
 
 fn collect_tx_parents(store: &MempoolStore, entry: &TxEntry) -> StoreHashSet<Id<Transaction>> {
-    entry
-        .requires()
-        .filter_map(|required_dep| {
-            let provided_dep = TxProvidedDependency::from_requirement(required_dep);
-            store.provider_txs.get(&provided_dep)
+    let utxo_parents_iter = entry
+        .transaction()
+        .inputs()
+        .iter()
+        .filter_map(|input| match input {
+            TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
+            TxInput::Account(..)
+            | TxInput::AccountCommand(..)
+            | TxInput::OrderAccountCommand(..) => None,
         })
-        .copied()
-        .collect()
+        .filter(|id| store.txs_by_id.contains_key(id));
+
+    let non_utxo_parents_iter = entry
+        .required_deps()
+        .filter_map(|required_dep| {
+            TxProvidedNonUtxoDependency::from_requirement(required_dep)
+                .and_then(|provided_dep| store.non_utxo_dep_provider_txs.get(&provided_dep))
+        })
+        .copied();
+
+    utxo_parents_iter.chain(non_utxo_parents_iter).collect()
 }
 
 fn ensure_cluster_tx_count_limit(

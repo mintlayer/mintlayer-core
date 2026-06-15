@@ -370,7 +370,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         entry: &'a TxEntry<O>,
     ) -> impl Iterator<Item = &'a Id<Transaction>> + 'a {
         entry
-            .requires()
+            .required_deps()
             .filter_map(TxRequiredDependency::into_consumed)
             .filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
@@ -914,7 +914,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         let result = connect_result
             .and_then(|fee| {
                 let fee = fee
-                    .map_into_block_fees(self.chain_config.as_ref(), current_best.block_height())
+                    .map_into_block_fees(self.chain_config.as_ref(), effective_height)
                     .map_err(|e| {
                         let outpt = tx_id.into();
                         ConnectTransactionError::ConstrainedValueAccumulatorError(e, outpt)

@@ -93,7 +93,7 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_origin.insert((entry.origin(), iid));
         assert!(inserted, "Tx entry already in the origin map");
 
-        self.by_deps.extend(entry.requires().map(|dep| (dep, iid)));
+        self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
 
     fn remove(&mut self, entry: &TxEntry) {
@@ -105,7 +105,7 @@ impl TxOrphanPoolMaps {
         let removed = self.by_origin.remove(&(entry.origin(), iid));
         assert!(removed, "Tx entry not present in the origin map");
 
-        entry.requires().for_each(|dep| {
+        entry.required_deps().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
         });
     }
@@ -157,13 +157,29 @@ impl TxOrphanPool {
         &'a self,
         entry: &'a super::TxEntry<R>,
     ) -> impl Iterator<Item = &'a TxEntry> + 'a {
-        entry.provides().flat_map(move |provided_dep| {
+        let utxo_deps = self
+            .maps
+            .by_deps
+            .range(
+                (
+                    TxRequiredDependency::TxOutput(*entry.tx_id(), 0),
+                    InternalId::ZERO,
+                )
+                    ..=(
+                        TxRequiredDependency::TxOutput(*entry.tx_id(), u32::MAX),
+                        InternalId::MAX,
+                    ),
+            )
+            .map(|(_, iid)| self.get_at(*iid));
+        let non_utxo_deps = entry.provided_non_utxo_deps().flat_map(move |provided_dep| {
             let required_dep = provided_dep.into_requirement();
             self.maps
                 .by_deps
                 .range((required_dep.clone(), InternalId::ZERO)..=(required_dep, InternalId::MAX))
                 .map(|(_, iid)| self.get_at(*iid))
-        })
+        });
+
+        utxo_deps.chain(non_utxo_deps)
     }
 
     /// Number of transactions in the orphan pool
@@ -310,7 +326,7 @@ impl<'p> PoolEntry<'p> {
     /// is still an orphan, the tx will be returned to the orphan pool.
     pub fn is_ready(&self) -> bool {
         let entry = self.get();
-        !entry.requires().any(|dep| match dep {
+        !entry.required_deps().any(|dep| match dep {
             TxRequiredDependency::TxOutput(tx_id, _) => {
                 self.pool.maps.by_tx_id.contains_key(&tx_id)
             }
@@ -325,7 +341,8 @@ impl<'p> PoolEntry<'p> {
             | TxRequiredDependency::TokenAccountManagement(_, _)
             | TxRequiredDependency::PoolCreation(_)
             | TxRequiredDependency::DelegationCreation(_)
-            | TxRequiredDependency::TokenCreation(_) => false,
+            | TxRequiredDependency::TokenCreation(_)
+            | TxRequiredDependency::OrderCreation(_) => false,
         })
     }
 
