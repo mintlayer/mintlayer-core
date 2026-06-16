@@ -212,10 +212,7 @@ pub fn collect_txs<M>(
             // fills and a delegation withdrawal depends on all delegations); then, when a tx is selected
             // but fails to be added to the tx verifier, this function may check if already selected txs
             // have pseudo-dependencies on this tx and reorder the txs accordingly.
-            log::warn!(
-                "Verifier and mempool do not agree on transaction deps for {}: {err}",
-                next_tx.tx_id()
-            );
+            log::debug!("Selected tx {:x} failed validation: {err}", next_tx.tx_id());
             continue;
         }
 

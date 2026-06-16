@@ -214,7 +214,7 @@ impl MempoolInterface for Mempool {
     }
 
     fn get_tx_score(&self, tx_id: &Id<Transaction>) -> Result<Option<AncestorScore>, Error> {
-        Ok(self.get_tx_score(tx_id)?)
+        self.get_tx_score(tx_id)
     }
 
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {

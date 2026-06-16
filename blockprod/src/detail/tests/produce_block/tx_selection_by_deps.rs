@@ -1,5 +1,5 @@
-// opensource@mintlayer.org
 // Copyright (c) 2026 RBB S.r.l
+// opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
 // you may not use this file except in compliance with the License.
@@ -58,9 +58,19 @@ use crate::{
     },
 };
 
+// In the tests below we'll be creating chains of txs where each following tx depends on the previous
+// one, adding those txs to the mempool, asking blockprod to create a block, and expecting that all
+// of the txs have been included in the block.
+// This enum defines how the tx fees will be selected.
 #[derive(Debug, Copy, Clone)]
 enum FeesSelection {
+    // The main case - the fees are progressively increasing, so that a dependent tx on its own would
+    // look more lucrative than the dependency. I.e. if the mempool doesn't honor the dependency,
+    // then during block creation the dependent txs will be selected first, fail the validation due
+    // to missing dependency and be omitted from the block, which will cause the test to fail.
     Increasing,
+    // Supplementary case - the fees are first created as in the Increases case, but then are
+    // shuffled.
     Random,
 }
 
@@ -70,9 +80,11 @@ pub fn fees_selection_param(
 ) {
 }
 
+// Check that token creation and token management commands form a dependency chain.
 #[rstest_reuse::apply(fees_selection_param)]
 #[rstest]
-// The test is heavily randomized, so we run it a few times to increase the likelihood of catching a problem.
+// Note: this test is heavily randomized, so we run it a few times to increase the likelihood of
+// catching a problem.
 #[case(Seed::from_entropy())]
 #[case(Seed::from_entropy())]
 #[case(Seed::from_entropy())]
@@ -114,8 +126,6 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
         .build();
 
     let base_fee = rng.random_range(10..20);
-    // Every next fee is much larger than the previous, to ensure that in the Increasing case
-    // each tx's ancestor score is determined by its own fee and not by fees of its ancestors.
     let fees = (0..tx_count)
         .map(|i| Amount::from_atoms(base_fee * 10u128.pow(i)))
         .collect_vec();
@@ -540,6 +550,7 @@ mod token_account_deps_test_details {
     }
 }
 
+// Check that pool creation and decommissioning form a dependency chain.
 // Note: this test creates only 2 txs, so Random case doesn't make much sense, so we only check
 // the Increasing case here.
 #[rstest]
@@ -573,7 +584,6 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
         .build();
 
     let base_fee = rng.random_range(10..20);
-    // The fees are progressively increasing, making the second (decommissioning) tx more lucrative.
     let fees = vec![Amount::from_atoms(base_fee), Amount::from_atoms(base_fee * 10)];
 
     let min_pledge = chain_config.min_stake_pool_pledge().into_atoms();
@@ -886,7 +896,7 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
 // form a dependency chain.
 // Note that this is not a super useful scenario, we mostly check it just because it's implemented
 // in the mempool.
-// Also node: since delegations and delegation withdrawals are not ordered with respect to each
+// Also note: since delegations and delegation withdrawals are not ordered with respect to each
 // other, we don't delegate and, instead, always withdraw zero amounts.
 #[rstest_reuse::apply(fees_selection_param)]
 #[rstest]
@@ -1049,6 +1059,7 @@ async fn pool_creation_and_delegation_withdrawals(
     join_handle.await.unwrap();
 }
 
+// Check that order creation and an order command form a dependency chain.
 #[rstest]
 #[case(Seed::from_entropy())]
 #[trace]
@@ -1144,7 +1155,6 @@ async fn order_creation_and_usage(
     let token_mint_tx_id = token_mint_tx.transaction().get_id();
 
     let base_fee = rng.random_range(10..20);
-    // The fees are progressively increasing, making the second (decommissioning) tx more lucrative.
     let fees = vec![Amount::from_atoms(base_fee), Amount::from_atoms(base_fee * 10)];
 
     // The order gives tokens for the same amount of coins.
@@ -1343,7 +1353,7 @@ async fn assert_fees(
         let actual_fee = tx_verifier
             .connect_transaction(
                 &TransactionSourceForConnect::for_mempool_with_height(&best_block_index, height),
-                &tx,
+                tx,
                 &BlockTimestamp::from_time(time_getter.get_time()),
             )
             .unwrap()
@@ -1403,33 +1413,4 @@ async fn mempool_wait_for_best_block(
     };
 
     tokio::time::timeout(Duration::from_secs(10), wait_loop).await.unwrap();
-}
-
-fn make_token_issuance_tx_from_genesis(
-    issuance: TokenIssuanceV1,
-    chain_config: &ChainConfig,
-    fee: Amount,
-    genesis_txo_idx: u32,
-    genesis_txo_amount: Amount,
-) -> SignedTransaction {
-    let total_fee = (chain_config.fungible_token_issuance_fee() + fee).unwrap();
-    let change = (genesis_txo_amount - total_fee).unwrap();
-    assert!(change > Amount::ZERO);
-
-    TransactionBuilder::new()
-        .add_input(
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                genesis_txo_idx,
-            ),
-            InputWitness::NoSignature(None),
-        )
-        .add_output(TxOutput::Transfer(
-            OutputValue::Coin(change),
-            Destination::AnyoneCanSpend,
-        ))
-        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-            issuance,
-        ))))
-        .build()
 }

@@ -19,9 +19,9 @@ use strum::IntoEnumIterator as _;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, IdCreationError,
-        OrderAccountCommand, OrderId, PoolId, TokenIdGenerationVersion, Transaction, TxInput,
-        TxOutput, make_delegation_id, make_order_id, make_token_id_with_version, tokens::TokenId,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, OrderAccountCommand, OrderId,
+        PoolId, TokenIdGenerationVersion, Transaction, TxInput, TxOutput, make_delegation_id,
+        make_order_id, make_token_id_with_version, tokens::TokenId,
     },
     primitives::Id,
 };
@@ -35,13 +35,13 @@ use crate::pool::entry::TxEntry;
 /// * For accounts that have a nonce, the stored nonce is the one that is consumed by the
 ///   requiring tx.
 /// * The deprecated order V0 commands are ignored.
-/// * We avoid creating pseudo-dependencies between transactions (such as putting all order fills
-///   before the corresponding freeze and the freeze before the conclusion, or putting all delegations
-///   before delegation withdrawals for the given delegation id); this would be redundant and it
-///   would contradict the mempool's goal of selecting the most lucrative transactions for inclusion
-///   in a block (also note that putting all fills before freeze/conclude would also be exploitable -
-///   an attacker would be able to postpone freezing/conclusion of an order by flooding the mempool
-///   with fills).
+/// * We avoid creating permanent pseudo-dependencies between transactions (such as putting all order
+///   fills before the corresponding freeze and the freeze before the conclusion, or putting all
+///   delegations before delegation withdrawals for the given delegation id); this would be redundant
+///   and it would contradict the mempool's goal of selecting the most lucrative transactions for
+///   inclusion in a block (also note that putting all fills before freeze/conclude would also be
+///   exploitable - an attacker would be able to postpone freezing/conclusion of an order by flooding
+///   the mempool with fills).
 /// * For some of the dependencies, there is not much sense in tracking them because having both
 ///   txs in the mempool at the same time would be a pathological case. E.g. delegation creation
 ///   and delegation withdrawal don't make sense together. But we do track them, for completeness.
@@ -227,7 +227,7 @@ impl TxProvidedNonUtxoDependency {
                 }
             }
 
-            | TxOutput::CreateDelegationId(_, _) => {
+            TxOutput::CreateDelegationId(_, _) => {
                 // Note: an error shouldn't be possible here for a valid tx.
                 match make_delegation_id(inputs) {
                     Ok(delegation_id) => Some(Self::DelegationCreation(delegation_id)),
@@ -292,7 +292,7 @@ impl TxProvidedNonUtxoDependency {
 
     pub fn into_requirement(self) -> TxRequiredDependency {
         // Note: account nonces are put into TxRequiredDependency as is, this is because
-        // TxProvidedDependency's nonce is the providing tx's nonce plus one, which is what
+        // TxProvidedNonUtxoDependency's nonce is the providing tx's nonce plus one, which is what
         // the requiring tx consumes.
         match self {
             Self::PoolCreation(pool_id) => TxRequiredDependency::PoolCreation(pool_id),
@@ -311,8 +311,8 @@ impl TxProvidedNonUtxoDependency {
     }
 
     pub fn from_requirement(req: TxRequiredDependency) -> Option<Self> {
-        // Note: account nonces are put into TxRequiredDependency as is, this is because
-        // TxProvidedDependency's nonce is the providing tx's nonce plus one, which is what
+        // Note: account nonces are put into TxProvidedNonUtxoDependency as is, this is because
+        // TxProvidedNonUtxoDependency's nonce is the providing tx's nonce plus one, which is what
         // the requiring tx consumes.
         match req {
             TxRequiredDependency::TxOutput(_, _) => None,

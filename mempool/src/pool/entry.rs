@@ -93,7 +93,7 @@ impl<O: IsOrigin> TxEntry<O> {
         TxRequiredDependency::from_tx(self)
     }
 
-    /// Dependency graph edges this entry provides
+    /// Dependency graph edges this entry provides, not including utxos.
     pub fn provided_non_utxo_deps(&self) -> impl Iterator<Item = TxProvidedNonUtxoDependency> + '_ {
         TxProvidedNonUtxoDependency::from_tx(self)
     }

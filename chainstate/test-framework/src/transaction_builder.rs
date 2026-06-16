@@ -72,6 +72,8 @@ impl TransactionBuilder {
         self
     }
 
+    // Helper function to add a token transfer output only if the amount is non-zero (zero token
+    // transfers are no longer allowed after a fork).
     pub fn add_token_transfer_output_if_non_zero(
         mut self,
         token_id: TokenId,

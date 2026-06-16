@@ -53,6 +53,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       (The actual consensus tightening will happen after a fork, the height is yet to be decided.)
 
+### Fixed
+  - Mempool:
+    - Fixed an issue where the mempool wouldn't track non-UTXO dependencies between transactions, which could
+      prevent e.g. several token management transactions from being included in the same block.
+
 ## [1.3.1] - 2026-06-03
 
 ### Fixed

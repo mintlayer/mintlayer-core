@@ -39,7 +39,7 @@ impl BasicTestTimeGetter {
     }
 
     pub fn with_millis_since_epoch(millis: u64) -> Self {
-        let current_time_millis = Arc::new(SeqCstAtomicU64::new(millis as u64));
+        let current_time_millis = Arc::new(SeqCstAtomicU64::new(millis));
         let initial_instant_for_monotonic_time_getter = std::time::Instant::now();
         Self {
             current_time_millis,

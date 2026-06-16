@@ -156,7 +156,7 @@ pub struct MempoolStore {
     // This allows us to recognize conflicts (double-spends) and handle them.
     spender_txs: Tracked<BTreeMap<TxConsumedDependency, Id<Transaction>>>,
 
-    // Map from a provided dependency to the tx that provides it.
+    // Map from a provided non-utxo dependency to the tx that provides it.
     non_utxo_dep_provider_txs: Tracked<BTreeMap<TxProvidedNonUtxoDependency, Id<Transaction>>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in

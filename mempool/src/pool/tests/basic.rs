@@ -420,7 +420,7 @@ async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] se
             let input_amount = tf.coin_amount_from_utxo(&input_utxo);
 
             let output_amount =
-                (input_amount - get_relay_fee_from_tx_size(estimate_tx_size(1, 1)).into()).unwrap();
+                (input_amount - get_relay_fee_from_tx_size(estimate_tx_size(1, 1))).unwrap();
             let tx = TransactionBuilder::new()
                 .add_input(input_utxo.into(), InputWitness::NoSignature(None))
                 .add_output(TxOutput::Transfer(
@@ -453,7 +453,7 @@ async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] se
                 .add_output(TxOutput::Transfer(
                     OutputValue::Coin(
                         ((*grandparent_amount + parent_delegation_spend_amount).unwrap()
-                            - get_relay_fee_from_tx_size(estimate_tx_size(2, 1)).into())
+                            - get_relay_fee_from_tx_size(estimate_tx_size(2, 1)))
                         .unwrap(),
                     ),
                     Destination::AnyoneCanSpend,
@@ -473,7 +473,7 @@ async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] se
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(
                 (child_delegation_spend_amount
-                    - get_relay_fee_from_tx_size(estimate_tx_size(1, 1)).into())
+                    - get_relay_fee_from_tx_size(estimate_tx_size(1, 1)))
                 .unwrap(),
             ),
             Destination::AnyoneCanSpend,
@@ -510,7 +510,7 @@ async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] se
     assert!(!mempool.contains_orphan_transaction(&parent1_id));
     assert!(mempool.contains_transaction(&parent1_id));
 
-    // The child is no loner an orphan
+    // The child is no longer an orphan
     assert!(!mempool.contains_orphan_transaction(&child_id));
     assert!(mempool.contains_transaction(&child_id));
 

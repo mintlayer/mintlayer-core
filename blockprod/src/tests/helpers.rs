@@ -137,7 +137,7 @@ impl BlockprodTestSetupBuilder {
             allow_checkpoints_mismatch: Default::default(),
         };
 
-        let mempool_config = self.mempool_config.unwrap_or_else(MempoolConfig::new);
+        let mempool_config = self.mempool_config.unwrap_or_default();
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
