@@ -873,7 +873,7 @@ fn add_tx_expect_cluster_byte_size_failure(mempool: &mut MempoolType, tx: &Signe
 
 fn assert_txs(mempool: &MempoolType, txs: &[&SignedTransaction]) {
     let actual_tx_ids = mempool
-        .get_all()
+        .get_all_by_descendant_score()
         .iter()
         .map(|tx| tx.transaction().get_id())
         .collect::<BTreeSet<_>>();

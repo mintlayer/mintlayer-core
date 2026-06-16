@@ -48,7 +48,7 @@ mockall::mock! {
             options: TxOptions,
         ) -> Result<TxStatus, Error>;
 
-        fn get_all(&self) -> Vec<SignedTransaction>;
+        fn get_all_in_insertion_order(&self) -> Vec<SignedTransaction>;
         fn transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction>;
         fn orphan_transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction>;
         fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;

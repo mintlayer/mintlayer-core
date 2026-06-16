@@ -53,6 +53,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
       (The actual consensus tightening will happen after a fork, the height is yet to be decided.)
 
+  - Node RPC:
+    - The method `mempool_transactions` now returns transactions in the same order in which they were originally inserted
+      into the mempool, rather than sorting them by descendant score.
+
 ### Fixed
   - Mempool:
     - Fixed an issue where the mempool wouldn't track non-UTXO dependencies between transactions, which could

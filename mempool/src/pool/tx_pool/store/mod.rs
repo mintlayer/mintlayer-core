@@ -28,7 +28,7 @@ use common::{
     primitives::Id,
 };
 use logging::log;
-use utils::{debug_assert_or_log, ensure, newtype};
+use utils::{debug_assert_or_log, debug_panic_or_log, ensure, newtype};
 
 use super::{Fee, Time, TxEntry, TxEntryWithFee};
 
@@ -266,6 +266,28 @@ impl MempoolStore {
 
     pub fn txs_by_creation_time(&self) -> &TrackedTxIdMultiMap<Time> {
         &self.txs_by_creation_time
+    }
+
+    pub fn txs_iter_in_insertion_order(&self) -> impl Iterator<Item = &'_ SignedTransaction> {
+        self.txs_by_seq_no.values().filter_map(move |tx_id| {
+            if let Some(entry) = self.txs_by_id.get(tx_id) {
+                Some(entry.transaction())
+            } else {
+                debug_panic_or_log!("Missing tx entry for tx {tx_id:x}");
+                None
+            }
+        })
+    }
+
+    pub fn txs_iter_by_descendant_score(&self) -> impl Iterator<Item = &'_ SignedTransaction> {
+        self.txs_by_descendant_score.iter().filter_map(move |(_, tx_id)| {
+            if let Some(entry) = self.txs_by_id.get(tx_id) {
+                Some(entry.transaction())
+            } else {
+                debug_panic_or_log!("Missing tx entry for tx {tx_id:x}");
+                None
+            }
+        })
     }
 
     #[cfg(test)]
