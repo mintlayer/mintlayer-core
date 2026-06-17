@@ -138,6 +138,10 @@ where
 }
 
 pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
+    if value == 0 {
+        return vec![0];
+    }
+
     let mut numbers = vec![0, value];
     let n = rng.random_range(0..10);
 
@@ -146,7 +150,12 @@ pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
         numbers.sort();
     }
 
-    numbers.iter().tuple_windows().map(|(v0, v1)| v1 - v0).collect()
+    numbers
+        .iter()
+        .tuple_windows()
+        .map(|(v0, v1)| v1 - v0)
+        .filter(|v| *v != 0)
+        .collect()
 }
 
 pub fn merge_btree_maps<K: Ord, V>(map1: BTreeMap<K, V>, map2: BTreeMap<K, V>) -> BTreeMap<K, V> {

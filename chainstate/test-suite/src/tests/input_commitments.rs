@@ -390,16 +390,13 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
         .add_input(fill_order_input, InputWitness::NoSignature(None))
         .add_output(TxOutput::Transfer(
-            OutputValue::TokenV1(token_id, filled_amount),
-            Destination::AnyoneCanSpend,
-        ))
-        .add_output(TxOutput::Transfer(
             OutputValue::Coin(coins_left),
             coins_owner_dest.clone(),
         ))
+        .add_token_transfer_output_if_non_zero(token_id, filled_amount, Destination::AnyoneCanSpend)
         .build();
     let order_fill_tx_id = order_fill_tx.transaction().get_id();
-    let coins_outpoint = UtxoOutPoint::new(order_fill_tx_id.into(), 1);
+    let coins_outpoint = UtxoOutPoint::new(order_fill_tx_id.into(), 0);
 
     tf.make_block_builder()
         .add_transaction(order_fill_tx)
@@ -418,15 +415,19 @@ fn order_fill(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
             let fill_order_input =
                 make_fill_order_input(orders_version, AccountNonce::new(1), &order_id, fill_amount);
 
-            let tx = Transaction::new(
-                0,
-                vec![coins_outpoint.clone().into(), fill_order_input],
-                vec![TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, filled_amount),
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    coins_outpoint.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(fill_order_input, InputWitness::NoSignature(None))
+                .add_token_transfer_output_if_non_zero(
+                    token_id,
+                    filled_amount,
                     Destination::AnyoneCanSpend,
-                )],
-            )
-            .unwrap();
+                )
+                .build()
+                .take_transaction();
 
             let coins_utxo = tf.utxo(&coins_outpoint).take_output();
             let bad_coins_utxo = {
@@ -677,13 +678,10 @@ fn order_conclude(#[case] seed: Seed, #[case] orders_version: OrdersVersion) {
         .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
         .add_input(fill_order_input, InputWitness::NoSignature(None))
         .add_output(TxOutput::Transfer(
-            OutputValue::TokenV1(token_id, filled_amount),
-            Destination::AnyoneCanSpend,
-        ))
-        .add_output(TxOutput::Transfer(
             OutputValue::Coin(coins_left),
             Destination::AnyoneCanSpend,
         ))
+        .add_token_transfer_output_if_non_zero(token_id, filled_amount, Destination::AnyoneCanSpend)
         .build();
 
     tf.make_block_builder()
