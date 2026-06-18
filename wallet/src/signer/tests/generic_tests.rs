@@ -77,26 +77,24 @@ use crate::{
 
 #[derive(Debug)]
 pub enum MessageToSign {
-    Random,
+    RandomShort,
+
+    RandomLong,
 
     // We only use this in trezor tests at this moment.
     #[allow(dead_code)]
     Predefined(Vec<u8>),
 }
 
-#[cfg(any(
-    feature = "enable-trezor-device-tests",
-    feature = "enable-ledger-device-tests"
-))]
 #[rstest_reuse::template]
 pub fn sign_message_test_params(
     #[values(
-        MessageToSign::Random,
+        MessageToSign::RandomShort,
+        MessageToSign::RandomLong,
         // Special case: an "overlong" utf-8 string (basically, the letter 'K' encoded with 2 bytes
         // instead of 1). Trezor firmware used to have troubles with this.
         MessageToSign::Predefined(vec![193, 139]),
-        // Special case: ASCII control characters not printable. Ledger was not handling it
-        // properly.
+        // Special case: ASCII control characters. Ledger was not handling them properly.
         MessageToSign::Predefined(vec![0, 3])
     )]
     message_to_sign: MessageToSign,
@@ -125,9 +123,8 @@ pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         let mut rng = make_seedable_rng(rng.random());
         move || {
             let msg = match &message_to_sign {
-                MessageToSign::Random => {
-                    vec![rng.random::<u8>(), rng.random::<u8>(), rng.random::<u8>()]
-                }
+                MessageToSign::RandomShort => gen_random_bytes(&mut rng, 3, 5),
+                MessageToSign::RandomLong => gen_random_bytes(&mut rng, 300, 500),
                 MessageToSign::Predefined(msg) => msg.clone(),
             };
             log::debug!("Using message: {msg:?}");

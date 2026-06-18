@@ -41,9 +41,7 @@ use crate::signer::{
     SignerError, SignerResult,
     ledger_signer::{
         LedgerError, LedgerFinder, LedgerSigner,
-        ledger_messages::{
-            check_current_app, get_extended_public_key, ping,
-        },
+        ledger_messages::{check_current_app, get_extended_public_key, ping},
     },
     tests::{
         generic_fixed_signature_tests::test_fixed_signatures_generic_no_legacy,
@@ -144,7 +142,7 @@ async fn wait_for_valid_reponse(device: &mut TcpDevice) {
     let mut tries = 0;
     loop {
         match ping(device).await {
-            Ok(_) => break,
+            Ok(()) => break,
             Err(_) => {
                 tries += 1;
                 assert!(
@@ -354,7 +352,7 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
     test_sign_message_generic(
         &mut rng,
-        MessageToSign::Random,
+        MessageToSign::RandomShort,
         make_ledger_signer,
         Some(make_deterministic_software_signer),
     )

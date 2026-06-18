@@ -24,23 +24,24 @@ use crate::signer::tests::{
         test_fixed_signatures_generic_no_legacy, test_fixed_signatures_generic2,
     },
     generic_tests::{
-        MessageToSign, test_sign_message_generic, test_sign_transaction_generic,
-        test_sign_transaction_intent_generic,
+        MessageToSign, sign_message_test_params, test_sign_message_generic,
+        test_sign_transaction_generic, test_sign_transaction_intent_generic,
     },
     make_deterministic_software_signer, make_software_signer, make_software_signer_for_cold_wallet,
     no_another_signer,
 };
 
+#[rstest_reuse::apply(sign_message_test_params)]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_message(#[case] seed: Seed) {
+async fn test_sign_message(#[case] seed: Seed, message_to_sign: MessageToSign) {
     let mut rng = make_seedable_rng(seed);
 
     test_sign_message_generic(
         &mut rng,
-        MessageToSign::Random,
+        message_to_sign,
         make_software_signer,
         no_another_signer(),
     )

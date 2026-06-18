@@ -155,11 +155,11 @@ pub enum TrezorError {
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
     #[error(
-        "The file being loaded is a Ledger wallet and cannot be used with the connected Trezor wallet"
+        "The file being loaded is a Ledger wallet and cannot be used with the connected Trezor device"
     )]
     WalletFileIsLedgerWallet,
     #[error(
-        "The file being loaded is a software wallet and cannot be used with the connected Trezor wallet"
+        "The file being loaded is a software wallet and cannot be used with the connected Trezor device"
     )]
     WalletFileIsSoftwareWallet,
     #[error(
