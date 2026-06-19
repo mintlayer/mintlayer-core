@@ -75,11 +75,11 @@ async fn add_single_tx() -> anyhow::Result<()> {
     let tx_id = tx.transaction().get_id();
     mempool.add_transaction_test(tx)?.assert_in_mempool();
     assert!(mempool.contains_transaction(&tx_id));
-    let all_txs = mempool.get_all();
+    let all_txs = mempool.get_all_by_descendant_score();
     assert_eq!(all_txs, vec![tx_clone]);
     mempool.store.remove_tx(&tx_id, MempoolRemovalReason::Block);
     assert!(!mempool.contains_transaction(&tx_id));
-    let all_txs = mempool.get_all();
+    let all_txs = mempool.get_all_by_descendant_score();
     assert_eq!(all_txs, Vec::<SignedTransaction>::new());
     mempool.store.assert_valid();
     Ok(())
@@ -170,7 +170,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     }
 
     let mut fees = Vec::new();
-    for tx in mempool.get_all() {
+    for tx in mempool.get_all_by_descendant_score() {
         fees.push(try_get_fee(&mempool, &tx).await)
     }
     let mut fees_sorted = fees.clone();
@@ -1714,7 +1714,7 @@ fn stack_overflow_on_transaction_addition(
         }
 
         let actual_tx_ids = mempool
-            .get_all()
+            .get_all_by_descendant_score()
             .iter()
             .map(|tx| tx.transaction().get_id())
             .collect::<BTreeSet<_>>();

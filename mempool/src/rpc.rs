@@ -56,12 +56,13 @@ trait MempoolRpc {
     #[method(name = "get_transaction")]
     async fn get_transaction(&self, tx_id: Id<Transaction>) -> RpcResult<Option<GetTxResponse>>;
 
-    /// Get all mempool transactions in a Vec/List, with hex-encoding.
+    /// Get all mempool transactions, in the insertion order.
     ///
-    /// Notice that this call may be expensive. Use it with caution.
-    /// This function is mostly used for testing purposes.
+    /// Note that this call may be expensive.
     #[method(name = "transactions")]
-    async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
+    async fn get_all_transactions_in_insertion_order(
+        &self,
+    ) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
     /// Submit a transaction to the mempool.
     ///
@@ -124,10 +125,12 @@ impl MempoolRpcServer for super::MempoolHandle {
         rpc::handle_result(self.call(move |this| this.contains_orphan_transaction(&tx_id)).await)
     }
 
-    async fn get_all_transactions(&self) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>> {
+    async fn get_all_transactions_in_insertion_order(
+        &self,
+    ) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>> {
         rpc::handle_result(
             self.call(move |this| -> Vec<HexEncoded<SignedTransaction>> {
-                this.get_all().into_iter().map(HexEncoded::new).collect()
+                this.get_all_in_insertion_order().into_iter().map(HexEncoded::new).collect()
             })
             .await,
         )

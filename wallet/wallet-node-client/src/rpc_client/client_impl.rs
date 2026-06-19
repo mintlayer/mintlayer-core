@@ -420,7 +420,7 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn mempool_get_transactions(&self) -> Result<Vec<SignedTransaction>, Self::Error> {
-        MempoolRpcClient::get_all_transactions(&*self.rpc_client)
+        MempoolRpcClient::get_all_transactions_in_insertion_order(&*self.rpc_client)
             .await
             .map_err(NodeRpcError::ResponseError)
             .map(|txs| txs.into_iter().map(|tx| tx.take()).collect())

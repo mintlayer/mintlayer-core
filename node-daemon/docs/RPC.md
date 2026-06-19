@@ -863,10 +863,9 @@ EITHER OF
 
 ### Method `mempool_transactions`
 
-Get all mempool transactions in a Vec/List, with hex-encoding.
+Get all mempool transactions, in the insertion order.
 
-Notice that this call may be expensive. Use it with caution.
-This function is mostly used for testing purposes.
+Note that this call may be expensive.
 
 
 Parameters:

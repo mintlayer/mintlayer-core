@@ -173,12 +173,12 @@ impl<M> TxPool<M> {
             .expect("IBD state query failed")
     }
 
-    pub fn get_all(&self) -> Vec<SignedTransaction> {
-        self.store
-            .txs_by_descendant_score()
-            .iter()
-            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
-            .collect()
+    pub fn get_all_in_insertion_order(&self) -> Vec<SignedTransaction> {
+        self.store.txs_iter_in_insertion_order().cloned().collect()
+    }
+
+    pub fn get_all_by_descendant_score(&self) -> Vec<SignedTransaction> {
+        self.store.txs_iter_by_descendant_score().cloned().collect()
     }
 
     #[cfg(test)]

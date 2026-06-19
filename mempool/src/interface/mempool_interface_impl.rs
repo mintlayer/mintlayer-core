@@ -135,8 +135,8 @@ impl MempoolInterface for Mempool {
         self.add_transaction(tx)
     }
 
-    fn get_all(&self) -> Vec<SignedTransaction> {
-        self.get_all()
+    fn get_all_in_insertion_order(&self) -> Vec<SignedTransaction> {
+        self.get_all_in_insertion_order()
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {

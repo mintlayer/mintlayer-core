@@ -45,8 +45,8 @@ pub trait MempoolInterface: Send + Sync {
         options: TxOptions,
     ) -> Result<TransactionDuplicateStatus, Error>;
 
-    /// Get all transactions from mempool
-    fn get_all(&self) -> Vec<SignedTransaction>;
+    /// Get all transactions from mempool, in the insertion order.
+    fn get_all_in_insertion_order(&self) -> Vec<SignedTransaction>;
 
     /// Get a specific transaction from the main mempool (non-orphan)
     fn transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction>;

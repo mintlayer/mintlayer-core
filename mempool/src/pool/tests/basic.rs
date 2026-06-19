@@ -20,8 +20,10 @@ use tokio::sync::mpsc;
 use chainstate::BlockSource;
 use chainstate_test_framework::helpers::split_utxo;
 use common::chain::{
-    AccountNonce, AccountOutPoint, AccountSpending, UtxoOutPoint, block::timestamp::BlockTimestamp,
+    self, AccountNonce, AccountOutPoint, AccountSpending, Genesis, UtxoOutPoint,
+    block::timestamp::BlockTimestamp,
 };
+use test_utils::BasicTestTimeGetter;
 
 use crate::event::NewTipEvent;
 
@@ -515,4 +517,70 @@ async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] se
     assert!(mempool.contains_transaction(&child_id));
 
     mempool.tx_store().assert_valid();
+}
+
+// Check that `get_all_in_insertion_order` actually returns all transactions in the insertion order.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_all_txs_in_insertion_order(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let tx_count = rng.random_range(50..100);
+    let genesis_txo_amount = Amount::from_atoms(1_000_000_000);
+
+    let genesis_txos = (0..tx_count)
+        .map(|_| {
+            TxOutput::Transfer(
+                OutputValue::Coin(genesis_txo_amount),
+                Destination::AnyoneCanSpend,
+            )
+        })
+        .collect();
+
+    let time_getter =
+        BasicTestTimeGetter::with_secs_since_epoch(rng.random_range(100_000_000..100_000_000_000))
+            .get_time_getter();
+    let genesis = Genesis::new(
+        "test".into(),
+        BlockTimestamp::from_time(time_getter.get_time()),
+        genesis_txos,
+    );
+
+    let chain_config =
+        chain::config::create_unit_test_config_builder().genesis_custom(genesis).build();
+    let genesis_id = chain_config.genesis_block_id();
+
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_time_getter(time_getter.clone())
+        .build();
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
+        max_cluster_tx_count: Default::default(),
+        max_cluster_size_bytes: Default::default(),
+    };
+    let mut mempool = setup_with_chainstate_generic(tf.chainstate(), mempool_config, time_getter);
+
+    let mut expected_txs = Vec::new();
+
+    for i in 0..tx_count {
+        let genesis_outpoint = UtxoOutPoint::new(genesis_id.into(), i);
+        let fee = Amount::from_atoms(rng.random_range(10..10_000_000));
+        let tx = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((genesis_txo_amount - fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        expected_txs.push(tx.clone());
+
+        mempool.add_transaction_test(tx).unwrap().assert_in_mempool();
+    }
+
+    let actual_txs = mempool.get_all_in_insertion_order();
+    assert_eq!(actual_txs, expected_txs);
 }

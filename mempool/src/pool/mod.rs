@@ -245,10 +245,17 @@ impl<M> Mempool<M> {
         }
     }
 
-    pub fn get_all(&self) -> Vec<SignedTransaction> {
+    pub fn get_all_in_insertion_order(&self) -> Vec<SignedTransaction> {
         match &self.0 {
             MempoolState::InIbd(_) => Vec::new(),
-            MempoolState::AfterIbd(state) => state.tx_pool.get_all(),
+            MempoolState::AfterIbd(state) => state.tx_pool.get_all_in_insertion_order(),
+        }
+    }
+
+    pub fn get_all_by_descendant_score(&self) -> Vec<SignedTransaction> {
+        match &self.0 {
+            MempoolState::InIbd(_) => Vec::new(),
+            MempoolState::AfterIbd(state) => state.tx_pool.get_all_by_descendant_score(),
         }
     }
 
