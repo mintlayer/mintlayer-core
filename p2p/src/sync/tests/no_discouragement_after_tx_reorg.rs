@@ -168,11 +168,12 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
             Destination::PublicKeyHash(PublicKeyHash::random_using(&mut tfxt.rng));
 
         let another_unminted_token2_id = tfxt.issue_token();
-        let another_unminted_token2_new_metadata_uri = gen_random_bytes(
+        let another_unminted_token2_new_metadata_uri = random_ascii_alphanumeric_string(
             &mut tfxt.rng,
-            1,
-            tfxt.tfrm.chain_config().token_max_uri_len(),
-        );
+            1..=tfxt.tfrm.chain_config().token_max_uri_len(),
+        )
+        .as_bytes()
+        .to_vec();
 
         let another_pool_pledge = tfxt
             .rng

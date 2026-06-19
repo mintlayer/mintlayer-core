@@ -18,12 +18,14 @@ use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU64, sync::Arc, ti
 use crate::{
     Uint256,
     chain::{
-        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated, CoinUnit,
-        ConsensusUpgrade, DataDepositFeeVersion, Destination, FrozenTokensValidationVersion,
-        GenBlock, Genesis, HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion,
-        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
-        TokenIssuanceVersion, TokensFeeVersion,
+        ChainstateUpgrade, ChainstateUpgradesBuilder, ChangeTokenMetadataUriActivated,
+        ChangeTokenMetadataUriValidityCheckRequired, CoinUnit, ConsensusUpgrade,
+        DataDepositFeeVersion, Destination, FrozenTokensValidationVersion, GenBlock, Genesis,
+        HtlcActivated, NetUpgrades, OrdersActivated, OrdersVersion, PoSChainConfig,
+        PoSConsensusVersion, PoWChainConfig, PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+        RewardDistributionVersion, SighashInputCommitmentVersion, StakerDestinationUpdateForbidden,
+        TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
+        ZeroTokenTransferForbidden,
         config::{
             ChainConfig, ChainType, EmissionScheduleTabular, create_mainnet_genesis,
             create_testnet_genesis, create_unit_test_genesis, emission_schedule,
@@ -84,6 +86,12 @@ const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
 // * prohibit updating the staker destination in ProduceBlockFromStake.
 const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566_060);
 
+// The fork where we tighten certain consensus rules:
+// * Using mismatched kernel utxo and PoSData is no longer allowed.
+// * Transferring zero amount of a token is no longer allowed.
+// * In AccountCommand::ChangeTokenMetadataUri, using a URI with invalid characters is no longer allowed.
+const TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(999_999_999);
+
 // The fork at which:
 // * txs with htlc and order outputs become valid;
 // * data deposit fee and size are changed;
@@ -98,6 +106,12 @@ const MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS: BlockHeight = BlockHeight::new(254_
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
 const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(517_700);
+
+// The fork where we tighten certain consensus rules:
+// * Using mismatched kernel utxo and PoSData is no longer allowed.
+// * Transferring zero amount of a token is no longer allowed.
+// * In AccountCommand::ChangeTokenMetadataUri, using a URI with invalid characters is no longer allowed.
+const MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(999_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -216,6 +230,9 @@ impl ChainType {
                 StakerDestinationUpdateForbidden::No,
                 TokenIdGenerationVersion::V0,
                 SighashInputCommitmentVersion::V0,
+                PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                ZeroTokenTransferForbidden::No,
+                ChangeTokenMetadataUriValidityCheckRequired::No,
             ))
             .then(MAINNET_FORK_HEIGHT_1_HTLC_AND_ORDERS, |builder| {
                 builder
@@ -231,6 +248,16 @@ impl ChainType {
                     .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
                     .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
+            })
+            .then(MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING, |builder| {
+                builder
+                    .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    )
+                    .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
+                    .change_token_metadata_uri_validity_check_required(
+                        ChangeTokenMetadataUriValidityCheckRequired::Yes,
+                    )
             })
             .build(),
             ChainType::Regtest | ChainType::Signet => {
@@ -253,6 +280,9 @@ impl ChainType {
                 StakerDestinationUpdateForbidden::No,
                 TokenIdGenerationVersion::V0,
                 SighashInputCommitmentVersion::V0,
+                PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                ZeroTokenTransferForbidden::No,
+                ChangeTokenMetadataUriValidityCheckRequired::No,
             ))
             .then(TESTNET_FORK_HEIGHT_1_TOKENS_V1, |builder| {
                 builder.token_issuance_version(TokenIssuanceVersion::V1)
@@ -283,6 +313,16 @@ impl ChainType {
                     .token_id_generation_version(TokenIdGenerationVersion::V1)
                     .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
             })
+            .then(TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING, |builder| {
+                builder
+                    .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    )
+                    .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
+                    .change_token_metadata_uri_validity_check_required(
+                        ChangeTokenMetadataUriValidityCheckRequired::Yes,
+                    )
+            })
             .build(),
         }
     }
@@ -302,6 +342,9 @@ pub fn default_regtest_chainstate_upgrade_at_genesis() -> ChainstateUpgrade {
         StakerDestinationUpdateForbidden::Yes,
         TokenIdGenerationVersion::V1,
         SighashInputCommitmentVersion::V1,
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+        ZeroTokenTransferForbidden::Yes,
+        ChangeTokenMetadataUriValidityCheckRequired::Yes,
     )
 }
 
@@ -761,7 +804,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -778,7 +824,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -795,7 +844,30 @@ mod tests {
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
                             TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V1
+                            SighashInputCommitmentVersion::V1,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
+                        ),
+                    ),
+                    (
+                        MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V1,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                            ZeroTokenTransferForbidden::Yes,
+                            ChangeTokenMetadataUriValidityCheckRequired::Yes,
                         ),
                     ),
                 ])
@@ -824,7 +896,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -841,7 +916,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -858,7 +936,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -875,7 +956,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -892,7 +976,10 @@ mod tests {
                             OrdersVersion::V0,
                             StakerDestinationUpdateForbidden::No,
                             TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0
+                            SighashInputCommitmentVersion::V0,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
                         ),
                     ),
                     (
@@ -909,7 +996,30 @@ mod tests {
                             OrdersVersion::V1,
                             StakerDestinationUpdateForbidden::Yes,
                             TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V1
+                            SighashInputCommitmentVersion::V1,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
+                            ZeroTokenTransferForbidden::No,
+                            ChangeTokenMetadataUriValidityCheckRequired::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
+                            OrdersVersion::V1,
+                            StakerDestinationUpdateForbidden::Yes,
+                            TokenIdGenerationVersion::V1,
+                            SighashInputCommitmentVersion::V1,
+                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                            ZeroTokenTransferForbidden::Yes,
+                            ChangeTokenMetadataUriValidityCheckRequired::Yes,
                         ),
                     ),
                 ])

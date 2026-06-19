@@ -55,11 +55,13 @@ use crate::{
 };
 
 use super::{
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
+    ChainstateUpgrade, ChangeTokenMetadataUriActivated,
+    ChangeTokenMetadataUriValidityCheckRequired, ConsensusUpgrade, DataDepositFeeVersion,
     DestinationTag, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
-    RequiredConsensus, RewardDistributionVersion, SighashInputCommitmentVersion,
-    StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
-    TokensFeeVersion, output_value::OutputValue, stakelock::StakePoolData,
+    PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RequiredConsensus, RewardDistributionVersion,
+    SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+    TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden, output_value::OutputValue,
+    stakelock::StakePoolData,
 };
 
 use self::emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT};
@@ -922,6 +924,9 @@ pub fn create_unit_test_config_builder() -> Builder {
                     StakerDestinationUpdateForbidden::Yes,
                     TokenIdGenerationVersion::V1,
                     SighashInputCommitmentVersion::V1,
+                    PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                    ZeroTokenTransferForbidden::Yes,
+                    ChangeTokenMetadataUriValidityCheckRequired::Yes,
                 ),
             )])
             .expect("cannot fail"),
@@ -1242,7 +1247,13 @@ mod tests {
     #[should_panic(expected = "The net-upgrade at height 1 must not be IgnoreConsensus")]
     fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
         let config = Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![
+                    (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
+                    (BlockHeight::new(1), ConsensusUpgrade::IgnoreConsensus),
+                ])
+                .unwrap(),
+            )
             .build();
 
         assert_no_ignore_consensus_in_chain_config(&config);

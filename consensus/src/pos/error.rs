@@ -108,4 +108,11 @@ pub enum ConsensusPoSError {
     FailedToCalculateCappedBalance,
     #[error("Invalid kernel output type in block {0}")]
     InvalidOutputTypeInStakeKernel(Id<Block>),
+    #[error(
+        "Pool id inside kernel input utxo ({kernel_utxo_pool_id:x}) doesn't match pool id from PoSData ({pos_data_pool_id:x})"
+    )]
+    PoolIdsInKernelUtxoAndPoSDataMismatch {
+        kernel_utxo_pool_id: PoolId,
+        pos_data_pool_id: PoolId,
+    },
 }

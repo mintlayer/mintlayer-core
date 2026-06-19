@@ -304,9 +304,8 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_)
             | ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _)
-            | ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => {
-                BlockProcessingErrorClass::BadBlock
-            }
+            | ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _)
+            | ConnectTransactionError::ZeroTokenTransfer(_) => BlockProcessingErrorClass::BadBlock,
 
             ConnectTransactionError::StorageError(err) => err.classify(),
             ConnectTransactionError::UtxoError(err) => err.classify(),
@@ -494,6 +493,7 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::CoinOrTokenOverflow(_)
             | TokensError::InsufficientTokenFees(_)
             | TokensError::TokenMetadataUriTooLarge(_)
+            | TokensError::IncorrectMetadataUri(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
             | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
                 BlockProcessingErrorClass::BadBlock
@@ -663,7 +663,8 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::FiniteTotalSupplyIsRequired
             | ConsensusPoSError::UnsupportedConsensusVersion
             | ConsensusPoSError::FailedToCalculateCappedBalance
-            | ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => {
+            | ConsensusPoSError::InvalidOutputTypeInStakeKernel(_)
+            | ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch { .. } => {
                 BlockProcessingErrorClass::BadBlock
             }
 

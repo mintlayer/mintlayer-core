@@ -144,6 +144,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::ConcludeInputAmountsDontMatch(_, _) => 100,
             ConnectTransactionError::ProduceBlockFromStakeChangesStakerDestination(_, _) => 100,
             ConnectTransactionError::IdCreationError(err) => err.ban_score(),
+            ConnectTransactionError::ZeroTokenTransfer(_) => 100,
         }
     }
 }
@@ -358,6 +359,7 @@ impl BanScore for TokensError {
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
             TokensError::TokenMetadataUriTooLarge(_) => 100,
+            TokensError::IncorrectMetadataUri(_) => 100,
         }
     }
 }
@@ -476,6 +478,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::EmptyTimespan => 100,
             ConsensusPoSError::FailedToCalculateCappedBalance => 100,
             ConsensusPoSError::InvalidOutputTypeInStakeKernel(_) => 100,
+            ConsensusPoSError::PoolIdsInKernelUtxoAndPoSDataMismatch { .. } => 100,
         }
     }
 }

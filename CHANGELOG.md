@@ -45,6 +45,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       of a cluster that exceeds the limits. The default cluster limits are: max 64 transactions, max 100'000 bytes
       in total.
 
+  - Consensus:
+    - Tightening of certain consensus rules have been implemented, in particular:
+      - When changing token metadata URI, the URI can no longer contain arbitrary characters (the restrictions are
+        the same as when a token is created).
+      - Transferring or burning zero amount of a token is no longer allowed.
+
+      (The actual consensus tightening will happen after a fork, the height is yet to be decided.)
+
 ## [1.3.1] - 2026-06-03
 
 ### Fixed

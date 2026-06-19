@@ -29,7 +29,7 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (make_tx, random_alphanum_str, reward_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
@@ -89,7 +89,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -122,7 +122,7 @@ class WalletTokens(BitcoinTestFramework):
             token_info = node.chainstate_token_info(token_id)
             assert_equal(metadata_uri, token_info['content']['metadata_uri']['text']);
 
-            new_metadata_uri = bytes([random.randint(0, 255) for _ in range(random.randint(1, 128))]).hex()
+            new_metadata_uri = random_alphanum_str(random.randint(1, 128)).encode().hex()
             assert_in("The transaction was submitted successfully", await wallet.change_token_metadata_uri(token_id, new_metadata_uri))
 
             self.generate_block()

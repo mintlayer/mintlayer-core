@@ -19,9 +19,9 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        ChainstateUpgradeBuilder, Destination, OutPointSourceId, TokenIssuanceVersion, TxInput,
-        TxOutput, UtxoOutPoint, output_value::OutputValue, signature::inputsig::InputWitness,
-        tokens::TokenId,
+        self, ChainstateUpgradeBuilder, Destination, NetUpgrades, OutPointSourceId,
+        TokenIssuanceVersion, TxInput, TxOutput, UtxoOutPoint, ZeroTokenTransferForbidden,
+        output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
@@ -34,10 +34,30 @@ use test_utils::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn nft_burn_invalid_amount(#[case] seed: Seed) {
+fn nft_burn_invalid_amount(
+    #[case] seed: Seed,
+    #[values(ZeroTokenTransferForbidden::Yes, ZeroTokenTransferForbidden::No)]
+    zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                chain::config::create_unit_test_config_builder()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgradeBuilder::latest()
+                                .zero_token_transfer_forbidden(zero_token_transfer_forbidden)
+                                .build(),
+                        )])
+                        .unwrap(),
+                    )
+                    .build(),
+            )
+            .build();
+
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let first_tx_input = TxInput::from_utxo(genesis_outpoint_id, 0);
         let token_id = TokenId::from_tx_input(&first_tx_input);
@@ -88,8 +108,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             )
         );
 
-        // Burn zero NFT
-        let _ = tf
+        // Burn zero NFT; this is only allowed if zero_token_transfer_forbidden is No.
+        let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -100,8 +120,20 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::ZERO)))
                     .build(),
             )
-            .build_and_process(&mut rng)
-            .unwrap();
+            .build_and_process(&mut rng);
+
+        match zero_token_transfer_forbidden {
+            ZeroTokenTransferForbidden::Yes => {
+                let expected_err =
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ZeroTokenTransfer(token_id),
+                    ));
+                assert_eq!(result.unwrap_err(), expected_err);
+            }
+            ZeroTokenTransferForbidden::No => {
+                result.unwrap();
+            }
+        }
     })
 }
 

@@ -18,12 +18,13 @@ use std::sync::Arc;
 use chainstate::{BlockError, ChainstateError, CheckBlockError, ban_score::BanScore};
 use chainstate_test_framework::TestFramework;
 use common::{
+    Uint256,
     chain::{
-        Block, NetUpgrades,
+        Block, ConsensusUpgrade, NetUpgrades,
         block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         config::{Builder as ChainConfigBuilder, ChainType, create_unit_test_config},
     },
-    primitives::{Idable, user_agent::mintlayer_core_user_agent},
+    primitives::{BlockHeight, Idable, user_agent::mintlayer_core_user_agent},
 };
 use consensus::ConsensusVerificationError;
 use logging::log;
@@ -137,8 +138,16 @@ async fn invalid_consensus_data() {
     for_each_protocol_version(|protocol_version| async move {
         let chain_config = Arc::new(
             ChainConfigBuilder::new(ChainType::Regtest)
-                // Enable consensus, so blocks with `ConsensusData::None` would be rejected.
-                .consensus_upgrades(NetUpgrades::new_for_chain(ChainType::Regtest))
+                // Enable PoW consensus, so blocks with `ConsensusData::None` would be rejected.
+                .consensus_upgrades(
+                    NetUpgrades::initialize(vec![(
+                        BlockHeight::new(0),
+                        ConsensusUpgrade::PoW {
+                            initial_difficulty: Uint256::MAX.into(),
+                        },
+                    )])
+                    .unwrap(),
+                )
                 .build(),
         );
         let mut node = TestNode::builder(protocol_version)

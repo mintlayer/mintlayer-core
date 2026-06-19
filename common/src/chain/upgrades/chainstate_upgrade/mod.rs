@@ -116,6 +116,42 @@ pub enum SighashInputCommitmentVersion {
     V1,
 }
 
+// The original implementation allows pool ids in the kernel stake utxo and PoSData to be different.
+// TODO: same as StakerDestinationUpdateForbidden, this upgrade can probably be removed after
+// the "fork height + reorg limit" height has been passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
+    Yes,
+    No,
+}
+
+// Originally, it was allowed to have zero amount of a token in a TxOutput; after the fork
+// we prohibit both transferring and burning zero amount of a token.
+// TODO: after the "fork height + reorg limit" height has been passed, check if we really had
+// zero-token outputs; if not, this fork can be removed completely after that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ZeroTokenTransferForbidden {
+    Yes,
+    No,
+}
+
+// During token issuance, a metadata uri validity check has always been performed (which at the
+// moment ensures that the uri only contains alphanumeric or valid rfc 3986 characters, see
+// `is_uri_valid` in the tx verifier). But during `AccountCommand::ChangeTokenMetadataUri` handling,
+// this check historically has not been performed. After the fork we perform the validation in
+// ChangeTokenMetadataUri too.
+// TODO: same as for the similar upgrades above, after it's complete, check whether we've ever had
+// a ChangeTokenMetadataUri transaction with a uri for which the uri validity check would fail;
+// if not, the upgrade can be removed completely after that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ChangeTokenMetadataUriValidityCheckRequired {
+    Yes,
+    No,
+}
+
+// Note: we have 2 upgrade types - `ConsensusUpgrade` and `ChainstateUpgrade`. Despite the names,
+// they both represent consensus upgrades. All upgrades not directly related to target difficulty
+// calculation should probably go to `ChainstateUpgrade`.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -130,6 +166,10 @@ pub struct ChainstateUpgrade {
     staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
     token_id_generation_version: TokenIdGenerationVersion,
     sighash_input_commitment_version: SighashInputCommitmentVersion,
+    pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+    zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+    change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired,
 }
 
 impl ChainstateUpgrade {
@@ -147,6 +187,10 @@ impl ChainstateUpgrade {
         staker_destination_update_forbidden: StakerDestinationUpdateForbidden,
         token_id_generation_version: TokenIdGenerationVersion,
         sighash_input_commitment_version: SighashInputCommitmentVersion,
+        pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+        zero_token_transfer_forbidden: ZeroTokenTransferForbidden,
+        change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -161,6 +205,9 @@ impl ChainstateUpgrade {
             staker_destination_update_forbidden,
             token_id_generation_version,
             sighash_input_commitment_version,
+            pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden,
+            zero_token_transfer_forbidden,
+            change_token_metadata_uri_validity_check_required,
         }
     }
 
@@ -210,5 +257,21 @@ impl ChainstateUpgrade {
 
     pub fn sighash_input_commitment_version(&self) -> SighashInputCommitmentVersion {
         self.sighash_input_commitment_version
+    }
+
+    pub fn pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
+        &self,
+    ) -> PoolIdMismatchInKernelUtxoAndPoSDataForbidden {
+        self.pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden
+    }
+
+    pub fn zero_token_transfer_forbidden(&self) -> ZeroTokenTransferForbidden {
+        self.zero_token_transfer_forbidden
+    }
+
+    pub fn change_token_metadata_uri_validity_check_required(
+        &self,
+    ) -> ChangeTokenMetadataUriValidityCheckRequired {
+        self.change_token_metadata_uri_validity_check_required
     }
 }

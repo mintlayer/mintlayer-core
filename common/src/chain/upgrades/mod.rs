@@ -20,10 +20,11 @@ mod netupgrade;
 
 pub use chainstate_upgrade::{
     ChainstateUpgrade, ChainstateUpgradeBuilder, ChangeTokenMetadataUriActivated,
-    DataDepositFeeVersion, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
-    OrdersVersion, RewardDistributionVersion, SighashInputCommitmentVersion,
-    StakerDestinationUpdateForbidden, TokenIdGenerationVersion, TokenIssuanceVersion,
-    TokensFeeVersion,
+    ChangeTokenMetadataUriValidityCheckRequired, DataDepositFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
+    PoolIdMismatchInKernelUtxoAndPoSDataForbidden, RewardDistributionVersion,
+    SighashInputCommitmentVersion, StakerDestinationUpdateForbidden, TokenIdGenerationVersion,
+    TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
 };
 pub use chainstate_upgrades_builder::ChainstateUpgradesBuilder;
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};

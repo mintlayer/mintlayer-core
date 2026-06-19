@@ -17,7 +17,10 @@ use crate::chain::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
     FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OrdersVersion,
     RewardDistributionVersion, SighashInputCommitmentVersion, StakerDestinationUpdateForbidden,
-    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion,
+    TokenIdGenerationVersion, TokenIssuanceVersion, TokensFeeVersion, ZeroTokenTransferForbidden,
+    upgrades::chainstate_upgrade::{
+        ChangeTokenMetadataUriValidityCheckRequired, PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
+    },
 };
 
 /// A builder for `ChainstateUpgrade`.
@@ -74,6 +77,11 @@ impl ChainstateUpgradeBuilder {
             staker_destination_update_forbidden: StakerDestinationUpdateForbidden::Yes,
             token_id_generation_version: TokenIdGenerationVersion::V1,
             sighash_input_commitment_version: SighashInputCommitmentVersion::V1,
+            pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden:
+                PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+            zero_token_transfer_forbidden: ZeroTokenTransferForbidden::Yes,
+            change_token_metadata_uri_validity_check_required:
+                ChangeTokenMetadataUriValidityCheckRequired::Yes,
         })
     }
 
@@ -93,4 +101,7 @@ impl ChainstateUpgradeBuilder {
     builder_method!(staker_destination_update_forbidden: StakerDestinationUpdateForbidden);
     builder_method!(token_id_generation_version: TokenIdGenerationVersion);
     builder_method!(sighash_input_commitment_version: SighashInputCommitmentVersion);
+    builder_method!(pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden: PoolIdMismatchInKernelUtxoAndPoSDataForbidden);
+    builder_method!(zero_token_transfer_forbidden: ZeroTokenTransferForbidden);
+    builder_method!(change_token_metadata_uri_validity_check_required: ChangeTokenMetadataUriValidityCheckRequired);
 }

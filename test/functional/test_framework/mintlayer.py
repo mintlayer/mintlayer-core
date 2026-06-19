@@ -18,6 +18,7 @@
 import hashlib
 import random
 import scalecodec
+import string
 import time
 from decimal import Decimal
 
@@ -171,3 +172,6 @@ def make_delegation_id(outpoint):
 def random_decimal_amount(min: int, max: int, num_decimals: int) -> Decimal:
     atoms_per_unit = 10 ** num_decimals
     return Decimal(random.randint(min * atoms_per_unit, max * atoms_per_unit)) / atoms_per_unit
+
+def random_alphanum_str(len: int) -> str:
+    return ''.join(random.choices(string.ascii_lowercase + string.ascii_uppercase + string.digits, k=len))

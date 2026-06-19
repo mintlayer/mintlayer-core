@@ -16,13 +16,17 @@
 use crate::Uint256;
 use crate::chain::config::ChainType;
 use crate::chain::pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0};
-use crate::chain::pow::limit;
 use crate::chain::{PoSChainConfig, PoSConsensusVersion, pos_initial_difficulty};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::{BlockHeight, Compact};
 
 use super::NetUpgrades;
 
+// Note: we have 2 upgrade types - `ConsensusUpgrade` and `ChainstateUpgrade`. Despite the names,
+// they both represent consensus upgrades. All upgrades not directly related to target difficulty
+// calculation should probably go to `ChainstateUpgrade`.
+// TODO: `PoSChainConfig` currently holds `staking_pool_spend_maturity_block_count`, which doesn't
+// participate in the difficulty calculation, so it should probably be moved to `ChainstateUpgrade`.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusUpgrade {
     PoW {
@@ -90,30 +94,11 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
 }
 
 impl NetUpgrades<ConsensusUpgrade> {
-    pub fn new_for_chain(chain_type: ChainType) -> Self {
-        Self::initialize(vec![(
-            BlockHeight::zero(),
-            ConsensusUpgrade::PoW {
-                initial_difficulty: limit(chain_type).into(),
-            },
-        )])
-        .expect("cannot fail")
-    }
-
     pub fn unit_tests() -> Self {
         Self::initialize(vec![(
             BlockHeight::zero(),
             ConsensusUpgrade::IgnoreConsensus,
         )])
-        .expect("cannot fail")
-    }
-
-    #[cfg(test)]
-    pub fn deliberate_ignore_consensus_twice() -> Self {
-        Self::initialize(vec![
-            (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
-            (BlockHeight::new(1), ConsensusUpgrade::IgnoreConsensus),
-        ])
         .expect("cannot fail")
     }
 
