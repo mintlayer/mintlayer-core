@@ -27,14 +27,14 @@ use chainstate_storage::inmemory::Store;
 use common::{
     Uint256, Uint512,
     chain::{
-        self, Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        self, Block, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        OutPointSourceId, PoSChainConfigBuilder, PoolId, SignedTransaction, TxInput, TxOutput,
         block::timestamp::BlockTimestamp,
         config::{ChainConfig, ChainType, create_unit_test_config},
         pos_initial_difficulty,
         stakelock::StakePoolData,
     },
-    primitives::{Amount, BlockHeight, H256, Idable, per_thousand::PerThousand},
+    primitives::{Amount, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use consensus::{
@@ -42,7 +42,7 @@ use consensus::{
     compact_target_to_target,
 };
 use crypto::{
-    key::{KeyKind, PrivateKey},
+    key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use mempool::{MempoolConfig, MempoolHandle, MempoolInit};
@@ -89,6 +89,7 @@ impl BlockprodTestSetup {
 pub struct BlockprodTestSetupBuilder {
     chain_config: Option<Arc<ChainConfig>>,
     time_getter: Option<TimeGetter>,
+    mempool_config: Option<MempoolConfig>,
 }
 
 impl BlockprodTestSetupBuilder {
@@ -96,6 +97,7 @@ impl BlockprodTestSetupBuilder {
         Self {
             chain_config: None,
             time_getter: None,
+            mempool_config: None,
         }
     }
 
@@ -106,6 +108,11 @@ impl BlockprodTestSetupBuilder {
 
     pub fn with_time_getter(mut self, time_getter: TimeGetter) -> Self {
         self.time_getter = Some(time_getter);
+        self
+    }
+
+    pub fn with_mempool_config(mut self, mempool_config: MempoolConfig) -> Self {
+        self.mempool_config = Some(mempool_config);
         self
     }
 
@@ -130,7 +137,7 @@ impl BlockprodTestSetupBuilder {
             allow_checkpoints_mismatch: Default::default(),
         };
 
-        let mempool_config = MempoolConfig::new();
+        let mempool_config = self.mempool_config.unwrap_or_default();
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
@@ -245,6 +252,31 @@ impl PoSTestSetup {
             )],
             vec![self.create_genesis_pool_utxo.clone()],
         )))
+    }
+
+    pub fn make_next_block_input_data(
+        &self,
+        parent_block_id: Id<GenBlock>,
+    ) -> GenerateBlockInputData {
+        let genesis_pubkey = PublicKey::from_private_key(&self.genesis_stake_private_key);
+        GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+            self.genesis_stake_private_key.clone(),
+            self.genesis_vrf_private_key.clone(),
+            PoolId::new(H256::zero()),
+            vec![TxInput::from_utxo(OutPointSourceId::BlockReward(parent_block_id), 0)],
+            vec![TxOutput::ProduceBlockFromStake(
+                Destination::PublicKey(genesis_pubkey),
+                PoolId::new(H256::zero()),
+            )],
+        )))
+    }
+
+    pub fn make_block_input_data(&self, parent_block_id: Id<GenBlock>) -> GenerateBlockInputData {
+        if parent_block_id == self.chain_config.genesis_block_id() {
+            self.make_first_pos_block_input_data()
+        } else {
+            self.make_next_block_input_data(parent_block_id)
+        }
     }
 }
 
@@ -492,4 +524,18 @@ pub fn build_chain_config_for_pos(builder: chain::config::Builder) -> ChainConfi
     );
 
     chain_config
+}
+
+pub async fn add_local_txs_to_mempool(mempool: &MempoolHandle, txs: Vec<SignedTransaction>) {
+    mempool
+        .call_mut(move |mp| {
+            let origin = mempool::tx_origin::LocalTxOrigin::Mempool;
+            let options = mempool::TxOptions::default_for(origin.into());
+
+            for tx in txs {
+                mp.add_transaction_local(tx, origin, options.clone()).unwrap();
+            }
+        })
+        .await
+        .unwrap()
 }

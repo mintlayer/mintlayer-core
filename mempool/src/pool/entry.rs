@@ -16,111 +16,15 @@
 use std::num::NonZeroUsize;
 
 use common::{
-    chain::{
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, OrderId, SignedTransaction,
-        Transaction, TxInput, UtxoOutPoint, tokens::TokenId,
-    },
+    chain::{SignedTransaction, Transaction},
     primitives::{Id, Idable},
 };
 
 use super::{Fee, Time, TxOptions, TxOrigin};
-use crate::tx_origin::IsOrigin;
-
-/// A dependency of a transaction. May be another transaction or a previous account state.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TxDependency {
-    DelegationAccount(DelegationId, AccountNonce),
-    TokenSupplyAccount(TokenId, AccountNonce),
-    // TODO: remove OrderV0Account after OrdersVersion::V1 is activated
-    //       https://github.com/mintlayer/mintlayer-core/issues/1901
-    OrderV0Account(OrderId, AccountNonce),
-    TxOutput(Id<Transaction>, u32),
-    // TODO: Block reward?
-
-    // Note that orders v1 are not needed here, because:
-    // 1) Since they don't use nonces, they don't create dependencies the way other account-based
-    //    inputs do.
-    // 2) We could introduce a pseudo-dependency, e.g. in the form of an `enum { Fillable, Freezable, Concludable }`
-    //    (we'd have to differentiate between dependencies that a tx requires vs those that it consumes,
-    //    so e.g. a `FreezeOrder` input would require `Freezable` but consume both `Freezable` and `Fillable`).
-    //    However, this doesn't seem to be useful because currently, with RBF disabled, `TxDependency`
-    //    itself has limited use:
-    //    a) It's used to check for conflicts (`check_mempool_policy` calls `conflicting_tx_ids`
-    //       and returns `MempoolConflictError::Irreplacable` if any), but this check doesn't seem
-    //       to be really needed, because a conflicting tx will always be rejected by the tx verifier
-    //       anyway (also, since the tx verifier call happens first, it doesn't seem that this
-    //       `Irreplacable` result is possible at all, unless it's a bug).
-    //       Though technically, we could use the pseudo-dependency as an optimization, to avoid calling
-    //       the tx verifier when we know it'll fail anyway.
-    //    b) The orphan pool uses a TxDependency map to check whether tx's dependencies could have become
-    //       satisfied. The pseudo-dependency won't be useful here at all.
-    //    (Also note that even when RBF is finally implemented, RBFing an order-related tx will probably
-    //    be based on re-using one of the UTXOs of the original tx, so tracking order inputs will probably
-    //    not be needed anyway).
-    // TODO: return to this when enabling RBF.
-}
-
-impl TxDependency {
-    fn from_utxo(output: &UtxoOutPoint) -> Option<Self> {
-        output
-            .source_id()
-            .get_tx_id()
-            .map(|id| Self::TxOutput(*id, output.output_index()))
-    }
-
-    fn from_account(account: &AccountSpending, nonce: AccountNonce) -> Self {
-        match account {
-            AccountSpending::DelegationBalance(delegation_id, _) => {
-                Self::DelegationAccount(*delegation_id, nonce)
-            }
-        }
-    }
-
-    fn from_account_cmd(cmd: &AccountCommand, nonce: AccountNonce) -> Self {
-        match cmd {
-            AccountCommand::MintTokens(token_id, _)
-            | AccountCommand::UnmintTokens(token_id)
-            | AccountCommand::LockTokenSupply(token_id)
-            | AccountCommand::FreezeToken(token_id, _)
-            | AccountCommand::UnfreezeToken(token_id)
-            | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-            | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                Self::TokenSupplyAccount(*token_id, nonce)
-            }
-            AccountCommand::ConcludeOrder(order_id) | AccountCommand::FillOrder(order_id, _, _) => {
-                Self::OrderV0Account(*order_id, nonce)
-            }
-        }
-    }
-
-    fn from_input_requires(input: &TxInput) -> Option<Self> {
-        // TODO: the "nonce().decrement().map()" calls below don't seem to be correct, because
-        // returning None for account-based inputs with zero nonce means that such inputs will
-        // never be considered as conflicting. Perhaps we should store `Option<AccountNonce>`
-        // inside TxDependency's variants instead.
-        // (Note that this issue doesn't seem to have a noticeable impact at this moment,
-        // with disabled RBF).
-        match input {
-            TxInput::Utxo(utxo) => Self::from_utxo(utxo),
-            TxInput::Account(acct) => {
-                acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
-            }
-            TxInput::AccountCommand(nonce, op) => {
-                nonce.decrement().map(|nonce| Self::from_account_cmd(op, nonce))
-            }
-            TxInput::OrderAccountCommand(_) => None,
-        }
-    }
-
-    fn from_input_provides(input: &TxInput) -> Option<Self> {
-        match input {
-            TxInput::Utxo(_) => None,
-            TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
-            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_cmd(op, *nonce)),
-            TxInput::OrderAccountCommand(_) => None,
-        }
-    }
-}
+use crate::{
+    pool::dependency::{TxProvidedNonUtxoDependency, TxRequiredDependency},
+    tx_origin::IsOrigin,
+};
 
 /// A transaction together with its creation time
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,20 +89,13 @@ impl<O: IsOrigin> TxEntry<O> {
     }
 
     /// Dependency graph edges this entry requires
-    pub fn requires(&self) -> impl Iterator<Item = TxDependency> + '_ {
-        self.inputs_iter().filter_map(TxDependency::from_input_requires)
+    pub fn required_deps(&self) -> impl Iterator<Item = TxRequiredDependency> + '_ {
+        TxRequiredDependency::from_tx(self)
     }
 
-    /// Dependency graph edges this entry provides
-    pub fn provides(&self) -> impl Iterator<Item = TxDependency> + '_ {
-        let n_outputs = self.transaction().outputs().len() as u32;
-        let from_outputs = (0..n_outputs).map(|i| TxDependency::TxOutput(*self.tx_id(), i));
-        let from_inputs = self.inputs_iter().filter_map(TxDependency::from_input_provides);
-        from_outputs.chain(from_inputs)
-    }
-
-    fn inputs_iter(&self) -> impl ExactSizeIterator<Item = &TxInput> + '_ {
-        self.transaction().inputs().iter()
+    /// Dependency graph edges this entry provides, not including utxos.
+    pub fn provided_non_utxo_deps(&self) -> impl Iterator<Item = TxProvidedNonUtxoDependency> + '_ {
+        TxProvidedNonUtxoDependency::from_tx(self)
     }
 
     pub fn map_origin<R: IsOrigin>(self, func: impl FnOnce(O) -> R) -> TxEntry<R> {

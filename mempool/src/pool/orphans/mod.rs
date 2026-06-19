@@ -21,8 +21,8 @@ use mempool_types::TxStatus;
 use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
-use super::{OrphanPoolError, Time, TxDependency};
-use crate::{config, tx_origin::RemoteTxOrigin};
+use super::{OrphanPoolError, Time};
+use crate::{config, pool::dependency::TxRequiredDependency, tx_origin::RemoteTxOrigin};
 pub use detect::OrphanType;
 
 mod detect;
@@ -66,8 +66,8 @@ struct TxOrphanPoolMaps {
     /// Transactions indexed by the insertion time. Useful for removing stale transactions
     by_insertion_time: BTreeSet<(Time, InternalId)>,
 
-    /// Transactions indexed by their dependencies
-    by_deps: BTreeSet<(TxDependency, InternalId)>,
+    /// Transactions indexed by their required dependencies
+    by_deps: BTreeSet<(TxRequiredDependency, InternalId)>,
 
     /// Transactions indexed by the origin
     by_origin: BTreeSet<(RemoteTxOrigin, InternalId)>,
@@ -93,7 +93,7 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_origin.insert((entry.origin(), iid));
         assert!(inserted, "Tx entry already in the origin map");
 
-        self.by_deps.extend(entry.requires().map(|dep| (dep, iid)));
+        self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
 
     fn remove(&mut self, entry: &TxEntry) {
@@ -105,9 +105,9 @@ impl TxOrphanPoolMaps {
         let removed = self.by_origin.remove(&(entry.origin(), iid));
         assert!(removed, "Tx entry not present in the origin map");
 
-        entry.requires().for_each(|dep| {
+        entry.required_deps().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
-        })
+        });
     }
 }
 
@@ -157,12 +157,29 @@ impl TxOrphanPool {
         &'a self,
         entry: &'a super::TxEntry<R>,
     ) -> impl Iterator<Item = &'a TxEntry> + 'a {
-        entry.provides().flat_map(move |dep| {
+        let utxo_deps = self
+            .maps
+            .by_deps
+            .range(
+                (
+                    TxRequiredDependency::TxOutput(*entry.tx_id(), 0),
+                    InternalId::ZERO,
+                )
+                    ..=(
+                        TxRequiredDependency::TxOutput(*entry.tx_id(), u32::MAX),
+                        InternalId::MAX,
+                    ),
+            )
+            .map(|(_, iid)| self.get_at(*iid));
+        let non_utxo_deps = entry.provided_non_utxo_deps().flat_map(move |provided_dep| {
+            let required_dep = provided_dep.into_requirement();
             self.maps
                 .by_deps
-                .range((dep.clone(), InternalId::ZERO)..=(dep, InternalId::MAX))
+                .range((required_dep.clone(), InternalId::ZERO)..=(required_dep, InternalId::MAX))
                 .map(|(_, iid)| self.get_at(*iid))
-        })
+        });
+
+        utxo_deps.chain(non_utxo_deps)
     }
 
     /// Number of transactions in the orphan pool
@@ -305,17 +322,27 @@ impl<'p> PoolEntry<'p> {
     /// Check no dependencies of given transaction are still in orphan pool so it can be considered
     /// as a candidate to move out.
     ///
-    /// Note: this function is allowed to produce false positives - if true is returned but
-    /// the tx is still an orphan (e.g. due to account-based dependencies), the tx will be returned
-    /// to the orphan pool.
+    /// Note: this function is allowed to produce false positives - if true is returned but the tx
+    /// is still an orphan, the tx will be returned to the orphan pool.
     pub fn is_ready(&self) -> bool {
         let entry = self.get();
-        !entry.requires().any(|dep| match dep {
-            // Always consider account deps. TODO: can be optimized in the future
-            TxDependency::DelegationAccount(_, _)
-            | TxDependency::TokenSupplyAccount(_, _)
-            | TxDependency::OrderV0Account(_, _) => false,
-            TxDependency::TxOutput(tx_id, _) => self.pool.maps.by_tx_id.contains_key(&tx_id),
+        !entry.required_deps().any(|dep| match dep {
+            TxRequiredDependency::TxOutput(tx_id, _) => {
+                self.pool.maps.by_tx_id.contains_key(&tx_id)
+            }
+
+            // Always consider account deps.
+            // Note: simply checking whether any of the orphan txs' provided dependencies are
+            // required by this tx (like we do in the utxo case) won't work because there can be
+            // multiple potential parents for it in the orphan pool; if one of the parents becomes
+            // non-orphan and the other stays in the orphan pool, it will prevent the child from
+            // entering the normal mempool even though in reality it's no longer an orphan.
+            TxRequiredDependency::DelegationSpending(_, _)
+            | TxRequiredDependency::TokenAccountManagement(_, _)
+            | TxRequiredDependency::PoolCreation(_)
+            | TxRequiredDependency::DelegationCreation(_)
+            | TxRequiredDependency::TokenCreation(_)
+            | TxRequiredDependency::OrderCreation(_) => false,
         })
     }
 

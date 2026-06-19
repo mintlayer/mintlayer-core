@@ -18,7 +18,10 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use chainstate::BlockSource;
-use common::chain::block::timestamp::BlockTimestamp;
+use chainstate_test_framework::helpers::split_utxo;
+use common::chain::{
+    AccountNonce, AccountOutPoint, AccountSpending, UtxoOutPoint, block::timestamp::BlockTimestamp,
+};
 
 use crate::event::NewTipEvent;
 
@@ -115,7 +118,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         )?,
         vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
     )
-    .expect("invalid witness count");
+    .unwrap();
 
     let result = mempool.add_transaction_test(replacing_tx);
     if ENABLE_RBF {
@@ -373,4 +376,143 @@ async fn ibd_transition(#[case] seed: Seed) {
 
     let event = events_broadcast_rx.recv().await;
     assert_eq!(event.as_ref(), Some(&expected_event));
+}
+
+// Regression test: `orphans::PoolEntry::is_ready` should not return false if a non-utxo parent
+// is present in the orphans pool.
+// * Set up a pool and a delegation.
+// * Create 2 grandparent txs.
+// * Create and add 3 orphan txs - 2 parent ones that use nonce 0 and a child one that uses nonce 1.
+//   There are no utxo-based relationships between the child and each of its potential parents.
+//   Each parent depends on the corresponding grandparent via a utxo relationship.
+// * Add the first grandparent tx.
+// Expected result: the second parent is still an orphan but the first parent and the child are
+// no longer orphans.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn non_utxo_orphan_dependency_can_be_resolved_by_mempool_parent(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+
+    let genesis_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
+    let min_pledge = tf.chain_config().min_stake_pool_pledge().into_atoms();
+    let pool_size = Amount::from_atoms(rng.random_range(min_pledge..min_pledge * 2));
+    let delegation_size = Amount::from_atoms(rng.random_range(min_pledge / 2..min_pledge * 2));
+    let (_, delegation_id, change_outpoint) = setup_pool_and_delegation(
+        &mut rng,
+        &mut tf,
+        genesis_outpoint,
+        pool_size,
+        delegation_size,
+    );
+
+    let tx_with_coins_id = split_utxo(&mut rng, &mut tf, change_outpoint, 2);
+
+    let parent_delegation_spend_amount = Amount::from_atoms(rng.random_range(1_000_000..2_000_000));
+    let child_delegation_spend_amount = Amount::from_atoms(rng.random_range(1_000_000..2_000_000));
+
+    let grandparents_with_amounts = (0..2)
+        .map(|grandparent_idx| {
+            let input_utxo = UtxoOutPoint::new(tx_with_coins_id.into(), grandparent_idx);
+            let input_amount = tf.coin_amount_from_utxo(&input_utxo);
+
+            let output_amount =
+                (input_amount - get_relay_fee_from_tx_size(estimate_tx_size(1, 1))).unwrap();
+            let tx = TransactionBuilder::new()
+                .add_input(input_utxo.into(), InputWitness::NoSignature(None))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(output_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            (tx, output_amount)
+        })
+        .collect::<Vec<_>>();
+
+    let parents = (0..2)
+        .map(|idx| {
+            let (grandparent, grandparent_amount) = &grandparents_with_amounts[idx];
+            TransactionBuilder::new()
+                .add_input(
+                    UtxoOutPoint::new(grandparent.transaction().get_id().into(), 0).into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::Account(AccountOutPoint::new(
+                        AccountNonce::new(0),
+                        AccountSpending::DelegationBalance(
+                            delegation_id,
+                            parent_delegation_spend_amount,
+                        ),
+                    )),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(
+                        ((*grandparent_amount + parent_delegation_spend_amount).unwrap()
+                            - get_relay_fee_from_tx_size(estimate_tx_size(2, 1)))
+                        .unwrap(),
+                    ),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build()
+        })
+        .collect::<Vec<_>>();
+
+    let child = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(1),
+                AccountSpending::DelegationBalance(delegation_id, child_delegation_spend_amount),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(
+                (child_delegation_spend_amount
+                    - get_relay_fee_from_tx_size(estimate_tx_size(1, 1)))
+                .unwrap(),
+            ),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let child_id = child.transaction().get_id();
+
+    let parent1_id = parents[0].transaction().get_id();
+    let parent2_id = parents[1].transaction().get_id();
+
+    let mut mempool = setup_with_chainstate(tf.chainstate());
+
+    mempool
+        .add_transaction_test(parents[0].clone())
+        .unwrap()
+        .assert_in_orphan_pool();
+    mempool
+        .add_transaction_test(parents[1].clone())
+        .unwrap()
+        .assert_in_orphan_pool();
+    mempool.add_transaction_test(child).unwrap().assert_in_orphan_pool();
+    assert_eq!(mempool.work_queue_total_len(), 0);
+
+    mempool
+        .add_transaction_test(grandparents_with_amounts[0].0.clone())
+        .unwrap()
+        .assert_in_mempool();
+
+    // parent2 is still an orphan
+    assert!(mempool.contains_orphan_transaction(&parent2_id));
+    assert!(!mempool.contains_transaction(&parent2_id));
+
+    // parent1 is no longer an orphan
+    assert!(!mempool.contains_orphan_transaction(&parent1_id));
+    assert!(mempool.contains_transaction(&parent1_id));
+
+    // The child is no longer an orphan
+    assert!(!mempool.contains_orphan_transaction(&child_id));
+    assert!(mempool.contains_transaction(&child_id));
+
+    mempool.tx_store().assert_valid();
 }

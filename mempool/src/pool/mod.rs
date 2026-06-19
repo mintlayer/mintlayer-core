@@ -43,23 +43,25 @@ use crate::{
 };
 
 use self::{
-    entry::{TxDependency, TxEntry},
+    entry::TxEntry,
     fee::Fee,
     memory_usage_estimator::MemoryUsageEstimator,
     orphans::{OrphanType, TxOrphanPool},
     tx_pool::{TxAdditionOutcome, TxPool},
 };
 
-pub use self::{feerate::FeeRate, tx_pool::feerate_points};
+pub use self::{
+    feerate::FeeRate,
+    tx_pool::{AncestorScore, feerate_points, memory_usage_estimator, tx_verifier},
+};
 
+mod dependency;
 mod entry;
 pub mod fee;
 mod feerate;
 mod orphans;
 mod tx_pool;
 mod work_queue;
-
-pub use tx_pool::memory_usage_estimator;
 
 pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
@@ -480,6 +482,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             MempoolState::AfterIbd(state) => {
                 state.tx_pool.get_best_tx_ids_by_score_and_ancestry(tx_ids, tx_count)
             }
+        }
+    }
+
+    pub fn get_tx_score(&self, tx_id: &Id<Transaction>) -> Result<Option<AncestorScore>, Error> {
+        match &self.0 {
+            MempoolState::InIbd(_) => Ok(None),
+            MempoolState::AfterIbd(state) => state.tx_pool.get_tx_score(tx_id),
         }
     }
 }

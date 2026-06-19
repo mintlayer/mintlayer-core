@@ -102,7 +102,7 @@ pub enum StakerDestinationUpdateForbidden {
 // b) For both testnet and mainnet, do one full sync with the upgrade present and another one with
 // it removed (i.e. where the V1 generation is always used); if the logged ids are the same,
 // the upgrade can be removed permanently.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, strum::EnumIter)]
 pub enum TokenIdGenerationVersion {
     // Token id is generated from the 1st input of the issuing transaction.
     V0,

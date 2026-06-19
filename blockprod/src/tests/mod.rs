@@ -21,6 +21,11 @@ use crate::{
     make_blockproduction, test_blockprod_config, tests::helpers::BlockprodTestSetupBuilder,
 };
 
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_make_blockproduction() {
     let (blockprod_setup, mut manager) = BlockprodTestSetupBuilder::new().build();

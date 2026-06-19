@@ -1209,10 +1209,11 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
         };
         let tx = TransactionBuilder::new()
             .add_input(conclude_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, (give_amount - filled_amount).unwrap()),
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                (give_amount - filled_amount).unwrap(),
                 Destination::AnyoneCanSpend,
-            ))
+            )
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(fill_amount),
                 Destination::AnyoneCanSpend,

@@ -14,11 +14,16 @@
 // limitations under the License.
 
 use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker;
 use common::{
-    chain::{SignedTransaction, Transaction},
-    primitives::Id,
+    chain::{
+        DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        make_delegation_id, output_value::OutputValue,
+    },
+    primitives::{Amount, Id, Idable as _},
     time_getter::TimeGetter,
 };
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use mempool_types::{TxOptions, TxStatus, tx_origin::TxOrigin};
 
 pub use crate::pool::tx_pool::tests::utils::*;
@@ -83,4 +88,77 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             self.perform_work_unit();
         }
     }
+}
+
+pub fn setup_pool_and_delegation(
+    rng: &mut impl CryptoRng,
+    tf: &mut TestFramework,
+    outpoint: UtxoOutPoint,
+    pool_size: Amount,
+    delegation_size: Amount,
+) -> (PoolId, DelegationId, /*change utxo*/ UtxoOutPoint) {
+    let coins_amount = tf.coin_amount_from_utxo(&outpoint);
+
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+    let (stake_pool_data, _) =
+        create_stake_pool_data_with_all_reward_to_staker(rng, pool_size, vrf_pk);
+
+    let pool_id = PoolId::from_utxo(&outpoint);
+    let change_amount = (coins_amount - pool_size).unwrap();
+    let create_pool_tx = TransactionBuilder::new()
+        .add_input(outpoint.into(), empty_witness(rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(change_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let create_pool_tx_id = create_pool_tx.transaction().get_id();
+    let change_utxo = UtxoOutPoint::new(create_pool_tx_id.into(), 1);
+    tf.make_block_builder()
+        .add_transaction(create_pool_tx)
+        .build_and_process(rng)
+        .unwrap();
+
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(change_utxo.into(), empty_witness(rng))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_id,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(change_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
+    let change_utxo = UtxoOutPoint::new(create_delegation_tx_id.into(), 1);
+    let delegation_id = make_delegation_id(create_delegation_tx.inputs()).unwrap();
+
+    tf.make_block_builder()
+        .add_transaction(create_delegation_tx)
+        .build_and_process(rng)
+        .unwrap();
+
+    let change_amount = (change_amount - delegation_size).unwrap();
+    let delegate_staking_tx = TransactionBuilder::new()
+        .add_input(change_utxo.into(), empty_witness(rng))
+        .add_output(TxOutput::DelegateStaking(delegation_size, delegation_id))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(change_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let delegate_staking_tx_id = delegate_staking_tx.transaction().get_id();
+    let change_utxo = UtxoOutPoint::new(delegate_staking_tx_id.into(), 1);
+
+    tf.make_block_builder()
+        .add_transaction(delegate_staking_tx)
+        .build_and_process(rng)
+        .unwrap();
+
+    (pool_id, delegation_id, change_utxo)
 }
