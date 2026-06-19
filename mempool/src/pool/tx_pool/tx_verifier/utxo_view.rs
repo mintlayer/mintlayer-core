@@ -54,7 +54,7 @@ impl<M, P: UtxosView> UtxosView for MempoolUtxoView<'_, M, P> {
             None => return Ok(self.parent.utxo(outpoint)?),
         };
 
-        self.mempool.store.txs_by_id.get(&tx_id).map_or_else(
+        self.mempool.store.txs_by_id().get(&tx_id).map_or_else(
             || Ok(self.parent.utxo(outpoint)?),
             |tx_entry| {
                 let tx = tx_entry.transaction();

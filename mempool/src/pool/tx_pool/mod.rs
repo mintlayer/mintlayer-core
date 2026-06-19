@@ -172,7 +172,7 @@ impl<M> TxPool<M> {
 
     pub fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
-            .txs_by_descendant_score
+            .txs_by_descendant_score()
             .iter()
             .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
@@ -486,7 +486,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         conflicts_with_descendants: &StoreHashSet<Id<Transaction>>,
     ) -> Result<Fee, MempoolPolicyError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
-            self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
+            self.store.txs_by_id().get(conflict_id).expect("tx should exist in mempool")
         });
 
         let total_conflict_fees = conflicts_with_descendants
@@ -626,7 +626,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
         let expired_ids = self
             .store
-            .txs_by_creation_time
+            .txs_by_creation_time()
             .iter()
             // Note: entries in txs_by_creation_time are sorted by the creation time in ascending order,
             // so once we find a tx that is not expired, the rest will not be expired either.
@@ -653,16 +653,22 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
     fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-        while !self.store.is_empty() && self.memory_usage() > self.max_size.as_bytes() {
+        loop {
+            self.store.shrink_capacity_if_needed();
+
+            if self.store.is_empty() || self.memory_usage() <= self.max_size.as_bytes() {
+                break;
+            }
+
             // TODO sort by descendant score, not by fee
             let removed_id = self
                 .store
-                .txs_by_descendant_score
+                .txs_by_descendant_score()
                 .iter()
                 .map(|(_score, entry)| *entry)
                 .next()
                 .expect("pool not empty");
-            let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
+            let removed = self.store.txs_by_id().get(&removed_id).expect("tx with id should exist");
 
             log::debug!(
                 "Mempool trim: Evicting tx {:x} which has a descendant score of {:?} and has size {}",
@@ -673,6 +679,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             removed_fees.push(FeeRate::from_total_tx_fee(removed.fee(), removed.size())?);
             self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
+
         Ok(removed_fees)
     }
 
@@ -946,8 +953,8 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             in_top_x_mb,
             &self.mempool_config,
             &self.rolling_fee_rate.read(),
-            &self.store.txs_by_descendant_score,
-            &self.store.txs_by_id,
+            self.store.txs_by_descendant_score(),
+            self.store.txs_by_id(),
         )
     }
 
@@ -991,8 +998,8 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
             num_points,
             &self.mempool_config,
             &self.rolling_fee_rate.read(),
-            &self.store.txs_by_descendant_score,
-            &self.store.txs_by_id,
+            self.store.txs_by_descendant_score(),
+            self.store.txs_by_id(),
         )
     }
 

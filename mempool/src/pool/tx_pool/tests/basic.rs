@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_test_framework::helpers::split_utxo;
+use mempool_types::tx_origin::LocalTxOrigin;
+use test_utils::BasicTestTimeGetter;
+
 use crate::pool::tx_pool::store::{StoreHashSet, TxMempoolEntryWithAncestors};
 
 use super::*;
@@ -581,7 +585,7 @@ async fn test_bip125_max_replacements(
         .await?;
         mempool.add_transaction_test(tx)?.assert_in_mempool();
     }
-    let mempool_size_before_replacement = mempool.store.txs_by_id.len();
+    let mempool_size_before_replacement = mempool.store.txs_by_id().len();
 
     let replacement_fee = (Amount::from_atoms(1_000_000_000_000_000) * fee).map(Fee::from);
     let replacement_tx = tx_spend_input(
@@ -593,7 +597,7 @@ async fn test_bip125_max_replacements(
     )
     .await?;
     mempool.add_transaction_test(replacement_tx)?.assert_in_mempool();
-    let mempool_size_after_replacement = mempool.store.txs_by_id.len();
+    let mempool_size_after_replacement = mempool.store.txs_by_id().len();
 
     assert_eq!(
         mempool_size_after_replacement,
@@ -724,7 +728,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     tx_pool.add_transaction_test(child_1)?.assert_in_mempool();
     log::debug!("added child_1");
 
-    assert_eq!(tx_pool.store.txs_by_id.len(), 2);
+    assert_eq!(tx_pool.store.txs_by_id().len(), 2);
     assert!(tx_pool.contains_transaction(&child_1_id));
     assert!(!tx_pool.contains_transaction(&child_0_id));
     let rolling_fee = tx_pool.get_minimum_rolling_fee();
@@ -1068,17 +1072,17 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction_test(tx_c)?.assert_in_mempool();
 
-    let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
+    let entry_tx = mempool.store.txs_by_id().get(&tx_id).expect("tx");
     let entry_tx_id = *entry_tx.tx_id();
     log::debug!(
         "at first, entry tx has score {:?}",
         entry_tx.ancestor_score()
     );
-    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a").deref().clone();
+    let entry_a = mempool.store.txs_by_id().get(&tx_a_id).expect("tx_a").deref().clone();
     log::debug!("AT FIRST, entry a has score {:?}", entry_a.ancestor_score());
-    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b").deref();
+    let entry_b = mempool.store.txs_by_id().get(&tx_b_id).expect("tx_b").deref();
     log::debug!("AT FIRST, entry b has score {:?}", entry_b.ancestor_score());
-    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").deref().clone();
+    let entry_c = mempool.store.txs_by_id().get(&tx_c_id).expect("tx_c").deref().clone();
     log::debug!(
         "AT FIRST, entry c looks like {:?} and has score {:?}",
         entry_c,
@@ -1094,26 +1098,26 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     log::debug!(
         "BEFORE REMOVAL raw txs_by_ancestor_score {:?}",
-        mempool.store.txs_by_ancestor_score
+        mempool.store.txs_by_ancestor_score()
     );
     check_txs_sorted_by_ancestor_score(&mempool);
 
     mempool.store.remove_tx(&entry_tx_id, MempoolRemovalReason::Block);
     log::debug!(
         "AFTER REMOVAL raw txs_by_ancestor_score {:?}",
-        mempool.store.txs_by_ancestor_score
+        mempool.store.txs_by_ancestor_score()
     );
-    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
+    let entry_a = mempool.store.txs_by_id().get(&tx_a_id).expect("tx_a");
     log::debug!(
         "AFTER removing tx, entry a has score {:?}",
         entry_a.ancestor_score()
     );
-    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    let entry_b = mempool.store.txs_by_id().get(&tx_b_id).expect("tx_b");
     log::debug!(
         "AFTER removing tx, entry b has score {:?}",
         entry_b.ancestor_score()
     );
-    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_b");
+    let entry_c = mempool.store.txs_by_id().get(&tx_c_id).expect("tx_b");
     log::debug!(
         "AFTER removing tx, entry c looks like {:?} and has score {:?}",
         entry_c,
@@ -1129,7 +1133,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 fn check_txs_sorted_by_ancestor_score<E>(tx_pool: &TxPool<E>) {
     let txs_by_ancestor_score = tx_pool
         .store
-        .txs_by_descendant_score
+        .txs_by_descendant_score()
         .iter()
         .map(|(_score, id)| id)
         .collect::<Vec<_>>();
@@ -1137,8 +1141,9 @@ fn check_txs_sorted_by_ancestor_score<E>(tx_pool: &TxPool<E>) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_ancestor_score.get(i).unwrap();
         let next_tx_id = txs_by_ancestor_score.get(i + 1).unwrap();
-        let entry_score = tx_pool.store.txs_by_id.get(*tx_id).unwrap().descendant_score();
-        let next_entry_score = tx_pool.store.txs_by_id.get(*next_tx_id).unwrap().descendant_score();
+        let entry_score = tx_pool.store.txs_by_id().get(*tx_id).unwrap().descendant_score();
+        let next_entry_score =
+            tx_pool.store.txs_by_id().get(*next_tx_id).unwrap().descendant_score();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)
@@ -1219,11 +1224,11 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction_test(tx_c)?.assert_in_mempool();
 
-    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
+    let entry_a = mempool.store.txs_by_id().get(&tx_a_id).expect("tx_a");
     log::debug!("entry a has score {:?}", entry_a.descendant_score());
-    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    let entry_b = mempool.store.txs_by_id().get(&tx_b_id).expect("tx_b");
     log::debug!("entry b has score {:?}", entry_b.descendant_score());
-    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").deref().clone();
+    let entry_c = mempool.store.txs_by_id().get(&tx_c_id).expect("tx_c").deref().clone();
     log::debug!("entry c has score {:?}", entry_c.descendant_score());
     assert_eq!(entry_a.fee(), entry_a.fees_with_descendants());
     assert_eq!(
@@ -1232,12 +1237,12 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     log::debug!(
         "raw_txs_by_descendant_score {:?}",
-        mempool.store.txs_by_descendant_score
+        mempool.store.txs_by_descendant_score()
     );
     check_txs_sorted_by_descendant_sore(&mempool);
 
     mempool.store.remove_tx(entry_c.tx_id(), MempoolRemovalReason::Block);
-    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    let entry_b = mempool.store.txs_by_id().get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
 
     check_txs_sorted_by_descendant_sore(&mempool);
@@ -1249,7 +1254,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 fn check_txs_sorted_by_descendant_sore<M>(tx_pool: &TxPool<M>) {
     let txs_by_descendant_score = tx_pool
         .store
-        .txs_by_descendant_score
+        .txs_by_descendant_score()
         .iter()
         .map(|(_score, id)| id)
         .collect::<Vec<_>>();
@@ -1257,8 +1262,9 @@ fn check_txs_sorted_by_descendant_sore<M>(tx_pool: &TxPool<M>) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
         let next_tx_id = txs_by_descendant_score.get(i + 1).unwrap();
-        let entry_score = tx_pool.store.txs_by_id.get(*tx_id).unwrap().descendant_score();
-        let next_entry_score = tx_pool.store.txs_by_id.get(*next_tx_id).unwrap().descendant_score();
+        let entry_score = tx_pool.store.txs_by_id().get(*tx_id).unwrap().descendant_score();
+        let next_entry_score =
+            tx_pool.store.txs_by_id().get(*next_tx_id).unwrap().descendant_score();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)
@@ -1314,7 +1320,6 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 
 #[rstest]
 #[case(Seed::from_entropy())]
-#[case::fail(Seed(1))]
 #[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full_real(#[case] seed: Seed) {
@@ -1361,16 +1366,23 @@ async fn mempool_full_real(#[case] seed: Seed) {
         mempool.add_transaction_bare(tx.tx_entry().clone()).unwrap().assert_in_mempool();
         log::trace!("Mempool mem usage updated: {}", mempool.memory_usage());
     }
-    assert_eq!(mempool.store.txs_by_id.len(), num_txs - 1);
+    assert_eq!(mempool.store.txs_by_id().len(), num_txs - 1);
 
     // Add the last transaction, check the memory limit kicked in and the total number of
     // transactions has not increased.
     let _ = mempool.add_transaction_bare(last_tx.tx_entry().clone());
-    assert!(mempool.store.txs_by_id.len() < num_txs);
+    assert!(mempool.store.txs_by_id().len() < num_txs);
 
     // Bump the memory limit again, and re-insert the evicted transaction(s). Also reset the
     // rolling fee since recently evicted transactions bump it up.
-    mempool.max_size = MempoolMaxSize::from_bytes(memory_size);
+    // Note: since the switch to using hashbrown tables in the mempool store, simply resetting
+    // `mempool.max_size` back to `memory_size` may not be enough for the previously evicted
+    // txs to fit back in. This is because hashbrown tables are probing tables that leave tombstones
+    // during element removal and tombstones may not always be reused during insertion. In such a
+    // case insertion will eat up one additional capacity element, and if the capacity is already at
+    // the maximum, reallocation will occur, doubling the number of buckets, which will contribute
+    // to the current mempool size and will cause some of the previously fitting txs to be evicted.
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size * 2);
     mempool.drop_rolling_fee();
 
     for tx in txs {
@@ -1380,7 +1392,7 @@ async fn mempool_full_real(#[case] seed: Seed) {
         mempool.add_transaction_bare(tx.into_tx_entry()).unwrap().assert_in_mempool();
     }
 
-    assert_eq!(mempool.store.txs_by_id.len(), num_txs, "Some txs missing");
+    assert_eq!(mempool.store.txs_by_id().len(), num_txs, "Some txs missing");
 }
 
 #[rstest]
@@ -1445,8 +1457,8 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     for id in ids {
         mempool.store.remove_tx(&id, MempoolRemovalReason::Block);
     }
-    assert!(mempool.store.txs_by_descendant_score.is_empty());
-    assert!(mempool.store.txs_by_creation_time.is_empty());
+    assert!(mempool.store.txs_by_descendant_score().is_empty());
+    assert!(mempool.store.txs_by_creation_time().is_empty());
     mempool.store.assert_valid();
     Ok(())
 }
@@ -1719,4 +1731,180 @@ fn stack_overflow_on_transaction_addition(
         .await
         .unwrap();
     });
+}
+
+// Note: this is not a real test; it's just a piece of code to estimate the maximum number
+// of transactions that can fit into a store of the default size. I.e. it fills the store
+// with txs of minimally possible size, stops when it's full and prints the count.
+// In the end, it removes all txs from the store and prints the resulting memory usage, which
+// will be the capacity overhead introduced by the 2 hashbrown tables.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn estimate_max_tx_count_in_store() {
+    let make_minimal_tx = |input| {
+        let tx = Transaction::new(
+            0,
+            vec![input],
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)],
+        )
+        .unwrap();
+        SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+    };
+
+    let fake_source = OutPointSourceId::Transaction(Id::new(common::primitives::H256::zero()));
+    let minimal_tx = make_minimal_tx(TxInput::from_utxo(fake_source.clone(), 0));
+    log::info!("minimal tx size = {}", minimal_tx.encoded_size());
+
+    let time = TimeGetter::default().get_time();
+    let origin = TxOrigin::Local(LocalTxOrigin::P2p);
+    let options = TxOptions::default_for(origin);
+    let fee = Amount::from_atoms(1_000_000).into();
+
+    let mut storage = MempoolStore::new(Default::default());
+    storage.disable_heavy_validity_checks();
+
+    loop {
+        let tx_count = storage.txs_by_id().len();
+
+        let tx = make_minimal_tx(TxInput::from_utxo(fake_source.clone(), tx_count as u32));
+        let entry = TxEntry::new(tx, time, origin, options.clone());
+        storage.add_transaction(TxEntryWithFee::new(entry, fee)).unwrap();
+
+        if storage.memory_usage() > MAX_MEMPOOL_SIZE_BYTES {
+            log::info!("max tx count: {tx_count}",);
+            break;
+        }
+    }
+
+    let tx_ids = storage.txs_by_id().keys().copied().collect::<Vec<_>>();
+
+    for tx_id in tx_ids {
+        storage.remove_tx(&tx_id, MempoolRemovalReason::Expiry);
+    }
+
+    assert!(storage.txs_by_id().is_empty());
+
+    // After all txs have been removed, the only thing that can occupy storage is allocated capacity
+    // of containers that have it, which at the moment of writing this are the 2 hash tables -
+    // `txs_by_id` and `seq_nos_by_tx`.
+    // Note though that this value will not exactly represent what will happen in the actual app,
+    // because in `cfg(test)` builds AssertDropPolicy is used as StrictDropPolicy, which contains
+    // an additional bool, which will turn into 8 extra bytes for each bucket of `txs_by_id`, due
+    // to alignment.
+    log::info!(
+        "memory usage after store cleanup: {}",
+        storage.memory_usage()
+    );
+}
+
+// Check that the mempool tries to shrink hash maps when a new tx is inserted.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn storage_capacity_shrinkage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_unit_test_config();
+    let time_getter = BasicTestTimeGetter::new();
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_time_getter(time_getter.get_time_getter())
+        .build();
+    let genesis_id = tf.genesis().get_id();
+    let tx_id = split_utxo(
+        &mut rng,
+        &mut tf,
+        UtxoOutPoint::new(genesis_id.into(), 0),
+        2,
+    );
+
+    let min_tx_relay_fee_rate = FeeRate::from_atoms_per_kb(1);
+
+    let time = time_getter.get_time_getter().get_time();
+    let num_txs = 250;
+    let txs: Vec<_> = generate_transaction_graph_generic(
+        &mut rng,
+        time,
+        min_tx_relay_fee_rate,
+        UtxoOutPoint::new(tx_id.into(), 0),
+        Amount::from_atoms(100_000_000_000_000),
+    )
+    .take(num_txs)
+    .collect();
+
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
+        // Make sure we don't hit the max cluster tx count limit.
+        max_cluster_tx_count: txs.len().into(),
+        max_cluster_size_bytes: Default::default(),
+    };
+
+    let mut mempool = setup_with_chainstate_generic(
+        tf.chainstate(),
+        mempool_config,
+        time_getter.get_time_getter(),
+    );
+
+    for tx in &txs {
+        mempool.add_transaction_bare(tx.tx_entry().clone()).unwrap().assert_in_mempool();
+    }
+
+    let bucket_count1 = store::hash_map_bucket_count_upper_bound(mempool.store.txs_by_id());
+    let bucket_count2 = store::hash_map_bucket_count_upper_bound(mempool.store.seq_nos_by_tx());
+    let alloc_size1 = mempool.store.txs_by_id().allocation_size();
+    let alloc_size2 = mempool.store.seq_nos_by_tx().allocation_size();
+
+    log::debug!("bucket_count1 = {bucket_count1}, bucket_count2 = {bucket_count2}");
+    log::debug!("alloc_size1 = {alloc_size1}, alloc_size2 = {alloc_size2}");
+
+    // Some sanity checks
+    assert!(bucket_count1 >= txs.len());
+    assert!(bucket_count2 >= txs.len());
+
+    assert!(alloc_size1 > 3 * store::HASH_TABLE_MIN_RECLAIMABLE_MEM_SIZE / 2);
+    assert!(alloc_size2 > 3 * store::HASH_TABLE_MIN_RECLAIMABLE_MEM_SIZE / 2);
+
+    time_getter.advance_time(config::DEFAULT_MEMPOOL_EXPIRY + Duration::from_secs(1));
+
+    let new_time = time_getter.get_time_getter().get_time();
+    let new_tx = generate_transaction_graph_generic(
+        &mut rng,
+        new_time,
+        min_tx_relay_fee_rate,
+        UtxoOutPoint::new(tx_id.into(), 1),
+        Amount::from_atoms(100_000_000_000_000),
+    )
+    .next()
+    .unwrap();
+
+    mempool
+        .add_transaction_bare(new_tx.tx_entry().clone())
+        .unwrap()
+        .assert_in_mempool();
+
+    // Sanity check: the old txs have expired
+    assert_eq!(mempool.store.txs_by_id().len(), 1);
+    assert_eq!(mempool.store.seq_nos_by_tx().len(), 1);
+
+    let new_bucket_count1 = store::hash_map_bucket_count_upper_bound(mempool.store.txs_by_id());
+    let new_bucket_count2 = store::hash_map_bucket_count_upper_bound(mempool.store.seq_nos_by_tx());
+    let new_alloc_size1 = mempool.store.txs_by_id().allocation_size();
+    let new_alloc_size2 = mempool.store.seq_nos_by_tx().allocation_size();
+
+    log::debug!("new_bucket_count1 = {new_bucket_count1}, new_bucket_count2 = {new_bucket_count2}");
+    log::debug!("new_alloc_size1 = {new_alloc_size1}, new_alloc_size2 = {new_alloc_size2}");
+
+    // After inserting the new tx, the store should attempt to shrink the capacities to number of
+    // txs (which will be 1) times HASH_TABLE_ADJUSTED_CAPACITY_FACTOR. But the shrinkage is not
+    // guaranteed to be done to this exact value and also the bucket count estimate is bigger than
+    // the actual bucket count, so we can't simply assert that new bucket counts are no bigger than
+    // HASH_TABLE_ADJUSTED_CAPACITY_FACTOR. So we multiply the latter by some additional factor.
+    let new_bucket_counts_expected_max = store::HASH_TABLE_ADJUSTED_CAPACITY_FACTOR * 3;
+    assert!(new_bucket_count1 <= new_bucket_counts_expected_max);
+    assert!(new_bucket_count2 <= new_bucket_counts_expected_max);
+
+    // Sanity check: new_bucket_counts_expected_max is less than the original bucket counts.
+    assert!(new_bucket_counts_expected_max < bucket_count1);
+    assert!(new_bucket_counts_expected_max < bucket_count2);
 }

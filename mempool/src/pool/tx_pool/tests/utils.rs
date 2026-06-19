@@ -206,7 +206,7 @@ pub async fn try_get_fee<M>(tx_pool: &TxPool<M>, tx: &SignedTransaction) -> Fee 
 // unconfirmed means: The outpoint comes from a transaction in the mempool
 pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &UtxoOutPoint) -> Amount {
     let tx_id = *outpoint.source_id().get_tx_id().expect("Not a transaction");
-    let entry = store.txs_by_id.get(&tx_id).expect("Entry not found");
+    let entry = store.txs_by_id().get(&tx_id).expect("Entry not found");
     let tx = entry.transaction().transaction();
     let output = tx.outputs().get(outpoint.output_index() as usize).expect("output not found");
     output_coin_amount(output)
@@ -235,21 +235,24 @@ pub fn make_tx(
 /// This produces an infinite iterator but taking too many items may not be valid:
 /// * The transaction fees may drop below minimum threshold.
 /// * In extreme, 0-value outputs may be generated.
-pub fn generate_transaction_graph(
+pub fn generate_transaction_graph_generic(
     rng: &mut impl CryptoRng,
     time: Time,
+    min_tx_relay_fee_rate: FeeRate,
+    initial_utxo: UtxoOutPoint,
+    initial_utxo_amount: Amount,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
-    let tf = TestFramework::builder(rng).build();
     let mut utxos = vec![(
-        TxInput::from_utxo(tf.genesis().get_id().into(), 0),
-        100_000_000_000_000_u128,
+        TxInput::Utxo(initial_utxo),
+        initial_utxo_amount.into_atoms(),
     )];
 
     std::iter::from_fn(move || {
         let n_inputs = rng.random_range(1..=std::cmp::min(3, utxos.len()));
         let n_outputs = rng.random_range(1..=3);
 
-        let estimated_fee = get_relay_fee_from_tx_size(estimate_tx_size(n_inputs, n_outputs));
+        let estimated_tx_size = estimate_tx_size(n_inputs, n_outputs);
+        let estimated_fee = min_tx_relay_fee_rate.compute_fee(estimated_tx_size).unwrap();
 
         let mut builder = TransactionBuilder::new();
         let mut total = 0u128;
@@ -297,6 +300,23 @@ pub fn generate_transaction_graph(
             Fee::new(Amount::from_atoms(total)),
         ))
     })
+}
+
+pub fn generate_transaction_graph(
+    rng: &mut impl CryptoRng,
+    time: Time,
+) -> impl Iterator<Item = TxEntryWithFee> + '_ {
+    let tf = TestFramework::builder(rng).build();
+    let initial_utxo = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
+    let initial_utxo_amount = Amount::from_atoms(100_000_000_000_000);
+
+    generate_transaction_graph_generic(
+        rng,
+        time,
+        TEST_MIN_TX_RELAY_FEE_RATE,
+        initial_utxo,
+        initial_utxo_amount,
+    )
 }
 
 pub fn make_test_block(

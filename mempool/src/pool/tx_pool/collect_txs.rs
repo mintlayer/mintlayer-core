@@ -133,7 +133,7 @@ pub fn collect_txs<M>(
     // Transaction IDs taken from mempool to fill in the rest of the block
     let mempool_txids = {
         // Get transactions from mempool by score
-        let txids = mempool.store.txs_by_ancestor_score.iter().map(|x| &x.1).rev();
+        let txids = mempool.store.txs_by_ancestor_score().iter().map(|x| &x.1).rev();
         // Take the appropriate amount of them as determined by the packing strategy
         txids.take(match packing_strategy {
             PackingStrategy::FillSpaceFromMempool => usize::MAX,
