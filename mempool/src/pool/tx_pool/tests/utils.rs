@@ -406,10 +406,9 @@ pub async fn tx_spend_input<M>(
     fee: impl Into<Option<Fee>>,
     flags: u128,
 ) -> anyhow::Result<SignedTransaction> {
-    let fee = fee.into().map_or_else(
-        || get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into(),
-        std::convert::identity,
-    );
+    let fee = fee
+        .into()
+        .unwrap_or_else(|| get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into());
     tx_spend_several_inputs(tx_pool, &[input], &[witness], fee, flags).await
 }
 

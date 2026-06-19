@@ -1235,8 +1235,17 @@ impl SignerProvider for LedgerSignerProvider {
     type S = LedgerSigner<LedgerHandle, LedgerSignerProvider>;
     type K = AccountKeyChainImplHardware;
 
-    fn provide(&mut self, chain_config: Arc<ChainConfig>, _account_index: U31) -> Self::S {
-        LedgerSigner::new(chain_config, self.client.clone(), self.clone())
+    fn provide(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        _account_index: U31,
+        _db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<Self::S> {
+        Ok(LedgerSigner::new(
+            chain_config,
+            self.client.clone(),
+            self.clone(),
+        ))
     }
 
     async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(

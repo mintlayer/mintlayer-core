@@ -27,7 +27,8 @@ use crate::signer::tests::{
         MessageToSign, test_sign_message_generic, test_sign_transaction_generic,
         test_sign_transaction_intent_generic,
     },
-    make_deterministic_software_signer, make_software_signer, no_another_signer,
+    make_deterministic_software_signer, make_software_signer, make_software_signer_for_cold_wallet,
+    no_another_signer,
 };
 
 #[rstest]
@@ -57,20 +58,44 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
-#[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
+#[case(Seed::from_entropy(), true, SighashInputCommitmentVersion::V0)]
+#[case(Seed::from_entropy(), false, SighashInputCommitmentVersion::V1)]
 #[trace]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sign_transaction(
     #[case] seed: Seed,
-    #[case] input_commitments_version: SighashInputCommitmentVersion,
+    #[case] before_fork: bool,
+    #[case] expected_input_commitments_version: SighashInputCommitmentVersion,
 ) {
     let mut rng = make_seedable_rng(seed);
 
     test_sign_transaction_generic(
         &mut rng,
-        input_commitments_version,
+        before_fork,
+        expected_input_commitments_version,
         make_software_signer,
+        no_another_signer(),
+        true,
+    )
+    .await;
+}
+
+// Cold wallet should assume v1 commitments regardless of what it thinks the current height is.
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_cold_wallet(
+    #[case] seed: Seed,
+    #[values(false, true)] before_fork: bool,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_transaction_generic(
+        &mut rng,
+        before_fork,
+        SighashInputCommitmentVersion::V1,
+        make_software_signer_for_cold_wallet,
         no_another_signer(),
         true,
     )

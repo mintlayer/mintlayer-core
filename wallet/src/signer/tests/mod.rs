@@ -21,7 +21,7 @@ use std::sync::Arc;
 use common::chain::ChainConfig;
 use crypto::key::{PredefinedSigAuxDataProvider, hdkd::u31::U31};
 use wallet_storage::StoreTxRwUnlocked;
-use wallet_types::seed_phrase::StoreSeedPhrase;
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::SoftwareWalletType};
 
 use crate::{
     Account,
@@ -58,7 +58,14 @@ fn account_from_mnemonic<B: storage::Backend>(
 }
 
 pub fn make_software_signer(chain_config: Arc<ChainConfig>, account_index: U31) -> SoftwareSigner {
-    SoftwareSigner::new(chain_config, account_index)
+    SoftwareSigner::new(chain_config, account_index, SoftwareWalletType::Hot)
+}
+
+pub fn make_software_signer_for_cold_wallet(
+    chain_config: Arc<ChainConfig>,
+    account_index: U31,
+) -> SoftwareSigner {
+    SoftwareSigner::new(chain_config, account_index, SoftwareWalletType::Cold)
 }
 
 // Return a SoftwareSigner that will produce Trezor-like signatures.
@@ -69,6 +76,7 @@ pub fn make_deterministic_software_signer(
     SoftwareSigner::new_with_sig_aux_data_provider(
         chain_config,
         account_index,
+        SoftwareWalletType::Hot,
         Box::new(PredefinedSigAuxDataProvider),
     )
 }

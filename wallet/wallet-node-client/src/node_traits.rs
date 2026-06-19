@@ -67,6 +67,7 @@ impl NodeInterfaceError for MockNodeInterfaceError {
 pub trait NodeInterface {
     type Error: NodeInterfaceError;
 
+    // TODO: rename this, e.g. to wallet_mode.
     async fn is_cold_wallet_node(&self) -> WalletControllerMode;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;

@@ -1229,7 +1229,8 @@ where
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let result = create_request(account, &mut db_tx);
-        let signer = self.signer_provider.provide(self.chain_config.clone(), account_index);
+        let signer =
+            self.signer_provider.provide(self.chain_config.clone(), account_index, &db_tx)?;
         let config = self.chain_config.clone();
         let result = sign_request(result, account.key_chain(), &mut db_tx, config, signer).await;
 

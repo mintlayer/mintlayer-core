@@ -45,7 +45,9 @@ use wallet::{
     account::TransactionToSign, wallet::test_helpers::create_wallet_with_mnemonic,
     wallet_events::WalletEventsNoOp,
 };
-use wallet_types::partially_signed_transaction::PtxAdditionalInfo;
+use wallet_types::{
+    partially_signed_transaction::PtxAdditionalInfo, wallet_type::WalletControllerMode,
+};
 
 use crate::{
     Controller,
@@ -174,6 +176,8 @@ async fn general_test(#[case] seed: Seed, #[case] use_htlc_secret: bool) {
             median_time: BlockTimestamp::from_int_seconds(rng.random()),
             is_initial_block_download: false,
         };
+
+        node_mock.expect_is_cold_wallet_node().returning(|| WalletControllerMode::Hot);
 
         node_mock
             .expect_get_utxo()

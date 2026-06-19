@@ -25,7 +25,10 @@ use common::{
     primitives::BlockHeight,
 };
 use wallet_storage::{DefaultBackend, Store};
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase,
+    wallet_type::{WalletControllerMode, WalletType},
+};
 
 use crate::{
     DefaultWallet, Wallet,
@@ -38,28 +41,15 @@ pub async fn create_wallet_with_mnemonic(
     chain_config: Arc<ChainConfig>,
     mnemonic: &str,
 ) -> DefaultWallet {
-    let db = create_wallet_in_memory().unwrap();
-    let genesis_block_id = chain_config.genesis_block_id();
-    Wallet::create_new_wallet(
-        chain_config.clone(),
-        Default::default(),
-        db,
-        (BlockHeight::new(0), genesis_block_id),
-        WalletType::Hot,
-        async |db_tx| {
-            Ok(SoftwareSignerProvider::new_from_mnemonic(
-                chain_config,
-                db_tx,
-                mnemonic,
-                None,
-                StoreSeedPhrase::DoNotStore,
-            )?)
-        },
-    )
-    .await
-    .unwrap()
-    .wallet()
-    .unwrap()
+    create_wallet_with_type_and_mnemonic(chain_config, WalletType::Hot, mnemonic).await
+}
+
+pub async fn create_wallet_with_type_and_mnemonic(
+    chain_config: Arc<ChainConfig>,
+    wallet_type: WalletType,
+    mnemonic: &str,
+) -> DefaultWallet {
+    create_wallet_generic(chain_config, wallet_type, mnemonic, None).await
 }
 
 pub fn create_named_in_memory_backend(db_name: &str) -> DefaultBackend {
@@ -75,14 +65,27 @@ pub async fn create_wallet_with_mnemonic_and_named_db(
     mnemonic: &str,
     db_name: &str,
 ) -> DefaultWallet {
-    let db = create_named_in_memory_store(db_name);
+    create_wallet_generic(chain_config, WalletType::Hot, mnemonic, Some(db_name)).await
+}
+
+pub async fn create_wallet_generic(
+    chain_config: Arc<ChainConfig>,
+    wallet_type: WalletType,
+    mnemonic: &str,
+    db_name: Option<&str>,
+) -> DefaultWallet {
+    let db = if let Some(db_name) = db_name {
+        create_named_in_memory_store(db_name)
+    } else {
+        create_wallet_in_memory().unwrap()
+    };
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config.clone(),
         Default::default(),
         db,
         (BlockHeight::new(0), genesis_block_id),
-        WalletType::Hot,
+        wallet_type,
         async |db_tx| {
             SoftwareSignerProvider::new_from_mnemonic(
                 chain_config,
@@ -93,6 +96,30 @@ pub async fn create_wallet_with_mnemonic_and_named_db(
             )
             .map_err(Into::into)
         },
+    )
+    .await
+    .unwrap()
+    .wallet()
+    .unwrap()
+}
+
+pub async fn load_wallet(
+    chain_config: Arc<ChainConfig>,
+    db_name: &str,
+    controller_mode: WalletControllerMode,
+    force_change_wallet_type: bool,
+) -> DefaultWallet {
+    let db = create_named_in_memory_store(db_name);
+
+    Wallet::load_wallet(
+        Arc::clone(&chain_config),
+        Default::default(),
+        db,
+        None,
+        |_| Ok(()),
+        controller_mode,
+        force_change_wallet_type,
+        async |db_tx| SoftwareSignerProvider::load_from_database(chain_config, &db_tx),
     )
     .await
     .unwrap()

@@ -231,6 +231,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     rpc_client: T,
 
     wallet: RuntimeWallet<B>,
+    wallet_mode: WalletControllerMode,
 
     staking_started: BTreeSet<U31>,
 
@@ -260,22 +261,19 @@ where
         wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<N>> {
-        let mempool_events = rpc_client
-            .mempool_subscribe_to_events()
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-        let mut controller = Self {
-            chain_config,
-            rpc_client,
-            wallet,
-            staking_started: BTreeSet::new(),
-            wallet_events,
-            mempool_events,
-            finished_initial_sync: SetFlag::new(),
-        };
+        let mut controller =
+            Self::new_unsynced(chain_config, rpc_client, wallet, wallet_events).await?;
 
-        log::info!("Syncing the wallet...");
-        controller.try_sync_once().await?;
+        // In the cold mode, try_sync_once is a no-op, so it doesn't matter whether we call it.
+        // We omit the call to avoid printing the "Syncing the wallet" log line, which looks
+        // confusing in the cold mode.
+        match controller.wallet_mode {
+            WalletControllerMode::Cold => {}
+            WalletControllerMode::Hot => {
+                log::info!("Syncing the wallet...");
+                controller.try_sync_once().await?;
+            }
+        };
 
         Ok(controller)
     }
@@ -286,14 +284,18 @@ where
         wallet: RuntimeWallet<B>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<N>> {
+        let wallet_mode = rpc_client.is_cold_wallet_node().await;
+
         let mempool_events = rpc_client
             .mempool_subscribe_to_events()
             .await
             .map_err(ControllerError::NodeCallError)?;
+
         Ok(Self {
             chain_config,
             rpc_client,
             wallet,
+            wallet_mode,
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
@@ -1565,26 +1567,33 @@ where
                 }
             }
 
-            // after the first successful sync to the tip fetch all mempool transactions
-            if !self.finished_initial_sync.test() {
-                let txs = self.rpc_client.mempool_get_transactions().await;
+            match self.wallet_mode {
+                WalletControllerMode::Hot => {
+                    // after the first successful sync to the tip fetch all mempool transactions
+                    if !self.finished_initial_sync.test() {
+                        let txs = self.rpc_client.mempool_get_transactions().await;
 
-                match txs {
-                    Ok(txs) => {
-                        if let Err(err) =
-                            self.wallet.add_mempool_transactions(&txs, &self.wallet_events)
-                        {
-                            log::error!("Error adding mempool transactions: {err}");
-                        } else {
-                            self.finished_initial_sync.set();
+                        match txs {
+                            Ok(txs) => {
+                                if let Err(err) =
+                                    self.wallet.add_mempool_transactions(&txs, &self.wallet_events)
+                                {
+                                    log::error!("Error adding mempool transactions: {err}");
+                                } else {
+                                    self.finished_initial_sync.set();
+                                }
+                            }
+                            Err(err) => {
+                                log::error!(
+                                    "Failed to fetch all transactions from the mempool: {err}"
+                                );
+                                tokio::time::sleep(ERROR_DELAY).await;
+                                continue;
+                            }
                         }
                     }
-                    Err(err) => {
-                        log::error!("Failed to fetch all transactions from the mempool: {err}");
-                        tokio::time::sleep(ERROR_DELAY).await;
-                        continue;
-                    }
                 }
+                WalletControllerMode::Cold => {}
             }
 
             let mut delay = Box::pin(tokio::time::sleep(NORMAL_DELAY));
@@ -1599,7 +1608,7 @@ where
                         let event = match maybe_event {
                             Some(e) => e,
                             None => {
-                                log::error!("Mempool notifications channel is closed.");
+                                log::error!("Mempool notifications channel is closed");
                                 tokio::time::sleep(ERROR_DELAY).await;
 
                                 match self.rpc_client
@@ -1609,7 +1618,7 @@ where
                                         self.mempool_events = events;
                                     }
                                     Err(err) => {
-                                        log::error!("Subscribing to mempool notifications failed with: {err}");
+                                        log::error!("Re-subscribing to mempool notifications failed: {err}");
                                     }
                                 }
                                 break
@@ -1626,14 +1635,14 @@ where
                                     Ok(Some(transaction)) => {
                                         let txs = [transaction];
                                         if let Err(err) = self.wallet.add_mempool_transactions(&txs, &self.wallet_events) {
-                                            log::error!("Tx {} failed to be added in the wallet because of an error: {err}", tx_id);
+                                            log::error!("Error adding mempool transaction {tx_id:x} to the wallet: {err}");
                                         }
                                     }
                                     Ok(None) => {
-                                        log::warn!("Tx {} announced by mempool, but not found when fetched", tx_id);
+                                        log::warn!("Transaction {tx_id:x} announced by mempool, but not found when fetched");
                                     }
                                     Err(err) => {
-                                        log::error!("Error while fetching a transaction from mempool {err}");
+                                        log::error!("Error fetching transaction {tx_id:x} from mempool: {err}");
                                     }
                                 }
                             }
@@ -1641,7 +1650,17 @@ where
                     }
                 }
             }
-            self.rebroadcast_txs(&mut rebroadcast_txs_timer).await;
+
+            // Note: normally a wallet in the cold mode will not have any transactions to broadcast. However, if it was
+            // force-converted from a hot wallet, it may have such transactions, in which case `rebroadcast_txs` will
+            // repeatedly print the warning "Rebroadcasting ... failed: Method is not available in cold wallet mode".
+            // So we avoid calling `rebroadcast_txs` in the cold mode.
+            match self.wallet_mode {
+                WalletControllerMode::Cold => {}
+                WalletControllerMode::Hot => {
+                    self.rebroadcast_txs(&mut rebroadcast_txs_timer).await;
+                }
+            }
         }
     }
 
@@ -1658,7 +1677,7 @@ where
                         let tx_id = tx.transaction().get_id();
                         let res = self.rpc_client.submit_transaction(tx, Default::default()).await;
                         if let Err(e) = res {
-                            log::warn!("Rebroadcasting for tx {tx_id} failed: {e}");
+                            log::warn!("Rebroadcasting tx {tx_id:x} failed: {e}");
                         }
                     }
                 }

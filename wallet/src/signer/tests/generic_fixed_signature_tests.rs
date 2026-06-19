@@ -387,9 +387,8 @@ where
         .unwrap();
     assert!(ptx.all_signatures_available());
 
-    let input_commitments = ptx
-        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
-        .unwrap();
+    let expected_input_commitments =
+        ptx.make_sighash_input_commitments(SighashInputCommitmentVersion::V0).unwrap();
     let all_utxos = utxos
         .iter()
         .map(Some)
@@ -402,7 +401,7 @@ where
             &chain_config,
             dest,
             &ptx,
-            &input_commitments,
+            &expected_input_commitments,
             i,
             all_utxos[i].cloned(),
         )
@@ -917,8 +916,8 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
     );
     let ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
-    let input_commitments = ptx
-        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(input_commitments_version)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
@@ -958,7 +957,7 @@ pub async fn test_fixed_signatures_generic2<MkS, S>(
             &chain_config,
             dest,
             &ptx,
-            &input_commitments,
+            &expected_input_commitments,
             i,
             all_utxos[i].cloned(),
         )
@@ -1572,8 +1571,8 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
     );
     let ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
-    let input_commitments = ptx
-        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(SighashInputCommitmentVersion::V1)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
@@ -1613,7 +1612,7 @@ pub async fn test_fixed_signatures_generic_no_legacy<MkS, S>(
             &chain_config,
             dest,
             &ptx,
-            &input_commitments,
+            &expected_input_commitments,
             i,
             all_utxos[i].cloned(),
         )
@@ -1952,8 +1951,8 @@ pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
     );
     let ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
-    let input_commitments = ptx
-        .make_sighash_input_commitments_at_height(&chain_config, tx_block_height)
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(input_commitments_version)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
@@ -1995,7 +1994,7 @@ pub async fn test_fixed_signatures_generic_htlc_refunding<MkS, S>(
             &chain_config,
             dest,
             &ptx,
-            &input_commitments,
+            &expected_input_commitments,
             i,
             all_utxos[i].cloned(),
         )

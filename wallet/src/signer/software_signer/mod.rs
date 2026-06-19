@@ -20,7 +20,8 @@ use itertools::Itertools;
 
 use common::{
     chain::{
-        ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
+        ChainConfig, Destination, SighashInputCommitmentVersion, SignedTransactionIntent,
+        Transaction, TxOutput,
         config::ChainType,
         htlc::HtlcSecret,
         signature::{
@@ -49,7 +50,7 @@ use crypto::key::{
     hdkd::{derivable::Derivable, u31::U31},
 };
 use randomness::make_true_rng;
-use utils::ensure;
+use utils::{debug_panic_or_log, ensure};
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
@@ -59,7 +60,7 @@ use wallet_types::{
     partially_signed_transaction::{PartiallySignedTransaction, TokensAdditionalInfo},
     seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
-    wallet_type::WalletType,
+    wallet_type::SoftwareWalletType,
 };
 
 use crate::{
@@ -76,11 +77,16 @@ use super::{Signer, SignerError, SignerProvider, SignerResult, utils::is_htlc_ut
 pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
+    wallet_type: SoftwareWalletType,
     sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider + Send>>,
 }
 
 impl SoftwareSigner {
-    pub fn new(chain_config: Arc<ChainConfig>, account_index: U31) -> Self {
+    pub fn new(
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        wallet_type: SoftwareWalletType,
+    ) -> Self {
         let use_deterministic_signer = *chain_config.chain_type() == ChainType::Regtest
             && cfg!(feature = "use-deterministic-signatures-in-software-signer-for-regtest");
 
@@ -88,12 +94,14 @@ impl SoftwareSigner {
             Self::new_with_sig_aux_data_provider(
                 chain_config,
                 account_index,
+                wallet_type,
                 Box::new(PredefinedSigAuxDataProvider),
             )
         } else {
             Self::new_with_sig_aux_data_provider(
                 chain_config,
                 account_index,
+                wallet_type,
                 Box::new(make_true_rng()),
             )
         }
@@ -102,11 +110,13 @@ impl SoftwareSigner {
     pub fn new_with_sig_aux_data_provider(
         chain_config: Arc<ChainConfig>,
         account_index: U31,
+        wallet_type: SoftwareWalletType,
         sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
     ) -> Self {
         Self {
             chain_config,
             account_index,
+            wallet_type,
             sig_aux_data_provider: Mutex::new(sig_aux_data_provider),
         }
     }
@@ -291,8 +301,19 @@ impl Signer for SoftwareSigner {
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let input_commitments =
-            ptx.make_sighash_input_commitments_at_height(&self.chain_config, block_height)?;
+        let input_commitments = match self.wallet_type {
+            SoftwareWalletType::Hot => {
+                ptx.make_sighash_input_commitments_at_height(&self.chain_config, block_height)?
+            }
+            SoftwareWalletType::Cold => {
+                // Wallet in the cold mode is not aware of the actual chain height, so block_height
+                // will always be zero here. Since at the moment of writing this the fork has already
+                // happened both on testnet and mainnet, we can unconditionally assume input commitments v1.
+                // TODO: remove the support of input commitments v0 in the wallet, always assume v1.
+                // Same for orders v0/v1.
+                ptx.make_sighash_input_commitments(SighashInputCommitmentVersion::V1)?
+            }
+        };
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -478,9 +499,10 @@ impl SoftwareSignerProvider {
     ) -> WalletResult<Self> {
         let this_wallet_type = db_tx.get_wallet_type()?;
         ensure!(
-            this_wallet_type == WalletType::Hot || this_wallet_type == WalletType::Cold,
+            this_wallet_type.to_software_wallet_type().is_some(),
             WalletError::HardwareWalletOpenedAsSoftwareWallet(this_wallet_type)
         );
+
         let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
         Ok(Self { master_key_chain })
     }
@@ -491,8 +513,26 @@ impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
     type K = AccountKeyChainImplSoftware;
 
-    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
-        SoftwareSigner::new(chain_config, account_index)
+    fn provide(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<Self::S> {
+        let wallet_type = db_tx.get_wallet_type()?;
+        let software_wallet_type =
+            wallet_type.to_software_wallet_type().unwrap_or_else(|| {
+                debug_panic_or_log!(
+                    "Db tx related to a hardware wallet ({wallet_type:?}) was passed to SoftwareSignerProvider::provide"
+                );
+                SoftwareWalletType::Hot
+            });
+
+        Ok(SoftwareSigner::new(
+            chain_config,
+            account_index,
+            software_wallet_type,
+        ))
     }
 
     async fn make_new_account<T: WalletStorageWriteUnlocked + Send>(

@@ -299,7 +299,7 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn mempool_subscribe_to_events(&self) -> Result<MempoolEvents, Self::Error> {
-        Ok(Box::new(futures::stream::empty()))
+        Ok(Box::new(futures::stream::pending()))
     }
 
     async fn mempool_get_transaction(
