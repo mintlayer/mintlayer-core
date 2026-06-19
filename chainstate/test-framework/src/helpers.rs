@@ -297,21 +297,49 @@ pub fn calculate_fill_order(
     .unwrap()
 }
 
-pub fn order_min_non_zero_fill_amount(
+/// For orders v1, return the minimal fill amount that would result in a non-zero filled amount.
+/// For orders v0 return 1.
+pub fn order_min_accepted_non_zero_fill_amount(
     tf: &TestFramework,
     order_id: &OrderId,
     orders_version: OrdersVersion,
 ) -> Amount {
     match orders_version {
-        // Note: in orders v0 even direct zero fills are allowed.
-        // However, this function is supposed to only return non-zero amounts.
         OrdersVersion::V0 => Amount::from_atoms(1),
 
-        // In orders v1, the fill amount must be big enough so that the filled amount is non-zero.
         OrdersVersion::V1 => {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
 
+            let order_data = orders_db.get_order_data(order_id).unwrap().unwrap();
+            let original_ask = order_data.ask().amount().into_atoms();
+            let original_give = order_data.give().amount().into_atoms();
+
+            Amount::from_atoms(original_ask.div_ceil(original_give))
+        }
+    }
+}
+
+/// Return the minimal fill amount that would result in a non-zero filled amount.
+/// Note: since orders v0 use the current balance for the filled amount calculation, this function
+/// should only be used to generate the first fill of the v0 order in the block under construction.
+pub fn order_min_amount_for_non_zero_fill(
+    tf: &TestFramework,
+    order_id: &OrderId,
+    orders_version: OrdersVersion,
+) -> Amount {
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let orders_db = OrdersAccountingDB::new(&db_tx);
+
+    match orders_version {
+        OrdersVersion::V0 => {
+            let ask_balance = orders_db.get_ask_balance(order_id).unwrap().into_atoms();
+            let give_balance = orders_db.get_give_balance(order_id).unwrap().into_atoms();
+
+            Amount::from_atoms(ask_balance.div_ceil(give_balance))
+        }
+
+        OrdersVersion::V1 => {
             let order_data = orders_db.get_order_data(order_id).unwrap().unwrap();
             let original_ask = order_data.ask().amount().into_atoms();
             let original_give = order_data.give().amount().into_atoms();

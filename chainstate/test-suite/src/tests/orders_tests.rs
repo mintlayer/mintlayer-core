@@ -26,7 +26,8 @@ use chainstate_test_framework::{
     TestFramework, TransactionBuilder,
     helpers::{
         calculate_fill_order, issue_and_mint_random_token_from_best_block,
-        issue_random_nft_from_best_block, order_min_non_zero_fill_amount, output_value_with_amount,
+        issue_random_nft_from_best_block, order_min_accepted_non_zero_fill_amount,
+        order_min_amount_for_non_zero_fill, output_value_with_amount,
     },
     output_value_amount,
 };
@@ -956,7 +957,8 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially or completely
-        let min_non_zero_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_non_zero_fill_amount =
+            order_min_accepted_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_non_zero_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
@@ -976,13 +978,14 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_order_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(left_to_fill),
                 Destination::AnyoneCanSpend,
             ))
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount,
+                Destination::AnyoneCanSpend,
+            )
             .build();
         let partial_fill_tx_id = tx.transaction().get_id();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
@@ -1001,11 +1004,16 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
             true,
         );
 
-        // Note: even though zero fills are allowed in orders V0 in general, we can't do a zero
-        // fill when the remaining ask balance is zero. So we skip the 2nd fill for orders V0
-        // as well when the remaining balance is less than min_non_zero_fill_amount (which is 1
-        // in the orders V0 case).
-        if left_to_fill >= min_non_zero_fill_amount {
+        let can_fill_rest = match version {
+            OrdersVersion::V0 => {
+                // Even though zero fills are allowed in orders V0 in general, we can't do a zero
+                // fill when the remaining ask balance is zero.
+                left_to_fill > Amount::ZERO
+            }
+            OrdersVersion::V1 => left_to_fill >= min_non_zero_fill_amount,
+        };
+
+        if can_fill_rest {
             // Fill the rest of the order
             let filled_amount = calculate_fill_order(&tf, &order_id, left_to_fill, version);
 
@@ -1022,14 +1030,15 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
 
             let tx = TransactionBuilder::new()
                 .add_input(
-                    UtxoOutPoint::new(partial_fill_tx_id.into(), 1).into(),
+                    UtxoOutPoint::new(partial_fill_tx_id.into(), 0).into(),
                     InputWitness::NoSignature(None),
                 )
                 .add_input(fill_order_input, InputWitness::NoSignature(None))
-                .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, filled_amount),
+                .add_token_transfer_output_if_non_zero(
+                    token_id,
+                    filled_amount,
                     Destination::AnyoneCanSpend,
-                ))
+                )
                 .build();
             tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -1095,7 +1104,7 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially or completely
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_fill_amount = order_min_accepted_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
@@ -1113,10 +1122,11 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_input, InputWitness::NoSignature(None))
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount),
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount,
                 Destination::AnyoneCanSpend,
-            ))
+            )
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -1136,9 +1146,7 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
                 .add_output(TxOutput::Transfer(
                     OutputValue::TokenV1(
                         token_id,
-                        (give_amount - filled_amount)
-                            .and_then(|v| v + Amount::from_atoms(1))
-                            .unwrap(),
+                        ((give_amount - filled_amount).unwrap() + Amount::from_atoms(1)).unwrap(),
                     ),
                     Destination::AnyoneCanSpend,
                 ))
@@ -1175,13 +1183,14 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
             let tx = TransactionBuilder::new()
                 .add_input(conclude_input, InputWitness::NoSignature(None))
                 .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, (give_amount - filled_amount).unwrap()),
-                    Destination::AnyoneCanSpend,
-                ))
-                .add_output(TxOutput::Transfer(
                     OutputValue::Coin((fill_amount + Amount::from_atoms(1)).unwrap()),
                     Destination::AnyoneCanSpend,
                 ))
+                .add_token_transfer_output_if_non_zero(
+                    token_id,
+                    (give_amount - filled_amount).unwrap(),
+                    Destination::AnyoneCanSpend,
+                )
                 .build();
             let tx_id = tx.transaction().get_id();
             let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
@@ -1209,15 +1218,15 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
         };
         let tx = TransactionBuilder::new()
             .add_input(conclude_input, InputWitness::NoSignature(None))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(fill_amount),
+                Destination::AnyoneCanSpend,
+            ))
             .add_token_transfer_output_if_non_zero(
                 token_id,
                 (give_amount - filled_amount).unwrap(),
                 Destination::AnyoneCanSpend,
             )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(fill_amount),
-                Destination::AnyoneCanSpend,
-            ))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -1241,10 +1250,11 @@ fn fill_then_conclude(#[case] seed: Seed, #[case] version: OrdersVersion) {
             };
             let tx = TransactionBuilder::new()
                 .add_input(fill_input, InputWitness::NoSignature(None))
-                .add_output(TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, filled_amount),
+                .add_token_transfer_output_if_non_zero(
+                    token_id,
+                    filled_amount,
                     Destination::AnyoneCanSpend,
-                ))
+                )
                 .build();
             let tx_id = tx.transaction().get_id();
             let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
@@ -1756,7 +1766,7 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
 
         // Fill the order partially, leaving at least one atom unfilled (so that the expected
         // remaining ask/give amounts are always Some).
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_fill_amount = order_min_accepted_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..ask_amount.into_atoms()),
         );
@@ -1776,13 +1786,14 @@ fn reorg_before_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(left_to_fill),
                 Destination::AnyoneCanSpend,
             ))
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount,
+                Destination::AnyoneCanSpend,
+            )
             .build();
         tf.make_block_builder()
             .add_transaction(fill_order_tx.clone())
@@ -1855,7 +1866,7 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
         let reorg_common_ancestor = tf.best_block_id();
 
         // Fill the order partially or completely
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_fill_amount = order_min_accepted_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
@@ -1875,13 +1886,14 @@ fn reorg_after_create(#[case] seed: Seed, #[case] version: OrdersVersion) {
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_input, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(left_to_fill),
                 Destination::AnyoneCanSpend,
             ))
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount,
+                Destination::AnyoneCanSpend,
+            )
             .build();
         tf.make_block_builder()
             .add_transaction(fill_order_tx.clone())
@@ -3336,7 +3348,8 @@ fn fill_freeze_conclude_order(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially or completely
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
+        let min_fill_amount =
+            order_min_accepted_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..=ask_amount.into_atoms()),
         );
@@ -3669,8 +3682,12 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
         // The destination in FillOrder is PublicKey(pk1), the input is not signed.
         // The actual output destination is output_destination.
         {
+            let min_fill_amount =
+                order_min_amount_for_non_zero_fill(&tf, &order_id, OrdersVersion::V0);
             let fill_amount1 =
-                Amount::from_atoms(rng.random_range(1..initial_ask_amount.into_atoms() / 10));
+                Amount::from_atoms(rng.random_range(
+                    min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 10,
+                ));
             let filled_amount1 =
                 calculate_fill_order(&tf, &order_id, fill_amount1, OrdersVersion::V0);
             let fill_order_input1 = TxInput::AccountCommand(
@@ -3711,8 +3728,12 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
         // The destination in FillOrder is PublicKey(pk1), the input is signed by pk2.
         // The actual output destination is output_destination.
         {
+            let min_fill_amount =
+                order_min_amount_for_non_zero_fill(&tf, &order_id, OrdersVersion::V0);
             let fill_amount2 =
-                Amount::from_atoms(rng.random_range(1..initial_ask_amount.into_atoms() / 10));
+                Amount::from_atoms(rng.random_range(
+                    min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 10,
+                ));
             let filled_amount2 =
                 calculate_fill_order(&tf, &order_id, fill_amount2, OrdersVersion::V0);
             let fill_order_input2 = TxInput::AccountCommand(
@@ -3772,8 +3793,12 @@ fn fill_order_v0_destination_irrelevancy(#[case] seed: Seed) {
         // The destination in FillOrder is PublicKey(pk1), the signature is bogus.
         // The actual output destination is output_destination.
         {
+            let min_fill_amount =
+                order_min_amount_for_non_zero_fill(&tf, &order_id, OrdersVersion::V0);
             let fill_amount3 =
-                Amount::from_atoms(rng.random_range(1..initial_ask_amount.into_atoms() / 10));
+                Amount::from_atoms(rng.random_range(
+                    min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 10,
+                ));
             let filled_amount3 =
                 calculate_fill_order(&tf, &order_id, fill_amount3, OrdersVersion::V0);
             let fill_order_input3 = TxInput::AccountCommand(
@@ -3868,7 +3893,8 @@ fn fill_order_v1_must_not_be_signed(#[case] seed: Seed) {
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let output_destination = Destination::PublicKey(pk);
 
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
+        let min_fill_amount =
+            order_min_accepted_non_zero_fill_amount(&tf, &order_id, OrdersVersion::V1);
         let fill_amount = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 10),
         );
@@ -4034,7 +4060,7 @@ fn fill_order_twice_in_same_block(
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let output_destination = Destination::PublicKey(pk);
 
-        let min_fill_amount = order_min_non_zero_fill_amount(&tf, &order_id, version);
+        let min_fill_amount = order_min_accepted_non_zero_fill_amount(&tf, &order_id, version);
         let fill_amount1 = Amount::from_atoms(
             rng.random_range(min_fill_amount.into_atoms()..initial_ask_amount.into_atoms() / 3),
         );
@@ -4104,30 +4130,32 @@ fn fill_order_twice_in_same_block(
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_order_input1, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount1),
-                output_destination.clone(),
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(coins_after_first_fill),
                 Destination::AnyoneCanSpend,
             ))
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount1,
+                output_destination.clone(),
+            )
             .build();
         let fill_tx_1_id = fill_tx_1.transaction().get_id();
 
-        let coins_outpoint = UtxoOutPoint::new(fill_tx_1_id.into(), 1);
+        let coins_outpoint = UtxoOutPoint::new(fill_tx_1_id.into(), 0);
 
         let coins_after_second_fill = (coins_after_first_fill - fill_amount2).unwrap();
         let fill_tx_2 = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(fill_order_input2, InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, filled_amount2),
-                output_destination.clone(),
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(coins_after_second_fill),
                 Destination::AnyoneCanSpend,
             ))
+            .add_token_transfer_output_if_non_zero(
+                token_id,
+                filled_amount2,
+                output_destination.clone(),
+            )
             .build();
 
         tf.make_block_builder()
@@ -4207,7 +4235,8 @@ fn conclude_and_recreate_in_same_tx_with_same_balances(
 
         let (fill_amount, filled_amount, coins_outpoint, coins_amount) = if fill_after_creation {
             // Fill the order partially.
-            let min_fill_amount = order_min_non_zero_fill_amount(&tf, &orig_order_id, version);
+            let min_fill_amount =
+                order_min_accepted_non_zero_fill_amount(&tf, &orig_order_id, version);
             let fill_amount = Amount::from_atoms(
                 rng.random_range(min_fill_amount.into_atoms()..orig_ask_amount.into_atoms()),
             );
@@ -4406,7 +4435,8 @@ fn conclude_and_recreate_in_same_tx_with_different_balances(
                 orig_ask_amount
             } else {
                 // Fill the order partially.
-                let min_fill_amount = order_min_non_zero_fill_amount(&tf, &orig_order_id, version);
+                let min_fill_amount =
+                    order_min_accepted_non_zero_fill_amount(&tf, &orig_order_id, version);
                 Amount::from_atoms(
                     rng.random_range(min_fill_amount.into_atoms()..orig_ask_amount.into_atoms()),
                 )
