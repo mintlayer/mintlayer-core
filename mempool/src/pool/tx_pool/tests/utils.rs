@@ -232,9 +232,12 @@ pub fn make_tx(
 
 /// Generate a valid transaction graph.
 ///
-/// This produces an infinite iterator but taking too many items may not be valid:
-/// * The transaction fees may drop below minimum threshold.
-/// * In extreme, 0-value outputs may be generated.
+/// Note: this produces an infinite iterator but taking too many items will fail, because at some
+/// point the remaining total amount will become less than the minimum tx fee. If you need a large
+/// number of txs, use a negligible fee rate and/or a large initial utxo amount (each tx pays the
+/// minimum fee plus up to 5% of its selected input amount as extra fee, so in the worst case after
+/// N txs the remaining amount will be no more than 0.95^N of the initial amount minus the accumulated
+/// minimum fees).
 pub fn generate_transaction_graph_generic(
     rng: &mut impl CryptoRng,
     time: Time,
@@ -248,34 +251,60 @@ pub fn generate_transaction_graph_generic(
     )];
 
     std::iter::from_fn(move || {
-        let n_inputs = rng.random_range(1..=std::cmp::min(3, utxos.len()));
-        let n_outputs = rng.random_range(1..=3);
-
-        let estimated_tx_size = estimate_tx_size(n_inputs, n_outputs);
-        let estimated_fee = min_tx_relay_fee_rate.compute_fee(estimated_tx_size).unwrap();
-
         let mut builder = TransactionBuilder::new();
         let mut total = 0u128;
         let mut amts = Vec::new();
 
-        // the number is chosen to avoid generating empty range below
-        let min_valid_total_amount = 2;
+        let min_outputs_amt = 2;
 
-        let mut input_count = 0;
-        while input_count < n_inputs || total < estimated_fee.into_atoms() + min_valid_total_amount
+        let mut inputs_count = rng.random_range(1..=std::cmp::min(3, utxos.len()));
+        let outputs_count = rng.random_range(1..=3);
+
+        let mut estimated_fee = min_tx_relay_fee_rate
+            .compute_fee(estimate_tx_size(inputs_count, outputs_count))
+            .unwrap();
+
         {
-            let (outpt, amt) = utxos.swap_remove(rng.random_range(0..utxos.len()));
-            total += amt;
-            builder = builder.add_input(outpt, empty_witness(rng));
-            input_count += 1;
+            let mut i = 0;
+            loop {
+                let (outpt, amt) = utxos.swap_remove(rng.random_range(0..utxos.len()));
+                total += amt;
+                builder = builder.add_input(outpt, empty_witness(rng));
+
+                if total >= estimated_fee.into_atoms() + min_outputs_amt {
+                    break;
+                }
+
+                if i == inputs_count - 1 {
+                    inputs_count += 1;
+
+                    estimated_fee = min_tx_relay_fee_rate
+                        .compute_fee(estimate_tx_size(inputs_count, outputs_count))
+                        .unwrap();
+                }
+
+                i += 1;
+            }
         }
 
-        for _ in 0..n_outputs {
-            if total < min_valid_total_amount {
+        let estimated_fee = estimated_fee;
+        let mut remaining_outputs_total = total - estimated_fee.into_atoms();
+
+        for i in 0..outputs_count {
+            if remaining_outputs_total == 0 {
                 break;
             }
-            let amt = rng.random_range((total / 2)..(95 * total / 100));
-            total -= amt;
+
+            let (min_amt_percentage, max_amt_percentage) = if i < outputs_count - 1 {
+                (25, 95)
+            } else {
+                (95, 100)
+            };
+            let min_amt = min_amt_percentage * remaining_outputs_total / 100;
+            let max_amt = max_amt_percentage * remaining_outputs_total / 100;
+            let amt = std::cmp::max(rng.random_range(min_amt..=max_amt), 1);
+
+            remaining_outputs_total -= amt;
             builder = builder.add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(amt)),
                 Destination::AnyoneCanSpend,
@@ -297,7 +326,7 @@ pub fn generate_transaction_graph_generic(
         let entry = TxEntry::new(tx, time, origin, options);
         Some(TxEntryWithFee::new(
             entry,
-            Fee::new(Amount::from_atoms(total)),
+            (estimated_fee + Fee::new(Amount::from_atoms(remaining_outputs_total))).unwrap(),
         ))
     })
 }
