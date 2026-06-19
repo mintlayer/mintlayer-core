@@ -37,7 +37,7 @@ use test_utils::{
 };
 
 use crate::{
-    config::{BackendTimeoutsConfig, P2pConfig},
+    config::{BackendConfig, P2pConfig},
     message::{HeaderList, HeaderListRequest},
     net::{
         default_backend::types::{HandshakeMessage, Message, MessageTag, P2pTimestamp},
@@ -285,12 +285,13 @@ async fn timeout_when_socket_not_read(
         let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(chain::config::create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
-            backend_timeouts: BackendTimeoutsConfig {
+            backend_config: BackendConfig {
                 socket_write_timeout: socket_write_timeout.into(),
                 disconnection_timeout: disconnection_timeout.into(),
 
                 outbound_connection_timeout: Default::default(),
                 peer_handshake_timeout: Default::default(),
+                max_pending_inbound_connections: Default::default(),
             },
 
             bind_addresses: Default::default(),

@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use common::primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent};
 use p2p::{
     ban_config::BanConfig,
-    config::{BackendTimeoutsConfig, NodeType, P2pConfig},
+    config::{BackendConfig, NodeType, P2pConfig},
     peer_manager::config::PeerManagerConfig,
 };
 use utils_networking::IpOrSocketAddress;
@@ -186,13 +186,14 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 min_peer_software_version,
             },
-            backend_timeouts: BackendTimeoutsConfig {
+            backend_config: BackendConfig {
                 outbound_connection_timeout: outbound_connection_timeout
                     .map(|t| Duration::from_secs(t.into()))
                     .into(),
                 peer_handshake_timeout: Default::default(),
                 disconnection_timeout: Default::default(),
                 socket_write_timeout: Default::default(),
+                max_pending_inbound_connections: Default::default(),
             },
             protocol_config: Default::default(),
             custom_disconnection_reason_for_banning,

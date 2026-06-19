@@ -39,8 +39,8 @@ use networking::{
 use p2p_types::socket_address::SocketAddress;
 use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{
-    atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
-    shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
+    atomics::SeqCstAtomicBool, debug_panic_or_log, eventhandler::EventsController,
+    set_flag::SetFlag, shallow_clone::ShallowClone, tokio_spawn_in_current_tracing_span,
 };
 
 use crate::{
@@ -108,6 +108,7 @@ struct PeerContext {
 }
 
 /// Pending peer data (until handshake message is received)
+#[derive(Debug)]
 struct PendingPeerContext {
     handle: tokio::task::JoinHandle<()>,
 
@@ -148,6 +149,9 @@ pub struct Backend<T: TransportSocket> {
 
     /// Pending connections
     pending_peers: HashMap<PeerId, PendingPeerContext>,
+
+    /// The number of inbound peers in `pending_peers`
+    pending_inbound_peer_count: usize,
 
     /// Map of streams for receiving events from peers.
     peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
@@ -210,6 +214,7 @@ where
             syncing_event_sender,
             peers: HashMap::new(),
             pending_peers: HashMap::new(),
+            pending_inbound_peer_count: 0,
             peer_event_stream_map: StreamMap::new(),
             command_queue: FuturesUnordered::new(),
             shutdown,
@@ -347,21 +352,51 @@ where
                 res = self.socket.accept() => {
                     match res {
                         Ok((stream, address)) => {
+                            // Note: this execution path is peer-triggerable, so we use debug level logging
+                            // until after `pending_inbound_peer_count` has been checked, to prevent malicious
+                            // peers from flooding the default logs.
                             if !self.networking_enabled {
-                                log::info!("Ignoring incoming connection from {address:?} because networking is disabled");
+                                log::debug!("Ignoring incoming connection from {address:?} because networking is disabled");
                             } else {
-                                self.create_pending_peer(
-                                    stream,
-                                    PeerId::new(),
-                                    ConnectionInfo::Inbound,
-                                    address.into(),
-                                )?;
+                                let max_pending_inbound_conn_count = *self.p2p_config.backend_config.max_pending_inbound_connections;
+
+                                if self.pending_inbound_peer_count >= max_pending_inbound_conn_count {
+                                    log::debug!(
+                                        concat!(
+                                            "Ignoring incoming connection from {:?} because the maximum number ",
+                                            "of pending incoming connections has been reached {}"
+                                        ),
+                                        address,
+                                        max_pending_inbound_conn_count
+                                    );
+                                } else {
+                                    self.create_pending_peer(
+                                        stream,
+                                        PeerId::new(),
+                                        ConnectionInfo::Inbound,
+                                        address.into(),
+                                    )?;
+                                }
                             }
                         },
                         Err(err) => {
-                            // Just log the error and let the node continue working
+                            // Note: this execution path is also peer-triggerable, though less reliably than the
+                            // successful path above, so we use debug-level logging here too. See also a similar
+                            // comment in `AdaptedListener::accept` in the transport layer.
+                            // TODO: malicious peers can still flood the default logs making successful connections
+                            // and dropping them immediately (though it will be less severe and more costly for the
+                            // attacker). Consider:
+                            // a) Using debug-level logging specifically for incoming connections (while keeping it
+                            //    at "info" for outbound ones) in all (or most) connectivity-related messages (e.g.
+                            //    "Peer disconnected", "Assigning peer id", "New peer accepted").
+                            // b) Implementing a rate-limiter for the log (e.g. using a custom tracing layer or filter),
+                            //    either based on the source code location (Bitcoin does this) or on the specified
+                            //    log target.
+                            // c) (In the case when some errors have been omitted or printed via debug!), printing
+                            //    some kind of info/warn-level summary at regular intervals, e.g. "X incoming connections
+                            //    ignored in the last Y seconds".
                             if self.networking_enabled {
-                                log::error!("Accepting a new connection failed unexpectedly: {err}")
+                                log::debug!("Accepting a new connection failed unexpectedly: {err}")
                             } else {
                                 log::debug!(
                                     "Ignoring failed incoming connection because networking is disabled (err = {err})",
@@ -426,7 +461,7 @@ where
             &format!("Peer[id={peer_id}]"),
         );
 
-        self.pending_peers.insert(
+        self.insert_new_pending_peer(
             peer_id,
             PendingPeerContext {
                 handle,
@@ -456,7 +491,7 @@ where
             bind_address,
             connection_info,
             backend_event_sender,
-        } = match self.pending_peers.remove(&peer_id) {
+        } = match self.remove_pending_peer(peer_id) {
             Some(pending_peer) => pending_peer,
             // Could be removed if self-connection was detected earlier
             None => return Ok(()),
@@ -568,7 +603,7 @@ where
                 .map(|(peer_id, _pending)| *peer_id);
 
             if let Some(peer_id) = pending_outbound_peer_id {
-                let peer_ctx = self.pending_peers.remove(&peer_id).expect("peer must exist");
+                let peer_ctx = self.remove_pending_peer(peer_id).expect("peer must exist");
 
                 log::info!(
                     "self-connection detected on address {:?}",
@@ -649,7 +684,7 @@ where
             }
 
             PeerEvent::ConnectionClosed => {
-                if let Some(pending_peer) = self.pending_peers.remove(&peer_id) {
+                if let Some(pending_peer) = self.remove_pending_peer(peer_id) {
                     // Note: we'll get here if handshake has failed, so no need to use log levels
                     // higher that debug, because the error should have been logged properly already.
                     match pending_peer.connection_info {
@@ -732,7 +767,7 @@ where
                 local_services_override,
             } => {
                 let connection_fut = timeout(
-                    *self.p2p_config.backend_timeouts.outbound_connection_timeout,
+                    *self.p2p_config.backend_config.outbound_connection_timeout,
                     self.transport.connect(address.socket_addr()),
                 );
 
@@ -801,6 +836,57 @@ where
             Err(_) if shutdown.load() => {}
             Err(_) => log::error!("sending syncing event from the backend failed unexpectedly"),
         }
+    }
+
+    fn insert_new_pending_peer(&mut self, peer_id: PeerId, peer_context: PendingPeerContext) {
+        let is_inbound = peer_context.connection_info.is_inbound();
+
+        if let Some(old_context) = self.pending_peers.insert(peer_id, peer_context) {
+            debug_panic_or_log!(
+                "Pending peer context already exists for a new peer {peer_id}: {old_context:?}"
+            );
+        } else if is_inbound {
+            self.pending_inbound_peer_count += 1;
+
+            #[cfg(test)]
+            self.assert_pending_inbound_peer_count_consistency();
+        }
+
+        if let Some(observer) = &self.observer {
+            observer.on_pending_peer_created(peer_id);
+        }
+    }
+
+    fn remove_pending_peer(&mut self, peer_id: PeerId) -> Option<PendingPeerContext> {
+        let peer_context = self.pending_peers.remove(&peer_id);
+
+        if let Some(peer_context) = &peer_context {
+            if peer_context.connection_info.is_inbound() {
+                self.pending_inbound_peer_count -= 1;
+
+                #[cfg(test)]
+                self.assert_pending_inbound_peer_count_consistency();
+            }
+
+            if let Some(observer) = &self.observer {
+                observer.on_pending_peer_removed(peer_id);
+            }
+        }
+
+        peer_context
+    }
+
+    #[cfg(test)]
+    fn assert_pending_inbound_peer_count_consistency(&self) {
+        let actual_pending_inbound_peer_count = self
+            .pending_peers
+            .values()
+            .filter(|context| context.connection_info.is_inbound())
+            .count();
+        assert_eq!(
+            self.pending_inbound_peer_count,
+            actual_pending_inbound_peer_count
+        );
     }
 }
 

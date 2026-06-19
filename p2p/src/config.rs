@@ -37,6 +37,7 @@ make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(DisconnectionTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(SoketWriteTimeout, Duration, Duration::from_secs(60));
+make_config_setting!(MaxPendingInboundConnections, usize, 100);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -121,8 +122,8 @@ pub struct P2pConfig {
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
 
-    /// Various timeouts used by the backend.
-    pub backend_timeouts: BackendTimeoutsConfig,
+    /// Various settings specific to the backend.
+    pub backend_config: BackendConfig,
 
     /// If set, this text will be sent to banned peers as part of the DisconnectionReason.
     pub custom_disconnection_reason_for_banning: Option<String>,
@@ -134,22 +135,31 @@ impl P2pConfig {
     /// It is calculated as the max clock diff setting plus handshake timeout to allow for
     /// imprecisions caused by the network latency.
     pub fn effective_max_clock_diff(&self) -> Duration {
-        *self.max_clock_diff + *self.backend_timeouts.peer_handshake_timeout
+        *self.max_clock_diff + *self.backend_config.peer_handshake_timeout
     }
 }
 
-/// Part of P2pConfig containing various timeouts used by the backend.
+/// Part of P2pConfig containing various settings specific to the backend.
 #[derive(Default, Debug, Clone)]
-pub struct BackendTimeoutsConfig {
+pub struct BackendConfig {
     /// The outbound connection timeout value.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
 
-    /// Timeout for initial peer handshake
+    /// Timeout for initial peer handshake.
     pub peer_handshake_timeout: PeerHandshakeTimeout,
 
-    /// Timeout for disconnection
+    /// Timeout for disconnection.
     pub disconnection_timeout: DisconnectionTimeout,
 
-    /// Timeout for the socket write call
+    /// Timeout for the socket write call.
     pub socket_write_timeout: SoketWriteTimeout,
+
+    /// The maximum number of pending inbound connections that can exist at the same time.
+    ///
+    /// Note: the presence of this limit is important for security, but its specific value is not -
+    /// it just defines backend's burst tolerance for transport-accepted inbound connections that
+    /// have not completed the P2P handshake yet. But it makes sense to keep it in the same order
+    /// as `MAX_CONCURRENT_HANDSHAKES` used by wrapped transport layer's `AdaptedListener`, which
+    /// limits the number of simultaneous transport-level inbound handshakes.
+    pub max_pending_inbound_connections: MaxPendingInboundConnections,
 }

@@ -174,7 +174,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -302,7 +302,7 @@ async fn disconnect(#[case] seed: Seed) {
             user_agent: "test".try_into().unwrap(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
@@ -369,7 +369,7 @@ async fn slow_response(#[case] seed: Seed) {
             user_agent: mintlayer_core_user_agent(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

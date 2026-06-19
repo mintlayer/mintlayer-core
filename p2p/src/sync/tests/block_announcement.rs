@@ -540,7 +540,7 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -643,7 +643,7 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 
@@ -743,7 +743,7 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
 

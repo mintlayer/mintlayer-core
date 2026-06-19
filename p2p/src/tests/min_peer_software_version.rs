@@ -144,7 +144,7 @@ fn make_p2p_config(test_params: &TestParams) -> P2pConfig {
         allow_discover_private_ips: Default::default(),
         sync_stalling_timeout: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     }
 }

@@ -76,7 +76,7 @@ async fn ping_timeout(#[case] seed: Seed) {
         sync_stalling_timeout: Default::default(),
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
-        backend_timeouts: Default::default(),
+        backend_config: Default::default(),
         custom_disconnection_reason_for_banning: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;

@@ -35,6 +35,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       - Adding an already existing relayable local transaction to the mempool will cause p2p to re-announce it.
       - Transactions are now announced in batches at irregular intervals (previously, a random delay was added
         before each individual transaction announcement).
+    - Security improvements:
+      - The number of pending inbound connections is now limited.
 
   - Mempool:
     - Various optimizations were made.

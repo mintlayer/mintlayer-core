@@ -188,7 +188,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
             protocol_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
@@ -263,7 +263,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
             user_agent: "test".try_into().unwrap(),
             sync_stalling_timeout: Default::default(),
             peer_manager_config: Default::default(),
-            backend_timeouts: Default::default(),
+            backend_config: Default::default(),
             custom_disconnection_reason_for_banning: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
