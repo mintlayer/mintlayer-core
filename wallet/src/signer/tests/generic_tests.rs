@@ -391,7 +391,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
 
-    let coin_input_amounts: Vec<Amount> = (0..rng.random_range(2..7))
+    let min_input_amounts = 4; // 1 utxo, 1 standalone, 1 create pool, 1 htlc
+    let coin_input_amounts: Vec<Amount> = (0..rng.random_range(min_input_amounts..7))
         .map(|_| Amount::from_atoms(rng.random_range(100..1000)))
         .collect();
 
@@ -426,7 +427,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         TxOutput::ProduceBlockFromStake(random_destination(rng), decommissioned_pool_id);
     let utxos: Vec<TxOutput> = coin_input_amounts
         .iter()
-        .skip(1)
+        .skip(min_input_amounts - 1)
         .map(|a| {
             let dest = destination_from_account(&mut account, &mut db_tx, rng);
 
@@ -563,10 +564,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     };
 
     let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
-    let htlc_utxo = TxOutput::Htlc(
-        OutputValue::Coin(Amount::from_atoms(rng.random::<u32>() as u128)),
-        Box::new(htlc.clone()),
-    );
+    let htlc_amount = coin_input_amounts[1];
+    let htlc_utxo = TxOutput::Htlc(OutputValue::Coin(htlc_amount), Box::new(htlc.clone()));
 
     let token_id = TokenId::new(H256::random_using(rng));
     let token_mint_amount = Amount::from_atoms(rng.random_range(100..200));
@@ -577,6 +576,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let created_order_ask = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let filled_order1_id = OrderId::new(H256::random_using(rng));
     let filled_order2_id = OrderId::new(H256::random_using(rng));
@@ -693,8 +693,9 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let created_pool_id = PoolId::new(H256::random_using(rng));
     let delegation_id = DelegationId::new(H256::random_using(rng));
+    let pool_amount = coin_input_amounts[2];
     let pool_data = StakePoolData::new(
-        Amount::from_atoms(rng.random_range(100..200)),
+        pool_amount,
         Destination::PublicKey(dest_pub.clone()),
         vrf_public_key,
         Destination::PublicKey(dest_pub.clone()),
@@ -744,8 +745,8 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
-        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
         OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
+        OutputValue::Coin(created_order_ask),
     );
 
     let outputs = vec![
