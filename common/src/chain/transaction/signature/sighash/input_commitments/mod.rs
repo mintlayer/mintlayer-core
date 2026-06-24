@@ -44,6 +44,14 @@ pub use info_providers::{
 ///    with the `Option`, provided that only `None` and `Utxo` variants are used.
 /// 2) The `ProduceBlockFromStakeUtxo`, `FillOrderAccountCommand` and `ConcludeOrderAccountCommand`
 ///    commitments are enabled since `SighashInputCommitmentVersion::V1`.
+///
+/// TODO: next time there is a need to update input commitments, consider also committing to
+/// the destination that the input is signed against (i.e. order conclude key, token authority,
+/// delegation owner); this will allow hardware wallets to prove (and therefore claim on the screen
+/// during input review) that a particular input is signed with a particular key (note that in the
+/// SigHashType::ALL case each input signature is a signature over the entire tx, so the host may
+/// claim that inputs x and y are signed with keys A and B respectively, while in reality it's vice
+/// versa, and hardware wallets have no way of verifying this in the general case).
 #[derive(Clone, Debug, Encode, Decode, Eq, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(name(SighashInputCommitmentTag), derive(EnumIter))]
 pub enum SighashInputCommitment<'a> {

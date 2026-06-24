@@ -26,6 +26,7 @@ use crate::signer::tests::{
     generic_tests::{
         MessageToSign, sign_message_test_params, test_sign_message_generic,
         test_sign_transaction_generic, test_sign_transaction_intent_generic,
+        test_sign_transaction_with_no_outputs_generic,
     },
     make_deterministic_software_signer, make_software_signer, make_software_signer_for_cold_wallet,
     no_another_signer,
@@ -157,6 +158,21 @@ async fn test_fixed_signatures_htlc_refunding(
         &mut rng,
         input_commitments_version,
         make_deterministic_software_signer,
+    )
+    .await;
+}
+
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_with_no_outputs(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_transaction_with_no_outputs_generic(
+        &mut rng,
+        make_software_signer,
+        no_another_signer(),
     )
     .await;
 }
