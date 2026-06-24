@@ -300,8 +300,8 @@ rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Add technical specification"
-rev = "16dce6ab619529d5b8f506cb6c2e4f62199b25d7"
+# The commit "Fix CI"
+rev = "929b3b600f513dec75975c2428d6d809319aa8ee"
 package = "mintlayer-messages"
 
 [workspace.dependencies.trezor-client]
