@@ -476,10 +476,6 @@ criteria = "safe-to-deploy"
 version = "5.4.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.fallible-streaming-iterator]]
-version = "0.1.9"
-criteria = "safe-to-deploy"
-
 [[exemptions.fast-srgb8]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
