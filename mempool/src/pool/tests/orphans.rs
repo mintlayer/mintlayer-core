@@ -236,10 +236,22 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
         subseq
     };
 
+    let mempool_config = MempoolConfig {
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+        // Make sure we don't hit the max cluster tx count limit.
+        max_cluster_tx_count: num_txs.into(),
+
+        max_cluster_size_bytes: Default::default(),
+    };
+
     let mut results: Vec<Vec<Option<TxStatus>>> = Vec::new();
     for tx_subseq in [tx_subseq_0, tx_subseq_1] {
         let tf = TestFramework::builder(&mut rng).build();
-        let mut mempool = setup_with_chainstate(tf.chainstate());
+        let mut mempool = setup_with_chainstate_generic(
+            tf.chainstate(),
+            mempool_config.clone(),
+            Default::default(),
+        );
 
         // Now add each transaction in the subsequence
         tx_subseq.iter().for_each(|tx| {

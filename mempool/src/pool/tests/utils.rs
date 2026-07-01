@@ -26,23 +26,25 @@ use common::{
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use mempool_types::{TxOptions, TxStatus, tx_origin::TxOrigin};
 
-pub use crate::pool::tx_pool::tests::utils::*;
-pub use rstest::rstest;
+use crate::MempoolConfig;
 
 use super::{Error, MemoryUsageEstimator, Mempool, TxEntry};
+
+pub use crate::pool::tx_pool::tests::utils::*;
+pub use rstest::rstest;
 
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
-    setup_with_chainstate_and_clock(chainstate, Default::default())
+    setup_with_chainstate_generic(chainstate, create_mempool_config(), Default::default())
 }
 
-pub fn setup_with_chainstate_and_clock(
+pub fn setup_with_chainstate_generic(
     chainstate: Box<dyn ChainstateInterface>,
+    mempool_config: MempoolConfig,
     clock: TimeGetter,
 ) -> Mempool<StoreMemoryUsageEstimator> {
     let chain_config = std::sync::Arc::clone(chainstate.get_chain_config());
-    let mempool_config = create_mempool_config();
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
         chain_config,

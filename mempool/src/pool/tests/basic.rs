@@ -213,7 +213,8 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
     let mock_time = tf.time_value.as_ref().unwrap().shallow_clone();
     let mock_clock = tf.time_getter.clone();
 
-    let mut mempool = setup_with_chainstate_and_clock(tf.chainstate(), mock_clock);
+    let mut mempool =
+        setup_with_chainstate_generic(tf.chainstate(), create_mempool_config(), mock_clock);
     let chainstate = mempool.chainstate_handle().shallow_clone();
 
     assert!(mempool.is_initial_block_download());
@@ -322,7 +323,8 @@ async fn ibd_transition(#[case] seed: Seed) {
     let mock_time = tf.time_value.as_ref().unwrap().shallow_clone();
     let mock_clock = tf.time_getter.clone();
 
-    let mut mempool = setup_with_chainstate_and_clock(tf.chainstate(), mock_clock);
+    let mut mempool =
+        setup_with_chainstate_generic(tf.chainstate(), create_mempool_config(), mock_clock);
     let chainstate = mempool.chainstate_handle().shallow_clone();
 
     assert!(mempool.is_initial_block_download());
