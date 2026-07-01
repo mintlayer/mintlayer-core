@@ -233,7 +233,7 @@ async fn test_sign_message_sig_consistency(#[case] seed: Seed) {
 
     test_sign_message_generic(
         &mut rng,
-        MessageToSign::Random,
+        MessageToSign::RandomShort,
         make_deterministic_trezor_signer,
         Some(make_deterministic_software_signer),
     )

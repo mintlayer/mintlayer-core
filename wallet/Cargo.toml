@@ -33,6 +33,7 @@ bip39 = { workspace = true, default-features = false, features = [
 derive_more.workspace = true
 hex.workspace = true
 itertools.workspace = true
+ml_primitives.workspace = true
 parity-scale-codec.workspace = true
 semver.workspace = true
 serde.workspace = true

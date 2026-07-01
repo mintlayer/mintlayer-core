@@ -17,22 +17,17 @@ mod ledger_messages;
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{
-    Account, WalletResult,
-    key_chain::{AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path},
-    signer::{
-        Signer, SignerError, SignerProvider, SignerResult,
-        hardware_signer_utils::{
-            StandaloneInput, StandaloneInputs, arbitrary_message_signature_from_raw_sig,
-            sign_with_standalone_private_keys,
-        },
-        ledger_signer::ledger_messages::{
-            LedgerMessagesError, check_current_app, get_extended_public_key,
-            get_extended_public_key_raw, sign_challenge, sign_tx,
-        },
-        utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
-    },
+use async_trait::async_trait;
+use itertools::{Itertools, izip};
+use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model};
+use mintlayer_ledger_messages::{
+    AdditionalOrderInfo, AdditionalUtxoInfo, AddrType, Bip32Path as LedgerBip32Path, CoinType,
+    InputAddressPath as LedgerInputAddressPath, SignatureResponse as LedgerSignatureResponse,
+    TxInputReq, TxInputWithAdditionalInfo, TxOutputReq,
 };
+use ml_primitives::SighashInputCommitment as LSighashInputCommitment;
+use tokio::sync::Mutex;
+
 use common::{
     chain::{
         AccountCommand, ChainConfig, Destination, DestinationTag, OrderAccountCommand,
@@ -64,6 +59,7 @@ use crypto::key::{
     hdkd::{derivable::Derivable, u31::U31},
     signature::SignatureKind,
 };
+use randomness::make_true_rng;
 use serialization::Encode;
 use utils::ensure;
 use wallet_storage::{
@@ -81,76 +77,153 @@ use wallet_types::{
     signature_status::SignatureStatus,
 };
 
-use async_trait::async_trait;
-use itertools::{Itertools, izip};
-use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model};
-use mintlayer_ledger_messages::{
-    AdditionalOrderInfo, AdditionalUtxoInfo, AddrType, Bip32Path as LedgerBip32Path, CoinType,
-    InputAddressPath as LedgerInputAddressPath, SighashInputCommitment as LSighashInputCommitment,
-    Signature as LedgerSignature, TxInputReq, TxInputWithAdditionalInfo, TxOutputReq,
+use crate::{
+    Account, WalletResult,
+    key_chain::{AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path},
+    signer::{
+        Signer, SignerError, SignerProvider, SignerResult,
+        hardware_signer_utils::{
+            StandaloneInput, StandaloneInputs, arbitrary_message_signature_from_raw_sig,
+            sign_with_standalone_private_keys,
+        },
+        ledger_signer::ledger_messages::{
+            check_current_app, get_extended_public_key, ping, sign_challenge, sign_tx,
+        },
+        utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
+    },
 };
-use randomness::make_true_rng;
-use tokio::sync::Mutex;
 
 /// Ledger Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum LedgerError {
+    #[error(transparent)]
+    DeviceError(#[from] LedgerDeviceError),
+
     #[error("No connected Ledger device found")]
     NoDeviceFound,
+
     #[error("Device timeout")]
     DeviceTimeout,
+
     #[error(
         "A different app is currently open on your Ledger device: \"{0}\". Please close it and open the Mintlayer app instead."
     )]
     DifferentActiveApp(String),
-    #[error("Received an invalid response from the Ledger device")]
-    InvalidResponse,
+
+    #[error("Received an invalid response APDU from the Ledger device")]
+    InvalidResponseApdu,
+
+    #[error("Received response cannot be decoded")]
+    CannotDecodeResponse,
+
+    #[error("Received a wrong response from the Ledger device")]
+    WrongResponse,
+
     #[error("Received an error response from the Ledger device: {0}")]
     ErrorResponse(String),
-    #[error("Device error: {0}")]
-    DeviceError(String),
+
     #[error("Derivation path too long")]
     DerivationPathTooLong,
+
     #[error("APDU message too long")]
     ApduMessageTooLong,
+
     #[error("Invalid public key returned from Ledger")]
     InvalidKey,
+
     #[error(
-        "The file being loaded is a software wallet and cannot be used with the connected Ledger wallet"
+        "The file being loaded is a software wallet and cannot be used with the connected Ledger device"
     )]
     WalletFileIsSoftwareWallet,
+
     #[error(
-        "The file being loaded is a trezor wallet and cannot be used with the connected Ledger wallet"
+        "The file being loaded is a Trezor wallet and cannot be used with the connected Ledger device"
     )]
     WalletFileIsTrezorWallet,
+
     #[error("Public keys mismatch - wrong device or passphrase")]
     HardwareWalletDifferentMnemonicOrPassphrase,
+
     #[error("A multisig signature was returned for a single address from Device")]
     MultisigSignatureReturned,
+
     #[error("Multiple signatures returned for a single address from Device")]
     MultipleSignaturesReturned,
+
     #[error("Missing multisig index for signature returned from Device")]
     MissingMultisigIndexForSignature,
+
     #[error("Signature error: {0}")]
     SignatureError(#[from] SignatureError),
+
     #[error("Input commitments version 0 is not supported by the Ledger app")]
     InputCommitmentVersion1NotSupported,
 }
 
-impl From<ledger_lib::Error> for LedgerError {
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum LedgerDeviceErrorKind {
+    Hid,
+    Tcp,
+    Ble,
+    Timeout,
+    Other,
+}
+
+/// Ledger device error.
+///
+/// Note: we can't put `ledger_lib::Error` into `LedgerError` directly because the latter needs `Eq`,
+/// which the former doesn't implement.
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[error("{message}")]
+pub struct LedgerDeviceError {
+    pub kind: LedgerDeviceErrorKind,
+    pub message: String,
+}
+
+impl From<ledger_lib::Error> for LedgerDeviceError {
     fn from(value: ledger_lib::Error) -> Self {
-        Self::DeviceError(value.to_string())
+        let kind = match &value {
+            ledger_lib::Error::Hid(_) => LedgerDeviceErrorKind::Hid,
+            ledger_lib::Error::Tcp(_) => LedgerDeviceErrorKind::Tcp,
+            ledger_lib::Error::Ble(_) => LedgerDeviceErrorKind::Ble,
+            ledger_lib::Error::Timeout => LedgerDeviceErrorKind::Timeout,
+
+            ledger_lib::Error::ApduSentToUnknownDeviceHandle
+            | ledger_lib::Error::RequestChannelClosed
+            | ledger_lib::Error::RequestResponseChannelClosed
+            | ledger_lib::Error::UnexpectedResponseWhileListingDevices
+            | ledger_lib::Error::UnexpectedResponseWhileConnecting
+            | ledger_lib::Error::UnexpectedResponseWhileExchangingData
+            | ledger_lib::Error::NoDevices
+            | ledger_lib::Error::InvalidDeviceIndex(_)
+            | ledger_lib::Error::Apdu(_)
+            | ledger_lib::Error::Status(_)
+            | ledger_lib::Error::UnknownStatus(_, _)
+            | ledger_lib::Error::Closed
+            | ledger_lib::Error::EmptyResponse
+            | ledger_lib::Error::UnexpectedResponse
+            | ledger_lib::Error::DeviceInUse
+            | ledger_lib::Error::CannotReadBleDeviceProperties
+            | ledger_lib::Error::CannotFindBleDeviceSpecs
+            | ledger_lib::Error::NotConnectedAfterSuccessfulBleConnect
+            | ledger_lib::Error::MissingReadOrWriteBleCharacteristics
+            | ledger_lib::Error::UnexpectedMtuResponse => LedgerDeviceErrorKind::Other,
+        };
+        let message = value.to_string();
+
+        Self { kind, message }
     }
 }
 
-impl From<LedgerMessagesError> for LedgerError {
-    fn from(value: LedgerMessagesError) -> Self {
-        match value {
-            LedgerMessagesError::DerivationPathTooLong => Self::DerivationPathTooLong,
-            LedgerMessagesError::ApduMessageTooLong => Self::ApduMessageTooLong,
-            LedgerMessagesError::DeviceError(err) => err.into(),
-        }
+impl From<ledger_lib::Error> for LedgerError {
+    fn from(value: ledger_lib::Error) -> Self {
+        Self::DeviceError(value.into())
     }
+}
+
+pub struct LedgerSignature {
+    pub signature: LedgerSignatureResponse,
+    pub multisig_idx: Option<u32>,
 }
 
 #[async_trait]
@@ -212,11 +285,9 @@ where
         let mut client = self.client.lock().await;
         // Try and wait around 50 * TIMEOUT_DUR for the screen to clear after a signing operation ends
         let mut num_tries = 50;
-        let derivation_path = make_account_path(&self.chain_config, key_chain.account_index());
-        let coin_type = to_ledger_chain_type(&self.chain_config);
         loop {
-            match get_extended_public_key_raw(&mut *client, coin_type, &derivation_path).await {
-                Ok(_) => {
+            match ping(&mut *client).await {
+                Ok(()) => {
                     check_public_keys_against_key_chain(
                         db_tx,
                         &mut *client,
@@ -226,40 +297,56 @@ where
                     .await?;
                     return Ok(());
                 }
-                // After finishing a signing operation the device shows a status success/failed.
-                // At those times any command sent is not handled so waiting for a response will
-                // just timeout.
-                Err(LedgerMessagesError::DeviceError(ledger_lib::Error::Timeout)) => {
-                    num_tries -= 1;
-                    if num_tries > 0 {
-                        continue;
-                    } else {
-                        return Err(SignerError::LedgerError(LedgerError::DeviceTimeout));
+                Err(err) => {
+                    match &err {
+                        LedgerError::DeviceError(device_err) => {
+                            match device_err.kind {
+                                // After finishing a signing operation the device shows a status success/failed.
+                                // At those times any command sent is not handled so waiting for a response will
+                                // just timeout.
+                                LedgerDeviceErrorKind::Timeout => {
+                                    num_tries -= 1;
+                                    if num_tries > 0 {
+                                        continue;
+                                    } else {
+                                        return Err(SignerError::LedgerError(
+                                            LedgerError::DeviceTimeout,
+                                        ));
+                                    }
+                                }
+
+                                // In case of a communication error try to reconnect, and try again
+                                LedgerDeviceErrorKind::Hid
+                                | LedgerDeviceErrorKind::Tcp
+                                | LedgerDeviceErrorKind::Ble => {
+                                    let (mut new_client, _data) = self
+                                        .provider
+                                        .find_ledger_device_from_db(
+                                            db_tx,
+                                            self.chain_config.clone(),
+                                        )
+                                        .await?;
+
+                                    check_public_keys_against_key_chain(
+                                        db_tx,
+                                        &mut new_client,
+                                        key_chain,
+                                        &self.chain_config,
+                                    )
+                                    .await?;
+
+                                    *client = new_client;
+                                    return Ok(());
+                                }
+
+                                LedgerDeviceErrorKind::Other => {
+                                    return Err(err.into());
+                                }
+                            }
+                        }
+                        _ => return Err(err.into()),
                     }
                 }
-                // In case of a communication error try to reconnect, and try again
-                Err(LedgerMessagesError::DeviceError(
-                    ledger_lib::Error::Hid(_)
-                    | ledger_lib::Error::Tcp(_)
-                    | ledger_lib::Error::Ble(_),
-                )) => {
-                    let (mut new_client, _data) = self
-                        .provider
-                        .find_ledger_device_from_db(db_tx, self.chain_config.clone())
-                        .await?;
-
-                    check_public_keys_against_key_chain(
-                        db_tx,
-                        &mut new_client,
-                        key_chain,
-                        &self.chain_config,
-                    )
-                    .await?;
-
-                    *client = new_client;
-                    return Ok(());
-                }
-                Err(err) => return Err(SignerError::LedgerError(err.into())),
             }
         }
     }
@@ -311,7 +398,7 @@ where
                         .ok_or(SignerError::DestinationNotFromThisWallet)?
                         .into_public_key();
                     let sig = Signature::from_raw_data(
-                        signature.signature,
+                        signature.signature.0,
                         SignatureKind::Secp256k1Schnorr,
                     )
                     .map_err(LedgerError::SignatureError)?;
@@ -338,7 +425,7 @@ where
             Destination::PublicKey(_) => {
                 if let Some(signature) = single_signature(signatures)? {
                     let sig = Signature::from_raw_data(
-                        signature.signature,
+                        signature.signature.0,
                         SignatureKind::Secp256k1Schnorr,
                     )
                     .map_err(LedgerError::SignatureError)?;
@@ -444,7 +531,7 @@ where
     ) -> SignerResult<(AuthorizedClassicalMultisigSpend, SignatureStatus)> {
         for sig in signatures {
             let idx = sig.multisig_idx.ok_or(LedgerError::MissingMultisigIndexForSignature)?;
-            let sig = Signature::from_raw_data(sig.signature, SignatureKind::Secp256k1Schnorr)
+            let sig = Signature::from_raw_data(sig.signature.0, SignatureKind::Secp256k1Schnorr)
                 .map_err(LedgerError::SignatureError)?;
             current_signatures.add_signature(idx as u8, sig);
         }
@@ -727,7 +814,7 @@ where
                     )
                     .await?;
 
-                arbitrary_message_signature_from_raw_sig(&sig, destination.into(), xpub)
+                arbitrary_message_signature_from_raw_sig(&sig.0, destination.into(), xpub)
             }
             Some(FoundPubKey::Standalone(acc_public_key)) => {
                 let standalone_pk = db_tx
@@ -821,7 +908,7 @@ fn to_ledger_tx_input_with_additional_info(
                     let pool_info = additional_info
                         .get_pool_info(pool_id)
                         .ok_or(SignerError::MissingTxExtraInfo)?;
-                    AdditionalUtxoInfo::PoolData {
+                    AdditionalUtxoInfo::UtxoWithPoolData {
                         utxo: utxo.clone().try_convert_into()?,
                         staker_balance: pool_info.staker_balance.try_convert_into()?,
                     }

@@ -300,9 +300,9 @@ rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Merge pull request #3 from mintlayer/update_ml_primitives_rev"
-rev = "a544449d0c649c7c6b27ec0bd8e03f43861f60a7"
-package = "messages"
+# The commit "Add technical specification"
+rev = "16dce6ab619529d5b8f506cb6c2e4f62199b25d7"
+package = "mintlayer-messages"
 
 [workspace.dependencies.trezor-client]
 git = "https://github.com/mintlayer/mintlayer-trezor-firmware"
