@@ -5178,10 +5178,11 @@ dependencies = [
 [[package]]
 name = "mintlayer-messages"
 version = "0.1.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=16dce6ab619529d5b8f506cb6c2e4f62199b25d7#16dce6ab619529d5b8f506cb6c2e4f62199b25d7"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=929b3b600f513dec75975c2428d6d809319aa8ee#929b3b600f513dec75975c2428d6d809319aa8ee"
 dependencies = [
  "derive_more 2.1.1",
  "mintlayer-core-primitives",
+ "num-traits",
  "num_enum",
  "parity-scale-codec",
 ]
@@ -9882,7 +9883,6 @@ dependencies = [
  "ledger-lib",
  "logging",
  "mempool",
- "mintlayer-core-primitives",
  "mintlayer-messages",
  "orders-accounting",
  "parity-scale-codec",
