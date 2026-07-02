@@ -48,6 +48,7 @@ use crate::signer::{
         generic_tests::{
             MessageToSign, sign_message_test_params, test_sign_message_generic,
             test_sign_transaction_generic, test_sign_transaction_intent_generic,
+            test_sign_transaction_with_no_outputs_generic,
         },
         make_deterministic_software_signer, no_another_signer,
     },
@@ -87,6 +88,36 @@ fn should_auto_confirm() -> bool {
     bool_from_env("LEDGER_TESTS_AUTO_CONFIRM").unwrap().unwrap_or(true)
 }
 
+// Possible "transaction titles"; one of this is shown when the user is to confirm the tx signing.
+// The list comes from the `transaction_title` function in the ledger app.
+fn transaction_titles() -> &'static [&'static str] {
+    &[
+        "Sign transaction",
+        "Sign transfer transaction",
+        "Sign burn transaction",
+        "Sign create HTLC transaction",
+        "Sign create delegation transaction",
+        "Sign delegate staking transaction",
+        "Sign delegation withdrawal transaction",
+        "Sign create stake pool transaction",
+        "Sign decommission stake pool transaction",
+        "Sign create NFT transaction",
+        "Sign create token transaction",
+        "Sign mint tokens transaction",
+        "Sign unmint tokens transaction",
+        "Sign freeze tokens transaction",
+        "Sign unfreeze tokens transaction",
+        "Sign lock token supply transaction",
+        "Sign change token authority transaction",
+        "Sign change token metadata URI transaction",
+        "Sign create order transaction",
+        "Sign fill order transaction",
+        "Sign freeze order transaction",
+        "Sign conclude order transaction",
+        "Sign data deposit transaction",
+    ]
+}
+
 async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, handle: Handle) {
     println!("Starting auto-confirmer for device: {:?}", handle.device());
 
@@ -94,9 +125,17 @@ async fn auto_confirmer(mut control_msg_rx: mpsc::Receiver<ControlMessage>, hand
         tokio::select! {
             _ = sleep(Duration::from_millis(500)) => {
                 if let Ok(events) = handle.current_screen_events().await {
-                    let to_sign = events.iter().any(|e|
-                        e.contains("Sign transaction") || e.contains("Sign message")
-                    );
+                    log::debug!("Screen events: {events:?}");
+
+                    // Note: the events can look like `["Sign freeze tokens ", "transaction"]`,
+                    // so we concatenate them before matching.
+                    // On the other hand, `events` may also contain strings from different screens,
+                    // so after the concatenation we do an exact substring search instead of
+                    // using a regex.
+                    let concatenated_events = events.concat();
+
+                    let to_sign = concatenated_events.contains("Sign message")
+                        || transaction_titles().iter().any(|title| concatenated_events.contains(title));
 
                     if to_sign {
                         let _ = handle.confirm().await;
@@ -225,7 +264,7 @@ async fn test_app_name() {
     let info = device.app_info(Duration::from_millis(500)).await.unwrap();
 
     let version = check_current_app(&mut device).await.unwrap();
-    assert_eq!(version, "0.1.0");
+    assert_eq!(version, "1.0.0");
     assert_eq!(version, info.version);
 }
 
@@ -425,6 +464,31 @@ async fn test_fixed_signatures_no_legacy(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     test_fixed_signatures_generic_no_legacy(&mut rng, make_deterministic_software_signer).await;
+}
+
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[serial_test::serial]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_with_no_outputs(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_with_no_outputs, seed = {seed:?}");
+
+    let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
+
+    let mut rng = make_seedable_rng(seed);
+
+    test_sign_transaction_with_no_outputs_generic(
+        &mut rng,
+        make_ledger_signer,
+        Some(make_deterministic_software_signer),
+    )
+    .await;
+
+    if let Some(auto_confirmer_handle) = auto_confirmer_handle {
+        control_msg_tx.send(ControlMessage::Finish).await.unwrap();
+        auto_confirmer_handle.await.unwrap();
+    }
 }
 
 async fn create_device_connection() -> TcpDevice {

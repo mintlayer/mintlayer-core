@@ -1006,6 +1006,101 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     }
 }
 
+// Test signing a tx that only have inputs but no outputs.
+pub async fn test_sign_transaction_with_no_outputs_generic<MkS1, MkS2, S1, S2>(
+    rng: &mut impl CryptoRng,
+    make_signer: MkS1,
+    make_another_signer: Option<MkS2>,
+) where
+    MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
+    MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
+    S1: Signer,
+    S2: Signer,
+{
+    let chain_config = Arc::new(chain::config::create_unit_test_config());
+
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+    let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
+
+    let dest1 = destination_from_account(&mut account, &mut db_tx, rng);
+    let dest2 = destination_from_account(&mut account, &mut db_tx, rng);
+
+    let tx_id = Id::<Transaction>::random_using(rng);
+    let token_id = TokenId::random_using(rng);
+
+    let utxo = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(rng.random_range(100..200))),
+        dest1,
+    );
+    let req = SendRequest::new()
+        .with_inputs(
+            [(
+                TxInput::from_utxo(tx_id.into(), rng.random_range(0..10)),
+                utxo.clone(),
+                None,
+            )],
+            &|_| None,
+        )
+        .unwrap()
+        .with_inputs_and_destinations([(
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+            ),
+            dest2,
+        )]);
+
+    let orig_ptx = req.into_partially_signed_tx(PtxAdditionalInfo::new()).unwrap();
+
+    let mut signer = make_signer(chain_config.clone(), account.account_index());
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx.clone(),
+            &TokensAdditionalInfo::new(),
+            account.key_chain(),
+            &mut db_tx,
+            BlockHeight::one(),
+        )
+        .await
+        .unwrap();
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let (another_ptx, _, _) = another_signer
+            .sign_tx(
+                orig_ptx,
+                &TokensAdditionalInfo::new(),
+                account.key_chain(),
+                &mut db_tx,
+                BlockHeight::one(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(ptx, another_ptx);
+    }
+
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(SighashInputCommitmentVersion::V1)
+        .unwrap()
+        .into_iter()
+        .map(|comm| comm.deep_clone())
+        .collect_vec();
+
+    for (i, (dest, utxo)) in ptx.destinations().iter().zip(ptx.input_utxos().iter()).enumerate() {
+        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+            &chain_config,
+            dest.as_ref().unwrap(),
+            &ptx,
+            &expected_input_commitments,
+            i,
+            utxo.clone(),
+        )
+        .unwrap();
+    }
+}
+
 fn random_order_info(
     ask_currency: &Currency,
     give_currency: &Currency,
