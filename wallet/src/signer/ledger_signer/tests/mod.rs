@@ -264,7 +264,7 @@ async fn test_app_name() {
     let info = device.app_info(Duration::from_millis(500)).await.unwrap();
 
     let version = check_current_app(&mut device).await.unwrap();
-    assert_eq!(version, "0.1.0");
+    assert_eq!(version, "1.0.0");
     assert_eq!(version, info.version);
 }
 
