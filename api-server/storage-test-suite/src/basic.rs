@@ -2148,6 +2148,222 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(rng: &mut impl CryptoRng, stor
     );
 }
 
+// Tokens with multiple state-change rows must appear exactly once in
+// get_token_ids/get_token_ids_by_ticker, on every page (issue #1982)
+pub async fn token_ids_dedup_and_pagination<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let seed = seed_maker();
+    let mut rng = make_seedable_rng(seed);
+
+    let mut storage = storage_maker().await;
+    let mut tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    tx.reinitialize_storage(&chain_config).await.unwrap();
+    tx.commit().await.unwrap();
+
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+
+    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let authority = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+
+    let matching_ticker = "MATCH";
+    let other_ticker = "OTHER";
+    // ticker used only by NFTs, so the fungible half of the union matches nothing
+    let nft_only_ticker = "NFTONLY";
+
+    let mut fungible_ids = Vec::new();
+    let mut matching_fungible_ids = Vec::new();
+    for i in 0..rng.random_range(5..10) {
+        let token_id = TokenId::random_using(&mut rng);
+        let matches_ticker = i % 2 == 0;
+        let ticker = if matches_ticker {
+            matching_ticker
+        } else {
+            other_ticker
+        };
+        let token_data = FungibleTokenData {
+            token_ticker: ticker.as_bytes().to_vec(),
+            number_of_decimals: rng.random_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            circulating_supply: Amount::ZERO,
+            total_supply: TokenTotalSupply::Unlimited,
+            is_locked: false,
+            frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            authority: authority.clone(),
+            next_nonce: AccountNonce::new(0),
+        };
+
+        let mut block_height = BlockHeight::new(rng.random_range(1..100));
+        db_tx
+            .set_fungible_token_issuance(token_id, block_height, token_data.clone())
+            .await
+            .unwrap();
+
+        let num_state_changes = if i % 2 == 0 {
+            rng.random_range(1..4)
+        } else {
+            0
+        };
+        let mut token_data = token_data;
+        for _ in 0..num_state_changes {
+            block_height = block_height.next_height();
+            let next_nonce = token_data.next_nonce;
+            token_data =
+                token_data.mint_tokens(Amount::from_atoms(rng.random_range(1..1000)), next_nonce);
+            db_tx
+                .set_fungible_token_data(token_id, block_height, token_data.clone())
+                .await
+                .unwrap();
+        }
+
+        fungible_ids.push(token_id);
+        if matches_ticker {
+            matching_fungible_ids.push(token_id);
+        }
+    }
+
+    let mut nft_ids = Vec::new();
+    let mut matching_nft_ids = Vec::new();
+    let mut nft_only_ids = Vec::new();
+    for i in 0..rng.random_range(5..10) {
+        let token_id = TokenId::random_using(&mut rng);
+        let ticker = match i % 3 {
+            0 => matching_ticker,
+            1 => other_ticker,
+            _ => nft_only_ticker,
+        };
+        let nft = NftIssuance::V0(NftIssuanceV0 {
+            metadata: common::chain::tokens::Metadata {
+                creator: None,
+                name: "Name".as_bytes().to_vec(),
+                description: "SomeNFT".as_bytes().to_vec(),
+                ticker: ticker.as_bytes().to_vec(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: "123456".as_bytes().to_vec(),
+            },
+        });
+
+        let mut block_height = BlockHeight::new(rng.random_range(1..100));
+        db_tx
+            .set_nft_token_issuance(token_id, block_height, nft, &authority)
+            .await
+            .unwrap();
+
+        // an owner change adds a row to the NFT issuance table
+        let num_owner_changes = if i % 2 == 0 {
+            rng.random_range(1..4)
+        } else {
+            0
+        };
+        for _ in 0..num_owner_changes {
+            block_height = block_height.next_height();
+            let (_, new_owner_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let new_owner = Address::new(
+                &chain_config,
+                Destination::PublicKeyHash(PublicKeyHash::from(&new_owner_pk)),
+            )
+            .unwrap();
+            db_tx
+                .set_address_balance_at_height(
+                    &new_owner,
+                    Amount::from_atoms(1),
+                    CoinOrTokenId::TokenId(token_id),
+                    block_height,
+                )
+                .await
+                .unwrap();
+        }
+
+        nft_ids.push(token_id);
+        match i % 3 {
+            0 => matching_nft_ids.push(token_id),
+            1 => (),
+            _ => nft_only_ids.push(token_id),
+        }
+    }
+
+    // expected order: fungible tokens first, then NFTs, each sorted by id
+    fungible_ids.sort();
+    nft_ids.sort();
+    matching_fungible_ids.sort();
+    matching_nft_ids.sort();
+    nft_only_ids.sort();
+    let all_ids = fungible_ids.iter().chain(nft_ids.iter()).copied().collect::<Vec<_>>();
+    let matching_ids = matching_fungible_ids
+        .iter()
+        .chain(matching_nft_ids.iter())
+        .copied()
+        .collect::<Vec<_>>();
+
+    let ids = db_tx.get_token_ids((all_ids.len() * 2) as u32, 0).await.unwrap();
+    assert_eq!(ids, all_ids);
+
+    // walk all pages at every page size; the concatenation must equal the full list
+    for page_size in 1..=all_ids.len() {
+        let mut collected = Vec::new();
+        loop {
+            let page = db_tx.get_token_ids(page_size as u32, collected.len() as u64).await.unwrap();
+            let expected_len = std::cmp::min(page_size, all_ids.len() - collected.len());
+            assert_eq!(page.len(), expected_len);
+            if page.is_empty() {
+                break;
+            }
+            collected.extend(page);
+        }
+        assert_eq!(collected, all_ids);
+    }
+
+    // same for the ticker variant, including a ticker with no fungible matches
+    for (ticker, expected) in [(matching_ticker, &matching_ids), (nft_only_ticker, &nft_only_ids)] {
+        let ids = db_tx
+            .get_token_ids_by_ticker((all_ids.len() * 2) as u32, 0, ticker)
+            .await
+            .unwrap();
+        assert_eq!(&ids, expected);
+
+        for page_size in 1..=expected.len() {
+            let mut collected = Vec::new();
+            loop {
+                let page = db_tx
+                    .get_token_ids_by_ticker(page_size as u32, collected.len() as u64, ticker)
+                    .await
+                    .unwrap();
+                let expected_len = std::cmp::min(page_size, expected.len() - collected.len());
+                assert_eq!(page.len(), expected_len);
+                if page.is_empty() {
+                    break;
+                }
+                collected.extend(page);
+            }
+            assert_eq!(&collected, expected);
+        }
+    }
+
+    // offsets past the end and zero-size pages return nothing
+    let past_end = (all_ids.len() * 2) as u64;
+    assert_eq!(db_tx.get_token_ids(5, past_end).await.unwrap(), Vec::new());
+    assert_eq!(db_tx.get_token_ids(0, 0).await.unwrap(), Vec::new());
+    assert_eq!(
+        db_tx.get_token_ids_by_ticker(5, past_end, matching_ticker).await.unwrap(),
+        Vec::new()
+    );
+    assert_eq!(
+        db_tx.get_token_ids_by_ticker(0, 0, matching_ticker).await.unwrap(),
+        Vec::new()
+    );
+
+    Ok(())
+}
+
 fn random_order(
     rng: &mut impl CryptoRng,
     creation_height: BlockHeight,
@@ -2183,7 +2399,8 @@ where
 {
     vec![
         make_test!(initialization, storage_maker.clone()),
-        make_test!(set_get, storage_maker),
+        make_test!(set_get, storage_maker.clone()),
+        make_test!(token_ids_dedup_and_pagination, storage_maker),
     ]
     .into_iter()
 }
