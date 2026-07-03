@@ -128,13 +128,13 @@ fn make_apdu<'a>(
 
 pub async fn sign_challenge<L: Exchange>(
     ledger: &mut L,
-    coin: ledger_msg::CoinType,
+    coin_type: ledger_msg::CoinType,
     path: ledger_msg::Bip32Path,
     addr_type: ledger_msg::AddrType,
     message: &[u8],
 ) -> Result<ledger_msg::Signature, LedgerError> {
     let req = ledger_msg::SignMessageStartReq {
-        coin,
+        coin_type,
         addr_type,
         path,
     };
@@ -143,7 +143,7 @@ pub async fn sign_challenge<L: Exchange>(
         ledger,
         ledger_msg::Ins::SIGN_MSG,
         ledger_msg::SignMsgP1::Start.into(),
-        &ledger_msg::encode(req),
+        &ledger_msg::encode(&req),
     )
     .await?;
     let resp = decode_response(&resp)?;
@@ -202,7 +202,7 @@ pub async fn get_extended_public_key<L: Exchange>(
         ledger,
         ledger_msg::Ins::GET_PUB_KEY,
         ledger_msg::GetPubKeyP1::NoDisplayAddress.into(),
-        &ledger_msg::encode(req),
+        &ledger_msg::encode(&req),
     )
     .await?;
 
@@ -220,13 +220,13 @@ pub async fn get_extended_public_key<L: Exchange>(
 
 pub async fn sign_tx<L: Exchange>(
     ledger: &mut L,
-    chain_type: ledger_msg::CoinType,
+    coin_type: ledger_msg::CoinType,
     inputs: Vec<ledger_msg::TxInputData>,
     input_commitments: Vec<ledger_msg::SighashInputCommitment>,
     outputs: Vec<ledger_msg::TxOutputData>,
 ) -> Result<BTreeMap<usize, Vec<LedgerSignature>>, LedgerError> {
-    let start_req = ledger_msg::encode(ledger_msg::SignTxStartReq {
-        coin: chain_type,
+    let start_req = ledger_msg::encode(&ledger_msg::SignTxStartReq {
+        coin_type,
         version: ledger_msg::TransactionVersion::V1,
         num_inputs: inputs.len() as u32,
         num_outputs: outputs.len() as u32,
@@ -247,7 +247,7 @@ pub async fn sign_tx<L: Exchange>(
             ledger,
             ledger_msg::Ins::SIGN_TX,
             ledger_msg::SignTxP1::Next.into(),
-            &ledger_msg::encode(ledger_msg::SignTxNextReq::ProcessInput(Box::new(input))),
+            &ledger_msg::encode(&ledger_msg::SignTxNextReq::ProcessInput(Box::new(input))),
         )
         .await?;
         let resp = decode_response(&resp)?;
@@ -259,9 +259,9 @@ pub async fn sign_tx<L: Exchange>(
             ledger,
             ledger_msg::Ins::SIGN_TX,
             ledger_msg::SignTxP1::Next.into(),
-            &ledger_msg::encode(ledger_msg::SignTxNextReq::ProcessInputCommitment(Box::new(
-                ledger_msg::TxInputCommitmentData { commitment },
-            ))),
+            &ledger_msg::encode(&ledger_msg::SignTxNextReq::ProcessInputCommitment(
+                Box::new(ledger_msg::TxInputCommitmentData { commitment }),
+            )),
         )
         .await?;
         let resp = decode_response(&resp)?;
@@ -273,7 +273,7 @@ pub async fn sign_tx<L: Exchange>(
             ledger,
             ledger_msg::Ins::SIGN_TX,
             ledger_msg::SignTxP1::Next.into(),
-            &ledger_msg::encode(ledger_msg::SignTxNextReq::ProcessOutput(Box::new(output))),
+            &ledger_msg::encode(&ledger_msg::SignTxNextReq::ProcessOutput(Box::new(output))),
         )
         .await?;
 
@@ -282,7 +282,7 @@ pub async fn sign_tx<L: Exchange>(
     }
 
     let next_sig_raw_req = {
-        let next_sig = ledger_msg::encode(ledger_msg::SignTxNextReq::ReturnNextSignature);
+        let next_sig = ledger_msg::encode(&ledger_msg::SignTxNextReq::ReturnNextSignature);
         let apdu = make_apdu(
             ledger_msg::Ins::SIGN_TX,
             ledger_msg::SignTxP1::Next.into(),

@@ -61,7 +61,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    AccountId,
+    AccountId, KeyPurpose,
     account_info::DEFAULT_ACCOUNT_INDEX,
     hw_data::{
         HardwareWalletData, HardwareWalletFullInfo, LedgerData, LedgerFullInfo, LedgerModel,
@@ -74,7 +74,9 @@ use wallet_types::{
 
 use crate::{
     Account, WalletResult,
-    key_chain::{AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path},
+    key_chain::{
+        self, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey, make_account_path,
+    },
     signer::{
         Signer, SignerError, SignerProvider, SignerResult,
         hardware_signer_utils::{
@@ -477,6 +479,7 @@ where
     fn to_ledger_output_data(
         &self,
         ptx: &PartiallySignedTransaction,
+        key_chain: &impl AccountKeyChains,
     ) -> SignerResult<Vec<ledger_msg::TxOutputData>> {
         ptx.tx()
             .outputs()
@@ -484,6 +487,7 @@ where
             .map(|out| {
                 Ok(ledger_msg::TxOutputData {
                     output: out.clone().try_convert_into()?,
+                    change_path: make_change_path(out, key_chain)?,
                 })
             })
             .collect()
@@ -557,7 +561,7 @@ where
     )> {
         let (inputs, standalone_inputs) = to_ledger_input_msgs(&ptx, key_chain, &db_tx)?;
         let input_commitments = to_ledger_input_commitments_reqs(&ptx)?;
-        let outputs = self.to_ledger_output_data(&ptx)?;
+        let outputs = self.to_ledger_output_data(&ptx, key_chain)?;
         let coin_type = make_ledger_coin_type(&self.chain_config);
 
         let input_commitment_version = self
@@ -942,6 +946,63 @@ fn to_ledger_tx_input_with_additional_info(
         }
     };
     Ok(inp)
+}
+
+/// Return a value for `TxOutputData::change_path`, which would case the ledger app to mark
+/// the output as a change output during tx review.
+///
+/// Note that the ledger app puts restrictions on what can be marked as a change output:
+/// 1. It should be a simple `Transfer`.
+/// 2. The destination should be `PublicKeyHash` or `PublicKey`.
+/// 3. The derivation path should be "m/44'/coin_type'/account_idx'/1/change_idx".
+/// 4. The destination and the path must match (obviously).
+fn make_change_path(
+    output: &TxOutput,
+    key_chain: &impl AccountKeyChains,
+) -> SignerResult<Option<ledger_msg::Bip32Path>> {
+    let change_transfer_dest = match output {
+        TxOutput::Transfer(_, destination) => {
+            // Note: the call to `key_chain.find_public_key` below will return None for destinations
+            // other than PublicKeyHash or PublicKey, but it's better to check them explicitly
+            // here, because this is one of the ledger app's requirements.
+            match destination {
+                Destination::PublicKeyHash(_) | Destination::PublicKey(_) => destination,
+
+                Destination::AnyoneCanSpend
+                | Destination::ScriptHash(_)
+                | Destination::ClassicMultisig(_) => return Ok(None),
+            }
+        }
+        TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _)
+        | TxOutput::CreateOrder(_) => return Ok(None),
+    };
+    let Some(pub_key) = key_chain.find_public_key(change_transfer_dest) else {
+        return Ok(None);
+    };
+
+    match pub_key {
+        FoundPubKey::Hierarchy(xpub) => {
+            let path = xpub.get_derivation_path();
+            let (purpose, _) = key_chain::get_purpose_and_index(path)?;
+
+            Ok((purpose == KeyPurpose::Change).then(|| {
+                let path_vec =
+                    path.as_slice().iter().map(|ch_num| ch_num.into_encoded_index()).collect();
+
+                ledger_msg::Bip32Path(path_vec)
+            }))
+        }
+        FoundPubKey::Standalone(_) => Ok(None),
+    }
 }
 
 /// Find the derivation paths to the key in the destination, or multiple in the case of a multisig

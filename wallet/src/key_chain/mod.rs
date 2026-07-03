@@ -350,7 +350,7 @@ pub fn make_path_to_vrf_key(chain_config: &ChainConfig, account_index: U31) -> D
     path.try_into().expect("Path creation should not fail")
 }
 
-fn get_purpose_and_index(
+pub fn get_purpose_and_index(
     derivation_path: &DerivationPath,
 ) -> KeyChainResult<(KeyPurpose, ChildNumber)> {
     // Check that derivation path has the expected number of nodes

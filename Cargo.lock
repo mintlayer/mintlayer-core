@@ -5178,13 +5178,14 @@ dependencies = [
 [[package]]
 name = "mintlayer-messages"
 version = "1.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=44988a5ba1efc8b008a8ec61f32e4d7596999023#44988a5ba1efc8b008a8ec61f32e4d7596999023"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=16cc563caa5d3f746cc1b62608b88c3bdb284fa4#16cc563caa5d3f746cc1b62608b88c3bdb284fa4"
 dependencies = [
  "derive_more 2.1.1",
  "mintlayer-core-primitives",
  "num-traits",
  "num_enum",
  "parity-scale-codec",
+ "strum 0.27.2",
 ]
 
 [[package]]

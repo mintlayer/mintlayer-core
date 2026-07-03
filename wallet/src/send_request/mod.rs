@@ -210,35 +210,6 @@ impl SendRequest {
         Ok(())
     }
 
-    pub fn from_transaction<'a, PoolDataGetter>(
-        transaction: Transaction,
-        utxos: Vec<TxOutput>,
-        pool_data_getter: &PoolDataGetter,
-    ) -> WalletResult<Self>
-    where
-        PoolDataGetter: Fn(&PoolId) -> Option<&'a PoolData>,
-    {
-        let destinations = utxos
-            .iter()
-            .map(|utxo| {
-                get_tx_output_destination(utxo, &pool_data_getter, HtlcSpendingCondition::Skip)
-                    .ok_or_else(|| {
-                        WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
-                    })
-            })
-            .collect::<WalletResult<Vec<_>>>()?;
-
-        Ok(Self {
-            flags: transaction.flags(),
-            utxos: utxos.into_iter().map(Some).collect(),
-            destinations,
-            inputs: transaction.inputs().to_vec(),
-            outputs: transaction.outputs().to_vec(),
-            htlc_secrets: vec![None; transaction.inputs().len()],
-            fees: BTreeMap::new(),
-        })
-    }
-
     pub fn inputs(&self) -> &[TxInput] {
         &self.inputs
     }
