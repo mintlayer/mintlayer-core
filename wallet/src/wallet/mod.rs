@@ -980,7 +980,7 @@ where
             .into_iter()
             .map(|account| (account.account_index(), account))
             .collect();
-        // reset all inmempool transactions to inactive so we can set them properly from the current node again
+        // reset all in-mempool transactions to inactive so we can set them properly from the current node again
         accounts.values_mut().for_each(|a| a.reset_inmempool_txs_to_inactive());
 
         let latest_median_time =
