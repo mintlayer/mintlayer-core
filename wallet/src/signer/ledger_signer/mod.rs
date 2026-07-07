@@ -15,11 +15,13 @@
 
 mod ledger_messages;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use itertools::{Itertools, izip};
-use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model};
+use ledger_lib::{
+    Device as _, Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model,
+};
 use logging::log;
 use mintlayer_ledger_messages as ledger_msg;
 use tokio::sync::Mutex;
@@ -59,7 +61,8 @@ use randomness::make_true_rng;
 use serialization::Encode;
 use utils::ensure;
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    BogusWalletDbTxRo, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::{
     AccountId, KeyPurpose,
@@ -85,11 +88,18 @@ use crate::{
             sign_with_standalone_private_keys,
         },
         ledger_signer::ledger_messages::{
-            check_current_app, get_extended_public_key, ping, sign_challenge, sign_tx,
+            check_current_app_info, get_extended_public_key, ping, sign_challenge, sign_tx,
         },
         utils::{is_htlc_utxo, produce_uniparty_signature_for_input},
     },
 };
+
+/// Timeout duration for normal Ledger operations
+const TIMEOUT_DUR: Duration = Duration::from_secs(100);
+/// While trying to get a successful operation use a short timeout.
+/// Used in between normal operations when the screen is showing success/failure,
+/// and the Ledger app doesn't respond with any response so no need to wait for a long time.
+const SHORT_TIMEOUT_DUR: Duration = Duration::from_millis(500);
 
 /// Ledger Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -1287,20 +1297,123 @@ fn to_ledger_bip32_path(xpub: &ExtendedPublicKey) -> ledger_msg::Bip32Path {
     )
 }
 
-async fn find_ledger_device() -> Result<(LedgerHandle, LedgerFullInfo), LedgerError> {
+/// Find a Ledger device. If `key_check_data` is Some, call `check_public_keys_against_db` using that data.
+///
+/// Note: it'd be better if the function just received a generic async closure that would perform the
+/// key check, but the compiler throws a tantrum in this case at some of the call sites ("implementation
+/// of `Send` is not general enough" etc).
+async fn find_ledger_device_impl<DbTx>(
+    mut key_check_data: Option<(Arc<ChainConfig>, &mut DbTx)>,
+) -> Result<(LedgerHandle, LedgerFullInfo), SignerError>
+where
+    DbTx: WalletStorageReadLocked + Send,
+{
     let mut provider = LedgerProvider::init().await;
-    let mut devices = provider.list(Filters::Any).await?;
+    let mut devices = provider.list(Filters::Any).await.map_err(LedgerError::from)?;
+
+    // Note:
+    // 1. Ideally we'd want to try connecting to all devices in parallel and choose ones for which
+    //    the connection succeeded, but all connection attempts go through `rust-ledger` backend
+    //    one by one, so parallelizing is not really possible.
+    // 2. If the Speculos port is open, even if Speculos itself is not running (e.g. this may happen
+    //    if you've started the Ledger Docker container with ports mapped but haven't started Speculos
+    //    itself yet), there will be a Tcp device in `devices` anyway. This is one of the reasons
+    //    why arbitrarily choosing one device here is not a good idea.
+    // 3. Just in case, we sort the devices, putting Usb ones first, then Ble, then Tcp.
+    //    At this moment `rust-ledger` will return them in this exact order, but we'd like to
+    //    be explicit.
+    devices.sort_by_key(|device| match device.kind() {
+        ledger_lib::info::ConnType::Usb => 0,
+        ledger_lib::info::ConnType::Ble => 1,
+        ledger_lib::info::ConnType::Tcp => 2,
+    });
 
     log::debug!("devices = {devices:?}");
 
-    let device = devices.pop().ok_or(LedgerError::NoDeviceFound)?;
-    let model = to_ledger_model(&device.model);
+    let mut first_general_error: Option<LedgerError> = None;
+    let mut first_app_info_check_error: Option<LedgerError> = None;
+    let mut first_key_check_error: Option<SignerError> = None;
 
-    let mut handle = provider.connect(device).await?;
+    for device in &devices {
+        let model = to_ledger_model(&device.model);
 
-    let app_version = check_current_app(&mut handle).await?;
+        let mut handle = match provider.connect(device.clone()).await {
+            Ok(handle) => handle,
+            Err(err) => {
+                log::debug!("Skipping Ledger device candidate {device:?}: connect failed: {err}");
+                first_general_error.get_or_insert(err.into());
+                continue;
+            }
+        };
 
-    Ok((handle, LedgerFullInfo { app_version, model }))
+        let app_info = match handle.app_info(SHORT_TIMEOUT_DUR).await {
+            Ok(app_info) => app_info,
+            Err(err) => {
+                log::debug!("Skipping Ledger device candidate {device:?}: app_info failed: {err}");
+                first_general_error.get_or_insert(err.into());
+                continue;
+            }
+        };
+
+        let app_version = match check_current_app_info(app_info) {
+            Ok(app_version) => app_version,
+            Err(err) => {
+                log::debug!(
+                    "Skipping Ledger device candidate {device:?}: app_info check failed: {err}"
+                );
+                first_app_info_check_error.get_or_insert(err);
+                continue;
+            }
+        };
+
+        if let Some((chain_config, db_tx)) = key_check_data.as_mut() {
+            match check_public_keys_against_db(db_tx, &mut handle, Arc::clone(chain_config)).await {
+                Ok(()) => {
+                    return Ok((handle, LedgerFullInfo { app_version, model }));
+                }
+                Err(err) => {
+                    log::debug!(
+                        "Skipping Ledger device candidate {device:?}: key check failed: {err}"
+                    );
+                    first_key_check_error.get_or_insert(err);
+                }
+            }
+        }
+    }
+
+    // If we've got no suitable devices, examine the errors in order:
+    // 1. If we've got one at the check_current_app_info stage, then it's possible that the device
+    //    is correct and the user just forgot to launch our app.
+    // 2. Then examine `first_key_check_error` - even though we know the device is wrong,
+    //    it's still better to report this before the general error, because the latter
+    //    can be anything, e.g. a failed attempt to connect to something that `rust-ledger`
+    //    thought to be Speculos.
+    // 3. Then examine `first_general_error`.
+    if let Some(err) = first_app_info_check_error {
+        Err(err.into())
+    } else if let Some(err) = first_key_check_error {
+        Err(err)
+    } else if let Some(err) = first_general_error {
+        Err(err.into())
+    } else {
+        // Can only get here if `devices` is empty.
+        debug_assert!(devices.is_empty());
+        Err(LedgerError::NoDeviceFound.into())
+    }
+}
+
+async fn find_ledger_device() -> Result<(LedgerHandle, LedgerFullInfo), SignerError> {
+    find_ledger_device_impl(Option::<(_, &mut BogusWalletDbTxRo)>::None).await
+}
+
+async fn find_ledger_device_and_check_keys<DbTx>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut DbTx,
+) -> Result<(LedgerHandle, LedgerFullInfo), SignerError>
+where
+    DbTx: WalletStorageReadLocked + Send,
+{
+    find_ledger_device_impl(Some((chain_config, db_tx))).await
 }
 
 /// Check that the public keys in the provided key chain are the same as the ones from the
@@ -1403,9 +1516,8 @@ impl LedgerFinder for LedgerSignerProvider {
         db_tx: &mut T,
         chain_config: Arc<ChainConfig>,
     ) -> SignerResult<(Self::Ledger, LedgerData)> {
-        let (mut client, info) = find_ledger_device().await?;
-
-        check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
+        let (client, info) =
+            find_ledger_device_and_check_keys(Arc::clone(&chain_config), db_tx).await?;
 
         Ok((client, info.into()))
     }
@@ -1425,9 +1537,8 @@ impl LedgerSignerProvider {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut T,
     ) -> WalletResult<Self> {
-        let (mut client, info) = find_ledger_device().await.map_err(SignerError::LedgerError)?;
-
-        check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
+        let (client, info) =
+            find_ledger_device_and_check_keys(Arc::clone(&chain_config), db_tx).await?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(ClosableLedgerExchangeAdapter::new(client))),

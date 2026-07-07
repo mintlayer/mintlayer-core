@@ -25,7 +25,7 @@ use crypto::key::{
 };
 use utils::ensure;
 
-use crate::signer::ledger_signer::LedgerError;
+use crate::signer::ledger_signer::{LedgerError, SHORT_TIMEOUT_DUR, TIMEOUT_DUR};
 
 use super::LedgerSignature;
 
@@ -42,13 +42,6 @@ macro_rules! ensure_response_type {
         }
     };
 }
-
-/// Timeout duration for normal Ledger operations
-const TIMEOUT_DUR: Duration = Duration::from_secs(100);
-/// While trying to get a successful operation use a short timeout.
-/// Used in between normal operations when the screen is showing success/failure,
-/// and the Ledger app doesn't respond with any response so no need to wait for a long time.
-const SHORT_TIMEOUT_DUR: Duration = Duration::from_millis(200);
 
 /// Check that the response ends with the OK status code and return the rest of the response back
 fn extract_response_apdu_data(mut resp: Vec<u8>) -> Result<Vec<u8>, LedgerError> {
@@ -163,16 +156,20 @@ pub async fn sign_challenge<L: Exchange>(
     Ok(resp.signature)
 }
 
+pub fn check_current_app_info(info: ledger_lib::info::AppInfo) -> Result<String, LedgerError> {
+    ensure!(
+        info.name == "Mintlayer",
+        LedgerError::DifferentActiveApp(info.name)
+    );
+    Ok(info.version)
+}
+
+#[allow(unused)]
 pub async fn check_current_app<L: Exchange + Device + Send>(
     ledger: &mut L,
 ) -> Result<String, LedgerError> {
     let info = ledger.app_info(TIMEOUT_DUR).await?;
-    let name = info.name;
-    let app_version = info.version;
-
-    ensure!(name == "Mintlayer", LedgerError::DifferentActiveApp(name));
-
-    Ok(app_version)
+    check_current_app_info(info)
 }
 
 pub async fn ping<L: Exchange>(ledger: &mut L) -> Result<(), LedgerError> {
