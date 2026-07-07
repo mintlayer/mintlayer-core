@@ -76,53 +76,76 @@ pub mod ledger_signer;
 pub enum SignerError {
     #[error("The provided keys do not belong to the same hierarchy")]
     KeysNotInSameHierarchy,
+
     #[error("Key derivation error: {0}")]
     Derivation(#[from] DerivationError),
+
     #[error("Signing error: {0}")]
     SigningError(#[from] DestinationSigError),
+
     #[error("Wallet database error: {0}")]
     DatabaseError(#[from] wallet_storage::Error),
+
     #[error("Keychain error: {0}")]
     KeyChainError(#[from] KeyChainError),
+
     #[error("Destination does not belong to this wallet")]
     DestinationNotFromThisWallet,
+
     #[error("Error signing arbitrary message: {0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+
     #[error("Signed transaction intent error: {0}")]
     SignedTransactionIntentError(#[from] SignedTransactionIntentError),
+
     #[error("{0}")]
     MultisigError(#[from] PartiallySignedMultisigStructureError),
+
     #[error("{0}")]
     SerializationError(#[from] serialization::Error),
+
     #[cfg(any(feature = "trezor", feature = "ledger"))]
     #[error("Hardware singer error: {0}")]
     HardwareSignerError(#[from] HardwareSignerError),
+
     #[cfg(feature = "trezor")]
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),
+
     #[cfg(feature = "ledger")]
     #[error("Ledger error: {0}")]
     LedgerError(#[from] LedgerError),
+
     #[error("Partially signed tx is missing input's destination")]
     MissingDestinationInTransaction,
+
     #[error("Partially signed tx is missing UTXO type input's UTXO")]
     MissingUtxo,
+
     #[error("Partially signed tx is missing extra info")]
     MissingTxExtraInfo,
+
     #[error("Tokens V0 are not supported")]
     UnsupportedTokensV0,
+
     #[error("Invalid TxOutput type as UTXO, cannot be spent")]
     InvalidUtxo,
+
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+
     #[error("Order was filled more than the available balance")]
     OrderFillUnderflow,
+
     #[error("HTLC refund expected for a multisig destination")]
     HtlcRefundExpectedForMultisig,
+
     #[error("Partially signed transaction error: {0}")]
     PartiallySignedTransactionError(#[from] PartiallySignedTransactionError),
+
     #[error("Duplicate UTXO input: {0:?}")]
     DuplicateUtxoInput(UtxoOutPoint),
+
     #[error("Wallet not initialized")]
     WalletNotInitialized,
 }

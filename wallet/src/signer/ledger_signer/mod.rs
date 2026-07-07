@@ -20,6 +20,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use itertools::{Itertools, izip};
 use ledger_lib::{Exchange, Filters, LedgerHandle, LedgerProvider, Transport, info::Model};
+use logging::log;
 use mintlayer_ledger_messages as ledger_msg;
 use tokio::sync::Mutex;
 
@@ -155,6 +156,9 @@ pub enum LedgerError {
 
     #[error("Input commitments version 0 is not supported by the Ledger app")]
     InputCommitmentVersion1NotSupported,
+
+    #[error("Ledger client was closed")]
+    LedgerClientClosed,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -234,19 +238,69 @@ pub trait LedgerFinder {
     ) -> SignerResult<(Self::Ledger, LedgerData)>;
 }
 
-pub struct LedgerSigner<L, P> {
+/// A wrapper for `Exchange` that can be closed.
+///
+/// This is needed because when reconnecting to the device after it has been physically disconnected
+/// and reconnected, we have to drop the old handle before the reconnection attempt, otherwise the
+/// reconnection would fail with `DeviceInUse`. This happens at the backend side of `rust-ledger`,
+/// which on a connection attempt looks for an existing device with the same `ConnInfo`, checks its
+/// `is_connected()` state and fails if it's true. But `is_connected` simply calls `hidapi`'s
+/// `HidDevice::get_device_info` and checks that it didn't fail, so it's a weak check that doesn't
+/// guarantee that the old HID connection is usable (and in practice, at least on a Linux machine,
+/// `is_connected` would always return true after physical disconnection and reconnection).
+pub trait ClosableLedgerExchange {
+    type Inner: Exchange + Send;
+
+    fn new(inner: Self::Inner) -> Self;
+
+    fn close(&mut self);
+
+    fn inner(&self) -> Result<&'_ Self::Inner, LedgerError>;
+    fn inner_mut(&mut self) -> Result<&'_ mut Self::Inner, LedgerError>;
+}
+
+/// An adapter that implement `ClosableLedgerExchange`.
+pub struct ClosableLedgerExchangeAdapter<L>(Option<L>);
+
+impl<L: Exchange + Send> ClosableLedgerExchange for ClosableLedgerExchangeAdapter<L> {
+    type Inner = L;
+
+    fn new(inner: Self::Inner) -> Self {
+        Self(Some(inner))
+    }
+
+    fn close(&mut self) {
+        // Drop the `Exchange` instance.
+        // Note that in the `LedgerHandle` case this only sends `LedgerReq::Close` to the `rust-ledger`
+        // backend and doesn't wait for the result, so the underlying device object won't be dropped
+        // just yet. But it will be dropped before the next connection attempt, because a connection
+        // attempt also sends a message to the backend (LedgerReq::Connect), which will arrive after
+        // `LedgerReq::Close` has already been handled.
+        self.0 = None;
+    }
+
+    fn inner(&self) -> Result<&'_ Self::Inner, LedgerError> {
+        self.0.as_ref().ok_or(LedgerError::LedgerClientClosed)
+    }
+
+    fn inner_mut(&mut self) -> Result<&'_ mut Self::Inner, LedgerError> {
+        self.0.as_mut().ok_or(LedgerError::LedgerClientClosed)
+    }
+}
+
+pub struct LedgerSigner<CL, P> {
     chain_config: Arc<ChainConfig>,
-    client: Arc<Mutex<L>>,
+    client: Arc<Mutex<CL>>,
     sig_aux_data_provider: std::sync::Mutex<Box<dyn SigAuxDataProvider + Send>>,
     provider: P,
 }
 
-impl<L, P> LedgerSigner<L, P>
+impl<CL, P> LedgerSigner<CL, P>
 where
-    L: Exchange + Send,
-    P: LedgerFinder<Ledger = L>,
+    CL: ClosableLedgerExchange + Send,
+    P: LedgerFinder<Ledger = CL::Inner>,
 {
-    pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<L>>, provider: P) -> Self {
+    pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<CL>>, provider: P) -> Self {
         Self::new_with_sig_aux_data_provider(
             chain_config,
             client,
@@ -257,7 +311,7 @@ where
 
     pub fn new_with_sig_aux_data_provider(
         chain_config: Arc<ChainConfig>,
-        client: Arc<Mutex<L>>,
+        client: Arc<Mutex<CL>>,
         sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
         provider: P,
     ) -> Self {
@@ -280,14 +334,15 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
+        let inner_client = client.inner_mut()?;
         // Try and wait around 50 * TIMEOUT_DUR for the screen to clear after a signing operation ends
         let mut num_tries = 50;
         loop {
-            match ping(&mut *client).await {
+            match ping(inner_client).await {
                 Ok(()) => {
                     check_public_keys_against_key_chain(
                         db_tx,
-                        &mut *client,
+                        inner_client,
                         key_chain,
                         &self.chain_config,
                     )
@@ -316,6 +371,10 @@ where
                                 LedgerDeviceErrorKind::Hid
                                 | LedgerDeviceErrorKind::Tcp
                                 | LedgerDeviceErrorKind::Ble => {
+                                    // Close the previous connection before attempting another one.
+                                    // See the comment near `ClosableLedgerExchange` for details.
+                                    client.close();
+
                                     let (mut new_client, _data) = self
                                         .provider
                                         .find_ledger_device_from_db(
@@ -332,7 +391,7 @@ where
                                     )
                                     .await?;
 
-                                    *client = new_client;
+                                    *client = CL::new(new_client);
                                     return Ok(());
                                 }
 
@@ -359,12 +418,12 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<R>
     where
-        F: AsyncFnOnce(&mut L) -> Result<R, SignerError>,
+        F: AsyncFnOnce(&mut CL::Inner) -> Result<R, SignerError>,
     {
         self.check_session(db_tx, key_chain).await?;
 
         let mut client = self.client.lock().await;
-        operation(&mut client).await
+        operation(client.inner_mut()?).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -544,8 +603,8 @@ where
 #[async_trait]
 impl<L, P> Signer for LedgerSigner<L, P>
 where
-    L: Exchange + Send,
-    P: Send + Sync + LedgerFinder<Ledger = L>,
+    L: ClosableLedgerExchange + Send,
+    P: Send + Sync + LedgerFinder<Ledger = L::Inner>,
 {
     async fn sign_tx(
         &mut self,
@@ -1232,6 +1291,8 @@ async fn find_ledger_device() -> Result<(LedgerHandle, LedgerFullInfo), LedgerEr
     let mut provider = LedgerProvider::init().await;
     let mut devices = provider.list(Filters::Any).await?;
 
+    log::debug!("devices = {devices:?}");
+
     let device = devices.pop().ok_or(LedgerError::NoDeviceFound)?;
     let model = to_ledger_model(&device.model);
 
@@ -1329,7 +1390,7 @@ fn single_signature(
 #[derive(Clone, derive_more::Debug)]
 pub struct LedgerSignerProvider {
     #[debug(skip)]
-    client: Arc<Mutex<LedgerHandle>>,
+    client: Arc<Mutex<ClosableLedgerExchangeAdapter<LedgerHandle>>>,
     info: LedgerFullInfo,
 }
 
@@ -1355,7 +1416,7 @@ impl LedgerSignerProvider {
         let (client, info) = find_ledger_device().await?;
 
         Ok(Self {
-            client: Arc::new(Mutex::new(client)),
+            client: Arc::new(Mutex::new(ClosableLedgerExchangeAdapter::new(client))),
             info,
         })
     }
@@ -1369,7 +1430,7 @@ impl LedgerSignerProvider {
         check_public_keys_against_db(db_tx, &mut client, chain_config).await?;
 
         Ok(Self {
-            client: Arc::new(Mutex::new(client)),
+            client: Arc::new(Mutex::new(ClosableLedgerExchangeAdapter::new(client))),
             info,
         })
     }
@@ -1379,13 +1440,18 @@ impl LedgerSignerProvider {
         chain_config: &Arc<ChainConfig>,
         account_index: U31,
     ) -> SignerResult<ExtendedPublicKey> {
-        fetch_extended_pub_key(&mut *self.client.lock().await, chain_config, account_index).await
+        fetch_extended_pub_key(
+            self.client.lock().await.inner_mut()?,
+            chain_config,
+            account_index,
+        )
+        .await
     }
 }
 
 #[async_trait]
 impl SignerProvider for LedgerSignerProvider {
-    type S = LedgerSigner<LedgerHandle, LedgerSignerProvider>;
+    type S = LedgerSigner<ClosableLedgerExchangeAdapter<LedgerHandle>, LedgerSignerProvider>;
     type K = AccountKeyChainImplHardware;
 
     fn provide(

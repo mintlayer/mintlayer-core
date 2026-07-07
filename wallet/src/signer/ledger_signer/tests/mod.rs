@@ -40,7 +40,8 @@ use tokio::{
 use crate::signer::{
     SignerError, SignerResult,
     ledger_signer::{
-        LedgerError, LedgerFinder, LedgerSigner,
+        ClosableLedgerExchange as _, ClosableLedgerExchangeAdapter, LedgerError, LedgerFinder,
+        LedgerSigner,
         ledger_messages::{check_current_app, get_extended_public_key, ping},
     },
     tests::{
@@ -199,7 +200,10 @@ async fn setup(
 ) -> (
     Option<tokio::task::JoinHandle<()>>,
     Sender<ControlMessage>,
-    impl Fn(Arc<ChainConfig>, U31) -> LedgerSigner<TcpDevice, DummyProvider>,
+    impl Fn(
+        Arc<ChainConfig>,
+        U31,
+    ) -> LedgerSigner<ClosableLedgerExchangeAdapter<TcpDevice>, DummyProvider>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), emulator_api_port());
 
@@ -223,7 +227,7 @@ async fn setup(
 
     wait_for_valid_reponse(&mut device).await;
 
-    let device = Arc::new(Mutex::new(device));
+    let device = Arc::new(Mutex::new(ClosableLedgerExchangeAdapter::new(device)));
 
     let (control_msg_tx, control_msg_rx) = mpsc::channel(1);
     let auto_confirmer_handle = if should_auto_confirm() {
@@ -279,7 +283,7 @@ async fn test_account_extended_public_key() {
 
     let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
     let (public_key, chain_code) = get_extended_public_key(
-        &mut *signer.client.lock().await,
+        signer.client.lock().await.inner_mut().unwrap(),
         CoinType::Mainnet,
         derivation_path,
     )
