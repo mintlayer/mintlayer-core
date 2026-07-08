@@ -264,12 +264,13 @@ pub trait ClosableLedgerExchange {
     fn new(inner: Self::Inner) -> Self;
 
     fn close(&mut self);
+    fn is_closed(&self) -> bool;
 
     fn inner(&self) -> Result<&'_ Self::Inner, LedgerError>;
     fn inner_mut(&mut self) -> Result<&'_ mut Self::Inner, LedgerError>;
 }
 
-/// An adapter that implement `ClosableLedgerExchange`.
+/// An adapter that implements `ClosableLedgerExchange`.
 pub struct ClosableLedgerExchangeAdapter<L>(Option<L>);
 
 impl<L: Exchange + Send> ClosableLedgerExchange for ClosableLedgerExchangeAdapter<L> {
@@ -287,6 +288,10 @@ impl<L: Exchange + Send> ClosableLedgerExchange for ClosableLedgerExchangeAdapte
         // attempt also sends a message to the backend (LedgerReq::Connect), which will arrive after
         // `LedgerReq::Close` has already been handled.
         self.0 = None;
+    }
+
+    fn is_closed(&self) -> bool {
+        self.0.is_none()
     }
 
     fn inner(&self) -> Result<&'_ Self::Inner, LedgerError> {
@@ -344,9 +349,22 @@ where
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().await;
+
+        // The client may be closed if the previous attempt of `reconnect` failed in the middle.
+        if client.is_closed() {
+            return Self::reconnect(
+                &self.chain_config,
+                &mut client,
+                &self.provider,
+                db_tx,
+                key_chain,
+            )
+            .await;
+        }
+
         let inner_client = client.inner_mut()?;
-        // Try and wait around 50 * TIMEOUT_DUR for the screen to clear after a signing operation ends
-        let mut num_tries = 50;
+        // Try and wait around 10 * SHORT_TIMEOUT_DUR for the screen to clear after a signing operation ends
+        let mut num_tries = 10;
         loop {
             match ping(inner_client).await {
                 Ok(()) => {
@@ -381,28 +399,14 @@ where
                                 LedgerDeviceErrorKind::Hid
                                 | LedgerDeviceErrorKind::Tcp
                                 | LedgerDeviceErrorKind::Ble => {
-                                    // Close the previous connection before attempting another one.
-                                    // See the comment near `ClosableLedgerExchange` for details.
-                                    client.close();
-
-                                    let (mut new_client, _data) = self
-                                        .provider
-                                        .find_ledger_device_from_db(
-                                            db_tx,
-                                            self.chain_config.clone(),
-                                        )
-                                        .await?;
-
-                                    check_public_keys_against_key_chain(
-                                        db_tx,
-                                        &mut new_client,
-                                        key_chain,
+                                    return Self::reconnect(
                                         &self.chain_config,
+                                        &mut client,
+                                        &self.provider,
+                                        db_tx,
+                                        key_chain,
                                     )
-                                    .await?;
-
-                                    *client = CL::new(new_client);
-                                    return Ok(());
+                                    .await;
                                 }
 
                                 LedgerDeviceErrorKind::Other => {
@@ -415,6 +419,27 @@ where
                 }
             }
         }
+    }
+
+    async fn reconnect<T: WalletStorageReadLocked + Send>(
+        chain_config: &Arc<ChainConfig>,
+        client: &mut CL,
+        provider: &P,
+        db_tx: &mut T,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<()> {
+        // Close the previous connection before attempting another one.
+        // See the comment near `ClosableLedgerExchange` for details.
+        client.close();
+
+        let (mut new_client, _data) =
+            provider.find_ledger_device_from_db(db_tx, Arc::clone(chain_config)).await?;
+
+        check_public_keys_against_key_chain(db_tx, &mut new_client, key_chain, chain_config)
+            .await?;
+
+        *client = CL::new(new_client);
+        Ok(())
     }
 
     /// Attempts to perform an operation on the Ledger client.
@@ -1017,7 +1042,7 @@ fn to_ledger_tx_input_with_additional_info(
     Ok(inp)
 }
 
-/// Return a value for `TxOutputData::change_path`, which would case the ledger app to mark
+/// Return a value for `TxOutputData::change_path`, which would cause the ledger app to mark
 /// the output as a change output during tx review.
 ///
 /// Note that the ledger app puts restrictions on what can be marked as a change output:
@@ -1368,17 +1393,18 @@ where
 
         if let Some((chain_config, db_tx)) = key_check_data.as_mut() {
             match check_public_keys_against_db(db_tx, &mut handle, Arc::clone(chain_config)).await {
-                Ok(()) => {
-                    return Ok((handle, LedgerFullInfo { app_version, model }));
-                }
+                Ok(()) => {}
                 Err(err) => {
                     log::debug!(
                         "Skipping Ledger device candidate {device:?}: key check failed: {err}"
                     );
                     first_key_check_error.get_or_insert(err);
+                    continue;
                 }
             }
         }
+
+        return Ok((handle, LedgerFullInfo { app_version, model }));
     }
 
     // If we've got no suitable devices, examine the errors in order:

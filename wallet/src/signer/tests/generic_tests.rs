@@ -576,7 +576,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
-    let created_order_ask = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let created_order_give = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let filled_order1_id = OrderId::new(H256::random_using(rng));
     let filled_order2_id = OrderId::new(H256::random_using(rng));
@@ -743,7 +743,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
         OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
-        OutputValue::Coin(created_order_ask),
+        OutputValue::Coin(created_order_give),
     );
 
     let outputs = vec![
@@ -1210,7 +1210,7 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
     let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
-    let created_order_ask = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let created_order_give = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let coins_tokens = |currency: Currency,
                         amount: Amount|
@@ -1454,7 +1454,7 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
         OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
-        OutputValue::Coin(created_order_ask),
+        OutputValue::Coin(created_order_give),
     );
 
     let mut outputs = Vec::new();
@@ -1514,7 +1514,7 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
         pool_amount,
         delegate_staking_amount,
         htlc_transfer_amount,
-        created_order_ask,
+        created_order_give,
         extra_coin_output_amount,
     ]
     .into_iter()
