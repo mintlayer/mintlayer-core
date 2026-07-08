@@ -2411,10 +2411,10 @@ impl<K: AccountKeyChains> Account<K> {
         let account_index = self.account_index();
 
         for tx in self.output_cache.reset_inmempool_txs_to_inactive() {
-            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), tx)?;
 
             if let Some(wallet_events) = wallet_events {
-                wallet_events.set_transaction(account_index, &tx);
+                wallet_events.set_transaction(account_index, tx);
             }
         }
 
