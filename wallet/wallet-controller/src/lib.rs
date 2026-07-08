@@ -1613,8 +1613,8 @@ where
 
                                 log::error!("Mempool notifications channel is closed");
 
-                                // reset in-mempool transactions to inactive so we can rescan them when we connect again
-                                self.wallet.reset_inmempool_txs_to_inactive();
+                                // Reset in-mempool transactions to inactive so we can rescan them when we connect again.
+                                self.wallet.reset_inmempool_txs_to_inactive(Some(&self.wallet_events))?;
                                 self.should_rescan_mempool_txs = true;
 
                                 tokio::time::sleep(ERROR_DELAY).await;

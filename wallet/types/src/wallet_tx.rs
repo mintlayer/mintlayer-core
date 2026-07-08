@@ -92,16 +92,17 @@ impl TxState {
         }
     }
 
-    pub fn reset_inmempool_to_inactive(&mut self) {
+    pub fn reset_inmempool_to_inactive(&mut self) -> bool {
         match self {
             TxState::InMempool(unconfirmed_tx_counter) => {
                 *self = TxState::Inactive(*unconfirmed_tx_counter);
+                true
             }
 
             TxState::Confirmed(_, _, _)
             | TxState::Conflicted(_)
             | TxState::Inactive(_)
-            | TxState::Abandoned => {}
+            | TxState::Abandoned => false,
         }
     }
 }
@@ -177,12 +178,10 @@ impl WalletTx {
         }
     }
 
-    pub fn reset_inmempool_to_inactive(&mut self) {
+    pub fn reset_inmempool_to_inactive(&mut self) -> bool {
         match self {
-            WalletTx::Block(_) => {} // Blocks are never InMempool
-            WalletTx::Tx(tx) => {
-                tx.state.reset_inmempool_to_inactive();
-            }
+            WalletTx::Block(_) => false, // Blocks are never InMempool
+            WalletTx::Tx(tx) => tx.state.reset_inmempool_to_inactive(),
         }
     }
 

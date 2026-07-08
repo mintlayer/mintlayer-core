@@ -2402,8 +2402,23 @@ impl<K: AccountKeyChains> Account<K> {
     }
 
     /// Reset all transactions that are currently in-mempool to inactive state
-    pub fn reset_inmempool_txs_to_inactive(&mut self) {
-        self.output_cache.reset_inmempool_txs_to_inactive();
+    pub fn reset_inmempool_txs_to_inactive<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        wallet_events: Option<&impl WalletEvents>,
+    ) -> WalletResult<()> {
+        let acc_id = self.get_account_id();
+        let account_index = self.account_index();
+
+        for tx in self.output_cache.reset_inmempool_txs_to_inactive() {
+            db_tx.set_transaction(&AccountWalletTxId::new(acc_id.clone(), tx.id()), &tx)?;
+
+            if let Some(wallet_events) = wallet_events {
+                wallet_events.set_transaction(account_index, &tx);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn update_best_block(

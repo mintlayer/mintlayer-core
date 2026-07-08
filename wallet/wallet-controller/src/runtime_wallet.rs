@@ -102,13 +102,16 @@ where
         }
     }
 
-    pub fn reset_inmempool_txs_to_inactive(&mut self) {
+    pub fn reset_inmempool_txs_to_inactive(
+        &mut self,
+        wallet_events: Option<&impl WalletEvents>,
+    ) -> WalletResult<()> {
         match self {
-            RuntimeWallet::Software(w) => w.reset_inmempool_txs_to_inactive(),
+            RuntimeWallet::Software(w) => w.reset_inmempool_txs_to_inactive(wallet_events),
             #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => w.reset_inmempool_txs_to_inactive(),
+            RuntimeWallet::Trezor(w) => w.reset_inmempool_txs_to_inactive(wallet_events),
             #[cfg(feature = "ledger")]
-            RuntimeWallet::Ledger(w) => w.reset_inmempool_txs_to_inactive(),
+            RuntimeWallet::Ledger(w) => w.reset_inmempool_txs_to_inactive(wallet_events),
         }
     }
 

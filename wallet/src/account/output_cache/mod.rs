@@ -1433,11 +1433,16 @@ impl OutputCache {
     }
 
     /// Reset all transactions that are currently in-mempool to inactive state.
-    pub fn reset_inmempool_txs_to_inactive(&mut self) {
-        self.txs.values_mut().for_each(|tx| tx.reset_inmempool_to_inactive());
-        self.consumed
+    ///
+    /// Return an iterator of the transactions that were reset.
+    pub fn reset_inmempool_txs_to_inactive(&mut self) -> impl Iterator<Item = &WalletTx> {
+        self.consumed.values_mut().for_each(|tx_state| {
+            tx_state.reset_inmempool_to_inactive();
+        });
+
+        self.txs
             .values_mut()
-            .for_each(|tx_state| tx_state.reset_inmempool_to_inactive());
+            .filter_map(|tx| tx.reset_inmempool_to_inactive().then_some(&*tx))
     }
 
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {

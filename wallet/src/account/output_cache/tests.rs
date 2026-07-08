@@ -1632,8 +1632,15 @@ fn reset_inmempool_txs_to_inactive(#[case] seed: Seed) {
         assert!(matches!(tx_state, TxState::InMempool(_)));
     }
 
+    let all_tx_ids = output_cache.txs.values().map(|tx| tx.id()).collect::<BTreeSet<_>>();
+
     // Reset
-    output_cache.reset_inmempool_txs_to_inactive();
+    let reset_tx_ids = output_cache
+        .reset_inmempool_txs_to_inactive()
+        .map(|tx| tx.id())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(reset_tx_ids, all_tx_ids);
 
     // Check that all txs are now Inactive
     for tx in output_cache.txs.values() {
