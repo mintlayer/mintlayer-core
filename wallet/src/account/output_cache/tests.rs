@@ -1626,12 +1626,24 @@ fn reset_inmempool_txs_to_inactive(#[case] seed: Seed) {
         );
     }
 
+    // Sanity check - the `consumed` collection is not empty and all the tx states are InMempool.
+    assert_eq!(output_cache.consumed.len(), 10);
+    for tx_state in output_cache.consumed.values() {
+        assert!(matches!(tx_state, TxState::InMempool(_)));
+    }
+
     // Reset
     output_cache.reset_inmempool_txs_to_inactive();
 
-    // Check none of the txs are InMempool state
+    // Check that all txs are now Inactive
     for tx in output_cache.txs.values() {
-        assert!(!matches!(tx.state(), TxState::InMempool(_)));
+        assert!(matches!(tx.state(), TxState::Inactive(_)));
+    }
+
+    // Check that inside `consumed` the state of the consuming tx has been updated as well.
+    assert_eq!(output_cache.consumed.len(), 10);
+    for tx_state in output_cache.consumed.values() {
+        assert!(matches!(tx_state, TxState::Inactive(_)));
     }
 }
 

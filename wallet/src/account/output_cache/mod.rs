@@ -600,6 +600,7 @@ pub struct OutputCache {
     //  - no confirmed txs are allowed;
     //  - confirmed tx cannot have unconfirmed parent.
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+    // Map of consumed utxos; the value is the state of the tx that consumed the corresponding utxo.
     consumed: BTreeMap<UtxoOutPoint, TxState>,
 
     pools: BTreeMap<PoolId, PoolData>,
@@ -1434,6 +1435,9 @@ impl OutputCache {
     /// Reset all transactions that are currently in-mempool to inactive state.
     pub fn reset_inmempool_txs_to_inactive(&mut self) {
         self.txs.values_mut().for_each(|tx| tx.reset_inmempool_to_inactive());
+        self.consumed
+            .values_mut()
+            .for_each(|tx_state| tx_state.reset_inmempool_to_inactive());
     }
 
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {

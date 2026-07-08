@@ -1607,7 +1607,12 @@ where
                         let event = match maybe_event {
                             Some(e) => e,
                             None => {
+                                // Note: currently the wallet is unable to automatically reconnect to the node when
+                                // the connection is dropped, so for now this branch mostly handles a hypothetical
+                                // situation when the connection is still up, but the stream itself somehow got closed.
+
                                 log::error!("Mempool notifications channel is closed");
+
                                 // reset in-mempool transactions to inactive so we can rescan them when we connect again
                                 self.wallet.reset_inmempool_txs_to_inactive();
                                 self.should_rescan_mempool_txs = true;
@@ -1628,6 +1633,21 @@ where
                         };
 
                         match event {
+                            // TODO: mempool can evict transactions - there is a size limit for the entire mempool
+                            // (MAX_MEMPOOL_SIZE_BYTES by default, which is 300Mb) and an expiration time for each tx
+                            // (DEFAULT_MEMPOOL_EXPIRY, which is currently 2 weeks). The wallet must be aware of this
+                            // and mark all its in-mempool txs that have been evicted as inactive.
+                            // At this moment eviction happens when a new tx is being added to the mempool, but note
+                            // that a `NewTransaction` event is not guaranteed in this case (e.g. if the newly added
+                            // tx gets evicted too). Additionally, txs may be evicted after the mempool has been explicitly
+                            // trimmed via `set_max_size`.
+                            // So, the simpler (but not 100% reliable) solution would be to check all of the wallet's
+                            // in-mempool txs for whether they're still in mempool (preferably via a dedicated rpc method,
+                            // to avoid overhead) whenever a `NewTransaction` event arrives.
+                            // A better solution is to introduce a separate mempool event, `TransactionsRemoved`,
+                            // that would contain ids of all txs that have been evicted or removed due to other reasons
+                            // (plus maybe the reason for the eviction/removal).
+
                             MempoolEvent::NewTransaction { tx_id } => {
                                 let transaction = self.rpc_client
                                     .mempool_get_transaction(tx_id)
