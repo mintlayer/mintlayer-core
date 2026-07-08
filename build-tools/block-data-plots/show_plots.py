@@ -40,6 +40,7 @@ class Handler():
         self.targets = self.all_targets[self.skipped_blocks:]
         self.time_diffs = self.all_time_diffs[self.skipped_blocks:]
         self.starting_height = self.skipped_blocks + 1
+        self.filename = pathlib.Path(args.input_file).resolve().name
 
     def run(self):
         print("Creating plots")
@@ -51,7 +52,7 @@ class Handler():
 
     def plot_targets(self):
         figure, axes = pyplot.subplots(layout="constrained")
-        figure.canvas.manager.set_window_title(f"Targets, {self.block_range_help_str}")
+        figure.canvas.manager.set_window_title(f"Targets, {self.block_range_help_str}, {self.filename}")
 
         plot = scatter_from(
             axes,
@@ -63,11 +64,15 @@ class Handler():
         # Note: the initial targets were very big, so if the entire range is plotted,
         # the later difficulties will be hard to distinguish, unless we set the limit
         # for the y axis values.
+        # On the other hand, testnet had a large target spike somewhere between heights 150000
+        # and 170000, so if we limit the y axis too much, this part won't be visible.
+        # So we use the target around height 5000 as the y-axis cap. It is high enough to keep the
+        # testnet spike (mostly) visible, but low enough for the later values to remain readable.
         #
         # Note: normal_y_lim is close to what is used by default, it leaves some space at
         # the top of the plot to make it look better.
         normal_y_lim = float(max(self.targets)) * 1.05
-        y_lim = min(float(self.all_targets[20000]), normal_y_lim)
+        y_lim = min(float(self.all_targets[5000]), normal_y_lim)
         axes.set_ylim(bottom=0, top=y_lim)
 
         # For some reason, zero values on the axes are shifted to the right/top by default.
@@ -84,7 +89,7 @@ class Handler():
 
     def plot_time_diffs(self):
         figure, axes = pyplot.subplots(layout="constrained")
-        figure.canvas.manager.set_window_title(f"Timestamp differences, {self.block_range_help_str}")
+        figure.canvas.manager.set_window_title(f"Timestamp differences, {self.block_range_help_str}, {self.filename}")
 
         plot = scatter_from(
             axes,
