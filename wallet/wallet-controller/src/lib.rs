@@ -54,7 +54,6 @@ use types::{
     SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
     WalletTypeArgsComputed,
 };
-use utils::set_flag::SetFlag;
 use wallet_storage::DefaultBackend;
 
 use read::ReadOnlyController;
@@ -238,7 +237,7 @@ pub struct Controller<T, W, B: storage::Backend + 'static> {
     wallet_events: W,
 
     mempool_events: MempoolEvents,
-    finished_initial_sync: SetFlag,
+    should_rescan_mempool_txs: bool,
 }
 
 impl<T, WalletEvents, B: storage::Backend> std::fmt::Debug for Controller<T, WalletEvents, B> {
@@ -299,7 +298,7 @@ where
             staking_started: BTreeSet::new(),
             wallet_events,
             mempool_events,
-            finished_initial_sync: SetFlag::new(),
+            should_rescan_mempool_txs: true,
         })
     }
 
@@ -1569,8 +1568,8 @@ where
 
             match self.wallet_mode {
                 WalletControllerMode::Hot => {
-                    // after the first successful sync to the tip fetch all mempool transactions
-                    if !self.finished_initial_sync.test() {
+                    // fetch all mempool transactions after a broken connection or after the initial sync
+                    if self.should_rescan_mempool_txs {
                         let txs = self.rpc_client.mempool_get_transactions().await;
 
                         match txs {
@@ -1580,7 +1579,7 @@ where
                                 {
                                     log::error!("Error adding mempool transactions: {err}");
                                 } else {
-                                    self.finished_initial_sync.set();
+                                    self.should_rescan_mempool_txs = false
                                 }
                             }
                             Err(err) => {
@@ -1608,9 +1607,17 @@ where
                         let event = match maybe_event {
                             Some(e) => e,
                             None => {
-                                log::error!("Mempool notifications channel is closed");
-                                tokio::time::sleep(ERROR_DELAY).await;
+                                // Note: currently the wallet is unable to automatically reconnect to the node when
+                                // the connection is dropped, so for now this branch mostly handles a hypothetical
+                                // situation when the connection is still up, but the stream itself somehow got closed.
 
+                                log::error!("Mempool notifications channel is closed");
+
+                                // Reset in-mempool transactions to inactive so we can rescan them when we connect again.
+                                self.wallet.reset_inmempool_txs_to_inactive(Some(&self.wallet_events))?;
+                                self.should_rescan_mempool_txs = true;
+
+                                tokio::time::sleep(ERROR_DELAY).await;
                                 match self.rpc_client
                                     .mempool_subscribe_to_events()
                                     .await {
@@ -1626,6 +1633,21 @@ where
                         };
 
                         match event {
+                            // TODO: mempool can evict transactions - there is a size limit for the entire mempool
+                            // (MAX_MEMPOOL_SIZE_BYTES by default, which is 300Mb) and an expiration time for each tx
+                            // (DEFAULT_MEMPOOL_EXPIRY, which is currently 2 weeks). The wallet must be aware of this
+                            // and mark all its in-mempool txs that have been evicted as inactive.
+                            // At this moment eviction happens when a new tx is being added to the mempool, but note
+                            // that a `NewTransaction` event is not guaranteed in this case (e.g. if the newly added
+                            // tx gets evicted too). Additionally, txs may be evicted after the mempool has been explicitly
+                            // trimmed via `set_max_size`.
+                            // So, the simpler (but not 100% reliable) solution would be to check all of the wallet's
+                            // in-mempool txs for whether they're still in mempool (preferably via a dedicated rpc method,
+                            // to avoid overhead) whenever a `NewTransaction` event arrives.
+                            // A better solution is to introduce a separate mempool event, `TransactionsRemoved`,
+                            // that would contain ids of all txs that have been evicted or removed due to other reasons
+                            // (plus maybe the reason for the eviction/removal).
+
                             MempoolEvent::NewTransaction { tx_id } => {
                                 let transaction = self.rpc_client
                                     .mempool_get_transaction(tx_id)

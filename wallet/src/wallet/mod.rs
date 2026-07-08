@@ -812,6 +812,22 @@ where
         Ok(())
     }
 
+    /// Resets all transactions in all accounts from in-mempool state to inactive.
+    pub fn reset_inmempool_txs_to_inactive(
+        &mut self,
+        wallet_events: Option<&impl WalletEvents>,
+    ) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        for account in self.accounts.values_mut() {
+            account.reset_inmempool_txs_to_inactive(&mut db_tx, wallet_events)?;
+        }
+
+        db_tx.commit()?;
+
+        Ok(())
+    }
+
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -978,6 +994,21 @@ where
             db_tx.get_median_time()?.unwrap_or(chain_config.genesis_block().timestamp());
 
         db_tx.close();
+
+        {
+            // Reset all in-mempool transactions to inactive so we can set them properly from the current node again.
+
+            let mut db_tx = db.transaction_rw(None)?;
+
+            for account in accounts.values_mut() {
+                account.reset_inmempool_txs_to_inactive(
+                    &mut db_tx,
+                    Option::<&WalletEventsNoOp>::None,
+                )?;
+            }
+
+            db_tx.commit()?;
+        }
 
         let next_unused_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
 

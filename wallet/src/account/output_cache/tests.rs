@@ -1608,9 +1608,65 @@ fn update_conflicting_txs_order_v1_freeze(#[case] seed: Seed) {
     assert!(!output_cache.orders[&order_id].is_concluded);
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reset_inmempool_txs_to_inactive(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = create_unit_test_config();
+    let mut output_cache = OutputCache::empty();
+
+    // add 10 random txs
+    for _ in 0..10 {
+        add_random_transfer_tx_with_state(
+            &mut output_cache,
+            &chain_config,
+            TxStateTag::InMempool,
+            &mut rng,
+        );
+    }
+
+    // Sanity check - the `consumed` collection is not empty and all the tx states are InMempool.
+    assert_eq!(output_cache.consumed.len(), 10);
+    for tx_state in output_cache.consumed.values() {
+        assert!(matches!(tx_state, TxState::InMempool(_)));
+    }
+
+    let all_tx_ids = output_cache.txs.values().map(|tx| tx.id()).collect::<BTreeSet<_>>();
+
+    // Reset
+    let reset_tx_ids = output_cache
+        .reset_inmempool_txs_to_inactive()
+        .map(|tx| tx.id())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(reset_tx_ids, all_tx_ids);
+
+    // Check that all txs are now Inactive
+    for tx in output_cache.txs.values() {
+        assert!(matches!(tx.state(), TxState::Inactive(_)));
+    }
+
+    // Check that inside `consumed` the state of the consuming tx has been updated as well.
+    assert_eq!(output_cache.consumed.len(), 10);
+    for tx_state in output_cache.consumed.values() {
+        assert!(matches!(tx_state, TxState::Inactive(_)));
+    }
+}
+
 fn add_random_transfer_tx(
     output_cache: &mut OutputCache,
     chain_config: &ChainConfig,
+    mut rng: impl Rng,
+) {
+    let state_tag = TxStateTag::iter().choose(&mut rng).unwrap();
+    add_random_transfer_tx_with_state(output_cache, chain_config, state_tag, rng);
+}
+
+fn add_random_transfer_tx_with_state(
+    output_cache: &mut OutputCache,
+    chain_config: &ChainConfig,
+    state_tag: TxStateTag,
     mut rng: impl Rng,
 ) {
     let random_tx_id = Id::<Transaction>::random_using(&mut rng);
@@ -1627,7 +1683,7 @@ fn add_random_transfer_tx(
         .build();
     let tx_id = tx.transaction().get_id();
 
-    let tx_state = match TxStateTag::iter().choose(&mut rng).unwrap() {
+    let tx_state = match state_tag {
         TxStateTag::Confirmed => TxState::Confirmed(
             BlockHeight::new(rng.random_range(0..100)),
             BlockTimestamp::from_int_seconds(rng.random_range(0..100)),

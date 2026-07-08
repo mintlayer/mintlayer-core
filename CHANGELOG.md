@@ -62,6 +62,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - Fixed an issue where the mempool wouldn't track non-UTXO dependencies between transactions, which could
       prevent e.g. several token management transactions from being included in the same block.
 
+  - Wallet:
+    - Fixed an issue where wallet transactions would remain marked as in-mempool after reopening the wallet when they are
+      actually no longer in the mempool.
+
 ## [1.3.1] - 2026-06-03
 
 ### Fixed
