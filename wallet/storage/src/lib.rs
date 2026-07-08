@@ -298,3 +298,7 @@ pub trait WalletStorage: WalletStorageWriteLocked + for<'tx> Transactional<'tx> 
 
 pub type DefaultBackend = storage_sqlite::Sqlite;
 pub type WalletStorageTxRwImpl<'st> = StoreTxRw<'st, storage_sqlite::Sqlite>;
+
+/// This can be used when something accepts e.g. `Option<impl WalletStorageReadLocked>` and `None`
+/// needs to be passed.
+pub type BogusWalletDbTxRo = StoreTxRo<'static, DefaultBackend>;

@@ -243,7 +243,7 @@ serde = "1.0"
 serde_json = "1.0"
 serde_test = "1.0"
 serde_with = "3.6"
-serial_test = "3.2"
+serial_test = "3.5"
 sha-1 = "0.10"
 sha2 = "0.10"
 sha3 = "0.10"
@@ -300,8 +300,8 @@ rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Merge pull request #22 from mintlayer/fix_core_repo_build"
-rev = "44988a5ba1efc8b008a8ec61f32e4d7596999023"
+# The commit "Merge pull request #23 from mintlayer/bugfixing"
+rev = "16cc563caa5d3f746cc1b62608b88c3bdb284fa4"
 package = "mintlayer-messages"
 
 [workspace.dependencies.trezor-client]

@@ -40,20 +40,21 @@ use tokio::{
 use crate::signer::{
     SignerError, SignerResult,
     ledger_signer::{
-        LedgerError, LedgerFinder, LedgerSigner,
+        ClosableLedgerExchange as _, ClosableLedgerExchangeAdapter, LedgerError, LedgerFinder,
+        LedgerSigner,
         ledger_messages::{check_current_app, get_extended_public_key, ping},
     },
     tests::{
         generic_fixed_signature_tests::test_fixed_signatures_generic_no_legacy,
         generic_tests::{
             MessageToSign, sign_message_test_params, test_sign_message_generic,
-            test_sign_transaction_generic, test_sign_transaction_intent_generic,
-            test_sign_transaction_with_no_outputs_generic,
+            test_sign_transaction_intent_generic, test_sign_transaction_with_no_outputs_generic,
+            test_sign_transaction_with_one_input_command_generic,
         },
         make_deterministic_software_signer, no_another_signer,
     },
 };
-use common::chain::{ChainConfig, SighashInputCommitmentVersion, config::create_mainnet};
+use common::chain::{ChainConfig, config::create_mainnet};
 use crypto::key::{
     PredefinedSigAuxDataProvider, SigAuxDataProvider,
     hdkd::{derivation_path::DerivationPath, u31::U31},
@@ -66,6 +67,9 @@ use test_utils::random::{Seed, make_seedable_rng};
 use utils::env_utils::{bool_from_env, get_from_env};
 use wallet_storage::WalletStorageReadLocked;
 use wallet_types::hw_data::LedgerData;
+
+// Note: no `test_sign_transaction` test here for now, because it'll fail on Ledger due to the tx
+// having multiple input commands. Same for `test_sign_transaction_sig_consistency`.
 
 #[derive(Debug)]
 enum ControlMessage {
@@ -199,7 +203,10 @@ async fn setup(
 ) -> (
     Option<tokio::task::JoinHandle<()>>,
     Sender<ControlMessage>,
-    impl Fn(Arc<ChainConfig>, U31) -> LedgerSigner<TcpDevice, DummyProvider>,
+    impl Fn(
+        Arc<ChainConfig>,
+        U31,
+    ) -> LedgerSigner<ClosableLedgerExchangeAdapter<TcpDevice>, DummyProvider>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), emulator_api_port());
 
@@ -223,7 +230,7 @@ async fn setup(
 
     wait_for_valid_reponse(&mut device).await;
 
-    let device = Arc::new(Mutex::new(device));
+    let device = Arc::new(Mutex::new(ClosableLedgerExchangeAdapter::new(device)));
 
     let (control_msg_tx, control_msg_rx) = mpsc::channel(1);
     let auto_confirmer_handle = if should_auto_confirm() {
@@ -279,7 +286,7 @@ async fn test_account_extended_public_key() {
 
     let derivation_path = DerivationPath::from_str("m/44h/19788h/0h").unwrap();
     let (public_key, chain_code) = get_extended_public_key(
-        &mut *signer.client.lock().await,
+        signer.client.lock().await.inner_mut().unwrap(),
         CoinType::Mainnet,
         derivation_path,
     )
@@ -350,24 +357,21 @@ async fn test_sign_transaction_intent(#[case] seed: Seed) {
 }
 
 #[rstest]
+#[case(Seed::from_entropy())]
 #[trace]
 #[serial_test::serial]
-#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_transaction(#[case] seed: Seed) {
-    log::debug!("test_sign_transaction, seed = {seed:?}");
+async fn test_sign_transaction_with_one_input_command(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_with_one_input_command, seed = {seed:?}",);
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(false).await;
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_generic(
+    test_sign_transaction_with_one_input_command_generic(
         &mut rng,
-        false,
-        SighashInputCommitmentVersion::V1,
         make_ledger_signer,
         no_another_signer(),
-        false,
     )
     .await;
 
@@ -429,24 +433,21 @@ async fn test_sign_transaction_intent_sig_consistency(#[case] seed: Seed) {
 }
 
 #[rstest]
+#[case(Seed::from_entropy())]
 #[trace]
 #[serial_test::serial]
-#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sign_transaction_sig_consistency(#[case] seed: Seed) {
-    log::debug!("test_sign_transaction_sig_consistency, seed = {seed:?}");
+async fn test_sign_transaction_with_one_input_command_sig_consistency(#[case] seed: Seed) {
+    log::debug!("test_sign_transaction_with_one_input_command_sig_consistency, seed = {seed:?}",);
 
     let (auto_confirmer_handle, control_msg_tx, make_ledger_signer) = setup(true).await;
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_generic(
+    test_sign_transaction_with_one_input_command_generic(
         &mut rng,
-        false,
-        SighashInputCommitmentVersion::V1,
         make_ledger_signer,
         Some(make_deterministic_software_signer),
-        false,
     )
     .await;
 

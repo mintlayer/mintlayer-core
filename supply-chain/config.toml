@@ -1188,10 +1188,6 @@ criteria = "safe-to-deploy"
 version = "0.14.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.scc]]
-version = "2.4.0"
-criteria = "safe-to-run"
-
 [[exemptions.schannel]]
 version = "0.1.28"
 criteria = "safe-to-deploy"
@@ -1207,10 +1203,6 @@ criteria = "safe-to-deploy"
 [[exemptions.sctk-adwaita]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.sdd]]
-version = "3.0.10"
-criteria = "safe-to-run"
 
 [[exemptions.security-framework]]
 version = "2.11.1"
@@ -1249,11 +1241,11 @@ version = "3.16.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.serial_test]]
-version = "3.3.1"
+version = "3.5.0"
 criteria = "safe-to-run"
 
 [[exemptions.serial_test_derive]]
-version = "3.3.1"
+version = "3.5.0"
 criteria = "safe-to-run"
 
 [[exemptions.signal-hook]]

@@ -15,7 +15,7 @@
 
 use std::{
     num::NonZeroU8,
-    ops::{Add, Div},
+    ops::{Add, Div, Sub},
     sync::Arc,
 };
 
@@ -576,7 +576,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
     let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
-    let created_order_ask = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let created_order_give = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
 
     let filled_order1_id = OrderId::new(H256::random_using(rng));
     let filled_order2_id = OrderId::new(H256::random_using(rng));
@@ -668,10 +668,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         ]);
     }
 
-    let token_max_fill = std::cmp::min(
-        filled_order2_info.initially_asked.amount(),
-        token_mint_amount,
-    );
+    let token_max_fill = std::cmp::min(filled_order2_info.ask_balance, token_mint_amount);
     let token_amount_to_fill = rng.random_range(1..token_max_fill.into_atoms());
     acc_inputs.extend([
         TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(concluded_order2_id)),
@@ -746,7 +743,7 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     let created_order_data = OrderData::new(
         Destination::PublicKey(dest_pub.clone()),
         OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
-        OutputValue::Coin(created_order_ask),
+        OutputValue::Coin(created_order_give),
     );
 
     let outputs = vec![
@@ -905,6 +902,705 @@ pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
 
     let expected_input_commitments = ptx
         .make_sighash_input_commitments(expected_input_commitments_version)
+        .unwrap()
+        .into_iter()
+        .map(|comm| comm.deep_clone())
+        .collect_vec();
+
+    let all_utxos = utxos
+        .iter()
+        .map(Some)
+        .chain([Some(&htlc_utxo), Some(&multisig_utxo)])
+        .chain(acc_dests.iter().map(|_| None))
+        .collect::<Vec<_>>();
+
+    for (i, dest) in destinations.iter().enumerate() {
+        let verify = || {
+            tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                &chain_config,
+                dest,
+                &ptx,
+                &expected_input_commitments,
+                i,
+                all_utxos[i].cloned(),
+            )
+        };
+        if i == multisig_input_index {
+            // The multisig will not be fully signed.
+            let err = verify().unwrap_err();
+            assert_eq!(
+                err.error(),
+                &InputCheckErrorPayload::Verification(ScriptError::Signature(
+                    DestinationSigError::IncompleteClassicalMultisigSignature(
+                        min_required_signatures,
+                        min_required_signatures - 1
+                    )
+                )),
+            )
+        } else if i == htlc_input_index {
+            if !first_account_can_sign_htlc {
+                assert!(ptx.signatures()[i].is_none());
+            } else if matches!(dest, Destination::ClassicMultisig(_)) {
+                // The multisig will not be fully signed.
+                let err = verify().unwrap_err();
+                assert_eq!(
+                    err.error(),
+                    &InputCheckErrorPayload::Verification(ScriptError::Signature(
+                        DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
+                    )),
+                )
+            } else {
+                verify().unwrap();
+            }
+        } else {
+            verify().unwrap();
+        }
+    }
+
+    let orig_ptx = ptx;
+    // fully sign the remaining key in the multisig address
+    let mut signer = make_signer(chain_config.clone(), account2.account_index());
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx.clone(),
+            &tokens_additional_info,
+            account2.key_chain(),
+            &mut db_tx,
+            tx_block_height,
+        )
+        .await
+        .unwrap();
+    assert!(ptx.all_signatures_available());
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer =
+            make_another_signer(chain_config.clone(), account2.account_index());
+        let (another_ptx, _, _) = another_signer
+            .sign_tx(
+                orig_ptx,
+                &tokens_additional_info,
+                account2.key_chain(),
+                &mut db_tx,
+                tx_block_height,
+            )
+            .await
+            .unwrap();
+        assert!(another_ptx.all_signatures_available());
+
+        assert_eq!(ptx, another_ptx);
+    }
+
+    for (i, dest) in destinations.iter().enumerate() {
+        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+            &chain_config,
+            dest,
+            &ptx,
+            &expected_input_commitments,
+            i,
+            all_utxos[i].cloned(),
+        )
+        .unwrap();
+    }
+}
+
+// Currently `test_sign_transaction_generic` fails on Ledger because the current Ledger app
+// can only show one "input command" (i.e. Account spending, AccountCommand or OrderAccountCommand)
+// during tx review, so it has to reject txs that have more than one of those, to prevent blind
+// signing. This test is similar to `test_sign_transaction_generic`, but it only has one "input
+// command", which is selected randomly.
+pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1, S2>(
+    rng: &mut impl CryptoRng,
+    make_signer: MkS1,
+    make_another_signer: Option<MkS2>,
+) where
+    MkS1: Fn(Arc<ChainConfig>, U31) -> S1,
+    MkS2: Fn(Arc<ChainConfig>, U31) -> S2,
+    S1: Signer,
+    S2: Signer,
+{
+    let tx_block_height = BlockHeight::new(rng.random_range(1..100_000));
+    let chain_config = Arc::new(chain::config::create_unit_test_config());
+
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+
+    let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
+    let mut account2 = account_from_mnemonic(&chain_config, &mut db_tx, U31::ONE);
+
+    let (standalone_private_key, standalone_pk) =
+        PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+    account
+        .add_standalone_private_key(&mut db_tx, standalone_private_key, None)
+        .unwrap();
+    let standalone_pk_destination = Destination::PublicKey(standalone_pk.clone());
+
+    let min_input_amounts = 4; // 1 utxo, 1 standalone, 1 create pool, 1 htlc
+    let coin_input_amounts: Vec<Amount> = (0..rng.random_range(min_input_amounts..7))
+        .map(|_| Amount::from_atoms(rng.random_range(100..1000)))
+        .collect();
+
+    let total_coin_input_amount =
+        coin_input_amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
+
+    let decommissioned_pool_id = PoolId::new(H256::random_using(rng));
+
+    let decommissioned_pool_data = PoolData {
+        utxo_outpoint: UtxoOutPoint::new(Id::<Transaction>::random_using(rng).into(), 1),
+        creation_block: BlockInfo {
+            height: BlockHeight::new(rng.random()),
+            timestamp: BlockTimestamp::from_int_seconds(rng.random()),
+        },
+        decommission_key: destination_from_account(&mut account, &mut db_tx, rng),
+        stake_destination: random_destination(rng),
+        vrf_public_key: VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel).1,
+        margin_ratio_per_thousand: PerThousand::new_from_rng(rng),
+        cost_per_block: Amount::from_atoms(rng.random_range(100..200)),
+    };
+
+    let produce_block_from_stake_utxo =
+        TxOutput::ProduceBlockFromStake(random_destination(rng), decommissioned_pool_id);
+    let mut utxos: Vec<TxOutput> = coin_input_amounts
+        .iter()
+        .skip(min_input_amounts - 1)
+        .map(|a| {
+            let dest = destination_from_account(&mut account, &mut db_tx, rng);
+
+            TxOutput::Transfer(OutputValue::Coin(*a), dest)
+        })
+        .chain([TxOutput::Transfer(
+            OutputValue::Coin(coin_input_amounts[0]),
+            standalone_pk_destination.clone(),
+        )])
+        .chain([produce_block_from_stake_utxo])
+        .collect();
+
+    let mut inputs: Vec<TxInput> = (0..utxos.len())
+        .map(|_| {
+            let source_id = if rng.random_bool(0.5) {
+                Id::<Transaction>::new(H256::random_using(rng)).into()
+            } else {
+                Id::<GenBlock>::new(H256::random_using(rng)).into()
+            };
+            TxInput::from_utxo(source_id, rng.next_u32())
+        })
+        .collect();
+
+    let (_, unknown_pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let pub_key1 = if let Destination::PublicKeyHash(pkh) =
+        account.get_new_address(&mut db_tx, KeyPurpose::Change).unwrap().1.into_object()
+    {
+        account.find_corresponding_pub_key(&pkh).unwrap()
+    } else {
+        panic!("not a public key hash")
+    };
+    let pub_key2 = if let Destination::PublicKeyHash(pkh) = account2
+        .get_new_address(&mut db_tx, KeyPurpose::Change)
+        .unwrap()
+        .1
+        .into_object()
+    {
+        account2.find_corresponding_pub_key(&pkh).unwrap()
+    } else {
+        panic!("not a public key hash")
+    };
+
+    let min_required_signatures = 3;
+    // The first account can sign the pub_key1 and the standalone key,
+    // but it will not be fully signed, so we will need to sign it with the account2 which
+    // can complete the signing with the pub_key2.
+    let challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        NonZeroU8::new(min_required_signatures).unwrap(),
+        vec![unknown_pub_key.clone(), pub_key1.clone(), standalone_pk, pub_key2.clone()],
+    )
+    .unwrap();
+    let multisig_hash1 =
+        account.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+    let multisig_hash2 = account2.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+    assert_eq!(multisig_hash1, multisig_hash2);
+
+    let multisig_dest = Destination::ClassicMultisig(multisig_hash1);
+
+    let source_id: OutPointSourceId = if rng.random_bool(0.5) {
+        Id::<Transaction>::new(H256::random_using(rng)).into()
+    } else {
+        Id::<GenBlock>::new(H256::random_using(rng)).into()
+    };
+    let multisig_input = TxInput::from_utxo(source_id.clone(), rng.next_u32());
+    let multisig_amount = Amount::from_atoms(rng.random_range(100..200));
+    let multisig_utxo =
+        TxOutput::Transfer(OutputValue::Coin(multisig_amount), multisig_dest.clone());
+
+    let pub_key1_or_2 = if rng.random_bool(0.5) {
+        log::debug!("pub_key1_or_2 is pub_key1");
+        pub_key1.clone()
+    } else {
+        log::debug!("pub_key1_or_2 is pub_key2");
+        pub_key2.clone()
+    };
+    let pub_key1_or_2_is_key1 = pub_key1_or_2 == pub_key1;
+    let dest1_or_2 = if rng.random_bool(0.5) {
+        log::debug!("dest1_or_2 is pub key");
+        Destination::PublicKey(pub_key1_or_2)
+    } else {
+        log::debug!("dest1_or_2 is pub key hash");
+        Destination::PublicKeyHash((&pub_key1_or_2).into())
+    };
+
+    let spend_htlc = rng.random_bool(0.5);
+    let htlc_secret = HtlcSecret::new_from_rng(rng);
+
+    // Note: in "first_account_can_sign_htlc", "sign" actually means "at least partially sign".
+    let (htlc_spend_dest, htlc_refund_dest, first_account_can_sign_htlc) = if spend_htlc {
+        log::debug!("htlc will be spent");
+
+        (
+            dest1_or_2,
+            Destination::PublicKey(unknown_pub_key),
+            pub_key1_or_2_is_key1,
+        )
+    } else {
+        let (refund_dest, first_account_can_sign_htlc) = if rng.random_bool(0.5) {
+            log::debug!("htlc will be refunded, single sig");
+
+            (dest1_or_2, pub_key1_or_2_is_key1)
+        } else {
+            log::debug!("htlc will be refunded, multisig");
+
+            let challenge = ClassicMultisigChallenge::new(
+                &chain_config,
+                NonZeroU8::new(2).unwrap(),
+                vec![pub_key1, pub_key2],
+            )
+            .unwrap();
+            let multisig_hash1 =
+                account.add_standalone_multisig(&mut db_tx, challenge.clone(), None).unwrap();
+            let multisig_hash2 =
+                account2.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+            assert_eq!(multisig_hash1, multisig_hash2);
+
+            (Destination::ClassicMultisig(multisig_hash1), true)
+        };
+
+        (
+            Destination::PublicKey(unknown_pub_key),
+            refund_dest,
+            first_account_can_sign_htlc,
+        )
+    };
+
+    let htlc = HashedTimelockContract {
+        secret_hash: htlc_secret.hash(),
+        spend_key: htlc_spend_dest,
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(rng.random_range(100..200))),
+        refund_key: htlc_refund_dest,
+    };
+
+    let htlc_input = TxInput::from_utxo(source_id, rng.next_u32());
+    let htlc_amount = coin_input_amounts[1];
+    let htlc_utxo = TxOutput::Htlc(OutputValue::Coin(htlc_amount), Box::new(htlc.clone()));
+
+    let token_id = TokenId::new(H256::random_using(rng));
+    let token_mint_amount = Amount::from_atoms(rng.random_range(100..200));
+
+    let coin_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let coin_lock_then_transfer_amount =
+        total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let coin_burn_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let delegate_staking_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let htlc_transfer_amount = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+    let created_order_give = total_coin_input_amount.div(rng.random_range(10..20)).unwrap();
+
+    let coins_tokens = |currency: Currency,
+                        amount: Amount|
+     -> (
+        /*coins amount:*/ Amount,
+        /*tokens amount:*/ Amount,
+    ) {
+        match currency {
+            Currency::Coin => (amount, Amount::ZERO),
+            Currency::Token(id) => {
+                assert_eq!(id, token_id);
+                (Amount::ZERO, amount)
+            }
+        }
+    };
+
+    let mut extra_coin_input_amount = Amount::ZERO;
+    let mut extra_coin_output_amount = Amount::ZERO;
+    let mut extra_token_input_amount = Amount::ZERO;
+    let mut extra_token_output_amount = Amount::ZERO;
+
+    let mut ptx_additional_info = PtxAdditionalInfo::new();
+
+    let acc_input = match rng.random_range(0..11) {
+        0 => {
+            let account_spending_amount = Amount::from_atoms(rng.random_range(100..200));
+
+            extra_coin_input_amount = account_spending_amount;
+
+            TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(rng.random_range(0..100)),
+                AccountSpending::DelegationBalance(
+                    DelegationId::new(H256::random_using(rng)),
+                    account_spending_amount,
+                ),
+            ))
+        }
+        1 => {
+            extra_token_input_amount = token_mint_amount;
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::MintTokens(token_id, token_mint_amount),
+            )
+        }
+        2 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::UnmintTokens(token_id),
+        ),
+        3 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::LockTokenSupply(token_id),
+        ),
+        4 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+        ),
+        5 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::UnfreezeToken(token_id),
+        ),
+        6 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::ChangeTokenAuthority(
+                TokenId::new(H256::random_using(rng)),
+                Destination::AnyoneCanSpend,
+            ),
+        ),
+        7 => TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::ChangeTokenMetadataUri(
+                TokenId::new(H256::random_using(rng)),
+                random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ),
+        ),
+        8 => {
+            // FreezeOrder
+            let order_id = OrderId::new(H256::random_using(rng));
+
+            ptx_additional_info.add_order_info(
+                order_id,
+                random_order_info(
+                    &Currency::Coin,
+                    &Currency::Token(token_id),
+                    100,
+                    200,
+                    10,
+                    rng,
+                ),
+            );
+
+            TxInput::OrderAccountCommand(OrderAccountCommand::FreezeOrder(order_id))
+        }
+        9 => {
+            // ConcludeOrder
+            let order_id = OrderId::new(H256::random_using(rng));
+            let ask_currency = if rng.random_bool(0.5) {
+                Currency::Coin
+            } else {
+                Currency::Token(token_id)
+            };
+            let give_currency = if ask_currency == Currency::Coin {
+                Currency::Token(token_id)
+            } else {
+                Currency::Coin
+            };
+            let order_info = random_order_info(&ask_currency, &give_currency, 100, 200, 10, rng);
+            let (ask_coin_input_amount, ask_token_input_amount) =
+                coins_tokens(ask_currency, order_info.ask_balance);
+            let (give_coin_input_amount, give_token_input_amount) =
+                coins_tokens(give_currency, order_info.give_balance);
+            let coin_input_amount = ask_coin_input_amount.add(give_coin_input_amount).unwrap();
+            let token_input_amount = ask_token_input_amount.add(give_token_input_amount).unwrap();
+
+            ptx_additional_info.add_order_info(order_id, order_info);
+            extra_coin_input_amount = coin_input_amount;
+            extra_token_input_amount = token_input_amount;
+
+            TxInput::OrderAccountCommand(OrderAccountCommand::ConcludeOrder(order_id))
+        }
+        _ => {
+            // FillOrder
+            let order_id = OrderId::new(H256::random_using(rng));
+            let ask_currency = if rng.random_bool(0.5) {
+                Currency::Coin
+            } else {
+                Currency::Token(token_id)
+            };
+            let give_currency = if ask_currency == Currency::Coin {
+                Currency::Token(token_id)
+            } else {
+                Currency::Coin
+            };
+            let order_info = random_order_info(&ask_currency, &give_currency, 100, 200, 10, rng);
+            let fill_amount =
+                Amount::from_atoms(rng.random_range(2..=order_info.ask_balance.into_atoms()));
+            let filled_amount = Amount::from_atoms(
+                order_info
+                    .initially_given
+                    .amount()
+                    .into_atoms()
+                    .checked_mul(fill_amount.into_atoms())
+                    .unwrap()
+                    .checked_div(order_info.initially_asked.amount().into_atoms())
+                    .unwrap(),
+            );
+            let (coin_output_amount, token_output_amount) = coins_tokens(ask_currency, fill_amount);
+            let (coin_input_amount, token_input_amount) =
+                coins_tokens(give_currency, filled_amount);
+
+            extra_coin_input_amount = coin_input_amount;
+            extra_coin_output_amount = coin_output_amount;
+            extra_token_input_amount = token_input_amount;
+            extra_token_output_amount = token_output_amount;
+
+            ptx_additional_info.add_order_info(order_id, order_info);
+
+            TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(order_id, fill_amount))
+        }
+    };
+
+    if extra_token_output_amount != Amount::ZERO {
+        let source_id = if rng.random_bool(0.5) {
+            Id::<Transaction>::new(H256::random_using(rng)).into()
+        } else {
+            Id::<GenBlock>::new(H256::random_using(rng)).into()
+        };
+        inputs.push(TxInput::from_utxo(source_id, rng.next_u32()));
+        utxos.push(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, extra_token_output_amount),
+            destination_from_account(&mut account, &mut db_tx, rng),
+        ));
+    }
+
+    // The v1 FillOrder input must not be signed.
+    let acc_dest = if matches!(
+        &acc_input,
+        TxInput::OrderAccountCommand(OrderAccountCommand::FillOrder(_, _))
+    ) {
+        Destination::AnyoneCanSpend
+    } else {
+        destination_from_account(&mut account, &mut db_tx, rng)
+    };
+    let acc_inputs = vec![acc_input];
+    let acc_dests = vec![acc_dest];
+
+    let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let (_, vrf_public_key) = VRFPrivateKey::new_from_rng(rng, crypto::vrf::VRFKeyKind::Schnorrkel);
+
+    let created_pool_id = PoolId::new(H256::random_using(rng));
+    let delegation_id = DelegationId::new(H256::random_using(rng));
+    let pool_amount = coin_input_amounts[2];
+    let pool_data = StakePoolData::new(
+        pool_amount,
+        Destination::PublicKey(dest_pub.clone()),
+        vrf_public_key,
+        Destination::PublicKey(dest_pub.clone()),
+        PerThousand::new_from_rng(rng),
+        Amount::from_atoms(rng.random_range(10..100)),
+    );
+    let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
+        number_of_decimals: rng.random_range(1..18),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+        total_supply: TokenTotalSupply::Unlimited,
+        authority: Destination::PublicKey(dest_pub.clone()),
+        is_freezable: if rng.random_bool(0.5) {
+            IsTokenFreezable::Yes
+        } else {
+            IsTokenFreezable::No
+        },
+    });
+
+    let nft1_issuance = NftIssuance::V0(NftIssuanceV0 {
+        metadata: Metadata {
+            creator: None,
+            name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            description: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
+            icon_uri: DataOrNoVec::from(None),
+            additional_metadata_uri: DataOrNoVec::from(None),
+            media_uri: DataOrNoVec::from(None),
+            media_hash: gen_random_bytes(rng, 4, 20),
+        },
+    });
+    let nft1_id = TokenId::new(H256::random_using(rng));
+    // Similar to the above, but the creator is also set
+    let nft2_issuance = NftIssuance::V0(NftIssuanceV0 {
+        metadata: Metadata {
+            creator: Some(PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr).1.into()),
+            name: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            description: random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+            ticker: random_ascii_alphanumeric_string(rng, 2..10).into_bytes(),
+            icon_uri: DataOrNoVec::from(None),
+            additional_metadata_uri: DataOrNoVec::from(None),
+            media_uri: DataOrNoVec::from(None),
+            media_hash: gen_random_bytes(rng, 4, 20),
+        },
+    });
+    let nft2_id = TokenId::new(H256::random_using(rng));
+
+    let created_order_data = OrderData::new(
+        Destination::PublicKey(dest_pub.clone()),
+        OutputValue::TokenV1(token_id, Amount::from_atoms(rng.random_range(100..200))),
+        OutputValue::Coin(created_order_give),
+    );
+
+    let mut outputs = Vec::new();
+    if extra_token_input_amount != Amount::ZERO {
+        outputs.push(TxOutput::Transfer(
+            OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.random_range(1..=extra_token_input_amount.into_atoms())),
+            ),
+            Destination::PublicKey(dest_pub.clone()),
+        ));
+    }
+    outputs.extend([
+        TxOutput::Transfer(
+            OutputValue::Coin(coin_transfer_amount),
+            Destination::PublicKey(dest_pub),
+        ),
+        TxOutput::LockThenTransfer(
+            OutputValue::Coin(coin_lock_then_transfer_amount),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForSeconds(rng.next_u64()),
+        ),
+        TxOutput::Burn(OutputValue::Coin(coin_burn_amount)),
+        TxOutput::CreateStakePool(created_pool_id, Box::new(pool_data)),
+        TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            PoolId::new(H256::random_using(rng)),
+        ),
+        TxOutput::DelegateStaking(delegate_staking_amount, delegation_id),
+        TxOutput::IssueFungibleToken(Box::new(token_issuance)),
+        TxOutput::IssueNft(
+            nft1_id,
+            Box::new(nft1_issuance.clone()),
+            Destination::AnyoneCanSpend,
+        ),
+        TxOutput::IssueNft(
+            nft2_id,
+            Box::new(nft2_issuance.clone()),
+            Destination::AnyoneCanSpend,
+        ),
+        TxOutput::DataDeposit(gen_random_bytes(rng, 10, 20)),
+        TxOutput::Htlc(OutputValue::Coin(htlc_transfer_amount), Box::new(htlc)),
+        TxOutput::CreateOrder(Box::new(created_order_data)),
+    ]);
+
+    let base_coin_input_amount = total_coin_input_amount
+        .sub(pool_amount)
+        .unwrap()
+        .add(multisig_amount)
+        .unwrap()
+        .add(extra_coin_input_amount)
+        .unwrap();
+    let coin_output_amount = [
+        coin_transfer_amount,
+        coin_lock_then_transfer_amount,
+        coin_burn_amount,
+        pool_amount,
+        delegate_staking_amount,
+        htlc_transfer_amount,
+        created_order_give,
+        extra_coin_output_amount,
+    ]
+    .into_iter()
+    .fold(Amount::ZERO, |acc, amount| acc.add(amount).unwrap());
+    let decommissioned_pool_balance =
+        coin_output_amount.sub(base_coin_input_amount).unwrap_or(Amount::ZERO);
+
+    ptx_additional_info.add_pool_info(
+        decommissioned_pool_id,
+        PoolAdditionalInfo {
+            staker_balance: decommissioned_pool_balance,
+        },
+    );
+
+    let req = SendRequest::new()
+        .with_inputs(
+            izip!(inputs.clone(), utxos.clone(), vec![None; inputs.len()]),
+            &|pool_id| {
+                assert_eq!(*pool_id, decommissioned_pool_id);
+                Some(&decommissioned_pool_data)
+            },
+        )
+        .unwrap()
+        .with_inputs(
+            [
+                (
+                    htlc_input.clone(),
+                    htlc_utxo.clone(),
+                    spend_htlc.then_some(htlc_secret),
+                ),
+                (multisig_input.clone(), multisig_utxo.clone(), None),
+            ],
+            &|_| None,
+        )
+        .unwrap()
+        .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
+        .with_outputs(outputs);
+    let htlc_input_index = inputs.len();
+    let multisig_input_index = htlc_input_index + 1;
+    let destinations = req.destinations().to_vec();
+
+    let tokens_additional_info = TokensAdditionalInfo::new().with_info(
+        token_id,
+        TokenAdditionalInfo {
+            num_decimals: rng.random_range(5..10),
+            ticker: random_ascii_alphanumeric_string(rng, 5..10).into_bytes(),
+        },
+    );
+    let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
+
+    let mut signer = make_signer(chain_config.clone(), account.account_index());
+    let (ptx, _, _) = signer
+        .sign_tx(
+            orig_ptx.clone(),
+            &tokens_additional_info,
+            account.key_chain(),
+            &mut db_tx,
+            tx_block_height,
+        )
+        .await
+        .unwrap();
+    if first_account_can_sign_htlc {
+        assert!(ptx.all_signatures_available());
+    }
+
+    if let Some(make_another_signer) = &make_another_signer {
+        let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
+        let (another_ptx, _, _) = another_signer
+            .sign_tx(
+                orig_ptx,
+                &tokens_additional_info,
+                account.key_chain(),
+                &mut db_tx,
+                tx_block_height,
+            )
+            .await
+            .unwrap();
+        if first_account_can_sign_htlc {
+            assert!(another_ptx.all_signatures_available());
+        }
+
+        assert_eq!(ptx, another_ptx);
+    }
+
+    let expected_input_commitments = ptx
+        .make_sighash_input_commitments(SighashInputCommitmentVersion::V1)
         .unwrap()
         .into_iter()
         .map(|comm| comm.deep_clone())
