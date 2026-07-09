@@ -11,6 +11,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-09
+
 ### Added
   - Wallet:
     - Added support for Ledger hardware wallets (beta).
@@ -51,7 +53,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
         the same as when a token is created).
       - Transferring or burning zero amount of a token is no longer allowed.
 
-      (The actual consensus tightening will happen after a fork, the height is yet to be decided.)
+      The actual consensus tightening will happen after a soft fork.
+      **The testnet fork height was set to 787640.**
+      The mainnet fork height is yet to be decided.
 
   - Node RPC:
     - The method `mempool_transactions` now returns transactions in the same order in which they were originally inserted

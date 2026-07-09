@@ -1250,41 +1250,60 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
         }
         1 => {
             extra_token_input_amount = token_mint_amount;
+            extra_coin_output_amount = chain_config.token_supply_change_fee(tx_block_height);
             TxInput::AccountCommand(
                 AccountNonce::new(rng.next_u64()),
                 AccountCommand::MintTokens(token_id, token_mint_amount),
             )
         }
-        2 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::UnmintTokens(token_id),
-        ),
-        3 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::LockTokenSupply(token_id),
-        ),
-        4 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
-        ),
-        5 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::UnfreezeToken(token_id),
-        ),
-        6 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::ChangeTokenAuthority(
-                TokenId::new(H256::random_using(rng)),
-                Destination::AnyoneCanSpend,
-            ),
-        ),
-        7 => TxInput::AccountCommand(
-            AccountNonce::new(rng.next_u64()),
-            AccountCommand::ChangeTokenMetadataUri(
-                TokenId::new(H256::random_using(rng)),
-                random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
-            ),
-        ),
+        2 => {
+            extra_coin_output_amount = chain_config.token_supply_change_fee(tx_block_height);
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::UnmintTokens(token_id),
+            )
+        }
+        3 => {
+            extra_coin_output_amount = chain_config.token_supply_change_fee(tx_block_height);
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::LockTokenSupply(token_id),
+            )
+        }
+        4 => {
+            extra_coin_output_amount = chain_config.token_freeze_fee(tx_block_height);
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+            )
+        }
+        5 => {
+            extra_coin_output_amount = chain_config.token_freeze_fee(tx_block_height);
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::UnfreezeToken(token_id),
+            )
+        }
+        6 => {
+            extra_coin_output_amount = chain_config.token_change_authority_fee(tx_block_height);
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::ChangeTokenAuthority(
+                    TokenId::new(H256::random_using(rng)),
+                    Destination::AnyoneCanSpend,
+                ),
+            )
+        }
+        7 => {
+            extra_coin_output_amount = chain_config.token_change_metadata_uri_fee();
+            TxInput::AccountCommand(
+                AccountNonce::new(rng.next_u64()),
+                AccountCommand::ChangeTokenMetadataUri(
+                    TokenId::new(H256::random_using(rng)),
+                    random_ascii_alphanumeric_string(rng, 10..20).into_bytes(),
+                ),
+            )
+        }
         8 => {
             // FreezeOrder
             let order_id = OrderId::new(H256::random_using(rng));
@@ -1317,8 +1336,10 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
                 Currency::Coin
             };
             let order_info = random_order_info(&ask_currency, &give_currency, 100, 200, 10, rng);
-            let (ask_coin_input_amount, ask_token_input_amount) =
-                coins_tokens(ask_currency, order_info.ask_balance);
+            let (ask_coin_input_amount, ask_token_input_amount) = coins_tokens(
+                ask_currency,
+                order_info.initially_asked.amount().sub(order_info.ask_balance).unwrap(),
+            );
             let (give_coin_input_amount, give_token_input_amount) =
                 coins_tokens(give_currency, order_info.give_balance);
             let coin_input_amount = ask_coin_input_amount.add(give_coin_input_amount).unwrap();
@@ -1516,6 +1537,9 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
         htlc_transfer_amount,
         created_order_give,
         extra_coin_output_amount,
+        chain_config.fungible_token_issuance_fee(),
+        (chain_config.nft_issuance_fee(tx_block_height) * 2).unwrap(),
+        chain_config.data_deposit_fee(tx_block_height),
     ]
     .into_iter()
     .fold(Amount::ZERO, |acc, amount| acc.add(amount).unwrap());
