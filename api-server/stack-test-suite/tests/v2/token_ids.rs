@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    make_token_id,
+    AccountCommand, AccountNonce, UtxoOutPoint, make_token_id,
     tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
 };
 
@@ -250,6 +250,202 @@ async fn ok(#[case] seed: Seed) {
                 Address::new(&chain_config, token_id).unwrap().into_string()
             )));
         }
+    }
+
+    task.abort();
+}
+
+// Tokens with multiple state changes must appear only once in the response (issue #1982)
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn no_duplicate_ids_for_tokens_with_state_changes(#[case] seed: Seed) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let chain_config = create_unit_test_config();
+
+            let chainstate_blocks = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                // AnyoneCanSpend authority so the mint input can go unsigned
+                let token_issuance = TokenIssuanceV1 {
+                    token_ticker: "XXXX".as_bytes().to_vec(),
+                    number_of_decimals: rng.random_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                    total_supply: TokenTotalSupply::Unlimited,
+                    authority: Destination::AnyoneCanSpend,
+                    is_freezable: IsTokenFreezable::No,
+                };
+
+                let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
+                let genesis_coins = chainstate_test_framework::get_output_value(
+                    tf.chainstate.utxo(&genesis_outpoint).unwrap().unwrap().output(),
+                )
+                .unwrap()
+                .coin_amount()
+                .unwrap();
+
+                let issuance_fee = chain_config.fungible_token_issuance_fee();
+                let supply_change_fee = chain_config.token_supply_change_fee(BlockHeight::zero());
+
+                // issue a token
+                let coins_after_issue = (genesis_coins - issuance_fee).unwrap();
+                let issue_tx = TransactionBuilder::new()
+                    .add_input(genesis_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_after_issue),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                        token_issuance.clone(),
+                    ))))
+                    .build();
+                let minted_token_id =
+                    make_token_id(&chain_config, tf.next_block_height(), issue_tx.inputs())
+                        .unwrap();
+                let issue_tx_id = issue_tx.transaction().get_id();
+                tf.make_block_builder()
+                    .add_transaction(issue_tx)
+                    .build_and_process(&mut rng)
+                    .unwrap()
+                    .unwrap();
+
+                // mint it, giving the token a second state row
+                let amount_to_mint = Amount::from_atoms(rng.random_range(100..1000));
+                let coins_after_mint = (coins_after_issue - supply_change_fee).unwrap();
+                let mint_tx = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::MintTokens(minted_token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(issue_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_after_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(minted_token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+                let mint_tx_id = mint_tx.transaction().get_id();
+                tf.make_block_builder()
+                    .add_transaction(mint_tx)
+                    .build_and_process(&mut rng)
+                    .unwrap()
+                    .unwrap();
+
+                // issue a second token with a single state row and the same ticker
+                let coins_after_second_issue = (coins_after_mint - issuance_fee).unwrap();
+                let second_issue_tx = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(coins_after_second_issue),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                        token_issuance,
+                    ))))
+                    .build();
+                let single_row_token_id = make_token_id(
+                    &chain_config,
+                    tf.next_block_height(),
+                    second_issue_tx.inputs(),
+                )
+                .unwrap();
+                tf.make_block_builder()
+                    .add_transaction(second_issue_tx)
+                    .build_and_process(&mut rng)
+                    .unwrap()
+                    .unwrap();
+
+                _ = tx.send((minted_token_id, single_row_token_id));
+
+                tf.block_indexes
+                    .iter()
+                    .map(|idx| tf.block(tf.to_chain_block_id(idx.block_id().into())))
+                    .collect::<Vec<_>>()
+            };
+
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let chain_config = Arc::new(chain_config);
+
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+            }
+        };
+
+        web_server(listener, web_server_state, false).await
+    });
+
+    let chain_config = create_unit_test_config();
+    let (minted_token_id, single_row_token_id) = rx.await.unwrap();
+    let minted_token_address = Address::new(&chain_config, minted_token_id).unwrap().into_string();
+    let single_row_token_address =
+        Address::new(&chain_config, single_row_token_id).unwrap().into_string();
+
+    for url in [
+        "/api/v2/token?offset=0&items=10".to_string(),
+        "/api/v2/token/ticker/XXXX?offset=0&items=10".to_string(),
+    ] {
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 200, "Failed getting token ids");
+
+        let body = response.text().await.unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let ids = body.as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>();
+
+        assert_eq!(
+            ids.iter().filter(|id| **id == minted_token_address).count(),
+            1
+        );
+        assert_eq!(
+            ids.iter().filter(|id| **id == single_row_token_address).count(),
+            1
+        );
+
+        let unique_ids = ids.iter().copied().collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(unique_ids.len(), ids.len(), "duplicate token ids: {ids:?}");
     }
 
     task.abort();

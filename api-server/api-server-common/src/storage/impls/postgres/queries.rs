@@ -2523,26 +2523,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
+        // both tables have one row per token state change, hence the DISTINCTs
         self.tx
             .query(
                 r#"
                 WITH count_tokens AS (
-                    SELECT count(token_id) FROM ml.fungible_token
+                    SELECT count(DISTINCT token_id) FROM ml.fungible_token
                 )
-                (SELECT token_id
+                (SELECT DISTINCT token_id
                  FROM ml.fungible_token
                  ORDER BY token_id
                  OFFSET $1
                  LIMIT $2)
                 UNION ALL
-                (SELECT nft_id
+                (SELECT DISTINCT nft_id
                  FROM ml.nft_issuance
                  ORDER BY nft_id
                  OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                 LIMIT GREATEST(LEAST($2, $2 + $1 - (SELECT * FROM count_tokens)), 0));
             "#,
                 &[&offset, &len],
             )
@@ -2572,24 +2570,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query(
                 r#"
                 WITH count_tokens AS (
-                    SELECT count(token_id) FROM ml.fungible_token WHERE ticker ILIKE $3
+                    SELECT count(DISTINCT token_id) FROM ml.fungible_token WHERE ticker ILIKE $3
                 )
-                (SELECT token_id
+                (SELECT DISTINCT token_id
                  FROM ml.fungible_token
                  WHERE ticker ILIKE $3
                  ORDER BY token_id
                  OFFSET $1
                  LIMIT $2)
                 UNION ALL
-                (SELECT nft_id
+                (SELECT DISTINCT nft_id
                  FROM ml.nft_issuance
                  WHERE ticker ILIKE $3
                  ORDER BY nft_id
                  OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                 LIMIT GREATEST(LEAST($2, $2 + $1 - (SELECT * FROM count_tokens)), 0));
             "#,
                 &[&offset, &len, &ticker_patern],
             )
