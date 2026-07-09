@@ -39,14 +39,14 @@ jobs:
 
     - name: Install build dependencies
       run: |
-        sudo apt-get install -y debhelper zip imagemagick
+        sudo apt-get install -y debhelper zip imagemagick pkg-config libdbus-1-dev libusb-1.0-0-dev
         if [ "${{ matrix.arch }}" = "x86_64" ]; then
           sudo apt-get install -y rpm
         fi
 
     - name: Build
       run: |
-        cargo build --release --target ${{ matrix.arch }}-unknown-linux-gnu --features trezor
+        cargo build --release --locked --target ${{ matrix.arch }}-unknown-linux-gnu --features trezor,ledger
 
     - name: Create Debian package for GUI
       run: |

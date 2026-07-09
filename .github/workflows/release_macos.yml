@@ -34,7 +34,7 @@ jobs:
 
     - name: Build
       run: |
-        cargo build --release --target ${{ matrix.arch }}-apple-darwin --features trezor
+        cargo build --release --locked --target ${{ matrix.arch }}-apple-darwin --features trezor,ledger
 
     - name: Sign and Notarize GUI
       env:
