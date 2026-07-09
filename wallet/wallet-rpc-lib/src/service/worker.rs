@@ -111,6 +111,17 @@ where
                 }
 
                 // Background wallet sync if there's nothing else to do
+                // TODO: due to being in a `select!` arm, the future returned by `background_task`
+                // can be cancelled. Currently it invokes the entire `Controller::run`, which
+                // performs staking and submits generated blocks, checks for mempool events (in
+                // a separate `select!` loop) etc. This may lead to a block not being submitted,
+                // mempool events being lost etc.
+                // So this must be refactored:
+                // 1. Only this `select!` should remain. Mempool events should be received at this
+                //    level and forwarded to the controller.
+                // 2. `Controller::run` should become `do_periodic_work`, i.e. it should perform
+                //    only one iteration of its work loop.
+                // 3. `do_periodic_work` should be called at regular intervals.
                 result = Self::background_task(&mut self.controller) => {
                     match result {
                         Ok(never) => match never {},
