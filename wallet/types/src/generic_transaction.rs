@@ -14,7 +14,11 @@
 // limitations under the License.
 
 use common::chain::{
-    SignedTransaction, Transaction, partially_signed_transaction::PartiallySignedTransaction,
+    SignedTransaction, Transaction,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionConsistencyCheck,
+        PartiallySignedTransactionError,
+    },
 };
 use serialization::DecodeAll as _;
 
@@ -34,8 +38,18 @@ impl GenericTransaction {
         // has an extra field, it's always bigger than the latter. By using `decode_all` we
         // make sure that these 2 can't be confused with each other either.
         // I.e. the order in which the decoding attempts are performed here doesn't matter.
-        if let Ok(tx) = PartiallySignedTransaction::decode_all(&mut &bytes[..]) {
-            Ok(Self::Partial(tx))
+        if let Ok(ptx) = PartiallySignedTransaction::decode_all(&mut &bytes[..]) {
+            // Decoding bypasses the invariants that `PartiallySignedTransaction::new`
+            // enforces, so a malformed (but still decodable) transaction could later make
+            // the wallet panic, e.g. on a witness/input count mismatch. Reject it here.
+            //
+            // `Basic` only checks the structural invariants that prevent such panics; the
+            // stricter additional-info checks are intentionally not used here so that a
+            // transaction that is still being assembled (and may not carry all of its input
+            // utxos or additional info yet) is not rejected.
+            ptx.ensure_consistency(PartiallySignedTransactionConsistencyCheck::Basic)
+                .map_err(GenericTransactionError::InconsistentPartiallySignedTransaction)?;
+            Ok(Self::Partial(ptx))
         } else if let Ok(stx) = SignedTransaction::decode_all(&mut &bytes[..]) {
             Ok(Self::Signed(stx))
         } else if let Ok(tx) = Transaction::decode_all(&mut &bytes[..]) {
@@ -50,6 +64,9 @@ impl GenericTransaction {
 pub enum GenericTransactionError {
     #[error("The provided bytes are not an encoded transaction")]
     CannotDecodeFromUntaggedBytes,
+
+    #[error("Inconsistent partially signed transaction: {0}")]
+    InconsistentPartiallySignedTransaction(PartiallySignedTransactionError),
 }
 
 #[cfg(test)]
@@ -58,10 +75,12 @@ mod tests {
 
     use common::{
         chain::{
-            OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+            Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+            htlc::HtlcSecret,
             output_value::OutputValue,
             partially_signed_transaction::{
-                PartiallySignedTransactionConsistencyCheck, TxAdditionalInfo,
+                PartiallySignedTransactionConsistencyCheck, PartiallySignedTransactionError,
+                TxAdditionalInfo,
             },
             signature::inputsig::InputWitness,
         },
@@ -125,5 +144,46 @@ mod tests {
         let err =
             GenericTransaction::decode_from_untagged_bytes("invalid bytes".as_bytes()).unwrap_err();
         assert_eq!(err, GenericTransactionError::CannotDecodeFromUntaggedBytes);
+    }
+
+    // A PartiallySignedTransaction that is decodable but violates the invariants that
+    // `new` normally enforces must be rejected, otherwise the wallet could later panic
+    // on it. Such a transaction can't be built through the public constructor, so its
+    // bytes are assembled by hand here to mimic malformed external input.
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_decode_rejects_inconsistent_partially_signed_transaction(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let tx = Transaction::new(
+            rng.random(),
+            vec![TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(Id::random_using(&mut rng)),
+                rng.random(),
+            ))],
+            vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(rng.random())))],
+        )
+        .unwrap();
+
+        // Encode a PartiallySignedTransactionV1 field by field, but give it an empty
+        // `witnesses` vector while the transaction has one input, so the witness count
+        // no longer matches the input count.
+        let mut bytes = Vec::new();
+        64u8.encode_to(&mut bytes); // PartiallySignedTransaction::V1 discriminant (codec index 64)
+        tx.encode_to(&mut bytes);
+        Vec::<Option<InputWitness>>::new().encode_to(&mut bytes); // witnesses
+        vec![Option::<TxOutput>::None].encode_to(&mut bytes); // input_utxos
+        vec![Option::<Destination>::None].encode_to(&mut bytes); // destinations
+        vec![Option::<HtlcSecret>::None].encode_to(&mut bytes); // htlc_secrets
+        TxAdditionalInfo::new().encode_to(&mut bytes);
+
+        let err = GenericTransaction::decode_from_untagged_bytes(&bytes).unwrap_err();
+        assert_eq!(
+            err,
+            GenericTransactionError::InconsistentPartiallySignedTransaction(
+                PartiallySignedTransactionError::InvalidWitnessCount
+            )
+        );
     }
 }
