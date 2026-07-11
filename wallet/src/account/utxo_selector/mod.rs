@@ -734,6 +734,49 @@ pub fn select_coins(
     }
 }
 
+/// Select coins, preferring confirmed utxos.
+///
+/// A transaction that spends an unconfirmed (in-mempool) utxo forms a cluster with the
+/// transaction that produced it, and the mempool limits how big such a cluster may be. To
+/// reduce the chance of building a transaction that the mempool would reject, this first tries
+/// to reach the target using `confirmed_pool` alone. Only if that doesn't work (for example
+/// because the confirmed utxos aren't enough) does it fall back to `full_pool`, which also
+/// contains the unconfirmed utxos.
+///
+/// `confirmed_pool` is `None` when there is no preference to apply, for example when the caller
+/// selected the inputs explicitly; in that case `full_pool` is used directly.
+pub fn select_coins_preferring_confirmed(
+    confirmed_pool: Option<Vec<OutputGroup>>,
+    full_pool: Vec<OutputGroup>,
+    selection_target: Amount,
+    pay_fees: PayFee,
+    cost_of_change: Amount,
+    coin_selection_algo: CoinSelectionAlgo,
+    max_tx_weight: usize,
+) -> Result<SelectionResult, UtxoSelectorError> {
+    if let Some(confirmed_pool) = confirmed_pool
+        && let Ok(result) = select_coins(
+            confirmed_pool,
+            selection_target,
+            pay_fees,
+            cost_of_change,
+            coin_selection_algo,
+            max_tx_weight,
+        )
+    {
+        return Ok(result);
+    }
+
+    select_coins(
+        full_pool,
+        selection_target,
+        pay_fees,
+        cost_of_change,
+        coin_selection_algo,
+        max_tx_weight,
+    )
+}
+
 fn select_random_coins(
     mut utxo_pool: Vec<OutputGroup>,
     selection_target: Amount,
