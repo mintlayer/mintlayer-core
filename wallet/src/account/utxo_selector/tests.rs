@@ -450,3 +450,36 @@ fn test_srd_solver_max_weight(#[case] seed: Seed) {
 
     assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_srd_solver_omits_redundant_utxos(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    // One large UTXO that on its own covers the target, plus several small UTXOs that
+    // together can't reach it. Whatever order SRD draws them in, the large UTXO has to be
+    // drawn to reach the target, and once it is none of the small ones are needed.
+    let target_value = Amount::from_atoms(50);
+    let mut groups = vec![];
+    add_output(Amount::from_atoms(100), &mut groups);
+    for _ in 0..10 {
+        add_output(Amount::from_atoms(1), &mut groups);
+    }
+
+    let cost_of_change = Amount::ZERO;
+    let max_weight = 100;
+    let result = select_coins_srd(
+        &groups,
+        target_value,
+        &mut rng,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    )
+    .unwrap();
+
+    // Only the large UTXO should be selected; the redundant small ones must be left out.
+    assert_eq!(result.num_selected_inputs(), 1);
+    assert_eq!(result.effective_value, Amount::from_atoms(100));
+}
