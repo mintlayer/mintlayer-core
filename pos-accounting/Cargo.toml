@@ -9,6 +9,7 @@ rust-version.workspace = true
 accounting = { path = "../accounting" }
 common = { path = "../common" }
 crypto = { path = "../crypto" }
+is-empty = { path = "../utils/is-empty" }
 randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }

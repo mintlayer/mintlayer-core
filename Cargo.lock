@@ -4347,6 +4347,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "is-empty"
+version = "1.4.0"
+dependencies = [
+ "is-empty-derive",
+]
+
+[[package]]
+name = "is-empty-derive"
+version = "1.4.0"
+dependencies = [
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6635,6 +6650,7 @@ dependencies = [
  "accounting",
  "common",
  "crypto",
+ "is-empty",
  "parity-scale-codec",
  "randomness",
  "rstest",
