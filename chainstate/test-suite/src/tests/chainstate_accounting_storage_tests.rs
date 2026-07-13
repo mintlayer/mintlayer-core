@@ -32,7 +32,7 @@ use common::{
     primitives::{Amount, Idable, per_thousand::PerThousand},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use pos_accounting::PoolData;
+use pos_accounting::{IsEmpty, PoolData};
 use randomness::{CryptoRng, RngExt as _};
 use rstest::rstest;
 use test_utils::random::{Seed, make_seedable_rng};

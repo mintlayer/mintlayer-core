@@ -19,11 +19,12 @@ use common::{
     chain::{DelegationId, PoolId},
     primitives::Amount,
 };
+use is_empty::IsEmpty;
 use serialization::{Decode, Encode};
 
 use crate::{DelegationData, PoolData};
 
-#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq, IsEmpty)]
 pub struct PoSAccountingData {
     /// A collection of all the pools and their data.
     pub pool_data: BTreeMap<PoolId, PoolData>,
@@ -49,14 +50,5 @@ impl PoSAccountingData {
             delegation_balances: BTreeMap::new(),
             delegation_data: BTreeMap::new(),
         }
-    }
-
-    // TODO: avoid manual implementation (mintlayer/mintlayer-core#669)
-    pub fn is_empty(&self) -> bool {
-        self.pool_data.is_empty()
-            && self.pool_balances.is_empty()
-            && self.pool_delegation_shares.is_empty()
-            && self.delegation_balances.is_empty()
-            && self.delegation_data.is_empty()
     }
 }

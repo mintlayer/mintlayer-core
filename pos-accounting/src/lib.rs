@@ -35,3 +35,6 @@ pub use crate::{
         in_memory::InMemoryPoSAccounting,
     },
 };
+
+// Re-exported so that users of `PoSAccountingData` (which derives it) have the trait in scope.
+pub use is_empty::IsEmpty;
