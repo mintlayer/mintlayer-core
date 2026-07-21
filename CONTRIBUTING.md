@@ -14,6 +14,51 @@ As an outside contributor, your first step will be to fork the repo and create y
 
 As you make your changes, ensure the code is as clean as possible and well documented so that it's clear to us what you're up to when we review it and it is thoroughly tested. Make sure that the old tests still pass, as well as any tests you've added. We will only merge code with all the tests passing in CI.
 
+### Setting up your environment
+
+Once rust is installed, clone your fork and build the workspace:
+
+```
+git clone https://github.com/<your-username>/mintlayer-core.git
+cd mintlayer-core
+cargo build
+```
+
+On Linux you will also need a few system packages before the build succeeds, mainly for the hardware wallet support. On a Debian or Ubuntu based system these are:
+
+```
+sudo apt-get install build-essential libdbus-1-dev libusb-1.0-0-dev
+```
+
+The static checks described below run through a small helper script that uses Python, so make sure you have Python 3.11 or newer available as well.
+
+### Running the tests
+
+Most of the test suite runs with a normal cargo invocation. We run it in release mode in CI because some of the tests are slow in a debug build:
+
+```
+cargo test --release --workspace
+```
+
+Some of the heavier tests, such as the functional tests, are marked as ignored so they don't run by default. If your change touches an area covered by them, you can run them explicitly by passing `-- --ignored`. When you add new behaviour, please add tests for it, and when you fix a bug, a test that would have caught it is very welcome.
+
+### Before you open a pull request
+
+We keep the static checks in one place so you can run locally exactly what CI will run. From the root of the repository:
+
+```
+./do_checks.sh
+```
+
+This checks formatting with `cargo fmt`, runs `cargo clippy` with the lint configuration we use, and runs `cargo deny` and `cargo vet` over the dependency tree. The last two come from separate tools, so install them once with:
+
+```
+cargo install cargo-deny --locked
+cargo install cargo-vet --locked
+```
+
+If `do_checks.sh` passes locally, your pull request should get through the static checks in CI too, which makes the review quicker for everyone. A draft pull request is always welcome if you would like early feedback, just mark it as such.
+
 ## Internal contributors
 
 By internal contributors, we mean people who are members of the Mintlayer organization. If you are not employed full-time to work on Mintlayer but have substantial contributions, drop us a message, and we'll see what can be done about adding you.
