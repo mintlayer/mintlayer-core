@@ -1,6 +1,18 @@
 # P2P subsystem
 
-TODO: this document is very incomplete.
+The p2p subsystem is responsible for everything related to talking to other nodes on the network: finding peers, establishing and maintaining connections, and exchanging blocks, transactions and control messages with them. This document first describes how the crate is put together and then specifies the wire protocol that nodes use to communicate.
+
+## Code structure
+
+The crate is split into a handful of modules, each with a focused responsibility:
+
+* `net` is the networking backend. It defines the `NetworkingService` interface that abstracts the low-level transport and, under `default_backend`, provides the implementation that actually speaks the wire protocol described below.
+* `peer_manager` owns the set of peers. It handles peer discovery (including dns seeds), decides which nodes to connect to, accepts inbound connections, keeps the number of connections within the configured bounds, and bans or discourages misbehaving peers. The peer database and the eviction logic live here.
+* `sync` handles block synchronization. It drives the initial block download when the node starts, and afterwards reacts to block and transaction announcements from peers as well as announcing blocks produced by this node.
+* `message` defines the messages that peers exchange, which are described in the protocol specification below.
+* `protocol` deals with protocol versioning. When two nodes connect they exchange protocol versions and negotiate the lowest version that both of them support.
+* `interface` and `rpc` expose the subsystem to the rest of the node and over RPC, for example to query the connected peers, manage bans, or add and remove reserved nodes.
+* `config` and `ban_config` hold the tunable settings for the subsystem, while `error` and `disconnection_reason` define the error and disconnection types used throughout.
 
 ## Protocol specification
 
