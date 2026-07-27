@@ -27,19 +27,25 @@ pub trait ReadOps {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>>;
 
     /// Get iterator over key-value pairs where the key has given prefix
-    fn prefix_iter(
-        &self,
+    ///
+    /// The prefix is only read, so it is passed by reference. The returned iterator borrows
+    /// from `self` only, it does not keep borrowing the prefix.
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_>;
+        prefix: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, Self>>;
 
     /// Get iterator over key-value pairs where the key is lexicographically greater or equal to
     /// the specified value.
-    fn greater_equal_iter(
-        &self,
+    ///
+    /// As with [`Self::prefix_iter`], the key is only read and the returned iterator borrows
+    /// from `self` only.
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_>;
+        key: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, Self>>;
 }
 
 /// Write database operation

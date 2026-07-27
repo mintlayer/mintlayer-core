@@ -141,7 +141,7 @@ impl<const IS_READONLY: bool> Drop for DbTx<'_, IS_READONLY> {
     }
 }
 
-impl<const IS_READONLY: bool> backend::ReadOps for DbTx<'_, IS_READONLY> {
+impl<'tx, const IS_READONLY: bool> backend::ReadOps for DbTx<'tx, IS_READONLY> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         let conn_lock = self.lock_connection();
 
@@ -159,11 +159,11 @@ impl<const IS_READONLY: bool> backend::ReadOps for DbTx<'_, IS_READONLY> {
         Ok(res)
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        prefix: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, IS_READONLY>> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
         let conn_lock = self.lock_connection();
@@ -186,11 +186,11 @@ impl<const IS_READONLY: bool> backend::ReadOps for DbTx<'_, IS_READONLY> {
         Ok(kv.into_iter())
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        key: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, IS_READONLY>> {
         let conn_lock = self.lock_connection();
         let mut stmt = conn_lock
             .connection

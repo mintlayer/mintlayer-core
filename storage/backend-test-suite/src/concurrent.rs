@@ -209,7 +209,7 @@ fn write_different_keys_and_iterate<B: SharedBackend, F: BackendFactory<B>>(
     thr1.join().unwrap();
 
     let dbtx = store.transaction_ro().unwrap();
-    let contents = dbtx.prefix_iter(MAPID.0, vec![]).unwrap();
+    let contents = dbtx.prefix_iter(MAPID.0, &[]).unwrap();
     let expected = [(vec![0x01], vec![0xf1]), (vec![0x02], vec![0xf2])];
     assert!(contents.eq(expected));
 }
