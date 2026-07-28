@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use serialization::extras::non_empty_vec::DataOrNoVec;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::helpers::make_trial;
 use crate::make_test;
@@ -1858,6 +1861,33 @@ where
             let ids = db_tx.get_token_ids_by_ticker(6, 0, &format!("A{c}")).await.unwrap();
             assert!(ids.is_empty());
         }
+
+        // Fungible token data is stored per block height, so a token that gets updated has
+        // a row for every height it changed at. It must still be listed only once.
+        db_tx
+            .set_fungible_token_issuance(
+                random_token_id1,
+                block_height.next_height(),
+                token_data.clone(),
+            )
+            .await
+            .unwrap();
+
+        let ids = db_tx.get_token_ids(6, 0).await.unwrap();
+        let unique_ids: BTreeSet<_> = ids.iter().collect();
+        assert_eq!(
+            ids.len(),
+            unique_ids.len(),
+            "get_token_ids returned duplicates"
+        );
+
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
+        let unique_ids: BTreeSet<_> = ids.iter().collect();
+        assert_eq!(
+            ids.len(),
+            unique_ids.len(),
+            "get_token_ids_by_ticker returned duplicates"
+        );
     }
 
     // test coin and token statistics
