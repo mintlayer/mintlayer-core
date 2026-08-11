@@ -300,8 +300,11 @@ rev = "c8ed12e89788e78d77cdc0dc9fb8a4bd4dc24b89"
 
 [workspace.dependencies.mintlayer-ledger-messages]
 git = "https://github.com/mintlayer/mintlayer-ledger-app"
-# The commit "Merge pull request #23 from mintlayer/bugfixing"
-rev = "16cc563caa5d3f746cc1b62608b88c3bdb284fa4"
+# Note: whenever the revision is updated, check `LEDGER_APP_DEV_TOOLS_IMAGE` in `.github/workflows/build.yml`
+# and ensure that the image version is recent enough to be able to build this revision of the app (if the SDK
+# version has been upped in the app, `LEDGER_APP_DEV_TOOLS_IMAGE` should probably be upped too).
+# The commit "Fix fee calculation for ConcludeOrder; update sdk version".
+rev = "25c7272424b1c55b2132dd22e4a921d617498993"
 package = "mintlayer-messages"
 
 [workspace.dependencies.trezor-client]
