@@ -1589,6 +1589,8 @@ pub async fn test_sign_transaction_with_one_input_command_generic<MkS1, MkS2, S1
     );
     let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
+    log::debug!("orig_ptx = {orig_ptx:?}");
+
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
         .sign_tx(

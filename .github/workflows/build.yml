@@ -363,7 +363,13 @@ jobs:
       matrix:
         model: [apex_p, flex, stax, nanox, nanosplus]
     env:
+      # This is used by the tests.
       LEDGER_TESTS_AUTO_CONFIRM: true
+      # This is only used directly in this job; the env var is only needed to avoid duplication.
+      # Note: using a specific version of the image instead of "latest" prevents breaking the CI
+      # when the latest image gets updated by Ledger (the latest image may require the app to use
+      # the latest SDK).
+      LEDGER_APP_DEV_TOOLS_IMAGE: ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:5.3.19
     steps:
       - name: Checkout the core repository
         uses: actions/checkout@v5
@@ -397,7 +403,7 @@ jobs:
         run: |
           sudo docker run --rm \
             -v "$(realpath ./mintlayer-ledger-app):/app" \
-            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            "$LEDGER_APP_DEV_TOOLS_IMAGE" \
             sh -c 'cargo ledger build ${{ matrix.model }}'
 
       - name: Run Ledger emulator and execute tests
@@ -407,7 +413,7 @@ jobs:
           sudo docker run -d --rm --name ledger-emulator \
             -v "$(realpath ./mintlayer-ledger-app):/app" \
             --publish 5000:5000 --publish 9999:9999 \
-            ghcr.io/ledgerhq/ledger-app-builder/ledger-app-dev-tools:latest \
+            "$LEDGER_APP_DEV_TOOLS_IMAGE" \
             sh -c 'speculos --apdu-port 9999 --api-port 5000 --display headless \
                -s "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" \
                target/${{ matrix.model }}/release/mintlayer-app'

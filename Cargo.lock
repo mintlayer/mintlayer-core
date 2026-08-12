@@ -5178,7 +5178,7 @@ dependencies = [
 [[package]]
 name = "mintlayer-messages"
 version = "1.0.0"
-source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=16cc563caa5d3f746cc1b62608b88c3bdb284fa4#16cc563caa5d3f746cc1b62608b88c3bdb284fa4"
+source = "git+https://github.com/mintlayer/mintlayer-ledger-app?rev=25c7272424b1c55b2132dd22e4a921d617498993#25c7272424b1c55b2132dd22e4a921d617498993"
 dependencies = [
  "derive_more 2.1.1",
  "mintlayer-core-primitives",
