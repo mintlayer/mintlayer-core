@@ -11,3 +11,18 @@ linker = "aarch64-linux-gnu-gcc"
 
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Force lmdb-sys (lmdb-mintlayer fork) to use POSIX mutexes instead of System V
+# semaphores on macOS. Darwin's default SysV backend fails with EINVAL once a
+# process holds locks on more than `kern.sysv.semume` (=10) semaphore sets
+# concurrently, which breaks any workload opening multiple DB environments in
+# one process (e.g. the storage-lmdb test suite).
+#
+# MDB_USE_ROBUST must be 0 because Darwin does not implement robust mutexes
+# (no PTHREAD_MUTEX_ROBUST); the cost is that a process crash while holding an
+# env lock can leave other processes deadlocked on that environment.
+# These flags are only applied when compiling FOR apple targets, so Linux/CI
+# builds keep upstream defaults (robust glibc pthread mutexes).
+[env]
+CFLAGS_aarch64-apple-darwin = "-DMDB_USE_POSIX_MUTEX=1 -DMDB_USE_ROBUST=0"
+CFLAGS_x86_64-apple-darwin = "-DMDB_USE_POSIX_MUTEX=1 -DMDB_USE_ROBUST=0"
