@@ -1862,10 +1862,11 @@ where
             assert!(ids.is_empty());
         }
 
-        // Fungible token data is stored per block height, so a token that gets updated has
-        // a row for every height it changed at. It must still be listed only once.
+        // Both tables keep a row per block height, so updating a token or changing an nft
+        // owner adds another row for an id that is already there. Neither must show up twice
+        // in the listings.
         db_tx
-            .set_fungible_token_issuance(
+            .set_fungible_token_data(
                 random_token_id1,
                 block_height.next_height(),
                 token_data.clone(),
@@ -1873,20 +1874,39 @@ where
             .await
             .unwrap();
 
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_nft_owner = Address::new(
+            &chain_config,
+            Destination::PublicKeyHash(PublicKeyHash::from(&pk)),
+        )
+        .unwrap();
+        db_tx
+            .set_address_balance_at_height(
+                &new_nft_owner,
+                Amount::from_atoms(1),
+                CoinOrTokenId::TokenId(random_token_id4),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let expected_ids: BTreeSet<_> = all_ids.iter().copied().collect();
+
         let ids = db_tx.get_token_ids(6, 0).await.unwrap();
-        let unique_ids: BTreeSet<_> = ids.iter().collect();
-        assert_eq!(
-            ids.len(),
-            unique_ids.len(),
-            "get_token_ids returned duplicates"
-        );
+        assert_eq!(ids.iter().copied().collect::<BTreeSet<_>>(), expected_ids);
 
         let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
-        let unique_ids: BTreeSet<_> = ids.iter().collect();
+        assert_eq!(ids.iter().copied().collect::<BTreeSet<_>>(), expected_ids);
+
+        // A page that crosses the boundary between the tokens and the nfts must not repeat
+        // or drop ids either.
+        let first_page = db_tx.get_token_ids(3, 0).await.unwrap();
+        let second_page = db_tx.get_token_ids(3, 3).await.unwrap();
+        assert_eq!(first_page.len(), 3);
+        assert_eq!(second_page.len(), 3);
         assert_eq!(
-            ids.len(),
-            unique_ids.len(),
-            "get_token_ids_by_ticker returned duplicates"
+            first_page.iter().chain(second_page.iter()).copied().collect::<BTreeSet<_>>(),
+            expected_ids
         );
     }
 

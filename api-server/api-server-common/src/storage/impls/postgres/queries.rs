@@ -2526,23 +2526,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                WITH count_tokens AS (
-                    SELECT count(DISTINCT token_id) FROM ml.fungible_token
-                )
-                (SELECT DISTINCT token_id
-                 FROM ml.fungible_token
-                 ORDER BY token_id
-                 OFFSET $1
-                 LIMIT $2)
-                UNION ALL
-                (SELECT DISTINCT nft_id
-                 FROM ml.nft_issuance
-                 ORDER BY nft_id
-                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                SELECT id FROM (
+                    (SELECT DISTINCT 0 AS grp, token_id AS id FROM ml.fungible_token)
+                    UNION ALL
+                    (SELECT DISTINCT 1, nft_id FROM ml.nft_issuance)
+                ) t
+                ORDER BY grp, id
+                OFFSET $1
+                LIMIT $2;
             "#,
                 &[&offset, &len],
             )
@@ -2571,25 +2562,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                WITH count_tokens AS (
-                    SELECT count(DISTINCT token_id) FROM ml.fungible_token WHERE ticker ILIKE $3
-                )
-                (SELECT DISTINCT token_id
-                 FROM ml.fungible_token
-                 WHERE ticker ILIKE $3
-                 ORDER BY token_id
-                 OFFSET $1
-                 LIMIT $2)
-                UNION ALL
-                (SELECT DISTINCT nft_id
-                 FROM ml.nft_issuance
-                 WHERE ticker ILIKE $3
-                 ORDER BY nft_id
-                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                SELECT id FROM (
+                    (SELECT DISTINCT 0 AS grp, token_id AS id
+                     FROM ml.fungible_token
+                     WHERE ticker ILIKE $3)
+                    UNION ALL
+                    (SELECT DISTINCT 1, nft_id
+                     FROM ml.nft_issuance
+                     WHERE ticker ILIKE $3)
+                ) t
+                ORDER BY grp, id
+                OFFSET $1
+                LIMIT $2;
             "#,
                 &[&offset, &len, &ticker_patern],
             )
