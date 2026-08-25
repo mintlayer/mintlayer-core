@@ -665,8 +665,8 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.h2]]
-version = "0.4.13"
-when = "2026-01-05"
+version = "0.4.18"
+when = "2026-08-20"
 user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
@@ -1087,8 +1087,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.openssl]]
-version = "0.10.78"
-when = "2026-04-19"
+version = "0.10.80"
+when = "2026-05-16"
 user-id = 163
 user-login = "alex"
 user-name = "Alex Gaynor"
@@ -1108,8 +1108,8 @@ user-login = "djc"
 user-name = "Dirkjan Ochtman"
 
 [[publisher.openssl-sys]]
-version = "0.9.114"
-when = "2026-04-19"
+version = "0.9.117"
+when = "2026-06-12"
 user-id = 163
 user-login = "alex"
 user-name = "Alex Gaynor"
