@@ -212,6 +212,10 @@ Also, the function assumes that the input UTXOs are not HTLC.
 Given inputs as bytes, outputs as bytes, and flags settings, this function returns
 the transaction that contains them all, as bytes.
 
+### Function: `decode_transaction_to_js`
+
+Decodes an unsigned transaction from its binary encoding into a JavaScript object.
+
 ### Function: `decode_signed_transaction_to_js`
 
 Decodes a signed transaction from its binary encoding into a JavaScript object.
