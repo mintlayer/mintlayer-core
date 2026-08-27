@@ -6,6 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Fixed
+- `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\
+  Both tokens and NFTs are stored with a row per block height they changed at, and every one
+  of those rows was being listed. Tokens that were updated, and NFTs that changed owner, now
+  appear once each, so the composition of a page has changed.
+- The same two endpoints no longer return more entries than the requested `items`.
+
 ## [1.4.0] - 2026-07-09
 
 No changes
