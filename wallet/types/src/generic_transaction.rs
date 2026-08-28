@@ -43,10 +43,14 @@ impl GenericTransaction {
             // enforces, so a malformed (but still decodable) transaction could later make
             // the wallet panic, e.g. on a witness/input count mismatch. Reject it here.
             //
-            // `Basic` only checks the structural invariants that prevent such panics; the
-            // stricter additional-info checks are intentionally not used here so that a
-            // transaction that is still being assembled (and may not carry all of its input
-            // utxos or additional info yet) is not rejected.
+            // `Basic` only checks the structural invariants that prevent such panics, namely
+            // that the witness, input utxo, destination and htlc secret counts all match the
+            // input count. The individual entries are still allowed to be `None`, which is what
+            // a transaction that is only partially filled in looks like.
+            //
+            // The stricter additional-info checks are intentionally not used here, so that a
+            // transaction that is still being assembled and does not carry its additional info
+            // yet is not rejected.
             ptx.ensure_consistency(PartiallySignedTransactionConsistencyCheck::Basic)
                 .map_err(GenericTransactionError::InconsistentPartiallySignedTransaction)?;
             Ok(Self::Partial(ptx))
@@ -66,7 +70,7 @@ pub enum GenericTransactionError {
     CannotDecodeFromUntaggedBytes,
 
     #[error("Inconsistent partially signed transaction: {0}")]
-    InconsistentPartiallySignedTransaction(PartiallySignedTransactionError),
+    InconsistentPartiallySignedTransaction(#[source] PartiallySignedTransactionError),
 }
 
 #[cfg(test)]

@@ -911,7 +911,7 @@ where
         N,
     > {
         let tx = GenericTransaction::decode_from_untagged_bytes(raw_tx.as_bytes())
-            .map_err(|_| RpcError::InvalidRawTransaction)?;
+            .map_err(RpcError::InvalidRawTransaction)?;
         let tx_to_sign = match tx {
             GenericTransaction::Tx(tx) => TransactionToSign::Tx(tx),
             GenericTransaction::Partial(tx) => TransactionToSign::Partial(tx),
@@ -1116,7 +1116,7 @@ where
         raw_tx: RpcHexString,
     ) -> WRpcResult<InspectTransaction, N> {
         let tx = GenericTransaction::decode_from_untagged_bytes(raw_tx.as_bytes())
-            .map_err(|_| RpcError::InvalidRawTransaction)?;
+            .map_err(RpcError::InvalidRawTransaction)?;
         let tx_to_inspect = match tx {
             GenericTransaction::Tx(tx) => TransactionToInspect::Tx(tx),
             GenericTransaction::Partial(tx) => TransactionToInspect::Partial(tx),
