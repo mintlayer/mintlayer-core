@@ -11,6 +11,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Fixed
+  - Wallet:
+    - Fixed an issue where `standalone-add-watch-only-address`, `standalone-add-private-key-from-hex` and
+      `standalone-add-multisig` (and the corresponding RPC methods) would reset the wallet to genesis but never
+      perform the announced rescan; the rescan is now done before the command returns. Previously, in `wallet-cli`
+      non-interactive mode the process would exit before the background rescan could run, leaving the wallet
+      stuck at genesis so that every subsequent wallet open had to rescan the whole blockchain.
+
 ## [1.4.0] - 2026-07-09
 
 ### Added
