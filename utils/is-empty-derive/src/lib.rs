@@ -19,10 +19,18 @@ use syn::{Data, DeriveInput, Fields, Index, parse_macro_input};
 
 /// Derive the `IsEmpty` trait for a struct.
 ///
-/// The generated implementation considers the struct empty when all of its fields are empty. Each
-/// field's own `is_empty` method is used, so every field type must have one (for example the
-/// standard collections, `String`, or another type that implements `IsEmpty`). A struct with no
-/// fields is always empty.
+/// The generated implementation considers the struct empty when all of its fields are empty. A
+/// struct with no fields is always empty.
+///
+/// Each field's own `is_empty` method is used, and it is resolved by ordinary method lookup rather
+/// than through this trait, so that the standard collections and `String` work through their
+/// inherent methods. Two things follow from that:
+///
+/// * A field whose `is_empty` means something unrelated is accepted silently. A fixed size array
+///   is the easiest way to get this wrong, as `[T; N]` resolves to the slice method and returns
+///   `false` for any `N > 0`, which would make the whole struct permanently non-empty.
+/// * A field whose type gets its `is_empty` from this trait needs the trait in scope at the point
+///   of the derive, since the per field call is not qualified.
 #[proc_macro_derive(IsEmpty)]
 pub fn derive(input: TokenStream) -> TokenStream {
     let DeriveInput {
@@ -67,7 +75,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics IsEmpty for #ident #ty_generics #where_clause {
+        impl #impl_generics ::is_empty::IsEmpty for #ident #ty_generics #where_clause {
             fn is_empty(&self) -> bool {
                 #body
             }

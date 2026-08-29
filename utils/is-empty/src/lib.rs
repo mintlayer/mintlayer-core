@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The derive macro expands to `::is_empty::IsEmpty`, which would not resolve inside this crate
+// itself. This alias makes that path work here too, so the trait can be derived in our own tests.
+extern crate self as is_empty;
+
 pub use is_empty_derive::IsEmpty;
 
 /// The interface for checking whether a value is "empty".
@@ -87,5 +91,32 @@ mod tests {
         struct Unit;
 
         assert!(Unit.is_empty());
+    }
+
+    // The generated impl names the trait by its full path, so deriving through a path qualified
+    // macro works without the trait being imported, and picks the right trait even if another one
+    // of the same name happens to be in scope.
+    mod trait_not_in_scope {
+        // Deliberately not importing the trait here.
+
+        #[derive(super::super::IsEmpty)]
+        struct Aggregate {
+            a: Vec<u32>,
+        }
+
+        // A decoy that would be picked up if the generated impl named the trait unqualified.
+        trait IsEmpty {
+            fn is_empty(&self) -> bool;
+        }
+
+        fn assert_impls<T: crate::IsEmpty>(value: &T) -> bool {
+            value.is_empty()
+        }
+
+        #[test]
+        fn derives_the_trait_from_its_own_crate() {
+            assert!(assert_impls(&Aggregate { a: Vec::new() }));
+            assert!(!assert_impls(&Aggregate { a: vec![1] }));
+        }
     }
 }
