@@ -366,8 +366,9 @@ where
                         .await?
                         .add_standalone_address(pkh, label);
 
-                    if !no_rescan {
+                    if res.is_ok() && !no_rescan {
                         w.reset_wallet_to_genesis()?;
+                        w.sync_once().await?;
                     }
 
                     res
@@ -396,8 +397,9 @@ where
                         .await?
                         .add_standalone_private_key(private_key, label);
 
-                    if !no_rescan {
+                    if res.is_ok() && !no_rescan {
                         w.reset_wallet_to_genesis()?;
+                        w.sync_once().await?;
                     }
 
                     res
@@ -455,8 +457,9 @@ where
                         .await?
                         .add_standalone_multisig(challenge, label);
 
-                    if !no_rescan {
+                    if res.is_ok() && !no_rescan {
                         w.reset_wallet_to_genesis()?;
+                        w.sync_once().await?;
                     }
 
                     res
