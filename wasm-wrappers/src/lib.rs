@@ -694,6 +694,20 @@ pub fn encode_transaction(inputs: &[u8], outputs: &[u8], flags: u64) -> Result<V
     Ok(tx.encode())
 }
 
+/// Decodes an unsigned transaction from its binary encoding into a JavaScript object.
+#[wasm_bindgen]
+pub fn decode_transaction_to_js(transaction: &[u8], network: Network) -> Result<JsValue, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let tx = Transaction::decode_all(&mut &transaction[..])
+        .map_err(Error::InvalidTransactionEncoding)?;
+
+    let str = JsonEncoded::new(&tx).to_string();
+    let str = dehexify_all_addresses(&chain_config, &str);
+
+    js_sys::JSON::parse(&str).map_err(Error::JsonParseError)
+}
+
 /// Decodes a signed transaction from its binary encoding into a JavaScript object.
 #[wasm_bindgen]
 pub fn decode_signed_transaction_to_js(
