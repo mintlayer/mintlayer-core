@@ -132,6 +132,10 @@ criteria = "safe-to-deploy"
 version = "0.1.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.block-buffer]]
+version = "0.12.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.block2]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
@@ -216,6 +220,10 @@ criteria = "safe-to-deploy"
 version = "5.4.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.cmov]]
+version = "0.5.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.com]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
@@ -234,6 +242,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.concurrent-queue]]
 version = "2.5.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.const-oid]]
+version = "0.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.const_format]]
@@ -276,6 +288,10 @@ criteria = "safe-to-run"
 version = "0.5.0"
 criteria = "safe-to-run"
 
+[[exemptions.crypto-common]]
+version = "0.2.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.ctor]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
@@ -286,6 +302,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ctor-proc-macro]]
 version = "0.0.13"
+criteria = "safe-to-deploy"
+
+[[exemptions.ctutils]]
+version = "0.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.cursor-icon]]
@@ -362,6 +382,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.difflib]]
 version = "0.4.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.digest]]
+version = "0.11.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.directories]]
@@ -632,6 +656,14 @@ criteria = "safe-to-deploy"
 version = "2.6.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.hmac]]
+version = "0.13.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.hybrid-array]]
+version = "0.4.10"
+criteria = "safe-to-deploy"
+
 [[exemptions.hyper-timeout]]
 version = "0.5.2"
 criteria = "safe-to-deploy"
@@ -782,6 +814,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.matchit]]
 version = "0.8.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.md-5]]
+version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.memmap2]]
@@ -990,6 +1026,14 @@ criteria = "safe-to-run"
 
 [[exemptions.pollster]]
 version = "0.4.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.postgres-protocol]]
+version = "0.6.12"
+criteria = "safe-to-deploy"
+
+[[exemptions.postgres-types]]
+version = "0.2.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.ppv-lite86]]
@@ -1256,6 +1300,10 @@ criteria = "safe-to-run"
 version = "3.5.0"
 criteria = "safe-to-run"
 
+[[exemptions.sha2]]
+version = "0.11.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.signal-hook]]
 version = "0.3.18"
 criteria = "safe-to-deploy"
@@ -1382,6 +1430,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tinyvec]]
 version = "1.10.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tokio-postgres]]
+version = "0.7.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-socks]]
