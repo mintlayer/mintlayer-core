@@ -50,3 +50,6 @@ build-tools/docker/example-mainnet-dns-server/mintlayer-data/*
 
 # This directory will contain some generated files.
 build-tools/block-data-plots/output
+
+# Cloudflare wrangler local cache (created by local wrangler tooling)
+.wrangler/

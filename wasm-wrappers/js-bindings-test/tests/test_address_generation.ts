@@ -172,7 +172,7 @@ export function passphrase_test() {
   const passphrase_key = make_default_account_privkey(MNEMONIC, Network.Testnet, PASSPHRASE);
   const passphrase_key2 = make_default_account_privkey(MNEMONIC, Network.Testnet, PASSPHRASE);
   assert_eq_arrays(passphrase_key, passphrase_key2);
-  if (passphrase_key.length != legacy_key.length) {
+  if (passphrase_key.length !== legacy_key.length) {
     throw new Error("Passphrase-derived key has an unexpected length");
   }
   assert_eq_arrays_is_different(legacy_key, passphrase_key);
@@ -185,7 +185,7 @@ export function passphrase_test() {
     public_key_from_private_key(make_receiving_address(passphrase_key, 0)),
     Network.Testnet
   );
-  if (legacy_address == passphrase_address) {
+  if (legacy_address === passphrase_address) {
     throw new Error("Passphrase-derived address unexpectedly equals the legacy address");
   }
 
@@ -193,9 +193,9 @@ export function passphrase_test() {
 }
 
 function assert_eq_arrays_is_different(arr1: Uint8Array, arr2: Uint8Array) {
-  if (arr1.length != arr2.length) return;
+  if (arr1.length !== arr2.length) return;
   for (let i = 0; i < arr1.length; i++) {
-    if (arr1[i] != arr2[i]) return;
+    if (arr1[i] !== arr2[i]) return;
   }
   throw new Error("Arrays are unexpectedly equal");
 }

@@ -44,4 +44,4 @@ serde-wasm-bindgen = "0.6"
 hex.workspace = true
 rstest.workspace = true
 test-utils = { path = "../test-utils" }
-wallet = { path = "../wallet" }
+wallet = { path = "../wallet", default-features = false }

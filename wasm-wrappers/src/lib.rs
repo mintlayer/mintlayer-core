@@ -140,7 +140,9 @@ pub fn make_default_account_privkey(
     let mnemonic =
         bip39::Mnemonic::parse_in(Language::English, mnemonic).map_err(Error::InvalidMnemonic)?;
 
-    // Keep the passphrase and the derived seed out of long-lived memory when possible.
+    // Best-effort mitigation: zeroize the passphrase and the derived seed when they are
+    // dropped. The derived keys and the encoded result returned over the JS boundary
+    // cannot be fully protected, but this limits the lifetime of the raw secret material.
     let passphrase = passphrase.map(zeroize::Zeroizing::new);
     let passphrase: &str = passphrase.as_deref().map_or("", |p| p.as_str());
     let seed = zeroize::Zeroizing::new(mnemonic.to_seed(passphrase));
