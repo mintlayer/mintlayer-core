@@ -19,7 +19,7 @@ use std::{
 };
 
 use clap::Parser;
-use hickory_client::rr::Name;
+use hickory_proto::rr::Name;
 
 use common::primitives::per_thousand::PerThousand;
 use utils::{app_version_with_git_info, clap_utils, root_user::ForceRunAsRootOptions};

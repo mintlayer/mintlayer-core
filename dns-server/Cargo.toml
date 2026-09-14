@@ -28,7 +28,7 @@ itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false }
-hickory-client.workspace = true
+hickory-proto.workspace = true
 hickory-server.workspace = true
 
 [dev-dependencies]

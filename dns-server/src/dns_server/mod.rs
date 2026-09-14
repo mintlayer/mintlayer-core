@@ -22,21 +22,16 @@ use std::{
 };
 
 use futures::never::Never;
-use hickory_client::{
-    proto::rr::{LowerName, RrKey},
-    rr::{
-        Name, RData, RecordSet, RecordType,
-        rdata::{NS, SOA},
-    },
+use hickory_proto::rr::{
+    LowerName, Name, RData, RecordSet, RecordType, RrKey,
+    rdata::{NS, SOA},
 };
 use hickory_server::{
-    ServerFuture,
-    authority::{
-        AuthLookup, Authority, Catalog, LookupError, LookupOptions, MessageRequest, UpdateResult,
-        ZoneType,
+    server::{Request, RequestInfo, Server},
+    store::in_memory::InMemoryZoneHandler,
+    zone_handler::{
+        AuthLookup, AxfrPolicy, Catalog, LookupControlFlow, LookupOptions, ZoneHandler, ZoneType,
     },
-    server::RequestInfo,
-    store::in_memory::InMemoryAuthority,
 };
 use itertools::Itertools;
 use tokio::{net::UdpSocket, sync::mpsc};
@@ -61,7 +56,7 @@ pub enum DnsServerCommand {
 pub struct DnsServer {
     auth: Arc<AuthorityImpl>,
 
-    server: ServerFuture<Catalog>,
+    server: Server<Catalog>,
 
     cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
 }
@@ -91,7 +86,8 @@ impl DnsServer {
         chain_config: Arc<ChainConfig>,
         cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
     ) -> crate::Result<Self> {
-        let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
+        let inner =
+            InMemoryZoneHandler::empty(config.host.clone(), ZoneType::Primary, AxfrPolicy::Deny);
 
         let auth = Arc::new(AuthorityImpl {
             config: AuthorityImplConfig::from_dns_server_config(&config),
@@ -102,11 +98,13 @@ impl DnsServer {
             ipv6_addrs: Default::default(),
         });
 
+        let handlers: Vec<Arc<dyn ZoneHandler>> = vec![Arc::clone(&auth) as _];
+
         let mut catalog = Catalog::new();
 
-        catalog.upsert(config.host.clone().into(), Box::new(Arc::clone(&auth)));
+        catalog.upsert(config.host.clone().into(), handlers);
 
-        let mut server = ServerFuture::new(catalog);
+        let mut server = Server::new(catalog);
 
         for bind_addr in config.bind_addr.iter() {
             let udp_socket = UdpSocket::bind(bind_addr).await?;
@@ -136,10 +134,12 @@ impl DnsServer {
             "Cmd handling loop",
         );
 
-        server.block_until_done().await?;
+        if let Err(err) = server.block_until_done().await {
+            log::error!("Hickory DNS server terminated with an error: {err}");
+        }
 
         Err(DnsServerError::Other(
-            "trust_dns_server terminated unexpectedly",
+            "hickory DNS server terminated unexpectedly",
         ))
     }
 }
@@ -176,7 +176,7 @@ struct AuthorityImpl {
     chain_config: Arc<ChainConfig>,
     config: AuthorityImplConfig,
     serial: RelaxedAtomicU32,
-    inner: InMemoryAuthority,
+    inner: InMemoryZoneHandler,
     ipv4_addrs: Mutex<BTreeMap<Ipv4Addr, SoftwareInfo>>,
     ipv6_addrs: Mutex<BTreeMap<Ipv6Addr, SoftwareInfo>>,
 }
@@ -356,19 +356,13 @@ impl AuthorityImpl {
 }
 
 #[async_trait::async_trait]
-impl Authority for AuthorityImpl {
-    type Lookup = AuthLookup;
-
+impl ZoneHandler for AuthorityImpl {
     fn zone_type(&self) -> ZoneType {
         self.inner.zone_type()
     }
 
-    fn is_axfr_allowed(&self) -> bool {
-        self.inner.is_axfr_allowed()
-    }
-
-    async fn update(&self, update: &MessageRequest) -> UpdateResult<bool> {
-        self.inner.update(update).await
+    fn axfr_policy(&self) -> AxfrPolicy {
+        self.inner.axfr_policy()
     }
 
     fn origin(&self) -> &LowerName {
@@ -379,8 +373,9 @@ impl Authority for AuthorityImpl {
         &self,
         name: &LowerName,
         query_type: RecordType,
+        request_info: Option<&RequestInfo<'_>>,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
+    ) -> LookupControlFlow<AuthLookup> {
         log::trace!(
             "In lookup for {:?}, query_type = {:?}, lookup_options = {:?}",
             name,
@@ -388,32 +383,32 @@ impl Authority for AuthorityImpl {
             lookup_options
         );
         self.refresh().await;
-        self.inner.lookup(name, query_type, lookup_options).await
+        self.inner.lookup(name, query_type, request_info, lookup_options).await
     }
 
     async fn search(
         &self,
-        request_info: RequestInfo<'_>,
+        request: &Request,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
+    ) -> (LookupControlFlow<AuthLookup>, Option<hickory_proto::rr::TSigResponseContext>) {
         log::trace!(
             "In search, src = {:?}, protocol = {:?}, header = {:?}, query = {:?}, lookup_options = {:?}",
-            request_info.src,
-            request_info.protocol,
-            request_info.header,
-            request_info.query,
+            request.src(),
+            request.protocol(),
+            request.metadata,
+            request.queries,
             lookup_options
         );
         self.refresh().await;
-        self.inner.search(request_info, lookup_options).await
+        self.inner.search(request, lookup_options).await
     }
 
-    async fn get_nsec_records(
+    async fn nsec_records(
         &self,
         name: &LowerName,
         lookup_options: LookupOptions,
-    ) -> Result<Self::Lookup, LookupError> {
-        self.inner.get_nsec_records(name, lookup_options).await
+    ) -> LookupControlFlow<AuthLookup> {
+        self.inner.nsec_records(name, lookup_options).await
     }
 }
 

@@ -187,8 +187,8 @@ hashbrown = "0.17"
 heck = "0.5"
 hex = "0.4"
 hex-literal = "0.4"
-hickory-client = "0.24"
-hickory-server = "0.24"
+hickory-proto = "0.26"
+hickory-server = "0.26"
 hmac = "0.12"
 http = "1.3"
 hyper = "1.7"
@@ -215,7 +215,6 @@ oneshot = "0.1"
 parity-scale-codec = "3.7"
 parking_lot = "0.12"
 paste = "1.0"
-probabilistic-collections = "0.7"
 proc-macro2 = "1.0"
 proptest = "1.11"
 qrcodegen = "1.8"
@@ -365,3 +364,8 @@ ledger-proto = { git = "https://github.com/ledger-community/rust-ledger.git", re
 # Note that the fix is needed for the Ledger app, but we have to use the same version of parity-scale-codec
 # across Trezor, Ledger, mintlayer-core and mintlayer-core-primitives repos.
 parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec.git", rev = "5021525697edc0661591ebc71392c48d950a10b0" }
+# Fork of iced_glyphon 0.6.0 with the lru dependency upgraded to 0.16.3 to pick up the fix
+# for RUSTSEC-2026-0002 ("IterMut violates Stacked Borrows by invalidating internal pointer").
+# Upstream has replaced the crate with "cryoglyph" in unreleased iced 0.15, so there is no
+# upstream release with the fix. Drop this patch once iced ships one.
+iced_glyphon = { git = "https://github.com/mintlayer/iced-glyphon", rev = "acb3fc10a3a15ee6e0e7da4e264db2338c09a7c1" }

@@ -19,10 +19,10 @@ use std::{
     sync::Arc,
 };
 
-use hickory_client::rr::{RData, RecordType};
+use hickory_proto::rr::{RData, RecordType};
 use hickory_server::{
-    authority::{Authority, ZoneType},
-    store::in_memory::InMemoryAuthority,
+    store::in_memory::InMemoryZoneHandler,
+    zone_handler::{AxfrPolicy, LookupOptions, ZoneHandler, ZoneType},
 };
 
 use common::{
@@ -61,7 +61,8 @@ async fn dns_server_basic() {
         version: SemVer::new(1, 2, 3),
     };
 
-    let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
+    let inner =
+        InMemoryZoneHandler::empty(host.clone(), ZoneType::Primary, AxfrPolicy::Deny);
 
     let auth = AuthorityImpl {
         config,
@@ -83,26 +84,36 @@ async fn dns_server_basic() {
     assert_eq!(auth.ipv6_addrs.lock().unwrap().len(), 1);
 
     let result_a = auth
-        .lookup(&host.clone().into(), RecordType::A, Default::default())
+        .lookup(
+            &host.clone().into(),
+            RecordType::A,
+            None,
+            LookupOptions::default(),
+        )
         .await
-        .unwrap()
+        .expect("lookup must not fail")
         .unwrap_records()
         .iter()
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_a.len(), 1);
-    assert_eq!(result_a[0].data(), Some(&RData::A(ip1.into())));
+    assert_eq!(result_a[0].data, RData::A(ip1.into()));
 
     let result_aaaa = auth
-        .lookup(&host.clone().into(), RecordType::AAAA, Default::default())
+        .lookup(
+            &host.clone().into(),
+            RecordType::AAAA,
+            None,
+            LookupOptions::default(),
+        )
         .await
-        .unwrap()
+        .expect("lookup must not fail")
         .unwrap_records()
         .iter()
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_aaaa.len(), 1);
-    assert_eq!(result_aaaa[0].data(), Some(&RData::AAAA(ip2.into())));
+    assert_eq!(result_aaaa[0].data, RData::AAAA(ip2.into()));
 
     handle_command(&auth, DnsServerCommand::DelAddress(ip1.into()));
     handle_command(&auth, DnsServerCommand::DelAddress(ip2.into()));
@@ -145,7 +156,11 @@ mod same_software_version_addr_selection_test {
         };
         let cur_soft_info = SoftwareInfo::current(&chain_config);
 
-        let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
+        let inner = InMemoryZoneHandler::empty(
+            config.host.clone(),
+            ZoneType::Primary,
+            AxfrPolicy::Deny,
+        );
         let auth = AuthorityImpl {
             config,
             chain_config: Arc::clone(&chain_config),
@@ -170,7 +185,7 @@ mod same_software_version_addr_selection_test {
         let selected_v4_addrs = records[0]
             .1
             .records_without_rrsigs()
-            .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::A(a)), a.0))
+            .map(|rec| assert_matches_return_val!(&rec.data, RData::A(a), a.0))
             .collect::<Vec<_>>();
         assert_eq!(
             selected_v4_addrs.len(),
@@ -188,7 +203,7 @@ mod same_software_version_addr_selection_test {
         let selected_v6_addrs = records[1]
             .1
             .records_without_rrsigs()
-            .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::AAAA(a)), a.0))
+            .map(|rec| assert_matches_return_val!(&rec.data, RData::AAAA(a), a.0))
             .collect::<Vec<_>>();
         assert_eq!(
             selected_v6_addrs.len(),
