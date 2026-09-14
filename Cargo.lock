@@ -10492,8 +10492,10 @@ dependencies = [
  "tsify",
  "tx-verifier",
  "utils",
+ "wallet",
  "wasm-bindgen",
  "web-sys",
+ "zeroize",
 ]
 
 [[package]]

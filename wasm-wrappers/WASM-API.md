@@ -14,6 +14,14 @@ Generates a new, random private key from entropy
 Create the default account's extended private key for a given mnemonic
 derivation path: 44'/mintlayer_coin_type'/0'
 
+The optional `passphrase` is used as the BIP39 passphrase when converting the mnemonic
+to a seed (the seed is derived as PBKDF2-HMAC-SHA512 over the mnemonic with the salt
+"mnemonic" + passphrase). Passing `None` (or `undefined`/`null` from JS, or an empty
+string) preserves the legacy behavior of deriving without a passphrase.
+
+Note: wallets derived with a non-empty passphrase produce completely different keys,
+so a passphrase must be remembered together with the mnemonic.
+
 ### Function: `make_receiving_address`
 
 From an extended private key create a receiving private key for a given key index
