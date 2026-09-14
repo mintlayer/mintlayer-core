@@ -954,8 +954,8 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.libsqlite3-sys]]
-version = "0.31.0"
-when = "2025-01-19"
+version = "0.32.0"
+when = "2025-03-05"
 user-id = 5062
 user-login = "gwenn"
 user-name = "gwenn"
@@ -1380,8 +1380,8 @@ user-login = "yoshuawuyts"
 user-name = "Yosh"
 
 [[publisher.rusqlite]]
-version = "0.33.0"
-when = "2025-01-19"
+version = "0.34.0"
+when = "2025-03-05"
 user-id = 5062
 user-login = "gwenn"
 user-name = "gwenn"

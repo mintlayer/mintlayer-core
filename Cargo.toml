@@ -235,7 +235,7 @@ ripemd = "0.1"
 rlimit = "0.10"
 rstest = "0.24"
 rstest_reuse = "0.7"
-rusqlite = "0.33"
+rusqlite = "0.34"
 schnorrkel = "0.11"
 secp256k1 = { version = "0.29", default-features = false }
 semver = "1.0"
