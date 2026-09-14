@@ -25,7 +25,7 @@ use siphasher::sip::SipHasher13;
 /// A space-efficient probabilistic data structure to test for membership in a set.
 ///
 /// Items can be added, but never removed. `contains` never produces false negatives,
-/// but may produce false positives with a probability of at most `fpp` for filters
+/// but may produce false positives with a probability of approximately `fpp` for filters
 /// that contain no more than `size` items.
 ///
 /// We used to depend on the `probabilistic_collections` crate here, but it is
@@ -63,7 +63,7 @@ impl<T: Hash> BloomFilter<T> {
 
             (
                 bit_count.ceil() as usize,
-                // Round down but ensure that there is at least one hash function.
+                // Round to the nearest integer, but ensure at least one hash function.
                 std::cmp::max(hash_count as u32, 1),
             )
         };

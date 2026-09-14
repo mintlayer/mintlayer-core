@@ -354,8 +354,10 @@ impl AuthorityImpl {
 }
 
 /// Note: dynamic DNS updates (RFC 2136) are not supported. The `ZoneHandler::update`
-/// default implementation responds with `NotImplemented`, which preserves the behavior
-/// of the previous hickory 0.24-based code.
+/// default implementation responds with `NotImplemented`, which is a stricter rejection
+/// than the previous hickory 0.24-based code (which delegated to `InMemoryAuthority`'s
+/// RFC 2136 processing and only rejected updates indirectly, for the lack of any
+/// configured signature keys). A public seed node must never accept updates.
 #[async_trait::async_trait]
 impl ZoneHandler for AuthorityImpl {
     fn zone_type(&self) -> ZoneType {
