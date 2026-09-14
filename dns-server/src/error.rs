@@ -16,6 +16,7 @@
 use std::net::AddrParseError;
 
 use hickory_proto::ProtoError;
+use hickory_server::net::NetError;
 use p2p::{error::P2pError, peer_manager::peerdb_common};
 use thiserror::Error;
 use utils::try_as::TryAsRef;
@@ -24,6 +25,8 @@ use utils::try_as::TryAsRef;
 pub enum DnsServerError {
     #[error("Proto error: {0}")]
     ProtoError(#[from] ProtoError),
+    #[error("Net error: {0}")]
+    NetError(#[from] NetError),
     #[error("Parse error: {0}")]
     AddrParseError(#[from] AddrParseError),
     #[error("IO error: {0}")]
@@ -47,6 +50,7 @@ impl TryAsRef<storage::Error> for DnsServerError {
     fn try_as_ref(&self) -> Option<&storage::Error> {
         match self {
             DnsServerError::ProtoError(_)
+            | DnsServerError::NetError(_)
             | DnsServerError::AddrParseError(_)
             | DnsServerError::IoError(_)
             | DnsServerError::P2pError(_)

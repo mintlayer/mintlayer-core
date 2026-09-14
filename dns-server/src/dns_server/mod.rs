@@ -23,7 +23,7 @@ use std::{
 
 use futures::never::Never;
 use hickory_proto::rr::{
-    LowerName, Name, RData, RecordSet, RecordType, RrKey,
+    LowerName, Name, RData, RecordSet, RecordType, RrKey, TSigResponseContext,
     rdata::{NS, SOA},
 };
 use hickory_server::{
@@ -134,9 +134,7 @@ impl DnsServer {
             "Cmd handling loop",
         );
 
-        if let Err(err) = server.block_until_done().await {
-            log::error!("Hickory DNS server terminated with an error: {err}");
-        }
+        server.block_until_done().await?;
 
         Err(DnsServerError::Other(
             "hickory DNS server terminated unexpectedly",
@@ -171,7 +169,7 @@ impl AuthorityImplConfig {
     }
 }
 
-/// Wrapper for InMemoryAuthority that selects random addresses every second
+/// Wrapper for InMemoryZoneHandler that selects random addresses every second
 struct AuthorityImpl {
     chain_config: Arc<ChainConfig>,
     config: AuthorityImplConfig,
@@ -355,6 +353,9 @@ impl AuthorityImpl {
     }
 }
 
+/// Note: dynamic DNS updates (RFC 2136) are not supported. The `ZoneHandler::update`
+/// default implementation responds with `NotImplemented`, which preserves the behavior
+/// of the previous hickory 0.24-based code.
 #[async_trait::async_trait]
 impl ZoneHandler for AuthorityImpl {
     fn zone_type(&self) -> ZoneType {
@@ -390,7 +391,7 @@ impl ZoneHandler for AuthorityImpl {
         &self,
         request: &Request,
         lookup_options: LookupOptions,
-    ) -> (LookupControlFlow<AuthLookup>, Option<hickory_proto::rr::TSigResponseContext>) {
+    ) -> (LookupControlFlow<AuthLookup>, Option<TSigResponseContext>) {
         log::trace!(
             "In search, src = {:?}, protocol = {:?}, header = {:?}, query = {:?}, lookup_options = {:?}",
             request.src(),

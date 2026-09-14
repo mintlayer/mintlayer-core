@@ -34,6 +34,9 @@ audit-as-crates-io = true
 [policy.iced_aw]
 audit-as-crates-io = true
 
+[policy.iced_glyphon]
+audit-as-crates-io = true
+
 [policy.ledger-lib]
 audit-as-crates-io = true
 
@@ -114,10 +117,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.bigdecimal]]
 version = "0.4.10"
-criteria = "safe-to-deploy"
-
-[[exemptions.bincode]]
-version = "1.3.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.bip39]]
@@ -287,6 +286,10 @@ criteria = "safe-to-run"
 [[exemptions.criterion-plot]]
 version = "0.5.0"
 criteria = "safe-to-run"
+
+[[exemptions.critical-section]]
+version = "1.2.0"
+criteria = "safe-to-deploy"
 
 [[exemptions.crypto-common]]
 version = "0.2.2"
@@ -476,10 +479,6 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.endian-type]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.enum-iterator]]
 version = "2.3.0"
 criteria = "safe-to-deploy"
@@ -652,6 +651,10 @@ criteria = "safe-to-deploy"
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.hickory-net]]
+version = "0.26.3"
+criteria = "safe-to-deploy"
+
 [[exemptions.hidapi]]
 version = "2.6.4"
 criteria = "safe-to-deploy"
@@ -680,6 +683,10 @@ criteria = "safe-to-deploy"
 version = "0.1.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.iced_glyphon]]
+version = "0.6.0@git:acb3fc10a3a15ee6e0e7da4e264db2338c09a7c1"
+criteria = "safe-to-deploy"
+
 [[exemptions.impl-trait-for-tuples]]
 version = "0.2.3"
 criteria = "safe-to-deploy"
@@ -696,8 +703,24 @@ criteria = "safe-to-run"
 version = "0.19.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.jni]]
+version = "0.22.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.jni-macros]]
+version = "0.22.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.jni-sys]]
 version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.jni-sys]]
+version = "0.4.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.jni-sys-macros]]
+version = "0.4.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jni-utils]]
@@ -785,7 +808,7 @@ version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.lru]]
-version = "0.12.5"
+version = "0.16.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.lyon]]
@@ -860,10 +883,6 @@ criteria = "safe-to-deploy"
 version = "0.6.0+11769913"
 criteria = "safe-to-deploy"
 
-[[exemptions.nibble_vec]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.nix]]
 version = "0.29.0"
 criteria = "safe-to-deploy"
@@ -914,10 +933,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.objc2-core-data]]
 version = "0.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.objc2-core-graphics]]
-version = "0.3.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.objc2-core-image]]
@@ -1028,24 +1043,20 @@ criteria = "safe-to-run"
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.postgres-protocol]]
-version = "0.6.12"
-criteria = "safe-to-deploy"
-
-[[exemptions.postgres-types]]
-version = "0.2.14"
+[[exemptions.portable-atomic]]
+version = "1.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ppv-lite86]]
 version = "0.2.21"
 criteria = "safe-to-deploy"
 
-[[exemptions.prettytable-rs]]
-version = "0.10.0"
+[[exemptions.prefix-trie]]
+version = "0.8.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.probabilistic-collections]]
-version = "0.7.0"
+[[exemptions.prettytable-rs]]
+version = "0.10.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.proc-macro-crate]]
@@ -1108,36 +1119,12 @@ criteria = "safe-to-deploy"
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.radix_trie]]
-version = "0.2.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand]]
-version = "0.7.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand_chacha]]
-version = "0.2.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand_chacha]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_core]]
-version = "0.5.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand_core]]
 version = "0.10.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand_hc]]
-version = "0.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand_xorshift]]
-version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.range-alloc]]
@@ -1320,8 +1307,8 @@ criteria = "safe-to-deploy"
 version = "0.3.8"
 criteria = "safe-to-deploy"
 
-[[exemptions.simdutf8]]
-version = "0.1.5"
+[[exemptions.simd_cesu8]]
+version = "1.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.slave-pool]]
@@ -1430,10 +1417,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tinyvec]]
 version = "1.10.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio-postgres]]
-version = "0.7.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-socks]]

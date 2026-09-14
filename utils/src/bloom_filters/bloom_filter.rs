@@ -80,19 +80,33 @@ impl<T: Hash> BloomFilter<T> {
         }
     }
 
-    fn indices(&self, value: &T) -> impl Iterator<Item = usize> + '_ {
+    fn indices(&self, value: &T) -> impl Iterator<Item = usize> {
+        Self::compute_indices(&self.hashers, self.bit_count, self.hash_count, value)
+    }
+
+    /// Computes the bit indices for the given value. Takes all the parameters by value or
+    /// reference to local data (as opposed to borrowing from `self`), so that it can be used
+    /// while `self.bits` is being mutated without any borrow gymnastics or allocations.
+    fn compute_indices(
+        hashers: &[SipHasher13; 2],
+        bit_count: usize,
+        hash_count: u32,
+        value: &T,
+    ) -> impl Iterator<Item = usize> {
         let hashes: [u64; 2] = {
-            let mut hash1 = self.hashers[0];
-            let mut hash2 = self.hashers[1];
+            let mut hash1 = hashers[0];
+            let mut hash2 = hashers[1];
             value.hash(&mut hash1);
             value.hash(&mut hash2);
             [hash1.finish(), hash2.finish()]
         };
 
-        let bit_count = self.bit_count as u64;
-        (0..self.hash_count).map(move |i| {
-            // The Kirsch-Mitzenmacher scheme: h1 + i*h2 + i^2, modulo the number of bits.
-            // 128-bit arithmetic is used to avoid overflows.
+        let bit_count = bit_count as u64;
+        (0..hash_count).map(move |i| {
+            // Enhanced double hashing: h1 + i*h2 + i^2, modulo the number of bits.
+            // (The extra quadratic term distinguishes it from the canonical
+            // Kirsch-Mitzenmacher scheme, which is fine for a bloom filter as long as
+            // the index mapping is deterministic.) 128-bit arithmetic avoids overflows.
             let idx = (hashes[0] as u128)
                 .wrapping_add((i as u128) * (hashes[1] as u128))
                 .wrapping_add((i as u128) * (i as u128));
@@ -102,17 +116,18 @@ impl<T: Hash> BloomFilter<T> {
 
     /// Inserts an element into the bloom filter
     pub fn insert(&mut self, value: &T) {
-        let indices: Vec<usize> = self.indices(value).collect();
-        for idx in indices {
+        let hashers = self.hashers;
+        let bit_count = self.bit_count;
+        let hash_count = self.hash_count;
+        for idx in Self::compute_indices(&hashers, bit_count, hash_count, value) {
             self.bits[idx / u64::BITS as usize] |= 1 << (idx % u64::BITS as usize);
         }
     }
 
     /// Checks if an element is possibly in the bloom filter
     pub fn contains(&self, value: &T) -> bool {
-        self.indices(value).all(|idx| {
-            self.bits[idx / u64::BITS as usize] & (1 << (idx % u64::BITS as usize)) != 0
-        })
+        self.indices(value)
+            .all(|idx| self.bits[idx / u64::BITS as usize] & (1 << (idx % u64::BITS as usize)) != 0)
     }
 
     /// Clears the bloom filter, removing all elements

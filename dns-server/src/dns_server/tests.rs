@@ -61,8 +61,7 @@ async fn dns_server_basic() {
         version: SemVer::new(1, 2, 3),
     };
 
-    let inner =
-        InMemoryZoneHandler::empty(host.clone(), ZoneType::Primary, AxfrPolicy::Deny);
+    let inner = InMemoryZoneHandler::empty(host.clone(), ZoneType::Primary, AxfrPolicy::Deny);
 
     let auth = AuthorityImpl {
         config,
@@ -156,11 +155,8 @@ mod same_software_version_addr_selection_test {
         };
         let cur_soft_info = SoftwareInfo::current(&chain_config);
 
-        let inner = InMemoryZoneHandler::empty(
-            config.host.clone(),
-            ZoneType::Primary,
-            AxfrPolicy::Deny,
-        );
+        let inner =
+            InMemoryZoneHandler::empty(config.host.clone(), ZoneType::Primary, AxfrPolicy::Deny);
         let auth = AuthorityImpl {
             config,
             chain_config: Arc::clone(&chain_config),
