@@ -131,15 +131,24 @@ fi
 # ---------------------------------------------------------------------------
 # Documentation: copyright, changelog, man pages
 # ---------------------------------------------------------------------------
+# The deb version always carries an explicit Debian revision (e.g. 1.4.0-1,
+# 1.4.0-rc1-1): without it the package looks "native", which changes lintian's
+# changelog-name expectations and dpkg's upgrade ordering.
+DEB_VERSION="$VERSION"
+case "$DEB_VERSION" in
+    *-*) ;;                  # already has a revision
+    *)  DEB_VERSION="${DEB_VERSION}-1" ;;
+esac
+
 DOC_DIR="$PKGDIR/usr/share/doc/$PKG_NAME"
 mkdir -p "$DOC_DIR"
 install -m 0644 "$PKG_ROOT/deb/copyright" "$DOC_DIR/copyright"
 install -m 0644 "$REPO_ROOT/LICENSE" "$DOC_DIR/LICENSE"
 
 CHANGELOG="$OUT_DIR/changelog.tmp"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$(date -R)/" \
+sed -e "s/@VERSION@/$DEB_VERSION/g" -e "s/@DATE@/$(date -R)/" \
     "$PKG_ROOT/deb/changelog.in" > "$CHANGELOG"
-gzip -n -9 -c "$CHANGELOG" > "$DOC_DIR/changelog.gz"
+gzip -n -9 -c "$CHANGELOG" > "$DOC_DIR/changelog.Debian.gz"
 rm -f "$CHANGELOG"
 
 # Man pages from --help output (binaries are executable on this host arch)
@@ -215,7 +224,7 @@ rm -rf "$SCRATCH" "$OUT_DIR/shlibs.tmp"
 
 INSTALLED_SIZE="$(du -sk --exclude=DEBIAN "$PKGDIR" | cut -f1)"
 
-sed -e "s/@VERSION@/$VERSION/g" \
+sed -e "s/@VERSION@/$DEB_VERSION/g" \
     -e "s/@DEBARCH@/$DEBARCH/g" \
     -e "s/@INSTALLED_SIZE@/$INSTALLED_SIZE/g" \
     -e "s/@SHLIBS@/$SHLIBS/g" \
