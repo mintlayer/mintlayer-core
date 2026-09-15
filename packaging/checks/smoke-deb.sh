@@ -4,7 +4,7 @@
 # Usage: smoke-deb.sh <path/to/pkg.deb> <package-name> node|gui
 set -euo pipefail
 
-DEB_FILE="$1"
+DEB_FILE="$(readlink -f "$1")"  # apt requires an unambiguous path
 PKG_NAME="$2"
 KIND="$3"
 
@@ -12,7 +12,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 
 apt-get install -y -qq systemd desktop-file-utils >/dev/null 2>&1 || true
-apt-get install -y -qq "./$DEB_FILE" >/dev/null
+apt-get install -y -qq "$DEB_FILE" >/dev/null
 
 echo "== dpkg status =="
 dpkg -s "$PKG_NAME" | grep -E "^(Status|Version|Depends):"
@@ -31,7 +31,11 @@ if [ "$KIND" = node ]; then
     done
 
     echo "== systemd units =="
-    for unit in /usr/lib/systemd/system/mintlayer-*.service; do
+    shopt -s nullglob
+    units=(/usr/lib/systemd/system/mintlayer-*.service)
+    shopt -u nullglob
+    [ ${#units[@]} -gt 0 ] || { echo "ERROR: no mintlayer units installed" >&2; exit 1; }
+    for unit in "${units[@]}"; do
         systemd-analyze verify "$unit"
         echo "  ok: $(basename "$unit")"
     done

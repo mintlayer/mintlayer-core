@@ -9,14 +9,24 @@ on:
   workflow_dispatch:
     inputs:
       binary_list:
-        description: 'Comma-separated list of binaries (unused by packaging scripts, kept for parity)'
+        description: 'Binaries bundled into the plain tar.gz artifacts (packaged debs/rpms always ship the full set)'
         required: false
         type: string
         default: 'api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon'
 
+concurrency:
+  group: release_linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FEDORA_IMAGE: fedora:44  # pinned for reproducible packaging; bump deliberately
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -25,6 +35,7 @@ jobs:
     - uses: actions/checkout@v5
       with:
         submodules: recursive
+        fetch-depth: 0  # git describe needs history for the dispatch fallback version
 
     # Register qemu binfmt handlers so `docker run --platform linux/arm64`
     # works on the arm64 matrix leg (needed for the debian:12 deb builder).
@@ -35,8 +46,12 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
-        [ "$VERSION" = "$GITHUB_REF" ] && VERSION="$(git describe --tags --abbrev=0 | sed -e 's/^v//')"
-        [ -n "$VERSION" ] || VERSION="0.0.0-ci"
+        if [ "$VERSION" = "$GITHUB_REF" ]; then
+          VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed -e 's/^v//' || true)"
+        fi
+        if [ -z "$VERSION" ]; then
+          VERSION="0.0.0-ci"
+        fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version extracted: $VERSION"
 
@@ -127,13 +142,13 @@ jobs:
     - name: Create RPM packages
       run: |
         ARCH=${{ matrix.arch }}
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
           packaging/rpm/build.sh \
             --package node --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
             --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
             --out /work/dist
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
           packaging/rpm/build.sh \
             --package gui --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
@@ -153,9 +168,9 @@ jobs:
     - name: Smoke test RPM packages
       run: |
         ARCH=${{ matrix.arch }}
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node node
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node-gui gui
 
     - name: Package Mintlayer Node (without GUI) as tar.gz

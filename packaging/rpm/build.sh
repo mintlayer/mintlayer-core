@@ -49,6 +49,13 @@ esac
 # Sanitize version for RPM (no dashes; 1.4.0-rc1 -> 1.4.0~rc1).
 # NOTE: do not use ${var//-/~} here — bash 5.3+ tilde-expands the replacement
 # word, turning '~' into $HOME.
+case "$VERSION" in
+    ''|*[!0-9.+-a-zA-Z~]*) echo "invalid --version: $VERSION" >&2; exit 2 ;;
+esac
+case "$VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;  # e.g. 1.4.0, 1.4.0-rc1
+    *) echo "invalid --version (expected X.Y.Z[-suffix]): $VERSION" >&2; exit 2 ;;
+esac
 RPM_VERSION="$(printf '%s' "$VERSION" | tr '-' '~')"
 
 # ---------------------------------------------------------------------------
@@ -175,6 +182,7 @@ install -m 0644 "$REPO_ROOT/LICENSE" "$TOPDIR/SOURCES/"
 # Build. Repackaging of prebuilt binaries only:
 #  - no debuginfo (binaries are not stripped here, none exists in buildroot)
 #  - strip/objdump disabled so brp scripts never touch foreign-arch ELFs
+# Output is printed in full (no filtering) so spec/payload errors are visible.
 # ---------------------------------------------------------------------------
 rpmbuild -bb \
     --define "_topdir $TOPDIR" \
@@ -184,33 +192,26 @@ rpmbuild -bb \
     --define "_buildrootdir $TOPDIR/BUILDROOT.dir" \
     --buildroot "$BR" \
     --target "$TARGET" \
-    "$TOPDIR/SPECS/$SPEC_NAME" 2>&1 | sed -n '/^Processing files/,$p' || {
-        echo "rpmbuild FAILED; rerun without output filter for details" >&2
-        rpmbuild -bb \
-            --define "_topdir $TOPDIR" \
-            --define "debug_package %{nil}" \
-            --define "__strip /bin/true" \
-            --define "__objdump /bin/true" \
-            --define "_buildrootdir $TOPDIR/BUILDROOT.dir" \
-            --buildroot "$BR" \
-            --target "$TARGET" \
-            "$TOPDIR/SPECS/$SPEC_NAME"
-    }
+    "$TOPDIR/SPECS/$SPEC_NAME"
 
-BUILT_RPM="$TOPDIR/RPMS/$RPMARCH/mintlayer-*.${RPMARCH}.rpm"
-[ -e $BUILT_RPM ] || { echo "expected rpm not found: $BUILT_RPM" >&2; exit 1; }
-mv $BUILT_RPM "$OUT_DIR/$ARTIFACT"
+# Pick up exactly the one rpm this build produced (no globs in mv).
+mapfile -t BUILT_RPMS < <(find "$TOPDIR/RPMS/$RPMARCH" -maxdepth 1 -name "mintlayer-*.${RPMARCH}.rpm")
+[ ${#BUILT_RPMS[@]} -eq 1 ] || {
+    echo "expected exactly one rpm in $TOPDIR/RPMS/$RPMARCH, found ${#BUILT_RPMS[@]}" >&2
+    exit 1
+}
+mv "${BUILT_RPMS[0]}" "$OUT_DIR/$ARTIFACT"
 rm -rf "$TOPDIR"
 
 echo "built $OUT_DIR/$ARTIFACT"
 
 # ---------------------------------------------------------------------------
-# Lint (errors fail; warnings are reported but allowed)
+# Lint. rpmlint exits non-zero when it reports errors (warnings still exit 0),
+# so gate on the exit code instead of parsing output lines: rpmlint keys lines
+# on the package NEVRA, which differs from the artifact filename.
 # ---------------------------------------------------------------------------
 dnf install -y -q rpmlint >/dev/null
-rpmlint "$OUT_DIR/$ARTIFACT" | tee "$OUT_DIR/rpmlint.log"
-RPM_BASE="$(basename "$ARTIFACT" | sed 's/\.rpm$//')"
-if grep -qE "^${RPM_BASE}\.[a-z0-9_]+: E:" "$OUT_DIR/rpmlint.log"; then
+if ! rpmlint "$OUT_DIR/$ARTIFACT"; then
     echo "rpmlint found errors in $ARTIFACT" >&2
     exit 1
 fi

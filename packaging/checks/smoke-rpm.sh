@@ -4,12 +4,12 @@
 # Usage: smoke-rpm.sh <path/to/pkg.rpm> <package-name> node|gui
 set -euo pipefail
 
-RPM_FILE="$1"
+RPM_FILE="$(readlink -f "$1")"
 PKG_NAME="$2"
 KIND="$3"
 
-dnf install -y -q systemd desktop-file-utils >/dev/null 2>&1 || true
-dnf install -y -q "./$RPM_FILE" >/dev/null
+dnf install -y -q systemd desktop-file-utils >/dev/null
+dnf install -y -q "$RPM_FILE" >/dev/null
 
 echo "== rpm query =="
 rpm -q "$PKG_NAME"
@@ -29,7 +29,11 @@ if [ "$KIND" = node ]; then
     done
 
     echo "== systemd units =="
-    for unit in /usr/lib/systemd/system/mintlayer-*.service; do
+    shopt -s nullglob
+    units=(/usr/lib/systemd/system/mintlayer-*.service)
+    shopt -u nullglob
+    [ ${#units[@]} -gt 0 ] || { echo "ERROR: no mintlayer units installed" >&2; exit 1; }
+    for unit in "${units[@]}"; do
         systemd-analyze verify "$unit"
         echo "  ok: $(basename "$unit")"
     done
@@ -39,6 +43,7 @@ if [ "$KIND" = node ]; then
     test -f /usr/lib/sysusers.d/mintlayer.conf
     test -f /usr/lib/udev/rules.d/51-mintlayer.rules
     test -f /etc/mintlayer/mainnet/node.env
+    test -f /etc/mintlayer/testnet/node.env
     echo "  ok: preset/sysusers/udev/conffiles present"
 
     echo "== man pages =="

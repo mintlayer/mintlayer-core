@@ -2,8 +2,11 @@
 # prerm for mintlayer-node
 set -e
 
-if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
-    if command -v deb-systemd-invoke >/dev/null 2>&1; then
+# Stop the daemons on remove AND on upgrade: during upgrade the binaries are
+# replaced, so running instances must be stopped (postinst starts the new
+# ones afterwards). The glob patterns stop every enabled chain instance.
+if [ "$1" = remove ] || [ "$1" = upgrade ]; then
+    if [ -d /run/systemd/system ] && command -v deb-systemd-invoke >/dev/null 2>&1; then
         deb-systemd-invoke stop 'mintlayer-node@*.service' 'mintlayer-wallet-rpc@*.service' \
             'mintlayer-api-web-server@*.service' 'mintlayer-api-blockchain-scanner@*.service' \
             'mintlayer-dns-server@*.service' >/dev/null || true

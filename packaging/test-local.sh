@@ -81,7 +81,9 @@ ARCHES=(x86_64)
 declare -A BIN_DIR
 for arch in "${ARCHES[@]}"; do
     BIN_DIR[$arch]="$REPO_ROOT/target/$arch-unknown-linux-gnu/release"
-    [ "$arch" = x86_64 ] && BIN_DIR[$arch]="$REPO_ROOT/target/release"
+    if [ "$arch" = x86_64 ]; then
+        BIN_DIR[$arch]="$REPO_ROOT/target/release"
+    fi
 done
 if [ "$SKIP_BUILD" -eq 1 ]; then
     if [ -n "$BINARIES_OVERRIDE" ]; then
@@ -90,7 +92,8 @@ if [ "$SKIP_BUILD" -eq 1 ]; then
         done
     fi
 RESULTS=()
-run_step() { # run_step <label> <cmd...>
+FAILED=0
+run_step() { # run_step <label> <cmd...> — records the result, never aborts
     local label="$1"; shift
     echo ""
     echo "=== $label ==="
@@ -99,8 +102,9 @@ run_step() { # run_step <label> <cmd...>
     else
         local rc=$?
         RESULTS+=("FAIL  $label (rc=$rc)")
-        return $rc
+        FAILED=1
     fi
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -164,7 +168,9 @@ declare -A DEBARCH=( [x86_64]=amd64 [aarch64]=arm64 )
 for arch in "${ARCHES[@]}"; do
     debarch="${DEBARCH[$arch]}"
     platform=""
-    [ "$arch" != "$(uname -m)" ] && platform="--platform linux/$arch"
+    if [ "$arch" != "$(uname -m)" ]; then
+        platform="--platform linux/$arch"
+    fi
 
     # Binaries dir as seen from inside the /work-mounted container
     rel_bin_dir="${BIN_DIR[$arch]#"$REPO_ROOT"}"
@@ -227,17 +233,18 @@ done
 # ---------------------------------------------------------------------------
 PAIRS=()
 for arch in "${ARCHES[@]}"; do PAIRS+=("${DEBARCH[$arch]}:$arch"); done
-run_step "artifact names" packaging/checks/verify-artifacts.sh "$DIST" "$VERSION" "${PAIRS[@]}" || true
+run_step "artifact names" packaging/checks/verify-artifacts.sh "$DIST" "$VERSION" "${PAIRS[@]}"
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
 echo "================ SUMMARY ($VERSION) ================"
-FAILED=0
 for r in "${RESULTS[@]}"; do
     echo "  $r"
-    [[ "$r" == FAIL* ]] && FAILED=1
+    if [[ "$r" == FAIL* ]]; then
+        FAILED=1
+    fi
 done
 echo "===================================================="
 if [ "$FAILED" -eq 0 ]; then

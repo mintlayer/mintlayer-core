@@ -129,14 +129,24 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Documentation: copyright, changelog, man pages
+# Version handling
 # ---------------------------------------------------------------------------
+# Guard against sed metacharacters and nonsense versions from the tag input.
+case "$VERSION" in
+    ''|*[!0-9.+-a-zA-Z~]*) echo "invalid --version: $VERSION" >&2; exit 2 ;;
+esac
+case "$VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;  # e.g. 1.4.0, 1.4.0-rc1, 1.4.0-rc1-1
+    *) echo "invalid --version (expected X.Y.Z[-suffix]): $VERSION" >&2; exit 2 ;;
+esac
+
 # The deb version always carries an explicit Debian revision (e.g. 1.4.0-1,
 # 1.4.0-rc1-1): without it the package looks "native", which changes lintian's
-# changelog-name expectations and dpkg's upgrade ordering.
+# changelog-name expectations and dpkg's upgrade ordering. A revision must
+# start with a digit, so a tag suffix like "1.4.0-rc1" gets "-1" appended too.
 DEB_VERSION="$VERSION"
 case "$DEB_VERSION" in
-    *-*) ;;                  # already has a revision
+    *-[0-9]*) ;;             # final dash-separated component is a real revision
     *)  DEB_VERSION="${DEB_VERSION}-1" ;;
 esac
 
@@ -191,9 +201,12 @@ done
 }
 
 # Strip binaries as distro packages do (the unstripped binaries remain
-# available in the tar.gz release artifact).
+# available in the tar.gz release artifact). The if-guard keeps a
+# "already stripped" match failure from tripping errexit.
 for binpath in "$PKGDIR"/usr/bin/*; do
-    file "$binpath" | grep -q "not stripped" && strip --strip-unneeded "$binpath"
+    if file "$binpath" | grep -q "not stripped"; then
+        strip --strip-unneeded "$binpath"
+    fi
 done
 
 # ---------------------------------------------------------------------------
@@ -216,11 +229,17 @@ Description: scratch control for dpkg-shlibdeps
  Placeholder used only to satisfy dpkg-shlibdeps.
 EOF
 
-SHLIBS=""
-( cd "$SCRATCH" && dpkg-shlibdeps -O "$PKGDIR"/usr/bin/* 2>/dev/null ) | \
-    grep -o 'shlibs:Depends=.*' | cut -d= -f2- > "$OUT_DIR/shlibs.tmp" || true
-SHLIBS="$(cat "$OUT_DIR/shlibs.tmp")"
-rm -rf "$SCRATCH" "$OUT_DIR/shlibs.tmp"
+# dpkg-shlibdeps must succeed: a silent failure here would ship a package
+# with an empty Depends field.
+SHLIBS_FILE="$OUT_DIR/shlibs.tmp"
+( cd "$SCRATCH" && dpkg-shlibdeps -O "$PKGDIR"/usr/bin/* ) | \
+    grep -o 'shlibs:Depends=.*' | cut -d= -f2- > "$SHLIBS_FILE"
+SHLIBS="$(cat "$SHLIBS_FILE")"
+[ -n "$SHLIBS" ] || {
+    echo "dpkg-shlibdeps produced no dependencies; refusing to ship without Depends" >&2
+    exit 1
+}
+rm -rf "$SCRATCH" "$SHLIBS_FILE"
 
 INSTALLED_SIZE="$(du -sk --exclude=DEBIAN "$PKGDIR" | cut -f1)"
 

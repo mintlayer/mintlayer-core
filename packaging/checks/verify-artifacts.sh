@@ -11,6 +11,10 @@ shift 2
 
 MISSING=0
 for pair in "$@"; do
+    if [[ "$pair" != *:* || "$pair" == *:*:* ]]; then
+        echo "invalid arch pair: '$pair' (expected debarch:rpmarch, e.g. amd64:x86_64)" >&2
+        exit 2
+    fi
     DEBARCH="${pair%%:*}"
     RPMARCH="${pair##*:}"
 
