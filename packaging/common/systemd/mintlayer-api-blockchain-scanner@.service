@@ -1,0 +1,42 @@
+# Template unit: one instance per chain.
+#   1. Edit /etc/mintlayer/<chain>/api-blockchain-scanner.env and set ARGS
+#      (the scanner needs access to the same Postgres database as the api web
+#      server and a running node).
+#   2. systemctl enable --now mintlayer-api-blockchain-scanner@<chain>.service
+[Unit]
+Description=Mintlayer API Blockchain Scanner (%i)
+Documentation=https://github.com/mintlayer/mintlayer-core
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mintlayer
+Group=mintlayer
+EnvironmentFile=-/etc/mintlayer/%i/api-blockchain-scanner.env
+ExecStart=/usr/bin/mintlayer-api-blockchain-scanner-daemon ${ARGS}
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=120s
+LimitNOFILE=65535
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

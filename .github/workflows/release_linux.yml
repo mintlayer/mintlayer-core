@@ -6,6 +6,13 @@ on:
       binary_list:
         required: true
         type: string
+  workflow_dispatch:
+    inputs:
+      binary_list:
+        description: 'Comma-separated list of binaries (unused by packaging scripts, kept for parity)'
+        required: false
+        type: string
+        default: 'api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon'
 
 jobs:
   build:
@@ -23,6 +30,8 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
+        [ "$VERSION" = "$GITHUB_REF" ] && VERSION="$(git describe --tags --abbrev=0 | sed -e 's/^v//')"
+        [ -n "$VERSION" ] || VERSION="0.0.0-ci"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version extracted: $VERSION"
 
@@ -62,13 +71,12 @@ jobs:
           sudo apt-get update
 
           sudo apt-get install -y \
-            rpm \
             libdbus-1-dev \
             libusb-1.0-0-dev \
             libudev-dev
         fi
 
-        sudo apt-get install -y debhelper zip imagemagick pkg-config
+        sudo apt-get install -y zip pkg-config
 
     - name: Build
       env:
@@ -77,129 +85,60 @@ jobs:
       run: |
         cargo build --release --locked --target ${{ matrix.arch }}-unknown-linux-gnu --features trezor,ledger
 
-    - name: Create Debian package for GUI
+    # GH-hosted ubuntu runners ship qemu-user-static + binfmt, so
+    # `docker run --platform linux/arm64` works out of the box: the arm64 leg
+    # runs the deb builder inside an arm64 debian:12 container. The same
+    # scripts run locally via packaging/test-local.sh.
+    - name: Create Debian packages
       run: |
-        mkdir -p debian-gui/DEBIAN
-        mkdir -p debian-gui/usr/bin
-        mkdir -p debian-gui/usr/share/applications
-        mkdir -p debian-gui/usr/share/icons/hicolor/512x512/apps
-        mkdir -p debian-gui/usr/share/icons/hicolor/256x256/apps
-        mkdir -p debian-gui/usr/share/icons/hicolor/128x128/apps
-        mkdir -p debian-gui/usr/share/icons/hicolor/64x64/apps
-        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui debian-gui/usr/bin/mintlayer-node-gui
+        ARCH=${{ matrix.arch }}
+        if [ "$ARCH" = "x86_64" ]; then DEBARCH=amd64; else DEBARCH=arm64; fi
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work debian:12 \
+          packaging/deb/build.sh \
+            --package node --version "${{ steps.get_version.outputs.VERSION }}" \
+            --debarch $DEBARCH \
+            --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
+            --out /work/dist
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work debian:12 \
+          packaging/deb/build.sh \
+            --package gui --version "${{ steps.get_version.outputs.VERSION }}" \
+            --debarch $DEBARCH \
+            --gui-binary /work/target/$ARCH-unknown-linux-gnu/release/node-gui \
+            --repo-root /work --out /work/dist
 
-        # Copy and convert icon files
-        cp build-tools/assets/node-gui-icon_512.png debian-gui/usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
-        convert build-tools/assets/node-gui-icon_512.png -resize 256x256 debian-gui/usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
-        convert build-tools/assets/node-gui-icon_512.png -resize 128x128 debian-gui/usr/share/icons/hicolor/128x128/apps/mintlayer-node-gui.png
-        convert build-tools/assets/node-gui-icon_512.png -resize 64x64 debian-gui/usr/share/icons/hicolor/64x64/apps/mintlayer-node-gui.png
-
-        # Create .desktop file
-        cat << EOF > debian-gui/usr/share/applications/mintlayer-node-gui.desktop
-        [Desktop Entry]
-        Name=Mintlayer Node GUI
-        Exec=/usr/bin/mintlayer-node-gui
-        Icon=mintlayer-node-gui
-        Type=Application
-        Categories=Utility;Network;
-        EOF
-
-        cat << EOF > debian-gui/DEBIAN/control
-        Package: mintlayer-node-gui
-        Version: ${{ steps.get_version.outputs.VERSION }}
-        Section: utils
-        Priority: optional
-        Architecture: ${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}
-        Maintainer: Mintlayer <devs@mintlayer.org>
-        Description: Mintlayer Node GUI
-         A graphical user interface for the Mintlayer node.
-        EOF
-        dpkg-deb --build debian-gui
-        mv debian-gui.deb Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
-
-    - name: Create Debian package for Node (without GUI)
+    - name: Create RPM packages
       run: |
-        mkdir -p debian-node/DEBIAN
-        mkdir -p debian-node/usr/bin
-        IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
-        for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary debian-node/usr/bin/mintlayer-$binary
-        done
-        cat << EOF > debian-node/DEBIAN/control
-        Package: mintlayer-node
-        Version: ${{ steps.get_version.outputs.VERSION }}
-        Section: utils
-        Priority: optional
-        Architecture: ${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}
-        Maintainer: Mintlayer <devs@mintlayer.org>
-        Description: Mintlayer Node
-         Mintlayer node and associated tools.
-        EOF
-        dpkg-deb --build debian-node
-        mv debian-node.deb Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        ARCH=${{ matrix.arch }}
+        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+          packaging/rpm/build.sh \
+            --package node --rpmarch $ARCH \
+            --version "${{ steps.get_version.outputs.VERSION }}" \
+            --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
+            --out /work/dist
+        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+          packaging/rpm/build.sh \
+            --package gui --rpmarch $ARCH \
+            --version "${{ steps.get_version.outputs.VERSION }}" \
+            --gui-binary /work/target/$ARCH-unknown-linux-gnu/release/node-gui \
+            --repo-root /work --out /work/dist
 
-    - name: Create RPM package for GUI
-      if: matrix.arch == 'x86_64'
+    # Install smoke tests in fresh containers (same images as production use)
+    - name: Smoke test Debian packages
       run: |
-        mkdir -p rpm-gui/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        mkdir -p rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64
-        cp -r debian-gui/usr rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64/
+        ARCH=${{ matrix.arch }}
+        if [ "$ARCH" = "x86_64" ]; then DEBARCH=amd64; else DEBARCH=arm64; fi
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work debian:12 \
+          packaging/checks/smoke-deb.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${DEBARCH}.deb mintlayer-node node
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work debian:12 \
+          packaging/checks/smoke-deb.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${DEBARCH}.deb mintlayer-node-gui gui
 
-        cat << EOF > rpm-gui/SPECS/mintlayer-node-gui.spec
-        Name: mintlayer-node-gui
-        Version: ${{ steps.get_version.outputs.VERSION }}
-        Release: 1
-        Summary: Mintlayer Node GUI
-        License: MIT
-        BuildArch: x86_64
-
-        %description
-        A graphical user interface for the Mintlayer node.
-
-        %files
-        /usr/bin/mintlayer-node-gui
-        /usr/share/applications/mintlayer-node-gui.desktop
-        /usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
-        /usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
-        /usr/share/icons/hicolor/128x128/apps/mintlayer-node-gui.png
-        /usr/share/icons/hicolor/64x64/apps/mintlayer-node-gui.png
-
-        %changelog
-        * $(date "+%a %b %d %Y") Mintlayer <devs@mintlayer.org> - ${{ steps.get_version.outputs.VERSION }}-1
-        - Initial RPM release
-        EOF
-
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" --buildroot $(pwd)/rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64 rpm-gui/SPECS/mintlayer-node-gui.spec
-        mv rpm-gui/RPMS/x86_64/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
-
-    - name: Create RPM package for Node (without GUI)
-      if: matrix.arch == 'x86_64'
+    - name: Smoke test RPM packages
       run: |
-        mkdir -p rpm-node/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        mkdir -p rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64
-        cp -r debian-node/usr rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64/
-
-        cat << EOF > rpm-node/SPECS/mintlayer-node.spec
-        Name: mintlayer-node
-        Version: ${{ steps.get_version.outputs.VERSION }}
-        Release: 1
-        Summary: Mintlayer Node
-        License: MIT
-        BuildArch: x86_64
-
-        %description
-        Mintlayer node and associated tools.
-
-        %files
-        /usr/bin/*
-
-        %changelog
-        * $(date "+%a %b %d %Y") Mintlayer <devs@mintlayer.org> - ${{ steps.get_version.outputs.VERSION }}-1
-        - Initial RPM release
-        EOF
-
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" --buildroot $(pwd)/rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64 rpm-node/SPECS/mintlayer-node.spec
-        mv rpm-node/RPMS/x86_64/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
+        ARCH=${{ matrix.arch }}
+        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+          packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node node
+        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+          packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node-gui gui
 
     - name: Package Mintlayer Node (without GUI) as tar.gz
       run: |
@@ -213,34 +152,32 @@ jobs:
     - name: Package Mintlayer Node GUI as tar.gz
       run: |
         mkdir -p Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
-        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/mintlayer-node-gui
-        tar -czvf Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.tar.gz Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
-
-    - name: Upload GUI DEB Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
-        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/mintlayer-node-gui
+        tar -czvf Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.tar.gz Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
 
     - name: Upload Node DEB Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
-        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+
+    - name: Upload GUI DEB Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
+        path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+
+    - name: Upload Node RPM Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.rpm
 
     - name: Upload GUI RPM Artifact
-      if: matrix.arch == 'x86_64'
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64_rpm
-        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
-
-    - name: Upload Node RPM Artifact (without GUI)
-      if: matrix.arch == 'x86_64'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64_rpm
-        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.rpm
 
     - name: List tar.gz files
       run: |

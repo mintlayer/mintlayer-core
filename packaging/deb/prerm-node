@@ -1,0 +1,13 @@
+#!/bin/sh
+# prerm for mintlayer-node
+set -e
+
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    if command -v deb-systemd-invoke >/dev/null 2>&1; then
+        deb-systemd-invoke stop 'mintlayer-node@*.service' 'mintlayer-wallet-rpc@*.service' \
+            'mintlayer-api-web-server@*.service' 'mintlayer-api-blockchain-scanner@*.service' \
+            'mintlayer-dns-server@*.service' >/dev/null || true
+    fi
+fi
+
+exit 0

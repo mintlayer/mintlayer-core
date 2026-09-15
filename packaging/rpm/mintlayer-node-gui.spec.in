@@ -1,0 +1,27 @@
+Name:           mintlayer-node-gui
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Mintlayer Node GUI
+
+License:        MIT
+URL:            https://github.com/mintlayer/mintlayer-core
+Source0:        LICENSE
+
+Requires:       hicolor-icon-theme
+Recommends:     mintlayer-node
+
+%description
+A graphical user interface for the Mintlayer node.
+
+Recommends the mintlayer-node package for Ledger/Trezor udev rules.
+
+%files
+%license /usr/share/licenses/mintlayer-node-gui/LICENSE
+%{_bindir}/mintlayer-node-gui
+%{_datadir}/applications/mintlayer-node-gui.desktop
+%{_datadir}/icons/hicolor/*/apps/mintlayer-node-gui.png
+%{_mandir}/man1/mintlayer-node-gui.1.gz
+
+%changelog
+* @RPM_DATE@ Mintlayer <devs@mintlayer.org> - @VERSION@-1
+- Mintlayer release @VERSION@.

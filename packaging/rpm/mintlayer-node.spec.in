@@ -1,0 +1,64 @@
+Name:           mintlayer-node
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Mintlayer node and associated tools
+
+License:        MIT
+URL:            https://github.com/mintlayer/mintlayer-core
+Source0:        LICENSE
+Source1:        mintlayer.conf
+Source2:        90-mintlayer.preset
+
+Requires:       systemd
+Suggests:       postgresql-server
+
+%description
+Mintlayer full node daemon, wallet RPC daemon, API server components,
+DNS seed server and command line wallet tools.
+
+This package includes systemd units for running the node daemon as a
+system service (the mainnet instance is enabled by default; all other
+services are opt-in) and udev rules for Ledger and Trezor hardware
+wallets.
+
+%pre
+%sysusers_create_package mintlayer-node %{SOURCE1}
+
+%post
+%systemd_post mintlayer-node@mainnet.service
+udevadm control --reload-rules >/dev/null 2>&1 || :
+udevadm trigger --subsystem-match=hidraw >/dev/null 2>&1 || :
+
+%preun
+%systemd_preun mintlayer-node@mainnet.service
+
+%postun
+%systemd_postun mintlayer-node@mainnet.service
+
+%files
+%license /usr/share/licenses/mintlayer-node/LICENSE
+%{_bindir}/mintlayer-node-daemon
+%{_bindir}/mintlayer-wallet-rpc-daemon
+%{_bindir}/mintlayer-api-web-server
+%{_bindir}/mintlayer-api-blockchain-scanner-daemon
+%{_bindir}/mintlayer-dns-server
+%{_bindir}/mintlayer-wallet-cli
+%{_bindir}/mintlayer-wallet-address-generator
+%{_unitdir}/mintlayer-node@.service
+%{_unitdir}/mintlayer-wallet-rpc@.service
+%{_unitdir}/mintlayer-api-web-server@.service
+%{_unitdir}/mintlayer-api-blockchain-scanner@.service
+%{_unitdir}/mintlayer-dns-server@.service
+%{_prefix}/lib/sysusers.d/mintlayer.conf
+%{_prefix}/lib/systemd/system-preset/90-mintlayer.preset
+%{_udevrulesdir}/51-mintlayer.rules
+%{_mandir}/man1/mintlayer-*.1.gz
+%dir %attr(0755,root,root) %{_sysconfdir}/mintlayer
+%dir %attr(0755,root,root) %{_sysconfdir}/mintlayer/mainnet
+%dir %attr(0755,root,root) %{_sysconfdir}/mintlayer/testnet
+%config(noreplace) %{_sysconfdir}/mintlayer/mainnet/*.env
+%config(noreplace) %{_sysconfdir}/mintlayer/testnet/*.env
+
+%changelog
+* @RPM_DATE@ Mintlayer <devs@mintlayer.org> - @VERSION@-1
+- Mintlayer release @VERSION@.
