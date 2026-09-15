@@ -279,4 +279,25 @@ mod permissions_tests {
             "database permissions must be repaired"
         );
     }
+
+    #[test]
+    fn pre_existing_directory_permissions_are_left_untouched() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("existing");
+        std::fs::create_dir(&db_dir).unwrap();
+        std::fs::set_permissions(&db_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        // Document the intentional behavior: a pre-existing (possibly permissive) directory
+        // is not modified; only the database file itself is protected.
+        assert_eq!(
+            mode(&db_dir),
+            0o755,
+            "pre-existing directory permissions must be left untouched"
+        );
+        assert_eq!(mode(&db_path), 0o600, "database file must still be 0600");
+    }
 }

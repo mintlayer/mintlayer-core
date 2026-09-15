@@ -44,10 +44,23 @@ use storage_core::{Data, DbDesc, DbMapId, backend};
 fn ensure_private_directory(dir: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    let need_create = !dir.exists();
-    std::fs::create_dir_all(dir)?;
+    // Determine whether this call creates the directory by attempting an atomic create_dir
+    // first, instead of a racy exists() check: if the leaf already exists its permissions
+    // are deliberately left untouched (it may be shared with unrelated data), otherwise it
+    // was created by this call and is immediately tightened to 0700.
+    let created = match std::fs::create_dir(dir) {
+        Ok(()) => true,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            // Some parent component was missing; create the whole path. The leaf did not
+            // exist in this case either, so it was created by this call as well.
+            std::fs::create_dir_all(dir)?;
+            true
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(err) => return Err(err),
+    };
 
-    if need_create {
+    if created {
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     }
 
