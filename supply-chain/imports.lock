@@ -397,7 +397,7 @@ version = "0.1.1"
 when = "2020-09-15"
 user-id = 2396
 user-login = "jdm"
-user-name = "Josh Matthews"
+user-name = "Josh Bowman-Matthews"
 
 [[publisher.cpufeatures]]
 version = "0.2.17"
@@ -1401,8 +1401,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.rustls]]
-version = "0.23.36"
-when = "2026-01-05"
+version = "0.23.45"
+when = "2026-09-14"
 user-id = 2751
 user-login = "ctz"
 user-name = "Joe Birr-Pixton"
@@ -1436,11 +1436,11 @@ user-login = "cpu"
 user-name = "Daniel McCarney"
 
 [[publisher.rustls-webpki]]
-version = "0.103.13"
-when = "2026-04-21"
-user-id = 2751
-user-login = "ctz"
-user-name = "Joe Birr-Pixton"
+version = "0.103.15"
+when = "2026-08-21"
+user-id = 209038
+user-login = "cpu"
+user-name = "Daniel McCarney"
 
 [[publisher.rustversion]]
 version = "1.0.22"
@@ -2515,14 +2515,14 @@ version = "0.8.39"
 when = "2026-02-05"
 user-id = 7178
 user-login = "joshlf"
-user-name = "Joshua Liebow-Feeser"
+user-name = "Josh Liebow-Feeser"
 
 [[publisher.zerocopy-derive]]
 version = "0.8.39"
 when = "2026-02-05"
 user-id = 7178
 user-login = "joshlf"
-user-name = "Joshua Liebow-Feeser"
+user-name = "Josh Liebow-Feeser"
 
 [[publisher.zeroize]]
 version = "1.8.2"
@@ -4446,7 +4446,7 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 [[audits.mozilla.wildcard-audits.core-graphics-types]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 2396 # Josh Matthews (jdm)
+user-id = 2396 # Josh Bowman-Matthews (jdm)
 start = "2020-07-20"
 end = "2023-05-04"
 renew = false
@@ -4458,8 +4458,8 @@ who = "Henri Sivonen <hsivonen@hsivonen.fi>"
 criteria = "safe-to-deploy"
 user-id = 4484 # Henri Sivonen (hsivonen)
 start = "2019-02-26"
-end = "2025-10-23"
-notes = "I, Henri Sivonen, wrote encoding_rs for Gecko and have reviewed contributions by others. There are two caveats to the certification: 1) The crate does things that are documented to be UB but that do not appear to actually be UB due to integer types differing from the general rule; https://github.com/hsivonen/encoding_rs/issues/79 . 2) It would be prudent to re-review the code that reinterprets buffers of integers as SIMD vectors; see https://github.com/hsivonen/encoding_rs/issues/87 ."
+end = "2027-09-07"
+notes = "I, Henri Sivonen, wrote encoding_rs for Gecko and have reviewed contributions by others."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.wildcard-audits.etagere]]

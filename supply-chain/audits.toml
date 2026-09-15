@@ -2075,13 +2075,13 @@ end = "2026-10-15"
 
 [[trusted.zerocopy]]
 criteria = "safe-to-deploy"
-user-id = 7178 # Joshua Liebow-Feeser (joshlf)
+user-id = 7178 # Josh Liebow-Feeser (joshlf)
 start = "2019-02-28"
 end = "2026-10-15"
 
 [[trusted.zerocopy-derive]]
 criteria = "safe-to-deploy"
-user-id = 7178 # Joshua Liebow-Feeser (joshlf)
+user-id = 7178 # Josh Liebow-Feeser (joshlf)
 start = "2019-02-28"
 end = "2026-10-15"
 
