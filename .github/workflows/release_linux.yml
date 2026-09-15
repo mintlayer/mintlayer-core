@@ -18,12 +18,17 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         arch: [aarch64, x86_64]
     steps:
     - uses: actions/checkout@v5
       with:
         submodules: recursive
+
+    # Register qemu binfmt handlers so `docker run --platform linux/arm64`
+    # works on the arm64 matrix leg (needed for the debian:12 deb builder).
+    - uses: docker/setup-qemu-action@v3
 
     - name: Extract version from tag
       id: get_version
