@@ -33,6 +33,44 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use error::process_sqlite_error;
 use storage_core::{Data, DbDesc, DbMapId, backend};
 
+/// The database can contain highly sensitive data (wallet databases store private keys and
+/// optionally the seed phrase), so it must never be readable by other users.
+///
+/// If the directory does not exist, it is created with owner-only permissions (0700), which
+/// also protects the auxiliary files that Sqlite creates (rollback journal, WAL,
+/// shared-memory, temporary files). The permissions of pre-existing directories are left
+/// untouched, since they may be shared with unrelated data.
+#[cfg(unix)]
+fn ensure_private_directory(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let need_create = !dir.exists();
+    std::fs::create_dir_all(dir)?;
+
+    if need_create {
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+
+    Ok(())
+}
+
+/// Create the database file atomically with owner-only permissions (0600), so that its
+/// (temporarily empty) contents are never observable by other users. If the file already
+/// exists, its permissions are repaired to 0600 instead. Returns whether the file was created.
+#[cfg(unix)]
+fn create_private_file(path: &Path) -> std::io::Result<bool> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    match std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path) {
+        Ok(_file) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 use crate::queries::SqliteQueries;
 
 // Note: DbTx holds the mutex itself and locks it on every operation instead of just holding a lock
@@ -441,6 +479,9 @@ impl backend::Backend for Sqlite {
 
         if let SqliteStorageMode::File(ref path) = self.backend {
             if let Some(parent) = path.parent() {
+                #[cfg(unix)]
+                ensure_private_directory(parent).map_err(error::process_io_error)?;
+                #[cfg(not(unix))]
                 std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
             } else {
                 return Err(storage_core::error::Fatal::Io(
@@ -449,6 +490,11 @@ impl backend::Backend for Sqlite {
                 )
                 .into());
             }
+
+            // Pre-create the database file with owner-only permissions so that Sqlite never
+            // creates it with the default (world-readable) permissions.
+            #[cfg(unix)]
+            create_private_file(path).map_err(error::process_io_error)?;
         }
 
         let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);

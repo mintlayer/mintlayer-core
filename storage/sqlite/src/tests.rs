@@ -222,3 +222,61 @@ fn db_open_in_memory_named() {
         assert!(dbtx.get(MAPID.0, b"hello").unwrap().is_none());
     }
 }
+
+/// Verify that newly created (and pre-existing) wallet databases get owner-only permissions
+/// on Unix, protecting the sensitive data (private keys, seed phrase) stored inside.
+#[cfg(unix)]
+mod permissions_tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::Sqlite;
+    use storage_backend_test_suite::prelude::desc;
+    use storage_core::{DbDesc, backend::Backend};
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    fn make_desc() -> DbDesc {
+        desc(1)
+    }
+
+    #[test]
+    fn newly_created_db_has_owner_only_permissions() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("subdir");
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        assert_eq!(mode(&db_dir), 0o700, "directory must be 0700");
+        assert_eq!(mode(&db_path), 0o600, "database file must be 0600");
+    }
+
+    #[test]
+    fn insecure_permissions_of_existing_db_are_repaired() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let db_path = tmp.join("wallet.db");
+
+        // Create the database, then weaken the file permissions like a pre-fix installation.
+        // Note: the directory here is pre-existing (tempfile), so its permissions are left
+        // untouched (it may be shared with unrelated data); only the database file itself
+        // must be repaired.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        // Re-open: the file permissions must be repaired.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        assert_eq!(
+            mode(&db_path),
+            0o600,
+            "database permissions must be repaired"
+        );
+    }
+}
