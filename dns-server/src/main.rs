@@ -143,6 +143,7 @@ async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
                     open_storage(open_storage_backend(storage_data_dir))
                 }
                 DnsServerError::ProtoError(_)
+                | DnsServerError::NetError(_)
                 | DnsServerError::AddrParseError(_)
                 | DnsServerError::IoError(_)
                 | DnsServerError::P2pError(_)
