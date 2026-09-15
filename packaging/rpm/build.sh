@@ -46,13 +46,16 @@ case "$RPMARCH" in
     *) echo "invalid --rpmarch: $RPMARCH" >&2; exit 2 ;;
 esac
 
-# Sanitize version for RPM (no dashes; 1.4.0-rc1 -> 1.4.0~rc1)
-RPM_VERSION="${VERSION//-/~}"
+# Sanitize version for RPM (no dashes; 1.4.0-rc1 -> 1.4.0~rc1).
+# NOTE: do not use ${var//-/~} here — bash 5.3+ tilde-expands the replacement
+# word, turning '~' into $HOME.
+RPM_VERSION="$(printf '%s' "$VERSION" | tr '-' '~')"
 
 # ---------------------------------------------------------------------------
 # Self-provision build dependencies (no-ops when already present)
 # ---------------------------------------------------------------------------
-dnf install -y -q rpm-build systemd-rpm-macros help2man file binutils >/dev/null
+dnf install -y -q rpm-build systemd-rpm-macros help2man file binutils \
+    dbus-libs libusb1 systemd-libs >/dev/null
 
 mkdir -p "$OUT_DIR"
 TOPDIR="$OUT_DIR/rpmbuild-$PACKAGE"
@@ -113,13 +116,19 @@ fi
 SPEC_NAME="${SPEC_IN%.spec.in}.spec"
 
 # ---------------------------------------------------------------------------
-# Strip binaries as distro packages do (before man pages are generated, so
-# help2man still works — stripping does not affect --help).
+# Strip binaries as distro packages do — but only when the container arch
+# matches the target: fedora's binutils cannot handle foreign-arch ELF
+# ("Unable to recognise the architecture"), so cross-target packages (e.g.
+# aarch64 rpms built on an x86_64 runner) ship unstripped.
 # ---------------------------------------------------------------------------
-dnf install -y -q binutils >/dev/null
-for binpath in "$BR"/usr/bin/*; do
-    file "$binpath" | grep -q "not stripped" && strip --strip-unneeded "$binpath"
-done
+HOST_ARCH="$(uname -m)"
+if [ "$RPMARCH" = "$HOST_ARCH" ]; then
+    for binpath in "$BR"/usr/bin/*; do
+        file "$binpath" | grep -q "not stripped" && strip --strip-unneeded "$binpath"
+    done
+else
+    echo "cross-target build ($HOST_ARCH container, $RPMARCH target): skipping strip"
+fi
 
 # ---------------------------------------------------------------------------
 # Man pages from --help output
