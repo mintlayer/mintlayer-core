@@ -90,6 +90,17 @@ jobs:
       run: |
         cargo build --release --locked --target ${{ matrix.arch }}-unknown-linux-gnu --features trezor,ledger
 
+    # Shared hicolor icon set for the GUI packages (deb and rpm builders
+    # consume it; avoids ImageMagick in the fedora container).
+    - name: Pre-generate icons
+      run: |
+        docker run --rm --platform linux/${{ matrix.arch }} -v "$PWD":/work -w /work debian:12 \
+          bash -ec "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y -qq imagemagick >/dev/null
+            packaging/make-icons.sh build-tools/assets/node-gui-icon_512.png dist/assets/icons
+          "
+
     # GH-hosted ubuntu runners ship qemu-user-static + binfmt, so
     # `docker run --platform linux/arm64` works out of the box: the arm64 leg
     # runs the deb builder inside an arm64 debian:12 container. The same
@@ -111,16 +122,18 @@ jobs:
             --gui-binary /work/target/$ARCH-unknown-linux-gnu/release/node-gui \
             --repo-root /work --out /work/dist
 
+    # Arch-matched container (qemu on the arm64 leg): native strip works and
+    # the binaries run under emulation so help2man generates real man pages.
     - name: Create RPM packages
       run: |
         ARCH=${{ matrix.arch }}
-        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
           packaging/rpm/build.sh \
             --package node --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
             --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
             --out /work/dist
-        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
           packaging/rpm/build.sh \
             --package gui --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
@@ -140,9 +153,9 @@ jobs:
     - name: Smoke test RPM packages
       run: |
         ARCH=${{ matrix.arch }}
-        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node node
-        docker run --rm -v "$PWD":/work -w /work fedora:latest \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work fedora:latest \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node-gui gui
 
     - name: Package Mintlayer Node (without GUI) as tar.gz
