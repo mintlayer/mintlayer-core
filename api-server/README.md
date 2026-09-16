@@ -20,11 +20,75 @@ The blockchain scanner daemon is a tool that runs in the backend, scans the bloc
 
 The architecture of the API server is made to be distributed as much as desired. You can run the database on as many servers as you wish in master-slave mode. This is achieved by separating the "API web server" from the "blockchain scanner daemon". You can have a single "blockchain scanner daemon", communicating with the `node-daemon` of Mintlayer, collecting information about new blocks and writing it to the master database, while having as many instances of the API web server reading from the slave databases. This ensures virtually an infinitely scalable infrastructure.
 
+#### Real-time event streaming
+
+The scanner daemon and the API web server also cooperate to provide a real-time event stream for block explorer clients. When the scanner indexes new blocks, it writes the corresponding events into the `ml.emitted_events` table *inside the same database transaction* that performs the indexing, and a notification is delivered to listeners when the transaction commits. The API web server runs an "event pump" that listens for these notifications on a dedicated database connection (with automatic reconnection and a periodic polling fallback) and forwards the events to connected clients. Independently of this, transactions reaching the node's mempool are bridged from the node's WebSocket RPC and delivered as `tx_seen` events immediately, before the block containing them is indexed. The key guarantee for clients: once a `block` event is delivered, the referenced block and its transactions are immediately queryable through the regular REST endpoints; there is no race between the event and the data it refers to.
+
 ### Using other database infrastructures
 
 Currently, the API server uses PostgreSQL for storage, but the design is extremely flexible and any desired database can be added if needed by implementing some interface (trait) in the rust code.
 
 In addition to the PostgreSQL, an implementation of a full in-memory storage exists, which we use for testing and as a reference implementation. Hence, when adding a new database implementation, the in-memory implementation can be used as a reference one. Our tests ensure that both PostgreSQL and in-memory implementation, through the beautiful abstractions of rust, arrive to the same result. Any additional implementation can be added to the same test suite.
+
+#### Database schema versions and upgrades
+
+The storage schema is versioned (`CURRENT_STORAGE_VERSION` in the source code, currently 26). When the blockchain scanner daemon encounters a database with a different version than the one it expects, it re-initializes the database from scratch, dropping the old data and performing a full re-scan of the blockchain; this is also when missing tables are created. Version 26 added the `ml.emitted_events` table, the append-only log that backs the [real-time event stream](#real-time-event-stream). Since the event stream has no replay and old events are never read again, the scanner prunes stream events older than the most recent 10,000.
+
+## Real-time event stream
+
+The API web server exposes a real-time event stream for block explorer clients, based on Server-Sent Events (SSE). Any standard SSE client works: the connection stays open, and the server pushes events as they happen.
+
+### Endpoint
+
+```
+GET /api/v2/stream
+```
+
+The endpoint requires no authentication, consistent with the other `/api/v2` GET endpoints, and responds with the `text/event-stream` content type.
+
+An optional `types` query parameter restricts the streamed event kinds to a comma-separated subset of `tx_seen`, `block`, and `reorg`; by default, all kinds are streamed. Invalid values are rejected with HTTP 400. For example, to receive only block and reorganization events:
+
+```
+GET /api/v2/stream?types=block,reorg
+```
+
+### Event format
+
+Events are *named* SSE events, so clients can subscribe to specific kinds with `EventSource.addEventListener("block", ...)` and so on. Every payload is a JSON object of the form `{"type": <event name>, "content": {...}}`. A `block` event looks like this on the wire:
+
+```
+event: block
+data: {"type":"block","content":{"block_id":"<hex>","height":3,"timestamp":1639975460,"tx_ids":["<hex>"]}}
+```
+
+The content per event kind:
+
+| Event | Content fields |
+| ----- | -------------- |
+| `tx_seen` | `tx_id` (hex); `origin`, which is `local` when the transaction was submitted through this node and `remote` when it was observed coming from the network |
+| `block` | `block_id` (hex); `height`; `timestamp` (unix seconds); `tx_ids`, the list of the block's transaction ids (hex) |
+| `reorg` | `common_ancestor_height`; `removed_block_ids`, the blocks disconnected by the reorganization (hex); `new_tip_height` |
+
+A few additional frames to be aware of:
+
+- The first frame is a `retry:` hint of 3 seconds, telling conforming clients how long to wait before reconnecting.
+- Keepalive comment lines (`: keepalive`) are sent while the stream is idle, every 30 seconds by default, so that proxies and clients can tell the connection is alive.
+- The response carries an `x-accel-buffering: no` header to keep reverse proxies from buffering the stream. If you operate a reverse proxy in front of the web server, make sure response buffering stays disabled, or the events will not reach the clients in real time.
+- If a client falls further behind than the server's per-client event buffer (1024 events by default), it receives a `lag` advisory event, `data: {"skipped": N}`, instead of the missed events. When this happens, reconcile the current state through the regular REST endpoints.
+
+A minimal browser client:
+
+```js
+const source = new EventSource("http://127.0.0.1:3000/api/v2/stream?types=block,reorg");
+source.addEventListener("block", (e) => console.log("block:", JSON.parse(e.data).content));
+source.addEventListener("reorg", (e) => console.log("reorg:", JSON.parse(e.data).content));
+```
+
+### Semantics and limitations
+
+- There is **no replay**: events missed while disconnected, or skipped on lag, are not re-sent, and the `Last-Event-ID` header is not supported. Recover missed data through the regular REST endpoints.
+- `tx_seen` events refer to transactions currently in the node's mempool; such a transaction may never be mined. Only successfully processed transactions are streamed.
+- A `block` event means the block has been fully indexed: the block and its transactions are immediately available through the REST endpoints.
 
 ## How to run
 
@@ -88,6 +152,14 @@ api-web-server --network testnet --bind-address 127.0.0.1:3000
 ```
 
 The API web server will immediately start and connect to the database locally. A specific remote database can be specified using command line arguments. Add `--help` to the previously mentioned commands to see how to do this.
+
+The [real-time event stream](#real-time-event-stream) works out of the box, with no configuration changes needed for existing deployments. Three options are available for tuning:
+
+- `--stream-events-broadcast-capacity` (default 1024): how many events are buffered per connected client before the client receives a `lag` advisory event instead of the missed events.
+- `--stream-events-poll-interval-secs` (default 30): how often the event pump polls the database for new events, as a safety net for missed notifications.
+- `--stream-events-keepalive-interval-secs` (default 30): how often keepalive comments are sent to connected stream clients.
+
+Note that the event pump behind the stream uses the PostgreSQL LISTEN/NOTIFY mechanism on a dedicated connection, so the real-time stream requires the PostgreSQL backend.
 
 ### Testing the API web server
 

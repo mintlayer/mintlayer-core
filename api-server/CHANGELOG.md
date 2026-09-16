@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+- New endpoint `/v2/stream` (Server-Sent Events) that streams `tx_seen`, `block` and `reorg` events in real time, with an optional `types` filter parameter.\
+  The stream carries keepalive comments, an in-stream reconnection hint, and a `lag` advisory for clients that fall behind; there is no replay, so missed events must be recovered through the regular REST endpoints.
+- New web server options: `--stream-events-broadcast-capacity`, `--stream-events-poll-interval-secs`, `--stream-events-keepalive-interval-secs`.
+- The scanner now emits block/reorg events into a new `ml.emitted_events` table (transactionally consistent with the indexed data) and notifies listeners on commit.\
+  Transactions seen in the node's mempool are bridged into `tx_seen` events by the web server.
+
+### Changed
+- The api-server storage version was bumped from 25 to 26 (new `ml.emitted_events` table); the scanner re-initializes the database when it finds a different version, as before. Full resync is required.
+
 ### Fixed
 - `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\
   Both tokens and NFTs are stored with a row per block height they changed at, and every one
