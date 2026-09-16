@@ -300,4 +300,70 @@ mod permissions_tests {
         );
         assert_eq!(mode(&db_path), 0o600, "database file must still be 0600");
     }
+
+    #[test]
+    fn nested_directories_are_created_private() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("level1").join("level2");
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        // Every directory created by this call must be owner-only, including the
+        // intermediate components.
+        assert_eq!(
+            mode(&tmp.path().join("level1")),
+            0o700,
+            "intermediate directory must be 0700"
+        );
+        assert_eq!(mode(&db_dir), 0o700, "leaf directory must be 0700");
+        assert_eq!(mode(&db_path), 0o600, "database file must be 0600");
+    }
+
+    #[test]
+    fn already_private_permissions_are_left_untouched() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let db_path = tmp.join("wallet.db");
+
+        // Create the database, then restrict it to an owner-only, read-only mode, i.e.
+        // one that is not exposed to group/other users.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o400)).unwrap();
+
+        // Opening may fail afterwards (Sqlite needs write access), depending on the
+        // environment, but the intentionally chosen permissions must be left untouched
+        // either way.
+        let _ = Sqlite::new(&db_path).open(make_desc());
+        assert_eq!(
+            mode(&db_path),
+            0o400,
+            "already private permissions must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn symlinked_database_path_is_rejected() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let target = tmp.join("target.db");
+        std::fs::File::create(&target).unwrap();
+        let db_path = tmp.join("wallet.db");
+        std::os::unix::fs::symlink(&target, &db_path).unwrap();
+
+        // Sensitive wallet data must not end up behind a symlink.
+        assert!(Sqlite::new(&db_path).open(make_desc()).is_err());
+    }
+
+    #[test]
+    fn directory_at_database_path_is_rejected() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("wallet.db");
+        std::fs::create_dir(&db_path).unwrap();
+
+        // A clear error instead of a confusing failure from inside Sqlite.
+        assert!(Sqlite::new(&db_path).open(make_desc()).is_err());
+    }
 }
