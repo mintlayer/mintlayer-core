@@ -40,6 +40,12 @@ pub struct ConstrainedValueAccumulator {
     timelock_constrained: BTreeMap<NonZeroU64, Amount>,
 }
 
+impl Default for ConstrainedValueAccumulator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConstrainedValueAccumulator {
     pub fn new() -> Self {
         Self {

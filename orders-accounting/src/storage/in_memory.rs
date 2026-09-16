@@ -29,6 +29,12 @@ pub struct InMemoryOrdersAccounting {
     give_balances: BTreeMap<OrderId, Amount>,
 }
 
+impl Default for InMemoryOrdersAccounting {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryOrdersAccounting {
     pub fn new() -> Self {
         Self {

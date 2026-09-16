@@ -24,7 +24,7 @@ use common::{
     },
     primitives::{Amount, H256},
 };
-use test_utils::random::{Rng, RngExt as _, Seed, make_seedable_rng};
+use test_utils::random::{Rng, Seed, make_seedable_rng};
 
 use super::*;
 

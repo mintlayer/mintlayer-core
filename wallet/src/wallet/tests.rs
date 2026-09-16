@@ -193,13 +193,12 @@ where
     B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
-    let coin_balance = wallet
+    wallet
         .get_balance(account, UtxoState::Confirmed.into(), WithLocked::Unlocked)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or(Amount::ZERO);
-    coin_balance
+        .unwrap_or(Amount::ZERO)
 }
 
 fn get_coin_balance_with_inactive<B, P>(wallet: &Wallet<B, P>) -> Amount
@@ -207,7 +206,7 @@ where
     B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
-    let coin_balance = wallet
+    wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoState::Confirmed | UtxoState::Inactive | UtxoState::InMempool,
@@ -216,8 +215,7 @@ where
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or(Amount::ZERO);
-    coin_balance
+        .unwrap_or(Amount::ZERO)
 }
 
 fn get_balance_with(
@@ -226,13 +224,12 @@ fn get_balance_with(
     utxo_states: UtxoStates,
     with_locked: WithLocked,
 ) -> Amount {
-    let coin_balance = wallet
+    wallet
         .get_balance(DEFAULT_ACCOUNT_INDEX, utxo_states, with_locked)
         .unwrap()
         .get(&currency)
         .copied()
-        .unwrap_or(Amount::ZERO);
-    coin_balance
+        .unwrap_or(Amount::ZERO)
 }
 
 fn get_coin_balance<B, P>(wallet: &Wallet<B, P>) -> Amount
@@ -1261,8 +1258,8 @@ async fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
-    let password = Some(gen_random_password(&mut rng));
-    wallet.encrypt_wallet(&password).unwrap();
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&Some(password.clone())).unwrap();
     wallet.lock_wallet().unwrap();
 
     let err = wallet.create_next_account(None).await;
@@ -1276,7 +1273,7 @@ async fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     let name: String = (0..rng.random_range(0..10)).map(|_| rng.random::<char>()).collect();
 
     // success after unlock
-    wallet.unlock_wallet(&password.unwrap()).unwrap();
+    wallet.unlock_wallet(&password).unwrap();
     if name.is_empty() {
         let err = wallet.create_next_account(Some(name)).await;
         assert_eq!(err, Err(WalletError::EmptyAccountName));
@@ -1374,8 +1371,8 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.random_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0).await;
 
-    let password = Some(gen_random_password(&mut rng));
-    wallet.encrypt_wallet(&password).unwrap();
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&Some(password.clone())).unwrap();
     wallet.lock_wallet().unwrap();
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1406,7 +1403,7 @@ async fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     );
 
     // success after unlock
-    wallet.unlock_wallet(&password.unwrap()).unwrap();
+    wallet.unlock_wallet(&password).unwrap();
     if rng.random::<bool>() {
         wallet
             .create_transaction_to_addresses(

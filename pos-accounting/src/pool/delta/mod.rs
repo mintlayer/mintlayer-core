@@ -47,6 +47,12 @@ pub struct DeltaMergeUndo {
     pub(crate) delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
 
+impl Default for DeltaMergeUndo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeltaMergeUndo {
     pub fn new() -> Self {
         Self {

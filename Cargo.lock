@@ -317,6 +317,8 @@ dependencies = [
  "parity-scale-codec",
  "pos-accounting",
  "rstest",
+ "serde",
+ "serde_json",
  "serialization",
  "test-utils",
  "thiserror 1.0.69",
@@ -329,6 +331,7 @@ name = "api-server-stack-test-suite"
 version = "1.4.0"
 dependencies = [
  "api-blockchain-scanner-lib",
+ "api-server-backend-test-suite",
  "api-server-common",
  "api-web-server",
  "async-trait",
@@ -367,6 +370,7 @@ dependencies = [
  "common",
  "crypto",
  "ctor",
+ "futures",
  "hex",
  "logging",
  "mempool",

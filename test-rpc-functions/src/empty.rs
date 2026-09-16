@@ -21,6 +21,12 @@ use common::chain::ChainConfig;
 // Empty implementation to exclude test functions under certain conditions, such as mainnet
 pub struct EmptyRpcTestFunctionsRpc;
 
+impl Default for EmptyRpcTestFunctionsRpc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EmptyRpcTestFunctionsRpc {
     pub fn new() -> Self {
         Self {}

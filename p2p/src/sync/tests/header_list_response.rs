@@ -328,13 +328,11 @@ async fn header_check_happens_before_checking_if_blocks_were_requested(
             let checkpoint_block_id: Id<GenBlock> =
                 branch1_blocks[branch2_invalid_header_idx].get_id().into();
 
-            let chain_config = Arc::new(
+            Arc::new(
                 common::chain::config::create_unit_test_config_builder()
                     .checkpoints([(checkpoint_height, checkpoint_block_id)].into())
                     .build(),
-            );
-
-            chain_config
+            )
         } else {
             chain_config
         };

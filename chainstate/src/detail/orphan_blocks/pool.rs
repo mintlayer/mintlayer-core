@@ -139,14 +139,12 @@ impl OrphanBlocksPool {
         // after we get all the blocks that have the same prev, we drop them from the pool
         res.iter().for_each(|blk| self.drop_block(&blk.get_id()));
         // after dropping everything, this is expected to be the only Rc left
-        let res = res
-            .drain(..)
+        res.drain(..)
             .map(|blk| {
                 Rc::try_unwrap(blk)
                     .expect("There cannot be more than one copy of the Rc. This is unexpected.")
             })
-            .collect();
-        res
+            .collect()
     }
 }
 

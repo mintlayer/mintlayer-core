@@ -1008,8 +1008,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             .expect("Unexpected conversion error"),
             consensus::MiningResult::Success
         );
-        let valid_block = Block::new_from_header(block_header, valid_block.body().clone()).unwrap();
-        valid_block
+        Block::new_from_header(block_header, valid_block.body().clone()).unwrap()
     };
     tf.process_block(block, BlockSource::Local).unwrap();
 
