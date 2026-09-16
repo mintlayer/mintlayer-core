@@ -222,3 +222,148 @@ fn db_open_in_memory_named() {
         assert!(dbtx.get(MAPID.0, b"hello").unwrap().is_none());
     }
 }
+
+/// Verify that newly created (and pre-existing) wallet databases get owner-only permissions
+/// on Unix, protecting the sensitive data (private keys, seed phrase) stored inside.
+#[cfg(unix)]
+mod permissions_tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::Sqlite;
+    use storage_backend_test_suite::prelude::desc;
+    use storage_core::{DbDesc, backend::Backend};
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    fn make_desc() -> DbDesc {
+        desc(1)
+    }
+
+    #[test]
+    fn newly_created_db_has_owner_only_permissions() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("subdir");
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        assert_eq!(mode(&db_dir), 0o700, "directory must be 0700");
+        assert_eq!(mode(&db_path), 0o600, "database file must be 0600");
+    }
+
+    #[test]
+    fn insecure_permissions_of_existing_db_are_repaired() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let db_path = tmp.join("wallet.db");
+
+        // Create the database, then weaken the file permissions like a pre-fix installation.
+        // Note: the directory here is pre-existing (tempfile), so its permissions are left
+        // untouched (it may be shared with unrelated data); only the database file itself
+        // must be repaired.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        // Re-open: the file permissions must be repaired.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        assert_eq!(
+            mode(&db_path),
+            0o600,
+            "database permissions must be repaired"
+        );
+    }
+
+    #[test]
+    fn pre_existing_directory_permissions_are_left_untouched() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("existing");
+        std::fs::create_dir(&db_dir).unwrap();
+        std::fs::set_permissions(&db_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        // Document the intentional behavior: a pre-existing (possibly permissive) directory
+        // is not modified; only the database file itself is protected.
+        assert_eq!(
+            mode(&db_dir),
+            0o755,
+            "pre-existing directory permissions must be left untouched"
+        );
+        assert_eq!(mode(&db_path), 0o600, "database file must still be 0600");
+    }
+
+    #[test]
+    fn nested_directories_are_created_private() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_dir = tmp.path().join("level1").join("level2");
+        let db_path = db_dir.join("wallet.db");
+
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+
+        // Every directory created by this call must be owner-only, including the
+        // intermediate components.
+        assert_eq!(
+            mode(&tmp.path().join("level1")),
+            0o700,
+            "intermediate directory must be 0700"
+        );
+        assert_eq!(mode(&db_dir), 0o700, "leaf directory must be 0700");
+        assert_eq!(mode(&db_path), 0o600, "database file must be 0600");
+    }
+
+    #[test]
+    fn already_private_permissions_are_left_untouched() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let db_path = tmp.join("wallet.db");
+
+        // Create the database, then restrict it to an owner-only, read-only mode, i.e.
+        // one that is not exposed to group/other users.
+        let db = Sqlite::new(&db_path).open(make_desc()).unwrap();
+        drop(db);
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o400)).unwrap();
+
+        // Opening may fail afterwards (Sqlite needs write access), depending on the
+        // environment, but the intentionally chosen permissions must be left untouched
+        // either way.
+        let _ = Sqlite::new(&db_path).open(make_desc());
+        assert_eq!(
+            mode(&db_path),
+            0o400,
+            "already private permissions must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn symlinked_database_path_is_rejected() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tmp.path();
+        let target = tmp.join("target.db");
+        std::fs::File::create(&target).unwrap();
+        let db_path = tmp.join("wallet.db");
+        std::os::unix::fs::symlink(&target, &db_path).unwrap();
+
+        // Sensitive wallet data must not end up behind a symlink.
+        assert!(Sqlite::new(&db_path).open(make_desc()).is_err());
+    }
+
+    #[test]
+    fn directory_at_database_path_is_rejected() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("wallet.db");
+        std::fs::create_dir(&db_path).unwrap();
+
+        // A clear error instead of a confusing failure from inside Sqlite.
+        assert!(Sqlite::new(&db_path).open(make_desc()).is_err());
+    }
+}
