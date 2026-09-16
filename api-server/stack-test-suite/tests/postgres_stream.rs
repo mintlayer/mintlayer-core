@@ -72,6 +72,12 @@ async fn recv_event(
 
 #[tokio::test]
 async fn stream_events_postgres_end_to_end() {
+    // Only run the test if the env var is defined
+    if std::env::var("ML_CONTAINERIZED_TESTS").is_err() {
+        eprintln!("Warning: Skipping Postgres containerized tests");
+        return;
+    }
+
     let mut rng = make_seedable_rng(Seed::from_entropy());
     let mut tf = TestFramework::builder(&mut rng).build();
     let chain_config = tf.chain_config().clone();
