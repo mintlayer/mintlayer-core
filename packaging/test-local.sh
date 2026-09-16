@@ -25,6 +25,13 @@ PKG_ROOT="$REPO_ROOT/packaging"
 DIST="$PKG_ROOT/dist"
 mkdir -p "$DIST"
 
+# Container image pins, shared with .github/workflows/release_linux.yml.
+. "$PKG_ROOT/images.env"
+ARCH_IMAGE="${ARCH_IMAGE:-archlinux:base-20260913.0.592969}"
+
+# Shared binary list (NODE_BINARIES)
+. "$PKG_ROOT/common/lib.sh"
+
 QUICK=0
 SKIP_BUILD=0
 SKIP_SMOKE=0
@@ -71,6 +78,7 @@ fi
 echo "pulling container images..."
 docker pull -q debian:12 >/dev/null
 docker pull -q fedora:latest >/dev/null
+docker pull -q "$ARCH_IMAGE" >/dev/null
 
 # ---------------------------------------------------------------------------
 # Build (or locate) release binaries
@@ -91,37 +99,7 @@ if [ "$SKIP_BUILD" -eq 1 ]; then
             [ -n "${pair%%=*}" ] && BIN_DIR[${pair%%=*}]="${pair##*=}"
         done
     fi
-RESULTS=()
-FAILED=0
-run_step() { # run_step <label> <cmd...> — records the result, never aborts
-    local label="$1"; shift
-    echo ""
-    echo "=== $label ==="
-    if "$@"; then
-        RESULTS+=("PASS  $label")
-    else
-        local rc=$?
-        RESULTS+=("FAIL  $label (rc=$rc)")
-        FAILED=1
-    fi
-    return 0
-}
-
-# ---------------------------------------------------------------------------
-# Pre-generate the hicolor icon set once (shared by deb and rpm builders,
-# avoids ImageMagick in the fedora container)
-# ---------------------------------------------------------------------------
-if [ ! -d "$DIST/assets/icons/usr/share/icons" ]; then
-    run_step "icons" \
-        docker run --rm -v "$REPO_ROOT:/work" -w /work debian:12 \
-        bash -ec "
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq && apt-get install -y -qq imagemagick >/dev/null
-            packaging/make-icons.sh build-tools/assets/node-gui-icon_512.png packaging/dist/assets/icons
-        "
-fi
-
-for arch in "${ARCHES[@]}"; do
+    for arch in "${ARCHES[@]}"; do
         test -f "${BIN_DIR[$arch]}/node-daemon" ||
             { echo "no prebuilt binary for $arch at ${BIN_DIR[$arch]}" >&2; exit 1; }
     done
@@ -130,7 +108,7 @@ else
     # Building inside the deb container guarantees the binaries run on the
     # oldest supported distro. Cargo caches live in named volumes so repeat
     # runs are incremental.
-    CONTAINER_PACKAGES="node-daemon wallet-rpc-daemon api-web-server api-blockchain-scanner-daemon dns-server wallet-cli wallet-address-generator node-gui"
+    CONTAINER_PACKAGES="${NODE_BINARIES[*]} node-gui"
     docker run --rm -v "$REPO_ROOT:/work" -w /work \
         -v mintlayer-cargo-home:/usr/local/cargo \
         -e CARGO_TARGET_DIR=/work/target-debian \
@@ -154,6 +132,36 @@ else
         echo "NOTE: skipping local aarch64 binary build (CI does it); " \
              "will fail later if no arm64 binaries exist." >&2
     fi
+fi
+
+RESULTS=()
+FAILED=0
+run_step() { # run_step <label> <cmd...> — records the result, never aborts
+    local label="$1"; shift
+    echo ""
+    echo "=== $label ==="
+    if "$@"; then
+        RESULTS+=("PASS  $label")
+    else
+        local rc=$?
+        RESULTS+=("FAIL  $label (rc=$rc)")
+        FAILED=1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Pre-generate the hicolor icon set once (shared by all builders,
+# avoids ImageMagick in the fedora/arch containers)
+# ---------------------------------------------------------------------------
+if [ ! -d "$DIST/assets/icons/usr/share/icons" ]; then
+    run_step "icons" \
+        docker run --rm -v "$REPO_ROOT:/work" -w /work debian:12 \
+        bash -ec "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y -qq imagemagick >/dev/null
+            packaging/make-icons.sh build-tools/assets/node-gui-icon_512.png packaging/dist/assets/icons
+        "
 fi
 
 # node-gui binary lives in the same target dir as the other binaries
@@ -204,6 +212,20 @@ for arch in "${ARCHES[@]}"; do
             --gui-binary "$CONTAINER_BIN_DIR/node-gui" \
             --repo-root /work --out /work/packaging/dist
 
+    # --- arch pkg: repackaging only; Arch images are amd64-only, so the
+    # arm64 leg is cross-targeted from the amd64 container (like rpm) ---
+    run_step "pkg mintlayer-node ($arch)" \
+        docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+        packaging/arch/build.sh --package node --arch "$arch" --version "$VERSION" \
+            --binaries-dir "$CONTAINER_BIN_DIR" \
+            --out /work/packaging/dist
+
+    run_step "pkg mintlayer-node-gui ($arch)" \
+        docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+        packaging/arch/build.sh --package gui --arch "$arch" --version "$VERSION" \
+            --gui-binary "$CONTAINER_BIN_DIR/node-gui" \
+            --repo-root /work --out /work/packaging/dist
+
     # --- smoke tests in fresh containers ---
     if [ "$SKIP_SMOKE" -eq 0 ]; then
         run_step "smoke deb node ($debarch)" \
@@ -225,15 +247,29 @@ for arch in "${ARCHES[@]}"; do
             docker run --rm -v "$REPO_ROOT:/work" -w /work fedora:latest \
             packaging/checks/smoke-rpm.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.rpm \
             mintlayer-node-gui gui
+
+        # pacman refuses foreign-architecture packages, so the arch pkg smoke
+        # test runs on the x86_64 leg only (like in release_linux.yml).
+        if [ "$arch" = x86_64 ]; then
+            run_step "smoke pkg node ($arch)" \
+                docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+                packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_linux_${VERSION}_${arch}.pkg.tar.zst \
+                mintlayer-node node
+
+            run_step "smoke pkg gui ($arch)" \
+                docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+                packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.pkg.tar.zst \
+                mintlayer-node-gui gui
+        fi
     fi
 done
 
 # ---------------------------------------------------------------------------
 # Artifact-name gate (what release.yml globs)
 # ---------------------------------------------------------------------------
-PAIRS=()
-for arch in "${ARCHES[@]}"; do PAIRS+=("${DEBARCH[$arch]}:$arch"); done
-run_step "artifact names" packaging/checks/verify-artifacts.sh "$DIST" "$VERSION" "${PAIRS[@]}"
+TRIPLES=()
+for arch in "${ARCHES[@]}"; do TRIPLES+=("${DEBARCH[$arch]}:$arch:$arch"); done
+run_step "artifact names" packaging/checks/verify-artifacts.sh "$DIST" "$VERSION" "${TRIPLES[@]}"
 
 # ---------------------------------------------------------------------------
 # Summary

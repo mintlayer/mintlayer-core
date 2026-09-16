@@ -1,0 +1,231 @@
+; Mintlayer Node installer (CLI daemons and tools).
+; Rendered from node.nsi.in by build-tools/win/create-nsis-installers.ps1 -
+; do not use this file directly. Requires NSIS 3 (Unicode).
+Unicode true
+RequestExecutionLevel admin
+SetCompressor /SOLID lzma
+
+!define APPNAME "Mintlayer Node"
+!define COMPANYNAME "Mintlayer"
+!define VERSION "@VERSION@"
+!define UNINSTKEY "${COMPANYNAME} ${APPNAME}"
+!define BACKUP_KEY "Software\${COMPANYNAME}\${APPNAME}"
+!define SERVICE_NAME "MintlayerNode"
+!define FIREWALL_RULE_NAME "Mintlayer Node"
+
+; Registry key holding the machine-wide PATH (expanded strings).
+!define ENV_KEY "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+; Stock NSIS builds cap script strings at 1024 characters; keep a safety
+; margin so rewriting the PATH can never truncate it.
+!define PATH_MAX_SAFE_LEN 900
+
+Name "${APPNAME}"
+InstallDir "$PROGRAMFILES64\${COMPANYNAME}\${APPNAME}"
+OutFile "Mintlayer_Node_win_${VERSION}_Setup.exe"
+
+!addincludedir "@NSI_DIR@"
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
+!include "WinMessages.nsh"  ; HWND_BROADCAST, WM_SETTINGCHANGE
+!include "StrFunc.nsh"
+; StrFunc declarations (must appear before any use; the `Un` variants are the
+; uninstaller counterparts).
+${StrLoc}
+${UnStrLoc}
+
+!define MUI_ABORTWARNING
+
+; License page
+!insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
+
+; Pages
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_INSTFILES
+
+; Languages
+!insertmacro MUI_LANGUAGE "English"
+
+!include "common.nsh"
+
+; Silently remove a previously installed version so upgrades behave like
+; fresh installs (the old uninstaller cleans PATH/service state).
+Function .onInit
+    !insertmacro MintlayerRemovePreviousInstall
+FunctionEnd
+
+; ---------------------------------------------------------------------------
+; Appends $INSTDIR to the machine PATH (idempotent); writes the registry
+; directly and notifies running applications so new shells pick the change up.
+;
+; Note: ReadRegStr returns REG_EXPAND_SZ values with %-references expanded on
+; the NSIS builds in use, so this rewrites e.g. %SystemRoot% references in
+; expanded form. The pre-write value is backed up under BACKUP_KEY for
+; recovery, and PATHs too long for NSIS string limits are left untouched.
+; ---------------------------------------------------------------------------
+Function AddToPath
+    Push $R0
+    Push $R1
+    Push $R2
+    ReadRegStr $R0 HKLM "${ENV_KEY}" "Path"
+    ${If} $R0 == ""
+        WriteRegExpandStr HKLM "${ENV_KEY}" "Path" "$INSTDIR"
+        SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+    ${Else}
+        ; Search with ';' sentinels so that e.g. "...\Mintlayer Node" does not
+        ; match "...\Mintlayer Node GUI". StrLoc yields an empty string (or
+        ; "-1" on some NSIS versions) when the needle is not found.
+        ${StrLoc} $R1 ";$R0;" ";$INSTDIR;" ">"
+        ${If} $R1 == ""
+        ${OrIf} $R1 == "-1"
+            StrLen $R2 $R0
+            ${If} $R2 > ${PATH_MAX_SAFE_LEN}
+                DetailPrint "Machine PATH too long ($R2 chars) to modify safely; add $INSTDIR manually."
+                MessageBox MB_OK|MB_ICONEXCLAMATION \
+                    "The system PATH is too long ($R2 characters) for this installer to modify safely (limit ${PATH_MAX_SAFE_LEN}).$\r$\n$\r$\nPlease add the following directory to the PATH manually:$\r$\n$INSTDIR"
+            ${Else}
+                ; Back up the previous value so a botched update is recoverable
+                ; (the uninstaller removes the backup key on success).
+                WriteRegStr HKLM "${BACKUP_KEY}" "PrevPath" "$R0"
+                WriteRegExpandStr HKLM "${ENV_KEY}" "Path" "$R0;$INSTDIR"
+                SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+            ${EndIf}
+        ${EndIf}
+    ${EndIf}
+    Pop $R2
+    Pop $R1
+    Pop $R0
+FunctionEnd
+
+; ---------------------------------------------------------------------------
+; Removes $INSTDIR from the machine PATH (no-op when absent).
+; ---------------------------------------------------------------------------
+Function un.RemoveFromPath
+    Push $R0
+    Push $R1
+    Push $R2
+    Push $R3
+    Push $R4
+    ReadRegStr $R0 HKLM "${ENV_KEY}" "Path"
+    ${Unless} $R0 == ""
+        ; Work on ';'-sentinel copies: with norm = ";" + $R0 + ";" and the
+        ; needle ";$INSTDIR;" found at index $R1 in norm, the entry starts at
+        ; offset $R1 in $R0, preceded by the sentinel ';' at $R1 - 1 (when
+        ; present) and followed by the trailing sentinel. StrLoc yields an
+        ; empty string (or "-1" on some NSIS versions) when not found.
+        ${UnStrLoc} $R1 ";$R0;" ";$INSTDIR;" ">"
+        ${If} $R1 != ""
+        ${AndIf} $R1 != "-1"
+            StrLen $R2 "$INSTDIR"
+            ${If} $R1 > 0
+                IntOp $R3 $R1 - 1              ; drop the preceding ';'
+                StrCpy $R4 $R0 $R3             ; part before the entry
+            ${Else}
+                StrCpy $R4 ""
+            ${EndIf}
+            IntOp $R3 $R1 + $R2                ; offset just after the entry
+            StrCpy $R2 $R0 "" $R3              ; part after the entry
+            StrCpy $R0 "$R4$R2"
+            ; Trim a leading or trailing ';' left over at a boundary.
+            StrCpy $R3 $R0 1
+            ${If} $R3 == ";"
+                StrCpy $R0 $R0 "" 1
+            ${EndIf}
+            StrCpy $R3 $R0 1 -1
+            ${If} $R3 == ";"
+                StrCpy $R0 $R0 -1
+            ${EndIf}
+            WriteRegExpandStr HKLM "${ENV_KEY}" "Path" "$R0"
+            SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+        ${EndIf}
+    ${EndUnless}
+    Pop $R4
+    Pop $R3
+    Pop $R2
+    Pop $R1
+    Pop $R0
+FunctionEnd
+
+; ---------------------------------------------------------------------------
+; Sections
+; ---------------------------------------------------------------------------
+Section "Mintlayer node binaries" SEC_BINARIES
+    SectionIn RO
+    SetOutPath "$INSTDIR"
+    File "target\release\node-daemon.exe"
+    File "target\release\wallet-rpc-daemon.exe"
+    File "target\release\api-web-server.exe"
+    File "target\release\api-blockchain-scanner-daemon.exe"
+    File "target\release\dns-server.exe"
+    File "target\release\wallet-cli.exe"
+    File "target\release\wallet-address-generator.exe"
+    File "LICENSE.txt"
+SectionEnd
+
+Section "Add installation directory to the PATH" SEC_PATH
+    Call AddToPath
+SectionEnd
+
+; Optional (off by default): register the mainnet node as a Windows service.
+; The blockchain data directory is $INSTDIR\data and an inbound TCP firewall
+; rule is added so peers can reach the node's p2p port (any local port; the
+; node's default is chosen by its configuration).
+Section /o "Run the mainnet node as a Windows service" SEC_SERVICE
+    CreateDirectory "$INSTDIR\data"
+    nsExec::ExecToLog 'sc.exe create ${SERVICE_NAME} start= auto DisplayName= "Mintlayer Node (mainnet)" binPath= "\"$INSTDIR\node-daemon.exe\" --datadir \"$INSTDIR\data\" mainnet"'
+    Pop $R9
+    DetailPrint "sc.exe create exit code: $R9"
+    nsExec::ExecToLog 'sc.exe description ${SERVICE_NAME} "Mintlayer full node daemon (mainnet chain)"'
+    Pop $R9
+    nsExec::ExecToLog 'netsh.exe advfirewall firewall add rule name="${FIREWALL_RULE_NAME}" dir=in action=allow protocol=TCP program="$INSTDIR\node-daemon.exe" enable=yes'
+    Pop $R9
+    DetailPrint "netsh.exe add rule exit code: $R9"
+SectionEnd
+
+; ---------------------------------------------------------------------------
+; Uninstallation
+; ---------------------------------------------------------------------------
+Section "Uninstall"
+    ; Stop and unregister the service (harmless if it was never registered).
+    nsExec::ExecToLog 'sc.exe stop ${SERVICE_NAME}'
+    Pop $R9
+    nsExec::ExecToLog 'sc.exe delete ${SERVICE_NAME}'
+    Pop $R9
+    nsExec::ExecToLog 'netsh.exe advfirewall firewall delete rule name="${FIREWALL_RULE_NAME}"'
+    Pop $R9
+
+    ; Remove the PATH entry added by the installer.
+    Call un.RemoveFromPath
+
+    Delete "$INSTDIR\node-daemon.exe"
+    Delete "$INSTDIR\wallet-rpc-daemon.exe"
+    Delete "$INSTDIR\api-web-server.exe"
+    Delete "$INSTDIR\api-blockchain-scanner-daemon.exe"
+    Delete "$INSTDIR\dns-server.exe"
+    Delete "$INSTDIR\wallet-cli.exe"
+    Delete "$INSTDIR\wallet-address-generator.exe"
+    Delete "$INSTDIR\LICENSE.txt"
+    Delete "$INSTDIR\uninstall.exe"
+
+    ; Note: $INSTDIR\data (blockchain storage) is intentionally preserved.
+
+    DeleteRegKey HKLM \
+        "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTKEY}"
+    ; The install succeeded end-to-end; drop the PATH backup too.
+    DeleteRegKey HKLM "${BACKUP_KEY}"
+
+    RMDir "$INSTDIR"
+SectionEnd
+
+; ---------------------------------------------------------------------------
+; Uninstaller registry entries
+; ---------------------------------------------------------------------------
+Section -PostInstall
+    !insertmacro MintlayerUninstallRegistry
+
+    ; Create the uninstaller
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+SectionEnd

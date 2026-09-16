@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Install-smoke test for a built .rpm. Runs INSIDE a fedora:latest container
-# with the repository mounted at /work.
-# Usage: smoke-rpm.sh <path/to/pkg.rpm> <package-name> node|gui
+# Install-smoke test for a built .pkg.tar.zst. Runs INSIDE an archlinux:base
+# container with the repository mounted at /work.
+# Usage: smoke-arch.sh <path/to/pkg.pkg.tar.zst> <package-name> node|gui
 set -euo pipefail
 
 # Shared binary list (NODE_BINARIES)
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/lib.sh"
 
-RPM_FILE="$(readlink -f "$1")"
+PKG_FILE="$(readlink -f "$1")"
 PKG_NAME="$2"
 KIND="$3"
 
-dnf install -y -q systemd desktop-file-utils >/dev/null
-dnf install -y -q "$RPM_FILE" >/dev/null
+# Sync the databases so the package dependencies resolve from the repos.
+pacman -Sy --noconfirm >/dev/null
+pacman -U --noconfirm "$PKG_FILE" >/dev/null
 
-echo "== rpm query =="
-rpm -q "$PKG_NAME"
-rpm -q --requires "$PKG_NAME" | head -n -2
+echo "== pacman query =="
+pacman -Qi "$PKG_NAME"
 
 if [ "$KIND" = node ]; then
     echo "== system user =="
@@ -48,9 +48,7 @@ if [ "$KIND" = node ]; then
     echo "  ok: preset/sysusers/udev/conffiles present"
 
     echo "== man pages =="
-    # NOTE: the fedora container image installs with tsflags=nodocs, so check
-    # the package payload instead of the filesystem (real systems install docs).
-    rpm -ql "$PKG_NAME" | grep -q "^/usr/share/man/man1/mintlayer-.*\.1\.gz$"
+    pacman -Ql "$PKG_NAME" | grep -q "usr/share/man/man1/mintlayer-.*\.1\.gz$"
     echo "  ok"
 else
     echo "== gui files =="
@@ -58,16 +56,18 @@ else
     /usr/bin/mintlayer-node-gui --help >/dev/null 2>&1
     echo "  ok: mintlayer-node-gui --help"
 
+    pacman -S --noconfirm --needed desktop-file-utils >/dev/null
     desktop-file-validate /usr/share/applications/mintlayer-node-gui.desktop
-    echo "  ok: desktop file valid"
 
-    for size in 64 128 256 512; do
-        test -f "/usr/share/icons/hicolor/${size}x${size}/apps/mintlayer-node-gui.png"
+    echo "== icons =="
+    for size in 64x64 128x128 256x256 512x512; do
+        test -f "/usr/share/icons/hicolor/${size}/apps/mintlayer-node-gui.png"
+        echo "  ok: hicolor ${size}"
     done
-    echo "  ok: icons present"
 
-    rpm -ql "$PKG_NAME" | grep -q "^/usr/share/man/man1/mintlayer-node-gui\.1\.gz$"
-    echo "  ok: man page"
+    echo "== man pages =="
+    pacman -Ql "$PKG_NAME" | grep -q "usr/share/man/man1/mintlayer-node-gui\.1\.gz$"
+    echo "  ok"
 fi
 
-echo "SMOKE OK: $PKG_NAME ($KIND)"
+echo "smoke test passed for $PKG_NAME"

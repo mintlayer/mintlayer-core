@@ -4,6 +4,9 @@
 # Usage: smoke-deb.sh <path/to/pkg.deb> <package-name> node|gui
 set -euo pipefail
 
+# Shared binary list (NODE_BINARIES)
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/lib.sh"
+
 DEB_FILE="$(readlink -f "$1")"  # apt requires an unambiguous path
 PKG_NAME="$2"
 KIND="$3"
@@ -22,9 +25,7 @@ if [ "$KIND" = node ]; then
     id mintlayer
 
     echo "== binaries =="
-    for bin in node-daemon wallet-rpc-daemon api-web-server \
-               api-blockchain-scanner-daemon dns-server wallet-cli \
-               wallet-address-generator; do
+    for bin in "${NODE_BINARIES[@]}"; do
         test -x "/usr/bin/mintlayer-$bin"
         "/usr/bin/mintlayer-$bin" --help >/dev/null 2>&1
         echo "  ok: mintlayer-$bin --help"

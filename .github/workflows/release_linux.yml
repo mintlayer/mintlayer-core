@@ -19,7 +19,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FEDORA_IMAGE: fedora:44  # pinned for reproducible packaging; bump deliberately
+  # Container image pins live in packaging/images.env (shared with
+  # packaging/test-local.sh) and are sourced by the steps that need them.
+  # Debian's builder also runs a full cargo build inside debian:12 in
+  # packaging/test-local.sh.
 
 jobs:
   build:
@@ -36,6 +39,7 @@ jobs:
       with:
         submodules: recursive
         fetch-depth: 0  # git describe needs history for the dispatch fallback version
+        persist-credentials: false  # the checkout is only built, never pushed
 
     # Register qemu binfmt handlers so `docker run --platform linux/arm64`
     # works on the arm64 matrix leg (needed for the debian:12 deb builder).
@@ -141,14 +145,15 @@ jobs:
     # the binaries run under emulation so help2man generates real man pages.
     - name: Create RPM packages
       run: |
+        source packaging/images.env
         ARCH=${{ matrix.arch }}
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/rpm/build.sh \
             --package node --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
             --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
             --out /work/dist
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/rpm/build.sh \
             --package gui --rpmarch $ARCH \
             --version "${{ steps.get_version.outputs.VERSION }}" \
@@ -168,10 +173,42 @@ jobs:
     - name: Smoke test RPM packages
       run: |
         ARCH=${{ matrix.arch }}
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node node
-        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work ${{ env.FEDORA_IMAGE }} \
+        docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.rpm mintlayer-node-gui gui
+
+    # Arch images are amd64-only: the x86_64 leg is arch-matched (native
+    # strip, ldd-based dependencies, help2man man pages), the arm64 leg
+    # repackages cross-target with stubs — same as the local rpm legs.
+    - name: Create Arch packages
+      run: |
+        source packaging/images.env
+        ARCH=${{ matrix.arch }}
+        docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
+          packaging/arch/build.sh \
+            --package node --arch "$ARCH" \
+            --version "${{ steps.get_version.outputs.VERSION }}" \
+            --binaries-dir /work/target/$ARCH-unknown-linux-gnu/release \
+            --out /work/dist
+        docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
+          packaging/arch/build.sh \
+            --package gui --arch "$ARCH" \
+            --version "${{ steps.get_version.outputs.VERSION }}" \
+            --gui-binary /work/target/$ARCH-unknown-linux-gnu/release/node-gui \
+            --repo-root /work --out /work/dist
+
+    # pacman refuses foreign-architecture packages, so the install smoke test
+    # only runs on the x86_64 leg; the arm64 payload is covered by the builder
+    # itself plus the artifact-name gate.
+    - name: Smoke test Arch packages
+      if: matrix.arch == 'x86_64'
+      run: |
+        source packaging/images.env
+        docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
+          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.pkg.tar.zst mintlayer-node node
+        docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
+          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.pkg.tar.zst mintlayer-node-gui gui
 
     - name: Package Mintlayer Node (without GUI) as tar.gz
       run: |
@@ -211,6 +248,18 @@ jobs:
       with:
         name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
         path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.rpm
+
+    - name: Upload Node PKG Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_pkg
+        path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.pkg.tar.zst
+
+    - name: Upload GUI PKG Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_pkg
+        path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.pkg.tar.zst
 
     - name: List tar.gz files
       run: |

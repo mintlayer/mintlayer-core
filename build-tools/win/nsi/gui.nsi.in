@@ -1,0 +1,86 @@
+; Mintlayer Node GUI installer.
+; Rendered from gui.nsi.in by build-tools/win/create-nsis-installers.ps1 -
+; do not use this file directly. Requires NSIS 3 (Unicode).
+Unicode true
+RequestExecutionLevel admin
+SetCompressor /SOLID lzma
+
+!define APPNAME "Mintlayer Node GUI"
+!define COMPANYNAME "Mintlayer"
+!define VERSION "@VERSION@"
+!define UNINSTKEY "${COMPANYNAME} ${APPNAME}"
+
+Name "${APPNAME}"
+InstallDir "$PROGRAMFILES64\${COMPANYNAME}\${APPNAME}"
+OutFile "Mintlayer_Node_GUI_win_${VERSION}_Setup.exe"
+
+!addincludedir "@NSI_DIR@"
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
+
+!define MUI_ABORTWARNING
+
+; License page
+!insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
+
+; Pages
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_INSTFILES
+
+; Languages
+!insertmacro MUI_LANGUAGE "English"
+
+!include "common.nsh"
+
+; Silently remove a previously installed version so upgrades do not leave
+; stale files behind.
+Function .onInit
+    !insertmacro MintlayerRemovePreviousInstall
+FunctionEnd
+
+; The install is machine-wide (admin); make the shortcuts available to all
+; users ($DESKTOP/$SMPROGRAMS resolve to the common profile directories).
+Section "Install"
+    SetShellVarContext all
+    SetOutPath "$INSTDIR"
+    File "target\release\node-gui.exe"
+    File "LICENSE.txt"
+
+    ; Create desktop shortcut
+    CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\node-gui.exe"
+
+    ; Create Start Menu shortcut
+    CreateDirectory "$SMPROGRAMS\${COMPANYNAME}"
+    CreateShortcut "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk" "$INSTDIR\node-gui.exe"
+
+    ; Create the uninstaller
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+SectionEnd
+
+Section -PostInstall
+    !insertmacro MintlayerUninstallRegistry
+SectionEnd
+
+Section "Uninstall"
+    SetShellVarContext all
+
+    ; Remove files
+    Delete "$INSTDIR\node-gui.exe"
+    Delete "$INSTDIR\LICENSE.txt"
+    Delete "$INSTDIR\uninstall.exe"
+
+    ; Remove shortcuts
+    Delete "$DESKTOP\${APPNAME}.lnk"
+    Delete "$SMPROGRAMS\${COMPANYNAME}\${APPNAME}.lnk"
+    RMDir "$SMPROGRAMS\${COMPANYNAME}"
+
+    ; Remove directories used
+    RMDir "$INSTDIR"
+
+    ; Remove uninstall registry keys
+    DeleteRegKey HKLM \
+        "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTKEY}"
+SectionEnd

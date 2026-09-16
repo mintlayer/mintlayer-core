@@ -1,9 +1,9 @@
 # Native Linux packages
 
-Proper Debian and Fedora packages for the Mintlayer node software: systemd
-integration, hardware-wallet udev rules, man pages, conffiles, declared
-library dependencies, and lint/install validation — for both amd64/x86_64 and
-arm64/aarch64.
+Proper Debian, Fedora and Arch packages for the Mintlayer node software:
+systemd integration, hardware-wallet udev rules, man pages, conffiles,
+declared library dependencies, and lint/install validation — for both
+amd64/x86_64 and arm64/aarch64.
 
 The same scripts run in CI (`.github/workflows/release_linux.yml`) and
 locally, inside the same container images, so a green local run means the
@@ -15,6 +15,9 @@ tagged release build will behave identically.
 |---|---|
 | `mintlayer-node` | node-daemon, wallet-rpc-daemon, api-web-server, api-blockchain-scanner-daemon, dns-server, wallet-cli, wallet-address-generator + systemd units, sysusers, preset, udev rules, man pages, `/etc/mintlayer` conffiles |
 | `mintlayer-node-gui` | node-gui + hicolor icons + desktop entry + man page |
+
+They are produced as `.deb` (Debian), `.rpm` (Fedora) and `.pkg.tar.zst`
+(Arch) packages with identical payloads.
 
 ### What the packages set up
 
@@ -37,8 +40,24 @@ tagged release build will behave identically.
   `uaccess`, shipped with `mintlayer-node` (used by wallet-cli and, when the
   recommended `mintlayer-node` package is installed, by the GUI).
 - **Dependencies**: computed from the binaries with `dpkg-shlibdeps` (deb) /
-  RPM soname autorequires; the deb additionally gets an `ldd` gate that fails
-  the build if any library is unresolved.
+  RPM soname autorequires / `pacman -F` lookups (Arch); the deb additionally
+  gets an `ldd` gate that fails the build if any library is unresolved.
+
+### Arch-specific notes
+
+- The Arch images published by the Arch project are amd64-only, so the
+  aarch64 package is repackaged cross-target from the amd64 container (like
+  the local cross-target rpm builds): binaries are shipped unstripped, man
+  pages are stubs and the dependency list comes from a static map (see
+  `packaging/arch/build.sh`). The x86_64 package is fully arch-matched.
+- Arch convention is to not start services from package scripts: the install
+  scriptlet applies the preset policy (enabling `mintlayer-node@mainnet`)
+  but does not start the unit; start it with
+  `systemctl start mintlayer-node@mainnet.service`.
+- The GUI package declares `mintlayer-node` as an `optdepends` (Arch's
+  equivalent of deb/rpm Recommends); install it for the udev rules.
+- The packages are not published to the AUR; install a release artifact
+  directly with `sudo pacman -U Mintlayer_Node_linux_<version>_<arch>.pkg.tar.zst`.
 
 ## Local testing (before tagging a release)
 
@@ -63,11 +82,15 @@ The script builds binaries with the exact CI flags
 1. assembles debs inside `debian:12` (arm64 via `--platform linux/arm64`)
 2. assembles rpms inside `fedora:latest` (`--target x86_64` and `aarch64`;
    repackaging only, no emulation needed for rpm)
-3. runs lintian / rpmlint inside the same containers
-4. installs each package in a **fresh** container and verifies: system user,
+3. assembles Arch packages inside `archlinux:base` (x86_64 arch-matched;
+   aarch64 cross-targeted from the amd64 container — Arch publishes no arm64
+   images)
+4. runs lintian / rpmlint / namcap inside the same containers
+5. installs each package in a **fresh** container and verifies: system user,
    binaries run (`--help`), `systemd-analyze verify` on all units, preset,
-   conffiles, icons, desktop file
-5. checks the artifact names against the globs `release.yml` uploads
+   conffiles, icons, desktop file (the Arch arm64 packages skip the
+   install step: pacman refuses foreign-architecture packages)
+6. checks the artifact names against the globs `release.yml` uploads
 
 A final summary matrix prints; exit code 0 = safe to tag.
 
@@ -83,19 +106,21 @@ tagging.
 
 - deb: `docker run --platform linux/$ARCH debian:12 packaging/deb/build.sh …`
 - rpm: `docker run fedora:latest packaging/rpm/build.sh …`
+- arch pkg: `docker run $ARCH_IMAGE packaging/arch/build.sh …` (amd64-only
+  images; see the Arch-specific notes above)
 - smoke: fresh-container installs via `packaging/checks/smoke-*.sh`
 
 Artifact names are unchanged (`Mintlayer_Node_linux_<version>_<arch>.deb/rpm`,
-`Mintlayer_Node_GUI_linux_<version>_<arch>.deb/rpm`) so `release.yml`
-attaches them exactly as before. New: GUI + node rpms are produced for both
-arches (previously rpm was x86_64-only), and `workflow_dispatch` allows a
-no-tag dry run.
+`Mintlayer_Node_GUI_linux_<version>_<arch>.deb/rpm`, plus the
+`.pkg.tar.zst` variants) so `release.yml` attaches them exactly as before.
+New: GUI + node rpms are produced for both arches (previously rpm was
+x86_64-only), and `workflow_dispatch` allows a no-tag dry run.
 
 ## Layout
 
 ```
 packaging/
-  common/            assets shared by both package formats
+  common/            assets shared by all package formats
     systemd/         template units (one per daemon)
     sysusers/        mintlayer system user definition
     udev/            Ledger/Trezor hidraw rules
@@ -104,7 +129,8 @@ packaging/
     applications/    .desktop entry for the GUI
   deb/               control template, maintscripts, changelog, build.sh
   rpm/               spec templates, build.sh
-  checks/            smoke-deb.sh, smoke-rpm.sh, verify-artifacts.sh
+  arch/              PKGBUILD templates, install scriptlet, build.sh
+  checks/            smoke-deb.sh, smoke-rpm.sh, smoke-arch.sh, verify-artifacts.sh
   make-icons.sh      hicolor icon set generator
   test-local.sh      full local replica of the release pipeline
   dist/              build output (gitignored)

@@ -45,3 +45,9 @@ build-tools/block-data-plots/output
 packaging/dist/
 /dist/
 target-debian/
+
+# Rendered NSIS scripts and installers (build-tools/win/create-nsis-installers.ps1)
+/installer-node.nsi
+/installer-gui.nsi
+/Mintlayer_Node_win_*_Setup.exe
+/Mintlayer_Node_GUI_win_*_Setup.exe
