@@ -213,18 +213,25 @@ pub trait StreamEventSource: Send {
         &mut self,
         last_seen_id: StreamEventId,
     ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError>;
+
+    /// The event id to start streaming from.
+    ///
+    /// Note: backends that support stream events return the id of the most recent event, so that
+    /// the events committed before this pump was started are not re-broadcast to the currently
+    /// connected clients as if they were fresh (the stream has no replay semantics).
+    async fn initial_last_seen_id(&mut self) -> StreamEventId {
+        0
+    }
 }
 
 /// The event pump: forwards stream events from a [StreamEventSource] into a
 /// [StreamEventsChannel], tracking the id of the last forwarded event.
-///
-/// The backlog is drained in batches before waiting for the next wakeup, which also takes care of
-/// draining whatever was committed before this pump was started.
 pub async fn run_event_pump(
     mut source: impl StreamEventSource,
     channel: StreamEventsChannel,
     mut last_seen_id: StreamEventId,
 ) {
+    logging::log::info!("Streaming events after #{last_seen_id}");
     loop {
         // Note: a full batch hints at more events being available, in which case the next batch
         // is read immediately; this keeps the memory use of the pump bounded while large backlogs

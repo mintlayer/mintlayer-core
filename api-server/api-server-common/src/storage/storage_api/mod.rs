@@ -811,6 +811,13 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
         Ok(Vec::new())
     }
+
+    /// The id of the most recently committed stream event, if any.
+    ///
+    /// Note: backends that don't support stream events simply return `None`.
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        Ok(None)
+    }
 }
 
 #[async_trait::async_trait]

@@ -3123,9 +3123,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .collect())
     }
 
-    /// Delete the stream events that fell out of the retention window.
-    pub async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
-        self.tx
+    /// Delete the stream events that fell out of the retention window, returning the number of
+    /// deleted rows.
+    pub async fn prune_stream_events(&mut self) -> Result<u64, ApiServerStorageError> {
+        let deleted = self
+            .tx
             .execute(
                 "DELETE FROM ml.emitted_events
                     WHERE id <= (SELECT COALESCE(max(id), 0) - $1 FROM ml.emitted_events);",
@@ -3134,7 +3136,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        Ok(())
+        Ok(deleted)
+    }
+
+    /// The id of the most recently committed stream event, if any.
+    pub async fn latest_stream_event_id(
+        &mut self,
+    ) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt("SELECT max(id) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.and_then(|row| row.get(0)))
     }
 
     pub async fn notify_new_stream_events(

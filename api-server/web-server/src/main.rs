@@ -48,6 +48,18 @@ use crate::error::ApiServerWebServerInitError;
 
 utils::enable_rust_backtrace!();
 
+/// Log a critical error if one of the background streaming tasks terminates.
+fn supervise(name: &'static str, handle: tokio::task::JoinHandle<()>) {
+    // Note: the background tasks are meant to run forever; without this supervisor, a panic or
+    // any other terminal failure would go completely unnoticed while the REST endpoints keep
+    // working, silently disabling the event stream.
+    tokio::spawn(async move {
+        if let Err(err) = handle.await {
+            logging::log::error!("CRITICAL: the {name} task terminated: {err}");
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<(), ApiServerWebServerInitError> {
     logging::init_logging();
@@ -94,10 +106,13 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         event_listener,
         std::time::Duration::from_secs(args.stream_events_poll_interval_secs.max(1)),
     );
-    tokio::spawn(streaming::run_database_event_pump(
-        event_source,
-        stream_events.clone(),
-    ));
+    supervise(
+        "stream event pump",
+        tokio::spawn(streaming::run_database_event_pump(
+            event_source,
+            stream_events.clone(),
+        )),
+    );
 
     let rpc_client = {
         let rpc_auth = match (
@@ -134,10 +149,13 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
 
     // Note: the mempool events arrive over the node's WebSocket connection and are bridged into
     // the stream event channel; the subscription is re-established after connection loss.
-    tokio::spawn(streaming::run_mempool_bridge(
-        Arc::clone(&rpc_client),
-        stream_events.clone(),
-    ));
+    supervise(
+        "mempool bridge",
+        tokio::spawn(streaming::run_mempool_bridge(
+            Arc::clone(&rpc_client),
+            stream_events.clone(),
+        )),
+    );
 
     let state = ApiServerWebServerState {
         db: storage,

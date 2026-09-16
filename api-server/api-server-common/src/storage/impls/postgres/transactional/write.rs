@@ -427,7 +427,12 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
 
     async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.prune_stream_events().await?;
+        let deleted = conn.prune_stream_events().await?;
+        if deleted > 0 {
+            logging::log::warn!(
+                "Pruned {deleted} stream events that fell out of the retention window"
+            );
+        }
 
         Ok(())
     }
@@ -848,6 +853,13 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.read_stream_events_after(last_seen_id).await?;
+
+        Ok(res)
+    }
+
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.latest_stream_event_id().await?;
 
         Ok(res)
     }

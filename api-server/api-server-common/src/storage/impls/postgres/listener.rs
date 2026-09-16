@@ -85,6 +85,13 @@ impl PostgresStreamEventSource {
         self.listener = listener;
         Ok(())
     }
+
+    /// The id of the most recently committed stream event.
+    async fn latest_event_id(&self) -> Result<StreamEventId, ApiServerStorageError> {
+        let db_tx = self.storage.transaction_ro().await?;
+        // Note: the events table is empty right after initialization.
+        Ok(db_tx.latest_stream_event_id().await?.unwrap_or(0))
+    }
 }
 
 #[async_trait::async_trait]
@@ -120,6 +127,19 @@ impl StreamEventSource for PostgresStreamEventSource {
             .read_stream_events_after(last_seen_id)
             .await
             .map_err(|e| StreamEventReadError(e.to_string()))
+    }
+
+    async fn initial_last_seen_id(&mut self) -> StreamEventId {
+        match self.latest_event_id().await {
+            Ok(last_event_id) => last_event_id,
+            Err(err) => {
+                // Note: falling back to zero would re-broadcast old events to the currently
+                // connected clients, so the failure is retried until the database answers.
+                logging::log::error!("Failed to read the latest stream event id: {err}");
+                tokio::time::sleep(self.poll_interval).await;
+                Box::pin(self.initial_last_seen_id()).await
+            }
+        }
     }
 }
 

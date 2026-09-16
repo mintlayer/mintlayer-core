@@ -37,9 +37,13 @@ pub const DEFAULT_STREAM_EVENTS_POLL_INTERVAL: Duration = Duration::from_secs(30
 /// How often a keepalive comment is sent to connected stream clients.
 pub const DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
-/// How long to wait before re-attempting the subscription to the node's mempool events after it
-/// has been lost.
+/// How long to wait before the first re-attempt of the subscription to the node's mempool events
+/// after it has been lost. The delay doubles on every failed attempt, up to
+/// [`MEMPOOL_RESUBSCRIBE_DELAY_MAX`].
 const MEMPOOL_RESUBSCRIBE_DELAY: Duration = Duration::from_secs(1);
+
+/// The upper bound of the mempool subscription retry delay.
+const MEMPOOL_RESUBSCRIBE_DELAY_MAX: Duration = Duration::from_secs(60);
 
 /// Streaming-related configuration of the web server.
 #[derive(Debug, Clone)]
@@ -79,8 +83,16 @@ impl StreamEventsHandle {
 
 /// Run the database event pump: forward the stream events committed by the scanner into the
 /// broadcast channel of the given handle.
-pub async fn run_database_event_pump(source: impl StreamEventSource, handle: StreamEventsHandle) {
-    run_event_pump(source, handle.channel, 0).await;
+///
+/// Note: the pump starts from the most recently committed event, since the events committed
+/// before the pump was started are history that is served by the REST endpoints; re-broadcasting
+/// them to the currently connected clients would violate the no-replay semantics of the stream.
+pub async fn run_database_event_pump(
+    mut source: impl StreamEventSource,
+    handle: StreamEventsHandle,
+) {
+    let last_seen_id = source.initial_last_seen_id().await;
+    run_event_pump(source, handle.channel, last_seen_id).await;
 }
 
 /// Map a node mempool event into a stream event.
@@ -113,10 +125,13 @@ fn map_rpc_event_to_tx_seen(event: RpcEvent) -> Option<StreamEvent> {
 /// hydrated here: a failed hydration must never block the stream, so the stream carries only the
 /// transaction ids and the clients are expected to fetch the details through the REST endpoints.
 pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHandle) {
+    let mut resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
     loop {
         match MempoolRpcClient::subscribe_to_events(rpc.ws_client()).await {
             Ok(subscription) => {
                 logging::log::info!("Subscribed to node mempool events");
+                // Note: the subscription worked, so the next retry does not need to back off.
+                resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
                 let mut subscription = subscription;
                 while let Some(event) = subscription.next().await {
                     match event {
@@ -138,7 +153,10 @@ pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHan
                 logging::log::error!("Failed to subscribe to node mempool events: {err}");
             }
         }
-        tokio::time::sleep(MEMPOOL_RESUBSCRIBE_DELAY).await;
+        // Note: the delay doubles on every failed attempt so that a long node outage cannot
+        // flood the logs; it is reset as soon as a subscription succeeds again.
+        tokio::time::sleep(resubscribe_delay).await;
+        resubscribe_delay = std::cmp::min(resubscribe_delay * 2, MEMPOOL_RESUBSCRIBE_DELAY_MAX);
     }
 }
 

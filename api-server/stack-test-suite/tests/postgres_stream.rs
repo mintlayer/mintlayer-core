@@ -80,19 +80,32 @@ async fn stream_events_postgres_end_to_end() {
     // The Postgres container and two storage instances (two pools), mirroring the scanner and
     // the web server processes.
     // -----------------------------------------------------------------------------------------
-    let mut podman = Podman::new(
-        "MintlayerPostgresStreamTest",
-        Container::PostgresFromDockerHub,
-    )
-    .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
-    .with_env(
-        "POSTGRES_DB",
-        format!("mintlayer-{}", chain_config.chain_type().name()).as_str(),
-    )
-    .with_port_mapping(None, 5432);
-    podman.run();
+    // Note: starting the container involves blocking process invocations (podman/docker CLI),
+    // which must not run on the runtime thread, where they would starve the async tasks spawned
+    // below and potentially distort the timing-sensitive assertions. The `Podman` handle is
+    // returned (rather than dropped inside the blocking task) so that the container is still
+    // cleaned up by its destructor when the test ends.
+    let (_podman, host_port) = {
+        let chain_config = Arc::clone(&chain_config);
+        tokio::task::spawn_blocking(move || {
+            let mut podman = Podman::new(
+                "MintlayerPostgresStreamTest",
+                Container::PostgresFromDockerHub,
+            )
+            .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
+            .with_env(
+                "POSTGRES_DB",
+                format!("mintlayer-{}", chain_config.chain_type().name()).as_str(),
+            )
+            .with_port_mapping(None, 5432);
+            podman.run();
 
-    let host_port = podman.get_port_mapping(5432).unwrap();
+            let host_port = podman.get_port_mapping(5432).unwrap();
+            (podman, host_port)
+        })
+        .await
+        .unwrap()
+    };
     let new_storage = || {
         TransactionalApiServerPostgresStorage::new(
             "127.0.0.1",
@@ -161,7 +174,10 @@ async fn stream_events_postgres_end_to_end() {
     let (connected_tx, connected_rx) = tokio::sync::oneshot::channel::<()>();
 
     let sse_url = format!("http://{}:{}/api/v2/stream", addr.ip(), addr.port());
-    tokio::spawn(async move {
+    // Note: the handle is kept so that the task can be joined at the end of the test; otherwise
+    // a panic inside the collector (an assertion, a serde unwrap, a UTF-8 unwrap) would only
+    // surface as a misleading timeout or a closed-channel error elsewhere.
+    let collector_task = tokio::spawn(async move {
         let mut connect_attempts = 0u32;
         let client = reqwest::Client::new();
         // Note: the listener is already bound, so this connect resolves as soon as the web
@@ -343,10 +359,12 @@ async fn stream_events_postgres_end_to_end() {
 
     // -----------------------------------------------------------------------------------------
     // No duplicates: after everything settles, no further events may arrive (the expected total
-    // is exactly one reorg + 3 + 3 block events, all of which have been consumed above).
+    // is exactly one reorg + 3 + 3 block events, all of which have been consumed above). The
+    // settle and observe windows are deliberately generous, so that this assertion does not
+    // flake on slow CI machines.
     // -----------------------------------------------------------------------------------------
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    match tokio::time::timeout(Duration::from_secs(1), event_rx.recv()).await {
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    match tokio::time::timeout(Duration::from_secs(3), event_rx.recv()).await {
         Err(_timed_out) => {} // no more events, as expected
         Ok(Some((name, event))) => {
             panic!("unexpected extra stream event: {name} {event:?}")
@@ -354,5 +372,18 @@ async fn stream_events_postgres_end_to_end() {
         Ok(None) => panic!("the stream event collector has been closed"),
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Shutdown: stop the web server and join the collector. The collector is aborted as well,
+    // since it would otherwise keep running indefinitely (the server keepalives prevent its
+    // internal chunk timeout from firing); aborting it does not swallow a panic that has
+    // already happened, which the join below propagates with the actual panic message.
+    // -----------------------------------------------------------------------------------------
     web_task.abort();
+    collector_task.abort();
+    if let Err(join_error) = collector_task.await {
+        assert!(
+            join_error.is_cancelled(),
+            "the SSE collector task failed: {join_error}"
+        );
+    }
 }

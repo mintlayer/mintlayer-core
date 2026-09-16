@@ -26,7 +26,9 @@ fn container_command() -> &'static str {
             .any(|dir| dir.join("podman").is_file() || dir.join("podman.exe").is_file())
     });
 
-    if podman_on_path { "podman" } else { "docker" }
+    let command = if podman_on_path { "podman" } else { "docker" };
+    logging::log::info!("Using {command} as the container manager");
+    command
 }
 
 pub enum Container {

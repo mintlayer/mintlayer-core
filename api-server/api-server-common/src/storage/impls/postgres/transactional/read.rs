@@ -459,4 +459,11 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
 
         Ok(res)
     }
+
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.latest_stream_event_id().await?;
+
+        Ok(res)
+    }
 }
