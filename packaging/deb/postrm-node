@@ -1,0 +1,23 @@
+#!/bin/sh
+# postrm for mintlayer-node
+set -e
+
+if [ "$1" = purge ]; then
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper purge mintlayer-node@mainnet.service >/dev/null 2>&1 || true
+        deb-systemd-helper unmask mintlayer-node@mainnet.service >/dev/null 2>&1 || true
+    fi
+    # Drop the system user; keep /var/lib/mintlayer unless the admin removed it
+    # explicitly after backing up (chain data can be large, deleting it on purge
+    # would be destructive beyond the package's own files). Reassign the
+    # directory to root first so its ownership does not dangle on an unallocated
+    # UID that a future system user could inherit.
+    if [ -d /var/lib/mintlayer ]; then
+        chown -R root:root /var/lib/mintlayer >/dev/null 2>&1 || true
+    fi
+    if getent passwd mintlayer >/dev/null 2>&1; then
+        deluser --system mintlayer >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

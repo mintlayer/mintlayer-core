@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mintlayer Node GUI
+Comment=Graphical interface for the Mintlayer node
+Exec=mintlayer-node-gui
+Icon=mintlayer-node-gui
+Terminal=false
+Categories=Network;
+Keywords=mintlayer;node;wallet;crypto;

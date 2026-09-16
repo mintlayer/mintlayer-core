@@ -1,0 +1,41 @@
+# Template unit: one instance per chain.
+#   1. Edit /etc/mintlayer/<chain>/api-web-server.env and set ARGS
+#      (the api web server needs access to a Postgres database and a running node).
+#   2. systemctl enable --now mintlayer-api-web-server@<chain>.service
+[Unit]
+Description=Mintlayer API Web Server (%i)
+Documentation=https://github.com/mintlayer/mintlayer-core
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mintlayer
+Group=mintlayer
+EnvironmentFile=-/etc/mintlayer/%i/api-web-server.env
+ExecStart=/usr/bin/mintlayer-api-web-server ${ARGS}
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=120s
+LimitNOFILE=65535
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

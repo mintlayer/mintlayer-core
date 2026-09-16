@@ -1,0 +1,45 @@
+# Template unit: one instance per chain.
+#   1. Edit /etc/mintlayer/<chain>/wallet-rpc.env and set ARGS
+#      (the wallet rpc daemon needs at least the path to the wallet file).
+#   2. systemctl enable --now mintlayer-wallet-rpc@<chain>.service
+[Unit]
+Description=Mintlayer Wallet RPC Daemon (%i)
+Documentation=https://github.com/mintlayer/mintlayer-core
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mintlayer
+Group=mintlayer
+EnvironmentFile=-/etc/mintlayer/%i/wallet-rpc.env
+ExecStart=/usr/bin/mintlayer-wallet-rpc-daemon ${ARGS}
+
+StateDirectory=mintlayer
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=120s
+LimitNOFILE=65535
+
+# The wallet database and any files referenced by ARGS must be readable by the
+# 'mintlayer' user. /var/lib/mintlayer is the recommended location.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

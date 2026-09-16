@@ -1,0 +1,15 @@
+# Mintlayer hardware wallet access rules (Ledger, Trezor).
+# Grants the active local session access to the device via systemd 'uaccess',
+# so node-gui / wallet-cli can talk to hardware wallets without root.
+
+# Ledger (all devices, vendor id 2c97)
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2c97", MODE="0660", TAG+="uaccess"
+
+# Trezor One (SatoshiLabs)
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="534c", ATTRS{idProduct}=="0001", MODE="0660", TAG+="uaccess"
+
+# Trezor Model T bootloader
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="53c0", MODE="0660", TAG+="uaccess"
+
+# Trezor Model T firmware
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="53c1", MODE="0660", TAG+="uaccess"
