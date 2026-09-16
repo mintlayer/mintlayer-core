@@ -38,6 +38,7 @@ use pos_accounting::{Error as PosError, PoolData};
 use serialization::{Decode, Encode};
 
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
+use crate::streaming::{StreamEvent, StreamEventId};
 
 pub mod block_aux_data;
 
@@ -800,6 +801,16 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    /// Read the stream events with an id greater than `last_seen_id`, in ascending id order.
+    ///
+    /// Note: backends that don't support stream events simply return an empty list.
+    async fn read_stream_events_after(
+        &self,
+        _last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
+        Ok(Vec::new())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1000,6 +1011,41 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
+
+    /// Append an event to the stream event log and return the assigned event id.
+    ///
+    /// The event becomes visible to readers only after the enclosing transaction has been
+    /// committed, which is what guarantees that an event is never observed before the data it
+    /// refers to.
+    ///
+    /// Note: backends that don't support stream events silently drop the event and return a
+    /// dummy id.
+    async fn append_stream_event(
+        &mut self,
+        _event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        Ok(0)
+    }
+
+    /// Request a notification to be delivered to stream event listeners when (and only when) the
+    /// enclosing transaction commits, signaling that all events up to `last_event_id` are
+    /// available.
+    ///
+    /// Note: backends that don't support stream event notifications silently do nothing; listeners
+    /// are expected to poll for new events as a fallback anyway.
+    async fn notify_new_stream_events(
+        &mut self,
+        _last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
+
+    /// Delete the stream events that fell out of the retention window.
+    ///
+    /// Note: backends that don't support stream events silently do nothing.
+    async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]

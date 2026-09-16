@@ -173,6 +173,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -279,6 +280,7 @@ async fn order_pairs(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 

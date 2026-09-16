@@ -16,8 +16,10 @@
 pub mod api;
 pub mod config;
 pub mod error;
+pub mod streaming;
 
 pub use error::ApiServerWebServerError;
+pub use streaming::{StreamEventsHandle, StreamingConfig};
 
 use common::{
     chain::{ChainConfig, SignedTransaction},
@@ -60,4 +62,7 @@ pub struct ApiServerWebServerState<T, R> {
     pub rpc: R,
     pub cached_values: Arc<CachedValues>,
     pub time_getter: TimeGetter,
+    /// The channel of real-time stream events, fed by the database event pump and the node
+    /// mempool bridge, and consumed by the `/api/v2/stream` endpoint.
+    pub stream_events: StreamEventsHandle,
 }

@@ -134,6 +134,9 @@ pub fn routes<
         .route("/order", get(orders))
         .route("/order/:id", get(order))
         .route("/order/pair/:pair", get(order_pair))
+        // Note: the real-time event stream is exposed together with the v2 endpoints, since the
+        // events reference data that is served by them.
+        .route("/stream", get(super::stream::stream_events))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {

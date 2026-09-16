@@ -22,6 +22,8 @@ use tokio::net::TcpListener;
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
+use crate::streaming;
+
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Parser)]
@@ -64,6 +66,20 @@ pub struct ApiServerWebServerConfig {
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
     pub node_rpc_password: Option<String>,
+
+    /// The maximum number of real-time stream events buffered per connected client; a client that
+    /// falls further behind receives a `lag` advisory event instead of the missed events.
+    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY)]
+    pub stream_events_broadcast_capacity: usize,
+
+    /// The interval in seconds between real-time stream event polls; used as a safety net for
+    /// missed database notifications.
+    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL.as_secs())]
+    pub stream_events_poll_interval_secs: u64,
+
+    /// The interval in seconds between keepalive comments sent to connected stream clients.
+    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs())]
+    pub stream_events_keepalive_interval_secs: u64,
 }
 
 #[derive(Clone, Debug, Parser)]

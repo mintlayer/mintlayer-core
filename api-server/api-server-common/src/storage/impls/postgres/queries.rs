@@ -42,6 +42,10 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
+use crate::streaming::{
+    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_READ_BATCH_SIZE, STREAM_EVENTS_RETENTION_COUNT,
+    StreamEvent, StreamEventId,
+};
 
 const VERSION_STR: &str = "version";
 
@@ -1043,6 +1047,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // Index for searching for trading pairs
         self.just_execute(
             "CREATE INDEX orders_currencies_index ON ml.orders (ask_currency, give_currency);",
+        )
+        .await?;
+
+        // Append-only log of stream events for real-time clients; the primary key index also
+        // serves the `WHERE id > $1 ORDER BY id` reads of the event pump.
+        self.just_execute(
+            "CREATE TABLE ml.emitted_events (
+                id BIGSERIAL PRIMARY KEY,
+                kind TEXT NOT NULL,
+                payload JSONB NOT NULL
+            );",
         )
         .await?;
 
@@ -3046,6 +3061,97 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                  decode_order_from_row(&row, chain_config)
             })
             .collect()
+    }
+
+    pub async fn append_stream_event(
+        &mut self,
+        event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        let kind = event.event_name();
+        let payload = serde_json::to_string(event).map_err(|e| {
+            ApiServerStorageError::LowLevelStorageError(format!(
+                "Stream event serialization failed: {e}"
+            ))
+        })?;
+
+        let row = self
+            .tx
+            .query_one(
+                // Note: the payload is bound as text and cast to jsonb, because the string types
+                // of the postgres driver do not serialize into the jsonb type directly.
+                "INSERT INTO ml.emitted_events (kind, payload) VALUES ($1, ($2::text)::jsonb)
+                    RETURNING id;",
+                &[&kind, &payload],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.get(0))
+    }
+
+    pub async fn read_stream_events_after(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                // Note: the reads are batched to keep the memory use of the event pump bounded
+                // regardless of the backlog size.
+                "SELECT id, payload::text FROM ml.emitted_events WHERE id > $1
+                    ORDER BY id ASC LIMIT $2;",
+                &[&last_seen_id, &STREAM_EVENTS_READ_BATCH_SIZE],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        // Note: rows that cannot be decoded are skipped (with a warning) instead of failing the
+        // whole batch, so that a single corrupted row cannot stall the stream.
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let id: i64 = row.get(0);
+                let payload: String = row.get(1);
+                match serde_json::from_str(&payload) {
+                    Ok(event) => Some((id, event)),
+                    Err(err) => {
+                        logging::log::warn!("Skipping undecodable stream event #{id}: {err}");
+                        None
+                    }
+                }
+            })
+            .collect())
+    }
+
+    /// Delete the stream events that fell out of the retention window.
+    pub async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "DELETE FROM ml.emitted_events
+                    WHERE id <= (SELECT COALESCE(max(id), 0) - $1 FROM ml.emitted_events);",
+                &[&STREAM_EVENTS_RETENTION_COUNT],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn notify_new_stream_events(
+        &mut self,
+        last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        // Note: the notification is sent within the transaction that appends the events, so
+        // Postgres delivers it only if/when that transaction commits.
+        self.tx
+            .execute(
+                "SELECT pg_notify($1, $2::text);",
+                &[&STREAM_EVENTS_NOTIFY_CHANNEL, &last_event_id.to_string()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
     }
 }
 

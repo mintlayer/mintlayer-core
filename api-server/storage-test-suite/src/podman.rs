@@ -15,6 +15,20 @@
 
 use randomness::{RngExt as _, make_pseudo_rng};
 
+/// The container manager command to use: `podman` if available, otherwise `docker`.
+///
+/// Note: the two CLIs are compatible for the commands used here.
+fn container_command() -> &'static str {
+    // Note: `std::process::Command::new(...).status()` would print the lookup failure to stderr
+    // on some systems, hence the explicit probing of the PATH.
+    let podman_on_path = std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths)
+            .any(|dir| dir.join("podman").is_file() || dir.join("podman.exe").is_file())
+    });
+
+    if podman_on_path { "podman" } else { "docker" }
+}
+
 pub enum Container {
     PostgresFromDockerHub,
 }
@@ -75,7 +89,7 @@ impl Podman {
     }
 
     pub fn run(&mut self) {
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("run");
         command.arg("--detach");
         command.arg("--name");
@@ -97,7 +111,7 @@ impl Podman {
     }
 
     pub fn get_port_mapping(&self, container_port: u16) -> Option<u16> {
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("port");
         command.arg(&self.name);
         command.arg(format!("{}", container_port));
@@ -116,7 +130,7 @@ impl Podman {
     }
 
     pub fn stop(&mut self) {
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("stop");
         command.arg(&self.name);
         Self::run_command(command);
@@ -128,7 +142,7 @@ impl Podman {
             self.is_running == Some(false),
             "The container must have been created and stopped before it can be restarted"
         );
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("start");
         command.arg(&self.name);
         Self::run_command(command);
@@ -137,7 +151,7 @@ impl Podman {
 
     /// Uses the command `podman logs` to print the logs of the container.
     pub fn print_logs(&mut self) {
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("logs");
         command.arg(&self.name);
         let output = Self::run_command(command);
@@ -173,7 +187,8 @@ impl Podman {
         );
         assert!(
             output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
+            "Failed to run {} command: {:?}\n{}",
+            container_command(),
             command,
             String::from_utf8_lossy(&output.stderr)
         );
@@ -181,7 +196,7 @@ impl Podman {
     }
 
     fn remove_container(&mut self) {
-        let mut command = std::process::Command::new("podman");
+        let mut command = std::process::Command::new(container_command());
         command.arg("rm");
         command.arg(&self.name);
         Self::run_command(command);

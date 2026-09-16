@@ -100,4 +100,9 @@ impl NodeRpcClient {
 
         Ok(client)
     }
+
+    /// Direct access to the underlying WebSocket RPC client, e.g. for subscriptions.
+    pub fn ws_client(&self) -> &rpc::RpcWsClient {
+        &self.rpc_client
+    }
 }

@@ -27,6 +27,7 @@ use api_server_common::storage::storage_api::{
     PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
+use api_server_common::streaming::{StreamEvent, StreamEventId};
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
     constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
@@ -122,9 +123,37 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     ) -> Result<(), Self::Error> {
         let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
 
+        // Note: a reorg happened iff the local best block is above the common ancestor with the
+        // new chain, in which case the blocks above the common ancestor are about to be
+        // disconnected.
+        let local_best_height = db_tx.get_best_block().await?.block_height();
+        let is_reorg = local_best_height > common_block_height;
+        let removed_block_ids = if is_reorg {
+            // Note: the removed block ids must be captured before the disconnect below, because
+            // the disconnect only marks the blocks as disconnected instead of removing them.
+            Some(
+                capture_main_chain_block_ids(&mut db_tx, common_block_height, local_best_height)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
         disconnect_tables_above_height(&mut db_tx, common_block_height)
             .await
             .expect("Unable to disconnect tables");
+
+        let mut last_event_id: StreamEventId = 0;
+        if let Some(removed_block_ids) = removed_block_ids {
+            let new_tip_height = next_block_height(common_block_height, blocks.len());
+            let event = StreamEvent::Reorg {
+                common_ancestor_height: common_block_height,
+                removed_block_ids,
+                new_tip_height,
+            };
+            last_event_id = db_tx.append_stream_event(&event).await?;
+        }
+
         let mut next_order_number =
             db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
@@ -201,6 +230,14 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to set block");
 
+            let event = StreamEvent::Block {
+                block_id,
+                height: block_height,
+                timestamp: block_timestamp,
+                tx_ids: block.transactions().iter().map(|tx| tx.transaction().get_id()).collect(),
+            };
+            last_event_id = db_tx.append_stream_event(&event).await?;
+
             for (idx, tx_info) in transactions.iter().enumerate() {
                 db_tx
                     .set_transaction(
@@ -237,11 +274,46 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             .expect("Unable to update tables from block");
         }
 
+        // Note: sent within the transaction, so the notification is only delivered if the
+        // transaction commits; this is what wakes up the stream event pump in the web server.
+        // Note: the guard also skips the notify for the backends that don't support stream
+        // events, since those return the dummy event id 0 from the appends.
+        if last_event_id > 0 {
+            db_tx.prune_stream_events().await?;
+            db_tx.notify_new_stream_events(last_event_id).await?;
+        }
+
         db_tx.commit().await.expect("Unable to commit transaction");
         logging::log::info!("Database commit completed successfully");
 
         Ok(())
     }
+}
+
+/// The height of the block that follows `block_count` blocks connected on top of `base_height`.
+fn next_block_height(base_height: BlockHeight, block_count: usize) -> BlockHeight {
+    BlockHeight::new(base_height.into_int() + block_count as u64)
+}
+
+/// Collect the ids of the main chain blocks above `common_block_height`, up to and including
+/// `best_block_height`.
+///
+/// Note: this issues one query per height; the cost is linear in the reorg depth, which is
+/// bounded by the number of blocks fetched in a single scanner batch.
+async fn capture_main_chain_block_ids<T: ApiServerStorageRead>(
+    db_tx: &mut T,
+    common_block_height: BlockHeight,
+    best_block_height: BlockHeight,
+) -> Result<Vec<Id<Block>>, ApiServerStorageError> {
+    let mut block_ids = Vec::with_capacity(
+        best_block_height.into_int().saturating_sub(common_block_height.into_int()) as usize,
+    );
+    for height in (common_block_height.into_int() + 1)..=best_block_height.into_int() {
+        if let Some(block_id) = db_tx.get_main_chain_block_id(BlockHeight::new(height)).await? {
+            block_ids.push(block_id);
+        }
+    }
+    Ok(block_ids)
 }
 
 // Find locked UTXOs that are unlocked at this height or time and update address balances

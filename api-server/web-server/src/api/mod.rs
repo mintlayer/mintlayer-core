@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod json_helpers;
+pub mod stream;
 pub mod v2;
 
 use std::sync::Arc;

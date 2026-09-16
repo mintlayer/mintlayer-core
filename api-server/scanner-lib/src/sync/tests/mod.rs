@@ -1043,15 +1043,13 @@ fn create_block(
     transactions: Vec<SignedTransaction>,
 ) -> Block {
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
-    let block = tf
-        .make_pos_block_builder()
+    tf.make_pos_block_builder()
         .with_parent(prev_block_hash)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk.clone())
         .with_stake_pool_id(pool_id)
         .with_transactions(transactions)
-        .build(&mut *rng);
-    block
+        .build(&mut *rng)
 }
 
 async fn sync_and_compare(

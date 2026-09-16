@@ -13,31 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Note: the module must not be called `common`, which would be ambiguous with the `common`
+// workspace crate; the path attribute decouples the module name from the file name.
+#[path = "common/mod.rs"]
+mod test_common;
 mod v2;
 
 use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
-use api_web_server::{ApiServerWebServerState, CachedValues, TxSubmitClient, api::web_server};
-use common::{
-    chain::{SignedTransaction, config::create_unit_test_config},
-    primitives::time::get_time,
-};
-use mempool::FeeRate;
-use node_comm::rpc_client::NodeRpcError;
+use api_web_server::{ApiServerWebServerState, CachedValues, api::web_server};
+use common::{chain::config::create_unit_test_config, primitives::time::get_time};
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 
-struct DummyRPC {}
-
-#[async_trait::async_trait]
-impl TxSubmitClient for DummyRPC {
-    async fn submit_tx(&self, _: SignedTransaction) -> Result<(), NodeRpcError> {
-        Ok(())
-    }
-
-    async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
-        Ok(vec![])
-    }
-}
+pub use test_common::DummyRPC;
 
 pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -56,6 +44,7 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 

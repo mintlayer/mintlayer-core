@@ -73,6 +73,7 @@ async fn ok(#[case] seed: Seed) {
                     )),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -142,6 +143,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
                     )),
                 }),
                 time_getter,
+                stream_events: Default::default(),
             }
         };
 

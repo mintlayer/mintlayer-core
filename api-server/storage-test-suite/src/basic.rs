@@ -2233,9 +2233,101 @@ where
 {
     vec![
         make_test!(initialization, storage_maker.clone()),
-        make_test!(set_get, storage_maker),
+        make_test!(set_get, storage_maker.clone()),
+        make_test!(stream_events_append_and_read, storage_maker),
     ]
     .into_iter()
+}
+
+/// Streaming events are only visible to readers after the writing transaction has been committed,
+/// and are returned in ascending id order.
+///
+/// Note: the backends that don't support stream events simply drop the appended events and return
+/// an empty list on reads.
+pub async fn stream_events_append_and_read<S, Fut, F>(
+    storage_maker: Arc<F>,
+    _seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    use api_server_common::streaming::{StreamEvent, TxOrigin};
+    use common::primitives::H256;
+
+    let tx_id = Id::<Transaction>::new(H256::from_low_u64_be(1));
+    let events = vec![
+        StreamEvent::TxSeen {
+            tx_id,
+            origin: TxOrigin::Local,
+        },
+        StreamEvent::TxSeen {
+            tx_id,
+            origin: TxOrigin::Remote,
+        },
+    ];
+
+    let mut storage = storage_maker().await;
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        let chain_config = create_unit_test_config();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    // Phase 1: events appended in a rolled back transaction are never visible.
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        for event in &events {
+            tx.append_stream_event(event).await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+
+        let db_tx = storage.transaction_ro().await.unwrap();
+        assert!(db_tx.read_stream_events_after(0).await.unwrap().is_empty());
+    }
+
+    // Phase 2: the committed events are visible, in ascending id order.
+    let mut tx = storage.transaction_rw().await.unwrap();
+
+    for event in &events {
+        tx.append_stream_event(event).await.unwrap();
+    }
+
+    tx.commit().await.unwrap();
+
+    let db_tx = storage.transaction_ro().await.unwrap();
+    let read_events = db_tx.read_stream_events_after(0).await.unwrap();
+
+    // Note: backends without stream event support return an empty list.
+    assert!(
+        read_events.is_empty() || read_events.len() == events.len(),
+        "unexpected number of stream events: {}",
+        read_events.len()
+    );
+
+    if !read_events.is_empty() {
+        // Note: the events are returned in ascending id order and the ids are strictly monotonic.
+        let ids = read_events.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        assert!(
+            ids.windows(2).all(|ids| ids[0] < ids[1]),
+            "ids not monotonic: {ids:?}"
+        );
+
+        for ((_, read_event), expected_event) in read_events.iter().zip(events.iter()) {
+            assert_eq!(read_event, expected_event);
+        }
+
+        // Note: reading after the last seen id returns nothing new.
+        assert!(db_tx.read_stream_events_after(ids[1]).await.unwrap().is_empty());
+        assert_eq!(
+            db_tx.read_stream_events_after(ids[0]).await.unwrap().len(),
+            1
+        );
+    }
+
+    Ok(())
 }
 
 fn get_all_substrings(s: &str) -> Vec<&str> {
