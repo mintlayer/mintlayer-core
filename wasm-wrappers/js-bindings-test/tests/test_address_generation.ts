@@ -44,6 +44,7 @@ export const ADDRESS = "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n";
 export function test_address_generation() {
   run_one_test(predefined_address_test);
   run_one_test(general_test);
+  run_one_test(passphrase_test);
 }
 
 export function predefined_address_test() {
@@ -153,4 +154,48 @@ export function general_test() {
       throw new Error("Incorrect address generated");
     }
   }
+}
+
+// Tests the optional BIP39 passphrase parameter of `make_default_account_privkey`:
+//  - the legacy call forms (2 arguments, `undefined`, `null`, "") must all be equivalent;
+//  - a non-empty passphrase must produce different keys and a different address;
+//  - derivations with a passphrase must be reproducible.
+export function passphrase_test() {
+  const PASSPHRASE = "test passphrase";
+
+  const legacy_key = make_default_account_privkey(MNEMONIC, Network.Testnet);
+  for (const passphrase of [undefined, null, ""]) {
+    const key = make_default_account_privkey(MNEMONIC, Network.Testnet, passphrase);
+    assert_eq_arrays(legacy_key, key);
+  }
+
+  const passphrase_key = make_default_account_privkey(MNEMONIC, Network.Testnet, PASSPHRASE);
+  const passphrase_key2 = make_default_account_privkey(MNEMONIC, Network.Testnet, PASSPHRASE);
+  assert_eq_arrays(passphrase_key, passphrase_key2);
+  if (passphrase_key.length !== legacy_key.length) {
+    throw new Error("Passphrase-derived key has an unexpected length");
+  }
+  assert_eq_arrays_is_different(legacy_key, passphrase_key);
+
+  const legacy_address = pubkey_to_pubkeyhash_address(
+    public_key_from_private_key(make_receiving_address(legacy_key, 0)),
+    Network.Testnet
+  );
+  const passphrase_address = pubkey_to_pubkeyhash_address(
+    public_key_from_private_key(make_receiving_address(passphrase_key, 0)),
+    Network.Testnet
+  );
+  if (legacy_address === passphrase_address) {
+    throw new Error("Passphrase-derived address unexpectedly equals the legacy address");
+  }
+
+  console.log("Tested BIP39 passphrase support successfully");
+}
+
+function assert_eq_arrays_is_different(arr1: Uint8Array, arr2: Uint8Array) {
+  if (arr1.length !== arr2.length) return;
+  for (let i = 0; i < arr1.length; i++) {
+    if (arr1[i] !== arr2[i]) return;
+  }
+  throw new Error("Arrays are unexpectedly equal");
 }

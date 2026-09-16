@@ -25,6 +25,7 @@ fixed-hash.workspace = true
 itertools.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+zeroize.workspace = true
 
 # This is required for `rand` to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 # Note that technically we use 2 differeent versions of `rand` (0.8 and 0.10) which depend on different versions of
@@ -43,3 +44,4 @@ serde-wasm-bindgen = "0.6"
 hex.workspace = true
 rstest.workspace = true
 test-utils = { path = "../test-utils" }
+wallet = { path = "../wallet", default-features = false }

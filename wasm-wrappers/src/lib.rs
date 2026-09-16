@@ -123,13 +123,31 @@ pub fn make_private_key() -> Vec<u8> {
 
 /// Create the default account's extended private key for a given mnemonic
 /// derivation path: 44'/mintlayer_coin_type'/0'
+///
+/// The optional `passphrase` is used as the BIP39 passphrase when converting the mnemonic
+/// to a seed (the seed is derived as PBKDF2-HMAC-SHA512 over the mnemonic with the salt
+/// "mnemonic" + passphrase). Passing `None` (or `undefined`/`null` from JS, or an empty
+/// string) preserves the legacy behavior of deriving without a passphrase.
+///
+/// Note: wallets derived with a non-empty passphrase produce completely different keys,
+/// so a passphrase must be remembered together with the mnemonic.
 #[wasm_bindgen]
-pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<Vec<u8>, Error> {
+pub fn make_default_account_privkey(
+    mnemonic: &str,
+    network: Network,
+    passphrase: Option<String>,
+) -> Result<Vec<u8>, Error> {
     let mnemonic =
         bip39::Mnemonic::parse_in(Language::English, mnemonic).map_err(Error::InvalidMnemonic)?;
-    let seed = mnemonic.to_seed("");
 
-    let root_key = ExtendedPrivateKey::new_master(&seed, ExtendedKeyKind::Secp256k1Schnorr)
+    // Best-effort mitigation: zeroize the passphrase and the derived seed when they are
+    // dropped. The derived keys and the encoded result returned over the JS boundary
+    // cannot be fully protected, but this limits the lifetime of the raw secret material.
+    let passphrase = passphrase.map(zeroize::Zeroizing::new);
+    let passphrase: &str = passphrase.as_deref().map_or("", |p| p.as_str());
+    let seed = zeroize::Zeroizing::new(mnemonic.to_seed(passphrase));
+
+    let root_key = ExtendedPrivateKey::new_master(seed.as_ref(), ExtendedKeyKind::Secp256k1Schnorr)
         .expect("Should not fail to create a master key");
 
     let chain_config = Builder::new(network.into()).build();

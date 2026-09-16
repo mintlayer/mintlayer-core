@@ -2,6 +2,31 @@
 
 This module has different basic functionalities of mintlayer compiled into wasm for various purposes, primarily interfacing with other systems and languages without having to rewrite code.
 
+## BIP39 passphrase support
+
+`make_default_account_privkey` accepts an optional BIP39 passphrase as its third argument:
+
+```js
+// Legacy wallets (no passphrase) - all of these are equivalent:
+make_default_account_privkey(mnemonic, Network.Mainnet);
+make_default_account_privkey(mnemonic, Network.Mainnet, undefined);
+make_default_account_privkey(mnemonic, Network.Mainnet, null);
+make_default_account_privkey(mnemonic, Network.Mainnet, "");
+
+// Wallets created with a passphrase:
+make_default_account_privkey(mnemonic, Network.Mainnet, "my secret passphrase");
+```
+
+The passphrase is used as the BIP39 passphrase when converting the mnemonic to a seed
+(the salt is `"mnemonic" + passphrase`). A non-empty passphrase produces completely
+different keys, so it must be remembered together with the mnemonic. Deriving keys
+without a passphrase keeps the legacy behavior byte-for-byte, so existing wallets are
+unaffected.
+
+The downstream functions (`make_receiving_address`, `make_change_address`,
+`encode_witness`, `sign_challenge`, etc.) take the extended private key produced by
+`make_default_account_privkey` and need no changes.
+
 ##### Note: This was tested on x86_64 Linux, and may not work on other platforms. It didn't work on M1 Mac directly (particularly the build. A pre-built wasm binary works fine on a browser, see below for more information).
 
 ## Running the tests

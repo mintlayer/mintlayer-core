@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+- `make_default_account_privkey` now accepts an optional BIP39 passphrase as its third
+  argument: `make_default_account_privkey(mnemonic, network, passphrase?)`. The passphrase
+  is used as the BIP39 passphrase when converting the mnemonic to a seed
+  (salt = "mnemonic" + passphrase).
+  **Note:** passing `None`/`undefined`/`null` (or an empty string) preserves the legacy
+  behavior of deriving without a passphrase, byte-for-byte. Wallets derived with a
+  non-empty passphrase produce completely different keys; consumers must keep deriving
+  legacy wallets with no passphrase and pass the user's passphrase only for wallets
+  created with one.
+
 ## [1.4.0] - 2026-07-09
 
 No changes
