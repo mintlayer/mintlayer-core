@@ -63,10 +63,12 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
-        Block, ChainConfig, Currency, Destination, GenBlock, PoolId, SighashInputCommitmentVersion,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, Block, ChainConfig, Currency, Destination, GenBlock, OrderAccountCommand,
+        OrderId, PoolId, SighashInputCommitmentVersion, SignedTransaction, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
+        output_value::OutputValue,
         signature::{
             DestinationSigError, Transactable, inputsig::InputWitness,
             sighash::input_commitments::SighashInputCommitment,
@@ -118,7 +120,7 @@ pub use wallet_types::{
 use wallet_types::hw_data::HardwareWalletFullInfo;
 use wallet_types::{
     partially_signed_transaction::{
-        PartiallySignedTransaction, PartiallySignedTransactionError,
+        OrderAdditionalInfo, PartiallySignedTransaction, PartiallySignedTransactionError,
         PartiallySignedTransactionWalletExt as _, PtxAdditionalInfo,
         SighashInputCommitmentCreationError, make_sighash_input_commitments,
     },
@@ -1170,7 +1172,14 @@ where
         .await?;
 
         let only_input_utxos = input_utxos.iter().flatten().cloned().collect_vec();
-        let fees = self.get_fees(&only_input_utxos, stx.outputs()).await?;
+        let fees = self
+            .get_fees(
+                stx.inputs(),
+                &only_input_utxos,
+                stx.outputs(),
+                Some(&additional_infos),
+            )
+            .await?;
 
         let input_commitments_v0 = make_sighash_input_commitments(
             stx.inputs(),
@@ -1234,7 +1243,14 @@ where
         ptx: PartiallySignedTransaction,
     ) -> Result<InspectTransaction, ControllerError<N>> {
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
-        let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
+        let fees = self
+            .get_fees(
+                ptx.tx().inputs(),
+                &input_utxos,
+                ptx.tx().outputs(),
+                Some(ptx.additional_info()),
+            )
+            .await?;
 
         let input_commitments_v0 =
             ptx.make_sighash_input_commitments(SighashInputCommitmentVersion::V0)?;
@@ -1311,7 +1327,9 @@ where
             })
             .collect();
         let fees = match self.fetch_utxos(&inputs).await {
-            Ok(input_utxos) => Some(self.get_fees(&input_utxos, tx.outputs()).await?),
+            Ok(input_utxos) => {
+                Some(self.get_fees(tx.inputs(), &input_utxos, tx.outputs(), None).await?)
+            }
             Err(_) => None,
         };
         let num_inputs = tx.inputs().len();
@@ -1382,7 +1400,7 @@ where
         only_transaction: bool,
     ) -> Result<(TransactionToSign, Balances), ControllerError<N>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
-        let fees = self.get_fees(&input_utxos, &outputs).await?;
+        let fees = self.get_fees(&[], &input_utxos, &outputs, None).await?;
 
         let num_inputs = inputs.len();
         let inputs = inputs.into_iter().map(TxInput::Utxo).collect();
@@ -1440,11 +1458,16 @@ where
 
     async fn get_fees(
         &self,
-        inputs: &[TxOutput],
+        tx_inputs: &[TxInput],
+        input_utxos: &[TxOutput],
         outputs: &[TxOutput],
+        additional_order_info: Option<&PtxAdditionalInfo>,
     ) -> Result<Balances, ControllerError<N>> {
-        let mut inputs = self.group_inputs(inputs)?;
-        let outputs = self.group_outputs(outputs)?;
+        let mut inputs = self.group_inputs(input_utxos)?;
+        let mut outputs = self.group_outputs(outputs)?;
+
+        self.add_order_command_amounts(tx_inputs, additional_order_info, &mut inputs, &mut outputs)
+            .await?;
 
         let mut fees = BTreeMap::new();
 
@@ -1465,6 +1488,131 @@ where
         fees.extend(inputs);
 
         into_balances(&self.rpc_client, &self.chain_config, fees).await
+    }
+
+    // Credits the values that order account command inputs take from (for FillOrder) or free
+    // from (for ConcludeOrder) the orders' escrow, mirroring the orders accounting semantics.
+    // For FillOrder the ask currency amount paid by the filler is added to `output_amounts`
+    // because it is consumed by the transaction.
+    async fn add_order_command_amounts(
+        &self,
+        tx_inputs: &[TxInput],
+        additional_order_info: Option<&PtxAdditionalInfo>,
+        input_amounts: &mut BTreeMap<Currency, Amount>,
+        output_amounts: &mut BTreeMap<Currency, Amount>,
+    ) -> Result<(), ControllerError<N>> {
+        for input in tx_inputs {
+            match input {
+                TxInput::AccountCommand(_, command) => match command {
+                    AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
+                        let order_info =
+                            self.resolve_order_info(*order_id, additional_order_info).await?;
+                        let filled_amount = orders_accounting::calculate_filled_amount(
+                            order_info.ask_balance,
+                            order_info.give_balance,
+                            *fill_amount_in_ask_currency,
+                        )
+                        .ok_or(ControllerError::<N>::WalletError(
+                            WalletError::CalculateOrderFilledAmountFailed(*order_id),
+                        ))?;
+
+                        add_amount(
+                            input_amounts,
+                            order_currency(&order_info.initially_given)?,
+                            filled_amount,
+                        )
+                        .map_err(ControllerError::WalletError)?;
+                        add_amount(
+                            output_amounts,
+                            order_currency(&order_info.initially_asked)?,
+                            *fill_amount_in_ask_currency,
+                        )
+                        .map_err(ControllerError::WalletError)?;
+                    }
+                    AccountCommand::ConcludeOrder(order_id) => {
+                        let order_info =
+                            self.resolve_order_info(*order_id, additional_order_info).await?;
+                        add_concluded_order_amounts(&order_info, input_amounts)
+                            .map_err(ControllerError::WalletError)?;
+                    }
+                    AccountCommand::MintTokens(..)
+                    | AccountCommand::LockTokenSupply(_)
+                    | AccountCommand::UnmintTokens(_)
+                    | AccountCommand::FreezeToken(..)
+                    | AccountCommand::UnfreezeToken(_)
+                    | AccountCommand::ChangeTokenAuthority(..)
+                    | AccountCommand::ChangeTokenMetadataUri(..) => {}
+                },
+                TxInput::OrderAccountCommand(command) => match command {
+                    OrderAccountCommand::FillOrder(order_id, fill_amount_in_ask_currency) => {
+                        let order_info =
+                            self.resolve_order_info(*order_id, additional_order_info).await?;
+                        let filled_amount = orders_accounting::calculate_filled_amount(
+                            order_info.initially_asked.amount(),
+                            order_info.initially_given.amount(),
+                            *fill_amount_in_ask_currency,
+                        )
+                        .ok_or(ControllerError::<N>::WalletError(
+                            WalletError::CalculateOrderFilledAmountFailed(*order_id),
+                        ))?;
+
+                        add_amount(
+                            input_amounts,
+                            order_currency(&order_info.initially_given)?,
+                            filled_amount,
+                        )
+                        .map_err(ControllerError::WalletError)?;
+                        add_amount(
+                            output_amounts,
+                            order_currency(&order_info.initially_asked)?,
+                            *fill_amount_in_ask_currency,
+                        )
+                        .map_err(ControllerError::WalletError)?;
+                    }
+                    OrderAccountCommand::ConcludeOrder(order_id) => {
+                        let order_info =
+                            self.resolve_order_info(*order_id, additional_order_info).await?;
+                        add_concluded_order_amounts(&order_info, input_amounts)
+                            .map_err(ControllerError::WalletError)?;
+                    }
+                    OrderAccountCommand::FreezeOrder(_) => {}
+                },
+                TxInput::Utxo(_) | TxInput::Account(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    // Order balances are committed to by the transaction's signatures, so the additional info
+    // embedded in a PartiallySignedTransaction is used when present and the node is only asked
+    // otherwise (e.g. when a signed transaction is inspected).
+    async fn resolve_order_info(
+        &self,
+        order_id: OrderId,
+        additional_order_info: Option<&PtxAdditionalInfo>,
+    ) -> Result<OrderAdditionalInfo, ControllerError<N>> {
+        if let Some(order_info) = additional_order_info
+            .and_then(|additional_info| additional_info.get_order_info(&order_id))
+        {
+            return Ok(order_info.clone());
+        }
+
+        let order_info = self
+            .rpc_client
+            .get_order_info(order_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::<N>::WalletError(
+                WalletError::OrderInfoMissing(order_id),
+            ))?;
+
+        Ok(OrderAdditionalInfo {
+            initially_asked: order_info.initially_asked.into(),
+            initially_given: order_info.initially_given.into(),
+            ask_balance: order_info.ask_balance,
+            give_balance: order_info.give_balance,
+        })
     }
 
     fn group_outputs(
@@ -1711,4 +1859,44 @@ where
                 .expect("Sleep intervals cannot be this large");
         }
     }
+}
+
+fn add_amount(
+    amounts: &mut BTreeMap<Currency, Amount>,
+    currency: Currency,
+    amount: Amount,
+) -> Result<(), WalletError> {
+    let entry = amounts.entry(currency).or_insert(Amount::ZERO);
+    *entry = (*entry + amount).ok_or(WalletError::OutputAmountOverflow)?;
+    Ok(())
+}
+
+fn order_currency(output_value: &OutputValue) -> Result<Currency, WalletError> {
+    Currency::from_output_value(output_value).ok_or(WalletError::UnsupportedTransactionOutput(
+        Box::new(TxOutput::Transfer(
+            output_value.clone(),
+            Destination::AnyoneCanSpend,
+        )),
+    ))
+}
+
+fn add_concluded_order_amounts(
+    order_info: &OrderAdditionalInfo,
+    input_amounts: &mut BTreeMap<Currency, Amount>,
+) -> Result<(), WalletError> {
+    add_amount(
+        input_amounts,
+        order_currency(&order_info.initially_given)?,
+        order_info.give_balance,
+    )?;
+
+    let filled_ask_amount = (order_info.initially_asked.amount() - order_info.ask_balance)
+        .ok_or(WalletError::OutputAmountOverflow)?;
+    add_amount(
+        input_amounts,
+        order_currency(&order_info.initially_asked)?,
+        filled_ask_amount,
+    )?;
+
+    Ok(())
 }

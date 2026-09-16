@@ -10132,6 +10132,7 @@ dependencies = [
  "mempool",
  "mempool-types",
  "node-comm",
+ "orders-accounting",
  "p2p-types",
  "randomness",
  "rpc",
