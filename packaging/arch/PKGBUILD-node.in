@@ -1,0 +1,23 @@
+# Maintainer: Mintlayer <devs@mintlayer.org>
+# Rendered by packaging/arch/build.sh from this template — do not use directly.
+pkgname=mintlayer-node
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Mintlayer node and associated tools"
+arch=('@ARCH@')
+url="https://github.com/mintlayer/mintlayer-core"
+license=('MIT')
+depends=(@DEPENDS@)
+backup=(@BACKUP@)
+install='mintlayer-node.install'
+# The payload consists of prebuilt release binaries; makepkg only repackages
+# the staged tree (strip is handled by the builder where arch-matched).
+options=('!strip' '!debug')
+
+# Repackaging of prebuilt binaries only (see packaging/README.md). The
+# payload directory is staged by packaging/arch/build.sh and rendered in
+# place of @PAYLOAD_DIR@; it stays root-owned so the package records correct
+# file ownership.
+package() {
+    cp -a '@PAYLOAD_DIR@/.' "$pkgdir/"
+}

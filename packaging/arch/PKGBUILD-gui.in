@@ -1,0 +1,23 @@
+# Maintainer: Mintlayer <devs@mintlayer.org>
+# Rendered by packaging/arch/build.sh from this template — do not use directly.
+pkgname=mintlayer-node-gui
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Graphical interface for the Mintlayer node"
+arch=('@ARCH@')
+url="https://github.com/mintlayer/mintlayer-core"
+license=('MIT')
+depends=(@DEPENDS@ 'hicolor-icon-theme')
+optdepends=('mintlayer-node: Ledger/Trezor hardware wallet udev rules')
+# The GUI recommends the node package for the Ledger/Trezor udev rules, like
+# the deb/rpm packages do; a soft preference cannot be expressed in Arch
+# metadata, so it is only documented here and in packaging/README.md.
+options=('!strip' '!debug')
+
+# Repackaging of prebuilt binaries only (see packaging/README.md). The
+# payload directory is staged by packaging/arch/build.sh and rendered in
+# place of @PAYLOAD_DIR@; it stays root-owned so the package records correct
+# file ownership.
+package() {
+    cp -a '@PAYLOAD_DIR@/.' "$pkgdir/"
+}

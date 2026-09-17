@@ -6,10 +6,22 @@ on:
       binary_list:
         required: true
         type: string
+  workflow_dispatch:
+    inputs:
+      binary_list:
+        description: 'Binaries bundled into the plain zip artifacts (the NSIS installers always ship the full set)'
+        required: false
+        type: string
+        default: 'api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon'
 
 jobs:
   build:
     runs-on: windows-latest
+    # Note: bounds the whole job, and in particular the installer smoke test below (every
+    # installed binary is executed with a per-process timeout as well; this is the backstop).
+    timeout-minutes: 120
+    permissions:
+      contents: read
     env:
         # With the default CARGO_HOME the job will fail due to Windows path length limit when
         # checking out the trezor firmware repo. E.g. one of the paths looks like this:
@@ -19,11 +31,26 @@ jobs:
     - uses: actions/checkout@v5
       with:
         submodules: recursive
+        fetch-depth: 0  # git describe needs history for the dispatch fallback version
+        persist-credentials: false  # the checkout is only built, never pushed
 
     - name: Extract version from tag
       id: get_version
       run: |
         $VERSION = $env:GITHUB_REF -replace 'refs/tags/', '' -replace '^v', ''
+        if ($VERSION -eq $env:GITHUB_REF) {
+          $VERSION = git describe --tags --abbrev=0 2>$null
+          $VERSION = $VERSION -replace '^v', ''
+        }
+        if ([string]::IsNullOrEmpty($VERSION)) {
+          $VERSION = "0.0.0-ci"
+        }
+        # Validate the grammar up front, so a non-semver tag fails here with a clear message
+        # instead of deep inside a packaging script (the same grammar the NSIS tooling and the
+        # Linux builders enforce).
+        if ($VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+          throw "derived version '$VERSION' is not X.Y.Z[-suffix]; tag a semver release"
+        }
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Version extracted: $VERSION"
       shell: pwsh
@@ -36,12 +63,17 @@ jobs:
     - name: Build Mintlayer Node and GUI
       run: cargo build --release --locked --features trezor,ledger
 
+    # Note: the version (and the workflow input) are passed through environment
+    # variables instead of direct ${{ }} interpolation into the run blocks, so
+    # that a crafted tag/ref/input cannot inject shell into the steps.
     - name: Package Mintlayer Node
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+        BINARY_LIST: ${{ inputs.binary_list }}
       run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_win_${VERSION}"
+        $DEST = "Mintlayer_Node_win_$env:VERSION"
         New-Item -ItemType Directory -Path $DEST
-        $binary_list = "${{ inputs.binary_list }}" -split ',' | Where-Object { $_ -ne "node-gui" }
+        $binary_list = $env:BINARY_LIST -split ',' | Where-Object { $_ -ne "node-gui" }
         foreach ($binary in $binary_list) {
           $binary = $binary.Trim()
         if (Test-Path "target\release\$binary.exe") {
@@ -63,26 +95,25 @@ jobs:
       run: .\build-tools\win\create-license.ps1
       shell: pwsh
 
-    - name: Create NSIS Installer Script
-      run: .\build-tools\win\create-nsis-script.ps1 -Version "${{ steps.get_version.outputs.VERSION }}"
+    - name: Create NSIS installers (node + GUI)
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+      run: .\build-tools\win\create-nsis-installers.ps1 -Version $env:VERSION
       shell: pwsh
 
-    - name: Build NSIS Installer
+    - name: Smoke test installers (silent install/uninstall)
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        $makensisPath = (Get-Command makensis.exe).Source
-        Write-Host "Using makensis at: $makensisPath"
-        & $makensisPath installer.nsi
-      shell: pwsh
-
-    - name: Display NSIS Script
-      run: |
-        Get-Content -Path installer.nsi
+        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_win_${env:VERSION}_Setup.exe" -AppName "Mintlayer Node" -Kind node -Version $env:VERSION
+        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_GUI_win_${env:VERSION}_Setup.exe" -AppName "Mintlayer Node GUI" -Kind gui -Version $env:VERSION
       shell: pwsh
 
     - name: Package Mintlayer Node GUI
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_GUI_win_${VERSION}"
+        $DEST = "Mintlayer_Node_GUI_win_$env:VERSION"
         New-Item -ItemType Directory -Path $DEST
         Copy-Item "target\release\node-gui.exe" -Destination $DEST
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
@@ -100,7 +131,13 @@ jobs:
         name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}
         path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}.zip
 
-    - name: Upload NSIS Installer Artifact
+    - name: Upload Node NSIS Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}_Setup
+        path: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+
+    - name: Upload GUI NSIS Installer Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup

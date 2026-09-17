@@ -1,0 +1,25 @@
+# Arch package scriptlet for mintlayer-node.
+#
+# The `mintlayer` system user is created automatically by pacman's systemd
+# hook from the shipped sysusers.d file, and the systemd units are reloaded
+# by the same hook mechanism; udev rule reloading is likewise handled by the
+# distro hooks, so none of that is duplicated here.
+
+post_install() {
+    # Apply the shipped preset policy: enable the mainnet node instance.
+    # Note: Arch convention is to not start services from package scripts, so
+    # the unit is enabled for the next boot only; start it with
+    #   systemctl start mintlayer-node@mainnet.service
+    systemctl preset mintlayer-node@mainnet.service >/dev/null 2>&1 || true
+}
+
+post_upgrade() {
+    # Deliberately empty: preset is applied at install time only, so an admin
+    # who disabled the unit is not overridden on upgrade. Unit reloading is
+    # handled by pacman's systemd hook.
+    :
+}
+
+pre_remove() {
+    systemctl disable --now mintlayer-node@mainnet.service >/dev/null 2>&1 || true
+}

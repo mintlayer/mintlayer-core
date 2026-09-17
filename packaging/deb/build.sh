@@ -14,6 +14,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=../common/lib.sh
+. "$PKG_ROOT/common/lib.sh"
 
 PACKAGE=""
 VERSION=""
@@ -77,9 +79,7 @@ mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/usr/bin"
 if [ "$PACKAGE" = node ]; then
     [ -n "$BINARIES_DIR" ] || { echo "--binaries-dir required for node" >&2; exit 2; }
     # All daemons + CLI tools, renamed with the mintlayer- prefix
-    for bin in node-daemon wallet-rpc-daemon api-web-server \
-               api-blockchain-scanner-daemon dns-server wallet-cli \
-               wallet-address-generator; do
+    for bin in "${NODE_BINARIES[@]}"; do
         cp "$BINARIES_DIR/$bin" "$PKGDIR/usr/bin/mintlayer-$bin"
         chmod 0755 "$PKGDIR/usr/bin/mintlayer-$bin"
     done
@@ -132,13 +132,10 @@ fi
 # Version handling
 # ---------------------------------------------------------------------------
 # Guard against sed metacharacters and nonsense versions from the tag input.
-case "$VERSION" in
-    ''|*[!0-9.+-a-zA-Z~]*) echo "invalid --version: $VERSION" >&2; exit 2 ;;
-esac
-case "$VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;  # e.g. 1.4.0, 1.4.0-rc1, 1.4.0-rc1-1
-    *) echo "invalid --version (expected X.Y.Z[-suffix]): $VERSION" >&2; exit 2 ;;
-esac
+if ! validate_version "$VERSION"; then
+    echo "$VERSION_FORMAT_ERROR" >&2
+    exit 2
+fi
 
 # The deb version always carries an explicit Debian revision (e.g. 1.4.0-1,
 # 1.4.0-rc1-1): without it the package looks "native", which changes lintian's
@@ -162,25 +159,7 @@ gzip -n -9 -c "$CHANGELOG" > "$DOC_DIR/changelog.Debian.gz"
 rm -f "$CHANGELOG"
 
 # Man pages from --help output (binaries are executable on this host arch)
-export LC_ALL=C.UTF-8
-MAN_DIR="$PKGDIR/usr/share/man/man1"
-mkdir -p "$MAN_DIR"
-for binpath in "$PKGDIR"/usr/bin/*; do
-    binname="$(basename "$binpath")"
-    if "$binpath" --help >/dev/null 2>&1; then
-        help2man --no-info --version-string="$VERSION" \
-            --name="Part of the Mintlayer node software" \
-            "$binpath" > "$MAN_DIR/$binname.1" 2>/dev/null ||
-            { echo "warning: help2man failed for $binname, shipping stub" >&2
-              printf '.TH %s 1\n.SH NAME\n%s \\- Mintlayer tool\n' "$binname" "$binname" \
-                > "$MAN_DIR/$binname.1"; }
-    else
-        echo "warning: $binname --help not runnable, shipping stub man page" >&2
-        printf '.TH %s 1\n.SH NAME\n%s \\- Mintlayer tool\n' "$binname" "$binname" \
-            > "$MAN_DIR/$binname.1"
-    fi
-    gzip -n -9 "$MAN_DIR/$binname.1"
-done
+gen_man "$PKGDIR" "$VERSION" 1
 
 # ---------------------------------------------------------------------------
 # Verify every binary's shared libraries resolve in this environment.

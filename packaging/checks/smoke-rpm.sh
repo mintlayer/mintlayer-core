@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Install-smoke test for a built .rpm. Runs INSIDE a fedora:latest container
+# Install-smoke test for a built .rpm. Runs INSIDE the pinned $FEDORA_IMAGE container
 # with the repository mounted at /work.
 # Usage: smoke-rpm.sh <path/to/pkg.rpm> <package-name> node|gui
 set -euo pipefail
+
+# Shared binary list (NODE_BINARIES)
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/lib.sh"
 
 RPM_FILE="$(readlink -f "$1")"
 PKG_NAME="$2"
@@ -20,9 +23,7 @@ if [ "$KIND" = node ]; then
     id mintlayer
 
     echo "== binaries =="
-    for bin in node-daemon wallet-rpc-daemon api-web-server \
-               api-blockchain-scanner-daemon dns-server wallet-cli \
-               wallet-address-generator; do
+    for bin in "${NODE_BINARIES[@]}"; do
         test -x "/usr/bin/mintlayer-$bin"
         "/usr/bin/mintlayer-$bin" --help >/dev/null 2>&1
         echo "  ok: mintlayer-$bin --help"
