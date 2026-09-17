@@ -55,12 +55,13 @@ case "$ARCH" in
 esac
 
 # Sanitize version for Arch (pkgver allows only alphanumerics, dots and
-# underscores; 1.4.1-rc1 -> 1.4.1_rc1).
+# underscores; 1.4.1-rc1 -> 1.4.1_rc1). The mapping is injective because
+# validate_version rejects '~' (see common/lib.sh).
 if ! validate_version "$VERSION"; then
     echo "$VERSION_FORMAT_ERROR" >&2
     exit 2
 fi
-PKGVER="$(printf '%s' "$VERSION" | tr -- '-~' '__')"
+PKGVER="$(printf '%s' "$VERSION" | tr -- '-' '_')"
 
 NATIVE=0
 [ "$ARCH" = "$(uname -m)" ] && NATIVE=1
@@ -143,8 +144,12 @@ fi
 # matches the target (see the header comment for the cross-target behavior).
 # ---------------------------------------------------------------------------
 if [ "$NATIVE" -eq 1 ]; then
+    # The if-guard keeps an "already stripped" match failure from tripping
+    # errexit (same as the deb builder).
     for binpath in "$BR"/usr/bin/*; do
-        file "$binpath" | grep -q "not stripped" && strip --strip-unneeded "$binpath"
+        if file "$binpath" | grep -q "not stripped"; then
+            strip --strip-unneeded "$binpath"
+        fi
     done
 else
     echo "cross-target build ($(uname -m) container, $ARCH target): skipping strip"

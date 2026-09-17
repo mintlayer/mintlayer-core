@@ -17,10 +17,11 @@ $ErrorActionPreference = "Stop"
 $TemplateDir = Join-Path $PSScriptRoot "nsi"
 
 # The version comes from the git tag and ends up inside NSIS string literals;
-# restrict it to the same charset the Linux packages allow so it cannot break
-# out of them.
-if ($Version -notmatch '^[0-9][0-9A-Za-z.~+-]*$') {
-    throw "invalid version '$Version' (expected digits-first X.Y.Z[-suffix])"
+# restrict it to the same grammar the Linux packages enforce (X.Y.Z with an
+# optional -suffix, see packaging/common/lib.sh) so it cannot break out of
+# them and both package families ship from the same version format.
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+    throw "invalid version '$Version' (expected X.Y.Z with an optional -suffix)"
 }
 
 if (-not (Test-Path "LICENSE.txt")) {

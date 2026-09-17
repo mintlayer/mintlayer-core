@@ -198,17 +198,20 @@ jobs:
             --gui-binary /work/target/$ARCH-unknown-linux-gnu/release/node-gui \
             --repo-root /work --out /work/dist
 
-    # pacman refuses foreign-architecture packages, so the install smoke test
-    # only runs on the x86_64 leg; the arm64 payload is covered by the builder
-    # itself plus the artifact-name gate.
+    # x86_64 leg: arch-matched container (native strip, ldd-based
+    # dependencies, help2man man pages), so the package installs natively.
+    # aarch64 leg: the same amd64-only image installs the foreign-arch
+    # package with IgnoreArch and runs the binaries through the qemu binfmt
+    # handlers registered above — the same emulation the deb/rpm legs use
+    # for their arm64 smoke tests.
     - name: Smoke test Arch packages
-      if: matrix.arch == 'x86_64'
       run: |
         source packaging/images.env
+        ARCH=${{ matrix.arch }}
         docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
-          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.pkg.tar.zst mintlayer-node node
+          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.pkg.tar.zst mintlayer-node node "$ARCH"
         docker run --rm -v "$PWD":/work -w /work $ARCH_IMAGE \
-          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.pkg.tar.zst mintlayer-node-gui gui
+          packaging/checks/smoke-arch.sh dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${ARCH}.pkg.tar.zst mintlayer-node-gui gui "$ARCH"
 
     - name: Package Mintlayer Node (without GUI) as tar.gz
       run: |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the mintlayer-node / mintlayer-node-gui RPM packages.
 #
-# Intended to run inside a fedora:latest container (any host arch for x86_64;
+# Intended to run inside the pinned $FEDORA_IMAGE container (any host arch for x86_64;
 # for the aarch64 target no emulation is needed: rpmbuild only repackages the
 # prebuilt binaries). Self-provisions its build dependencies.
 #
@@ -51,6 +51,8 @@ esac
 # Sanitize version for RPM (no dashes; 1.4.0-rc1 -> 1.4.0~rc1).
 # NOTE: do not use ${var//-/~} here — bash 5.3+ tilde-expands the replacement
 # word, turning '~' into $HOME.
+# NOTE: the mapping is injective because validate_version rejects '~' (see
+# common/lib.sh).
 if ! validate_version "$VERSION"; then
     echo "$VERSION_FORMAT_ERROR" >&2
     exit 2
@@ -127,8 +129,12 @@ SPEC_NAME="${SPEC_IN%.spec.in}.spec"
 # ---------------------------------------------------------------------------
 HOST_ARCH="$(uname -m)"
 if [ "$RPMARCH" = "$HOST_ARCH" ]; then
+    # The if-guard keeps an "already stripped" match failure from tripping
+    # errexit (same as the deb builder).
     for binpath in "$BR"/usr/bin/*; do
-        file "$binpath" | grep -q "not stripped" && strip --strip-unneeded "$binpath"
+        if file "$binpath" | grep -q "not stripped"; then
+            strip --strip-unneeded "$binpath"
+        fi
     done
 else
     echo "cross-target build ($HOST_ARCH container, $RPMARCH target): skipping strip"

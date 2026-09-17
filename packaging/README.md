@@ -80,7 +80,7 @@ The script builds binaries with the exact CI flags
 (`cargo build --release --locked --features trezor,ledger`), then:
 
 1. assembles debs inside `debian:12` (arm64 via `--platform linux/arm64`)
-2. assembles rpms inside `fedora:latest` (`--target x86_64` and `aarch64`;
+2. assembles rpms inside `$FEDORA_IMAGE` (fedora:44) (`--target x86_64` and `aarch64`;
    repackaging only, no emulation needed for rpm)
 3. assembles Arch packages inside `archlinux:base` (x86_64 arch-matched;
    aarch64 cross-targeted from the amd64 container — Arch publishes no arm64
@@ -105,7 +105,7 @@ tagging.
 `release_linux.yml` calls the same builders per matrix arch:
 
 - deb: `docker run --platform linux/$ARCH debian:12 packaging/deb/build.sh …`
-- rpm: `docker run fedora:latest packaging/rpm/build.sh …`
+- rpm: `docker run $FEDORA_IMAGE packaging/rpm/build.sh …`
 - arch pkg: `docker run $ARCH_IMAGE packaging/arch/build.sh …` (amd64-only
   images; see the Arch-specific notes above)
 - smoke: fresh-container installs via `packaging/checks/smoke-*.sh`

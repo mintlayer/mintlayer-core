@@ -54,12 +54,17 @@ jobs:
     - name: Build Mintlayer Node and GUI
       run: cargo build --release --locked --features trezor,ledger
 
+    # Note: the version (and the workflow input) are passed through environment
+    # variables instead of direct ${{ }} interpolation into the run blocks, so
+    # that a crafted tag/ref/input cannot inject shell into the steps.
     - name: Package Mintlayer Node
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+        BINARY_LIST: ${{ inputs.binary_list }}
       run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_win_${VERSION}"
+        $DEST = "Mintlayer_Node_win_$env:VERSION"
         New-Item -ItemType Directory -Path $DEST
-        $binary_list = "${{ inputs.binary_list }}" -split ',' | Where-Object { $_ -ne "node-gui" }
+        $binary_list = $env:BINARY_LIST -split ',' | Where-Object { $_ -ne "node-gui" }
         foreach ($binary in $binary_list) {
           $binary = $binary.Trim()
         if (Test-Path "target\release\$binary.exe") {
@@ -82,19 +87,24 @@ jobs:
       shell: pwsh
 
     - name: Create NSIS installers (node + GUI)
-      run: .\build-tools\win\create-nsis-installers.ps1 -Version "${{ steps.get_version.outputs.VERSION }}"
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+      run: .\build-tools\win\create-nsis-installers.ps1 -Version $env:VERSION
       shell: pwsh
 
     - name: Smoke test installers (silent install/uninstall)
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}_Setup.exe" -AppName "Mintlayer Node" -Kind node -Version "${{ steps.get_version.outputs.VERSION }}"
-        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup.exe" -AppName "Mintlayer Node GUI" -Kind gui -Version "${{ steps.get_version.outputs.VERSION }}"
+        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_win_${env:VERSION}_Setup.exe" -AppName "Mintlayer Node" -Kind node -Version $env:VERSION
+        .\build-tools\win\smoke-install.ps1 -Installer "Mintlayer_Node_GUI_win_${env:VERSION}_Setup.exe" -AppName "Mintlayer Node GUI" -Kind gui -Version $env:VERSION
       shell: pwsh
 
     - name: Package Mintlayer Node GUI
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_GUI_win_${VERSION}"
+        $DEST = "Mintlayer_Node_GUI_win_$env:VERSION"
         New-Item -ItemType Directory -Path $DEST
         Copy-Item "target\release\node-gui.exe" -Destination $DEST
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"

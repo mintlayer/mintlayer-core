@@ -77,7 +77,7 @@ fi
 
 echo "pulling container images..."
 docker pull -q debian:12 >/dev/null
-docker pull -q fedora:latest >/dev/null
+docker pull -q "$FEDORA_IMAGE" >/dev/null
 docker pull -q "$ARCH_IMAGE" >/dev/null
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,8 @@ GUI_BIN="${BIN_DIR[${ARCHES[0]}]}/node-gui"
 test -f "$GUI_BIN" || { echo "node-gui binary not found at $GUI_BIN" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Packaging matrix: for each arch, deb (in debian:12) + rpm (in fedora:latest)
+# Packaging matrix: for each arch, deb (in debian:12) + rpm (in the pinned
+# $FEDORA_IMAGE)
 # ---------------------------------------------------------------------------
 declare -A DEBARCH=( [x86_64]=amd64 [aarch64]=arm64 )
 
@@ -200,14 +201,14 @@ for arch in "${ARCHES[@]}"; do
 
     # --- rpm: node (repackaging only, cross-target safe without emulation) ---
     run_step "rpm mintlayer-node ($arch)" \
-        docker run --rm -v "$REPO_ROOT:/work" -w /work fedora:latest \
+        docker run --rm -v "$REPO_ROOT:/work" -w /work "$FEDORA_IMAGE" \
         packaging/rpm/build.sh --package node --rpmarch "$arch" --version "$VERSION" \
             --binaries-dir "$CONTAINER_BIN_DIR" \
             --out /work/packaging/dist
 
     # --- rpm: gui ---
     run_step "rpm mintlayer-node-gui ($arch)" \
-        docker run --rm -v "$REPO_ROOT:/work" -w /work fedora:latest \
+        docker run --rm -v "$REPO_ROOT:/work" -w /work "$FEDORA_IMAGE" \
         packaging/rpm/build.sh --package gui --rpmarch "$arch" --version "$VERSION" \
             --gui-binary "$CONTAINER_BIN_DIR/node-gui" \
             --repo-root /work --out /work/packaging/dist
@@ -239,12 +240,12 @@ for arch in "${ARCHES[@]}"; do
             mintlayer-node-gui gui
 
         run_step "smoke rpm node ($arch)" \
-            docker run --rm -v "$REPO_ROOT:/work" -w /work fedora:latest \
+            docker run --rm -v "$REPO_ROOT:/work" -w /work "$FEDORA_IMAGE" \
             packaging/checks/smoke-rpm.sh packaging/dist/Mintlayer_Node_linux_${VERSION}_${arch}.rpm \
             mintlayer-node node
 
         run_step "smoke rpm gui ($arch)" \
-            docker run --rm -v "$REPO_ROOT:/work" -w /work fedora:latest \
+            docker run --rm -v "$REPO_ROOT:/work" -w /work "$FEDORA_IMAGE" \
             packaging/checks/smoke-rpm.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.rpm \
             mintlayer-node-gui gui
 

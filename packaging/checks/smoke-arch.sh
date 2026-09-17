@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Install-smoke test for a built .pkg.tar.zst. Runs INSIDE an archlinux:base
 # container with the repository mounted at /work.
-# Usage: smoke-arch.sh <path/to/pkg.pkg.tar.zst> <package-name> node|gui
+# Usage: smoke-arch.sh <path/to/pkg.pkg.tar.zst> <package-name> node|gui [pkg-arch]
+#
+# The optional fourth argument is the architecture the package was built for
+# (defaults to the container architecture). For a foreign-architecture package
+# (the cross-target aarch64 leg reuses the amd64-only Arch image), pacman's
+# architecture check is bypassed via IgnoreArch and the binaries are executed
+# through the host's qemu binfmt handlers — the same emulation the deb/rpm
+# legs use for their arm64 smoke tests.
 set -euo pipefail
 
 # Shared binary list (NODE_BINARIES)
@@ -10,6 +17,12 @@ set -euo pipefail
 PKG_FILE="$(readlink -f "$1")"
 PKG_NAME="$2"
 KIND="$3"
+PKG_ARCH="${4:-$(uname -m)}"
+
+if [ "$PKG_ARCH" != "$(uname -m)" ]; then
+    echo "foreign-architecture package ($PKG_ARCH on $(uname -m)): enabling IgnoreArch"
+    sed -i "/^\[options\]$/a IgnoreArch = $PKG_ARCH" /etc/pacman.conf
+fi
 
 # Sync the databases so the package dependencies resolve from the repos.
 pacman -Sy --noconfirm >/dev/null

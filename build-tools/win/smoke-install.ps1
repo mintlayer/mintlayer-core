@@ -26,6 +26,13 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+# The installers write to the 64-bit Program Files and the native registry
+# view; a 32-bit PowerShell would resolve $env:ProgramFiles to "Program Files
+# (x86)" and read the redirected WOW6432Node view, producing false failures.
+if (-not [Environment]::Is64BitProcess) {
+    throw "this smoke test must run under 64-bit PowerShell (the installers write to the native registry view)"
+}
+
 $InstallDir = Join-Path $env:ProgramFiles (Join-Path "Mintlayer" $AppName)
 $UninstKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Mintlayer $AppName"
 

@@ -25,9 +25,12 @@ NODE_BINARIES=(
 # Note: the character class uses a POSIX class — explicit ranges like `+-a`
 # in a glob bracket expression are parsed counter-intuitively and reject
 # letters.
+# Note: '~' and '+' are rejected on purpose: the rpm builder maps '-' to '~'
+# and the Arch builder maps '-' to '_', and both mappings must stay injective
+# so that distinct versions cannot produce the same package version.
 validate_version() {
     local version="$1"
-    if [ -z "$version" ] || [[ "$version" == *[![:alnum:].~+-]* ]]; then
+    if [ -z "$version" ] || [[ "$version" == *[![:alnum:].-]* ]]; then
         VERSION_FORMAT_ERROR="invalid version: $version"
         return 1
     fi

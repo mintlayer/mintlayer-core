@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install-smoke test for a built .rpm. Runs INSIDE a fedora:latest container
+# Install-smoke test for a built .rpm. Runs INSIDE the pinned $FEDORA_IMAGE container
 # with the repository mounted at /work.
 # Usage: smoke-rpm.sh <path/to/pkg.rpm> <package-name> node|gui
 set -euo pipefail
