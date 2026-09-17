@@ -55,13 +55,22 @@ case "$ARCH" in
 esac
 
 # Sanitize version for Arch (pkgver allows only alphanumerics, dots and
-# underscores; 1.4.1-rc1 -> 1.4.1_rc1). The mapping is injective because
-# validate_version rejects '~' (see common/lib.sh).
+# underscores). Note: pre-release versions (with a '-' suffix) are rejected:
+# Arch's vercmp has no '~' equivalent, so '1.4.1_rc1' would sort NEWER than
+# '1.4.1' and systems that installed the RC would refuse to upgrade to the
+# final release. The deb/rpm builders keep pre-release support ('-' maps to
+# '~' there, which sorts before the final release).
 if ! validate_version "$VERSION"; then
     echo "$VERSION_FORMAT_ERROR" >&2
     exit 2
 fi
-PKGVER="$(printf '%s' "$VERSION" | tr -- '-' '_')"
+case "$VERSION" in
+    *-*)
+        echo "pre-release versions are not supported for Arch packages: $VERSION" >&2
+        exit 2
+        ;;
+esac
+PKGVER="$VERSION"
 
 NATIVE=0
 [ "$ARCH" = "$(uname -m)" ] && NATIVE=1
@@ -207,6 +216,7 @@ fi
 # installed, so provision them here (package names are x86_64 repo names,
 # which is what the amd64 container's repos provide regardless of the target
 # arch being packaged).
+[ -n "$DEPENDS" ] || { echo "empty depends list" >&2; exit 1; }
 pacman -S --noconfirm --needed --asdeps $DEPENDS >/dev/null
 
 # ---------------------------------------------------------------------------

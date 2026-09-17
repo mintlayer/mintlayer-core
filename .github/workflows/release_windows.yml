@@ -17,6 +17,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # Note: bounds the whole job, and in particular the installer smoke test below (every
+    # installed binary is executed with a per-process timeout as well; this is the backstop).
+    timeout-minutes: 120
     permissions:
       contents: read
     env:
@@ -41,6 +44,12 @@ jobs:
         }
         if ([string]::IsNullOrEmpty($VERSION)) {
           $VERSION = "0.0.0-ci"
+        }
+        # Validate the grammar up front, so a non-semver tag fails here with a clear message
+        # instead of deep inside a packaging script (the same grammar the NSIS tooling and the
+        # Linux builders enforce).
+        if ($VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+          throw "derived version '$VERSION' is not X.Y.Z[-suffix]; tag a semver release"
         }
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Version extracted: $VERSION"

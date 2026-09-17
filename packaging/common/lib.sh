@@ -58,6 +58,9 @@ gen_man() {
     local man_dir="$bin_dir/usr/share/man/man1"
     mkdir -p "$man_dir"
     local binpath binname
+    # Note: without nullglob, an empty or missing bin dir would make the glob expand to the
+    # literal path, producing a garbage '*.1.gz' man page instead of failing loudly here.
+    shopt -s nullglob
     for binpath in "$bin_dir"/usr/bin/*; do
         binname="$(basename "$binpath")"
         if [ "$runnable" -eq 1 ] && "$binpath" --help >/dev/null 2>&1; then
@@ -74,4 +77,5 @@ gen_man() {
         fi
         gzip -n -9 "$man_dir/$binname.1"
     done
+    shopt -u nullglob
 }

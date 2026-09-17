@@ -96,9 +96,18 @@ if ($Kind -eq "node") {
 Write-Host "== binaries answer --help"
 foreach ($bin in $Binaries) {
     $exe = Join-Path $InstallDir "$bin.exe"
-    & $exe --help *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "$bin --help exited with $LASTEXITCODE"
+    # Note: the invocation is bounded by a timeout: a binary that ignores --help and starts
+    # serving (as the daemons may) or blocks on input must not hang the smoke test forever.
+    $out = Join-Path $env:TEMP "mintlayer-smoke-$bin.out.log"
+    $err = Join-Path $env:TEMP "mintlayer-smoke-$bin.err.log"
+    $proc = Start-Process -FilePath $exe -ArgumentList "--help" -NoNewWindow -PassThru `
+        -RedirectStandardOutput $out -RedirectStandardError $err
+    if (-not $proc.WaitForExit(60000)) {
+        $proc.Kill()
+        throw "$bin --help timed out after 60s (possible daemon start)"
+    }
+    if ($proc.ExitCode -ne 0) {
+        throw "$bin --help exited with $($proc.ExitCode)"
     }
     Write-Host "  ok: $bin --help"
 }
