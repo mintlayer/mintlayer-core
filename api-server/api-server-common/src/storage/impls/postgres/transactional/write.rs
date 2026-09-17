@@ -35,7 +35,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
-use crate::streaming::{StreamEvent, StreamEventId};
+use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
 use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
@@ -850,7 +850,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn read_stream_events_after(
         &self,
         last_seen_id: StreamEventId,
-    ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.read_stream_events_after(last_seen_id).await?;
 

@@ -417,3 +417,115 @@ async fn stream_block_event_is_queryable() {
 
     task.abort();
 }
+
+/// The subscriber limit must be enforced, and the slot must be released on client disconnect, so
+/// that a new subscriber is accepted and is fully functional.
+#[tokio::test]
+async fn stream_subscriber_limit() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    // Note: the channel is cloned before being moved into the handle, so that the test can send
+    // events into it.
+    let channel = StreamEventsChannel::new(16);
+    let handle = StreamEventsHandle::new(
+        channel.clone(),
+        StreamingConfig {
+            keepalive_interval: Duration::from_millis(200),
+            max_subscribers: 1,
+        },
+    );
+
+    let task = spawn_stream_webserver(listener, handle);
+
+    // Take the only subscriber slot.
+    let first = connect_to_stream(addr, "").await;
+
+    // With the slot taken, another subscriber must be rejected.
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!(
+            "http://{}:{}/api/v2/stream",
+            addr.ip(),
+            addr.port()
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 429);
+    let body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({"error": "Too many concurrent stream connections"})
+    );
+
+    // Once the first client disconnects, the slot must be released, so that a new subscriber is
+    // accepted again. Note: the server notices the disconnect asynchronously, hence the retry
+    // loop.
+    drop(first);
+    let mut second = {
+        let url = format!("http://{}:{}/api/v2/stream", addr.ip(), addr.port());
+        let deadline = tokio::time::Instant::now() + FRAME_TIMEOUT;
+        loop {
+            let response = client.get(url.as_str()).send().await.unwrap();
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the subscriber slot was not released on client disconnect"
+                );
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+
+            assert_eq!(response.status(), 200);
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .expect("content-type header must be present")
+                .to_str()
+                .unwrap();
+            assert!(
+                content_type.starts_with("text/event-stream"),
+                "unexpected content-type: {content_type}"
+            );
+
+            break SseConnection {
+                response,
+                buffer: String::new(),
+            };
+        }
+    };
+
+    let tx_seen = StreamEvent::TxSeen {
+        tx_id: Id::new(H256::from_low_u64_be(20)),
+        origin: TxOrigin::Local,
+    };
+    let block = StreamEvent::Block {
+        block_id: Id::new(H256::from_low_u64_be(21)),
+        height: BlockHeight::new(1),
+        timestamp: BlockTimestamp::from_int_seconds(3_000),
+        tx_ids: vec![Id::new(H256::from_low_u64_be(22))],
+    };
+
+    // Note: sending must succeed, since the endpoint is subscribed.
+    channel.send(tx_seen.clone()).unwrap();
+    channel.send(block.clone()).unwrap();
+
+    // The events sent after the reconnection must be delivered to the new subscriber.
+    for expected in [&tx_seen, &block] {
+        let frame = second.next_event_frame(FRAME_TIMEOUT).await;
+
+        assert_eq!(
+            frame_event_name(&frame),
+            Some(expected.event_name()),
+            "unexpected SSE frame: {frame:?}"
+        );
+
+        let data = frame_data(&frame).expect("the event must carry a data field");
+        let parsed: StreamEvent = serde_json::from_str(data)
+            .expect("the data payload must parse back into a StreamEvent");
+        assert_eq!(&parsed, expected, "event roundtrip mismatch");
+    }
+
+    task.abort();
+}

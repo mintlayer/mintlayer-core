@@ -20,33 +20,25 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_server_common::streaming::{
-    StreamEvent, StreamEventSource, StreamEventsChannel, TxOrigin, run_event_pump,
+    DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY, DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL,
+    DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS, StreamEvent, StreamEventSource, StreamEventsChannel,
+    TxOrigin, run_event_pump,
 };
 use mempool::rpc::MempoolRpcClient;
 use mempool::rpc_event::{RpcEvent, RpcTxOrigin};
 use node_comm::rpc_client::NodeRpcClient;
 
-/// How many real-time stream events may be buffered per connected client before the client
-/// receives a `lag` advisory event instead of the missed events.
-pub const DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY: usize = 1024;
-
-/// How often the database event pump polls for new events as a safety net for missed
-/// notifications.
-pub const DEFAULT_STREAM_EVENTS_POLL_INTERVAL: Duration = Duration::from_secs(30);
-
-/// How often a keepalive comment is sent to connected stream clients.
-pub const DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
-
-/// The default maximum number of concurrently served stream (SSE) connections.
-///
-/// Note: each stream connection holds per-connection state (a broadcast receiver and a stream
-/// task) for an unbounded lifetime, so the number of connections must be bounded; a reverse
-/// proxy in front of the server may impose its own limits as well.
-pub const DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS: usize = 128;
-
 /// How long to wait for the mempool WebSocket subscription to be established before giving up
 /// and retrying (with backoff).
 const MEMPOOL_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long the mempool subscription may stay without delivering a single event before the
+/// connection is treated as stalled and re-established.
+///
+/// Note: a quiet mempool on a slow chain can legitimately produce no events for a long time, in
+/// which case the re-subscription below is a harmless no-op; the timeout only exists so that a
+/// stalled connection (TCP alive, but no frames and no close) cannot wedge the bridge forever.
+const MEMPOOL_EVENT_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// How long to wait before the first re-attempt of the subscription to the node's mempool events
 /// after it has been lost. The delay doubles on every failed attempt, up to
@@ -162,13 +154,19 @@ fn map_rpc_event_to_tx_seen(event: RpcEvent) -> Option<StreamEvent> {
 /// processed transactions are forwarded as `TxSeen` events. Note that the events are not
 /// hydrated here: a failed hydration must never block the stream, so the stream carries only the
 /// transaction ids and the clients are expected to fetch the details through the REST endpoints.
+///
+/// Note: while the bridge is disconnected (plus the backoff delay before a re-subscription), the
+/// transactions seen by the node are lost to the stream; a `lag` advisory event is broadcast to
+/// tell the clients that a gap is possible.
 pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHandle) {
     let mut resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
+    // The start of the current outage, if the bridge is not subscribed.
+    let mut outage_started: Option<std::time::Instant> = None;
     loop {
         // Note: the subscription is bounded by a timeout, so that a stalled WebSocket handshake
         // (e.g. the node accepting the TCP connection but never completing the RPC handshake)
         // cannot wedge the bridge forever without any log output.
-        match tokio::time::timeout(
+        let subscription = match tokio::time::timeout(
             MEMPOOL_SUBSCRIBE_TIMEOUT,
             MempoolRpcClient::subscribe_to_events(rpc.ws_client()),
         )
@@ -176,34 +174,72 @@ pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHan
         {
             Ok(Ok(subscription)) => {
                 logging::log::info!("Subscribed to node mempool events");
+                if let Some(started) = outage_started.take() {
+                    logging::log::info!(
+                        "Node mempool events were unavailable for {:?}",
+                        started.elapsed()
+                    );
+                }
                 // Note: the subscription worked, so the next retry does not need to back off.
                 resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
-                let mut subscription = subscription;
-                while let Some(event) = subscription.next().await {
-                    match event {
-                        Ok(event) => {
-                            if let Some(stream_event) = map_rpc_event_to_tx_seen(event) {
-                                // Note: sending fails only when there are no subscribers.
-                                let _ = handle.channel.send(stream_event);
-                            }
-                        }
-                        Err(err) => {
-                            logging::log::warn!("Node mempool subscription error: {err}");
-                            break;
-                        }
-                    }
-                }
-                logging::log::warn!("Node mempool subscription closed; re-subscribing");
+                Some(subscription)
             }
             Ok(Err(err)) => {
                 logging::log::error!("Failed to subscribe to node mempool events: {err}");
+                None
             }
             Err(_timed_out) => {
                 logging::log::error!(
                     "Timed out subscribing to node mempool events; retrying after a delay"
                 );
+                None
+            }
+        };
+
+        if let Some(mut subscription) = subscription {
+            // Note: every receive is bounded by a timeout, so that a stalled connection (the
+            // node keeping the TCP connection alive without delivering anything and without
+            // closing it) cannot wedge the bridge silently; expiry is treated like any other
+            // connection failure and triggers a re-subscription.
+            loop {
+                let event =
+                    match tokio::time::timeout(MEMPOOL_EVENT_TIMEOUT, subscription.next()).await {
+                        Ok(event) => event,
+                        Err(_timed_out) => {
+                            logging::log::error!(
+                                "No mempool event traffic for {MEMPOOL_EVENT_TIMEOUT:?}; \
+                            re-subscribing"
+                            );
+                            break;
+                        }
+                    };
+                match event {
+                    Some(Ok(event)) => {
+                        if let Some(stream_event) = map_rpc_event_to_tx_seen(event) {
+                            // Note: sending fails only when there are no subscribers.
+                            let _ = handle.channel.send(stream_event);
+                        }
+                    }
+                    Some(Err(err)) => {
+                        logging::log::warn!("Node mempool subscription error: {err}");
+                        break;
+                    }
+                    None => {
+                        logging::log::warn!("Node mempool subscription closed; re-subscribing");
+                        break;
+                    }
+                }
             }
         }
+
+        if outage_started.is_none() {
+            // Note: tell connected clients that a gap in the `tx_seen` events is possible (the
+            // events that occurred while the bridge was disconnected cannot be replayed; the
+            // clients reconcile through the REST endpoints).
+            outage_started = Some(std::time::Instant::now());
+            let _ = handle.channel.send(StreamEvent::Lag { skipped: 0 });
+        }
+
         // Note: the delay doubles on every failed attempt so that a long node outage cannot
         // flood the logs; it is reset as soon as a subscription succeeds again.
         tokio::time::sleep(resubscribe_delay).await;

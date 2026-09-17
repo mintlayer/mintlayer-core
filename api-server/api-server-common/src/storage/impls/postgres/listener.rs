@@ -108,7 +108,14 @@ impl StreamEventSource for PostgresStreamEventSource {
                     // Note: the listener connection is dead; without the reconnect below, the
                     // pump would fall back to pure polling forever and the notifications would
                     // never be received again.
-                    if self.reconnect().await.is_err() {
+                    if let Err(err) = self.reconnect().await {
+                        // Note: the failure must be logged: a prolonged outage here means the
+                        // pump silently degrades to pure polling, which is very hard to
+                        // diagnose in production without a trace.
+                        logging::log::error!(
+                            "Failed to re-establish the stream event listener connection: {err}; \
+                            falling back to polling"
+                        );
                         tokio::time::sleep(self.poll_interval).await;
                     }
                 }
@@ -125,11 +132,8 @@ impl StreamEventSource for PostgresStreamEventSource {
             .storage
             .transaction_ro()
             .await
-            .map_err(|e: ApiServerStorageError| StreamEventReadError(e.to_string()))?;
-        db_tx
-            .read_stream_events_after(last_seen_id)
-            .await
-            .map_err(|e| StreamEventReadError(e.to_string()))
+            .map_err(|e: ApiServerStorageError| StreamEventReadError::Other(e.to_string()))?;
+        db_tx.read_stream_events_after(last_seen_id).await
     }
 
     async fn initial_last_seen_id(&mut self) -> StreamEventId {

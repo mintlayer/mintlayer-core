@@ -45,7 +45,7 @@ use crate::storage::{
 use crate::streaming::{
     STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_PUMP_CURSOR_KEY, STREAM_EVENTS_READ_BATCH_SIZE,
     STREAM_EVENTS_RETENTION_COUNT, STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR, StreamEvent,
-    StreamEventId,
+    StreamEventId, StreamEventReadError,
 };
 
 const VERSION_STR: &str = "version";
@@ -3093,7 +3093,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn read_stream_events_after(
         &self,
         last_seen_id: StreamEventId,
-    ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
         let rows = self
             .tx
             .query(
@@ -3104,12 +3104,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 &[&last_seen_id, &STREAM_EVENTS_READ_BATCH_SIZE],
             )
             .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+            .map_err(|e| StreamEventReadError::Other(e.to_string()))?;
 
-        // Note: a row that cannot be decoded is a hard error instead of a silent skip: the event
-        // has been durably committed alongside the data it refers to, so silently dropping it
-        // would leave the clients unaware of e.g. a reorg. The pump logs the error and retries;
-        // manual operator intervention is required in such a case anyway.
+        // Note: a row that cannot be decoded is surfaced to the pump as a dedicated error (so
+        // that the pump can skip the event loudly instead of being permanently stalled by it):
+        // the event has been durably committed alongside the data it refers to, so silently
+        // dropping it would hide e.g. a reorg from the clients.
         let mut events = Vec::with_capacity(rows.len());
         for row in rows {
             let id: i64 = row.get(0);
@@ -3117,10 +3117,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             match serde_json::from_str(&payload) {
                 Ok(event) => events.push((id, event)),
                 Err(err) => {
-                    logging::log::error!("Undecodable stream event #{id}: {err}");
-                    return Err(ApiServerStorageError::DeserializationError(format!(
-                        "Undecodable stream event #{id}: {err}"
-                    )));
+                    logging::log::error!(
+                        "Undecodable stream event #{id}: {err} (payload: {payload})"
+                    );
+                    return Err(StreamEventReadError::UndecodableEvent {
+                        id,
+                        error: err.to_string(),
+                    });
                 }
             }
         }
@@ -3133,10 +3136,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ///
     /// Note: the pruning is based on the consumption progress recorded by the event pump (see
     /// `update_stream_events_pump_cursor`), so that events that have not been pumped (and thus
-    /// broadcast) yet are never deleted. To bound the growth of the event log during a pump
-    /// outage, everything below a hard limit of
-    /// `STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR * STREAM_EVENTS_RETENTION_COUNT` events is
-    /// deleted regardless of the progress, with an error being logged in that case.
+    /// broadcast) yet are never deleted. To bound the growth of the event log before any
+    /// progress has been recorded (no web server) or during a pump outage, everything below a
+    /// hard limit of `STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR * STREAM_EVENTS_RETENTION_COUNT`
+    /// events is deleted regardless of the progress, with an error being logged in that case.
     pub async fn prune_stream_events(&mut self) -> Result<u64, ApiServerStorageError> {
         let row = self
             .tx
@@ -3147,14 +3150,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         let pump_cursor = self.stream_events_pump_cursor().await?;
 
-        // Note: without a recorded cursor, the plain retention window is used, so that a
-        // database fed only by the scanner (no web server) is still bounded.
+        // Note: without a recorded cursor, only the hard limit bounds the log: pruning below the
+        // plain retention window before the pump has recorded any progress could delete events
+        // that have not been consumed yet (e.g. in a scanner-only deployment, or in the window
+        // between the scanner's first commits and the pump's first cursor write).
         let retention_cutoff = max_id - STREAM_EVENTS_RETENTION_COUNT;
         let hard_cutoff =
             max_id - STREAM_EVENTS_RETENTION_COUNT * STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR;
         let cutoff = match pump_cursor {
             Some(pump_cursor) => std::cmp::max(retention_cutoff.min(pump_cursor), hard_cutoff),
-            None => retention_cutoff,
+            None => hard_cutoff,
         };
 
         if cutoff < 0 {

@@ -38,7 +38,7 @@ use pos_accounting::{Error as PosError, PoolData};
 use serialization::{Decode, Encode};
 
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
-use crate::streaming::{StreamEvent, StreamEventId};
+use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
 pub mod block_aux_data;
 
@@ -808,7 +808,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn read_stream_events_after(
         &self,
         _last_seen_id: StreamEventId,
-    ) -> Result<Vec<(StreamEventId, StreamEvent)>, ApiServerStorageError> {
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
         Ok(Vec::new())
     }
 

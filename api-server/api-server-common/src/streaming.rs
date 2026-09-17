@@ -31,6 +31,7 @@
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common::{
     chain::{Block, Transaction, block::timestamp::BlockTimestamp},
@@ -67,6 +68,24 @@ pub const STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR: i64 = 10;
 /// The key under which the event pump consumption progress is stored in the database.
 pub const STREAM_EVENTS_PUMP_CURSOR_KEY: &str = "stream_events_pump_cursor";
 
+/// How many real-time stream events may be buffered per connected client before the client
+/// receives a `lag` advisory event instead of the missed events.
+pub const DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY: usize = 1024;
+
+/// The default maximum number of concurrently served stream (SSE) connections.
+///
+/// Note: each stream connection holds per-connection state (a broadcast receiver and a stream
+/// task) for an unbounded lifetime, so the number of connections must be bounded; a reverse
+/// proxy in front of the server may impose its own limits as well.
+pub const DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS: usize = 128;
+
+/// How often the database event pump polls for new events as a safety net for missed
+/// notifications.
+pub const DEFAULT_STREAM_EVENTS_POLL_INTERVAL: Duration = Duration::from_secs(30);
+
+/// How often a keepalive comment is sent to connected stream clients.
+pub const DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
 /// The simplified origin of a transaction seen in the mempool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TxOrigin {
@@ -99,6 +118,11 @@ pub enum StreamEvent {
         removed_block_ids: Vec<Id<Block>>,
         new_tip_height: BlockHeight,
     },
+    /// Advisory that a gap in the stream is possible: `skipped` events are known to have been
+    /// missed (zero when the size of the gap is unknown, e.g. when the mempool bridge was
+    /// disconnected from the node). The missed events cannot be replayed (the stream has no
+    /// replay semantics), so clients should reconcile through the regular REST endpoints.
+    Lag { skipped: u64 },
 }
 
 impl StreamEvent {
@@ -108,6 +132,7 @@ impl StreamEvent {
             StreamEvent::TxSeen { .. } => StreamEventType::TxSeen,
             StreamEvent::Block { .. } => StreamEventType::Block,
             StreamEvent::Reorg { .. } => StreamEventType::Reorg,
+            StreamEvent::Lag { .. } => StreamEventType::Lag,
         }
     }
 
@@ -125,11 +150,13 @@ pub enum StreamEventType {
     TxSeen,
     Block,
     Reorg,
+    Lag,
 }
 
 impl StreamEventType {
     /// All the event kinds, in a stable order.
-    pub const ALL: &'static [StreamEventType] = &[Self::TxSeen, Self::Block, Self::Reorg];
+    pub const ALL: &'static [StreamEventType] =
+        &[Self::TxSeen, Self::Block, Self::Reorg, Self::Lag];
 
     /// The name of the event kind as used in the Server-Sent Events protocol.
     pub fn name(self) -> &'static str {
@@ -137,6 +164,7 @@ impl StreamEventType {
             StreamEventType::TxSeen => "tx_seen",
             StreamEventType::Block => "block",
             StreamEventType::Reorg => "reorg",
+            StreamEventType::Lag => "lag",
         }
     }
 }
@@ -180,8 +208,14 @@ impl fmt::Display for StreamEventTypeParseError {
 
 /// The error returned when reading the stream events from the source fails.
 #[derive(Debug, thiserror::Error)]
-#[error("Failed to read stream events: {0}")]
-pub struct StreamEventReadError(pub String);
+pub enum StreamEventReadError {
+    #[error("Failed to read stream events: {0}")]
+    Other(String),
+    /// A committed event row cannot be decoded; the pump skips the event (loudly) instead of
+    /// being permanently stalled by it.
+    #[error("stream event #{id} cannot be decoded: {error}")]
+    UndecodableEvent { id: StreamEventId, error: String },
+}
 
 /// A cloneable handle for distributing stream events to subscribers.
 #[derive(Clone)]
@@ -200,11 +234,19 @@ impl StreamEventsChannel {
 
     /// Subscribe to the stream events. Each subscriber receives the events sent after the
     /// subscription has been created.
+    ///
+    /// Note: a subscriber that falls more than `capacity` events behind receives a
+    /// `broadcast::error::RecvError::Lagged` on the next receive and the skipped events are lost
+    /// permanently; the stream has no replay semantics.
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<StreamEvent> {
         self.sender.subscribe()
     }
 
     /// Send an event to all subscribers. Returns `Err` only if there are no subscribers.
+    ///
+    /// Note: a subscriber that fell too far behind silently misses the events that no longer
+    /// fit into its per-subscriber buffer (surfaced to that subscriber as a `lag` advisory
+    /// event when it next receives).
     pub fn send(
         &self,
         event: StreamEvent,
@@ -247,6 +289,10 @@ pub trait StreamEventSource: Send {
 
 /// The event pump: forwards stream events from a [StreamEventSource] into a
 /// [StreamEventsChannel], tracking the id of the last forwarded event.
+///
+/// Note: the pump runs for the whole lifetime of the process; there is no graceful shutdown
+/// path. The server brings the process down if the pump task ever terminates (see the
+/// supervisor in the web server binary), which is also how the web server itself is terminated.
 pub async fn run_event_pump(
     mut source: impl StreamEventSource,
     channel: StreamEventsChannel,
@@ -280,6 +326,18 @@ pub async fn run_event_pump(
                     if batch_size < STREAM_EVENTS_READ_BATCH_SIZE {
                         break;
                     }
+                }
+                // Note: an undecodable event is skipped instead of stalling the whole stream:
+                // the row is logged loudly and the clients are told about the gap through a
+                // `lag` advisory, but a single corrupted row must not block every other event
+                // (including reorg notices) indefinitely.
+                Err(StreamEventReadError::UndecodableEvent { id, error: err }) => {
+                    logging::log::error!(
+                        "Skipping stream event #{id} ({err}); clients are notified via a lag \
+                        advisory and can recover through the REST endpoints"
+                    );
+                    let _ = channel.send(StreamEvent::Lag { skipped: 1 });
+                    last_seen_id = id;
                 }
                 Err(err) => {
                     logging::log::error!("{err}");
@@ -406,7 +464,7 @@ mod tests {
             ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
                 if self.failing {
                     self.failing = false;
-                    Err(StreamEventReadError("storage error".to_owned()))
+                    Err(StreamEventReadError::Other("storage error".to_owned()))
                 } else {
                     self.failing = true;
                     Ok(vec![(7, test_block_event(7))])
@@ -425,6 +483,53 @@ mod tests {
         pump.abort();
     }
 
+    #[tokio::test]
+    async fn pump_skips_undecodable_events_with_lag_advisory() {
+        struct CorruptedRowSource {
+            served: bool,
+        }
+
+        #[async_trait::async_trait]
+        impl StreamEventSource for CorruptedRowSource {
+            async fn wait_for_wakeup(&mut self) {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+
+            async fn read_events_after(
+                &mut self,
+                last_seen_id: StreamEventId,
+            ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+                if last_seen_id == 0 {
+                    // The id is returned in the error so the pump can advance past the row.
+                    Err(StreamEventReadError::UndecodableEvent {
+                        id: 5,
+                        error: "bad payload".to_owned(),
+                    })
+                } else if !self.served {
+                    self.served = true;
+                    Ok(vec![(7, test_block_event(7))])
+                } else {
+                    Ok(vec![])
+                }
+            }
+        }
+
+        let channel = StreamEventsChannel::new(16);
+        let mut rx = channel.subscribe();
+        let pump = tokio::spawn(run_event_pump(
+            CorruptedRowSource { served: false },
+            channel,
+            0,
+        ));
+
+        // The gap advisory for the skipped event arrives first, then the stream continues
+        // with the events after the corrupted row.
+        assert_eq!(rx.recv().await.unwrap(), StreamEvent::Lag { skipped: 1 });
+        assert_eq!(rx.recv().await.unwrap(), test_block_event(7));
+
+        pump.abort();
+    }
+
     #[test]
     fn event_serde_roundtrip() {
         let events = [
@@ -434,6 +539,7 @@ mod tests {
             },
             test_block_event(3),
             test_reorg_event(2),
+            StreamEvent::Lag { skipped: 4 },
         ];
 
         for event in events {
@@ -455,5 +561,6 @@ mod tests {
         );
         assert_eq!(test_block_event(0).event_name(), "block");
         assert_eq!(test_reorg_event(0).event_name(), "reorg");
+        assert_eq!(StreamEvent::Lag { skipped: 0 }.event_name(), "lag");
     }
 }

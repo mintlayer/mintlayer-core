@@ -22,15 +22,8 @@ use api_server_common::storage::impls::postgres::{
 };
 use api_server_common::streaming::StreamEventsChannel;
 use api_web_server::{
-    ApiServerWebServerState,
-    CachedValues,
-    StreamEventsHandle,
-    TxSubmitClient,
-    api::web_server,
-    config::ApiServerWebServerConfig,
-    // Note: `streaming` is imported into the crate root so that the shared `config` module can
-    // refer to it as `crate::streaming` in both the library and the binary.
-    streaming,
+    ApiServerWebServerState, CachedValues, StreamEventsHandle, TxSubmitClient, api::web_server,
+    config::ApiServerWebServerConfig, streaming,
 };
 use clap::Parser;
 use common::{
@@ -53,9 +46,12 @@ fn supervise(name: &'static str, handle: tokio::task::JoinHandle<()>) {
     // Note: the background tasks are meant to run forever; without this supervisor, a panic or
     // any other terminal failure would go completely unnoticed while the REST endpoints keep
     // working, silently disabling the event stream (connected SSE clients would only see
-    // keepalives forever). Since a terminated task is unrecoverable by design, the process is
-    // brought down so that the failure is operationally observable and the service manager can
-    // restart the server.
+    // keepalives forever). Since a terminated task is unrecoverable by design and the daemon
+    // has no graceful-shutdown path (web_server() only returns on error), the process is
+    // brought down with a non-zero exit code so that the failure is operationally observable
+    // and the service manager restarts the server. This skips destructors and in-flight
+    // requests, but that is consistent with how the process terminates anyway (no signal
+    // handling is installed).
     tokio::spawn(async move {
         if let Err(err) = handle.await {
             logging::log::error!("CRITICAL: the {name} task terminated: {err}");

@@ -15,9 +15,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Changed
 - The api-server storage version was bumped from 25 to 26 (new `ml.emitted_events` table); the scanner re-initializes the database when it finds a different version, as before. Full resync is required.
-- The stream event retention pruning no longer deletes events that the event pump has not consumed yet: the pump records its progress in the database and the pruning never overtakes it (with a hard limit of 100k retained events during a pump outage, logged as an error when it kicks in).
+- The stream event retention pruning no longer deletes events that the event pump has not consumed yet: the pump records its progress in the database and the pruning never overtakes it (with a hard limit of 100k retained events before the first progress record or during a pump outage, logged as an error when it kicks in).
 - A terminated streaming background task (the event pump or the mempool bridge) now brings the web server process down instead of leaving the event stream silently dead while the REST endpoints keep working.
 - The streaming CLI options are validated (`clap` range checks) instead of silently clamping invalid values, and an SSE connection above `--stream-events-max-subscribers` is rejected with `429 Too Many Requests`.
+- A `lag` advisory (`skipped: 0`) is now broadcast when the node's mempool subscription is lost or an event cannot be decoded, so clients can detect gaps; a single undecodable event no longer stalls the whole stream.
 
 ### Fixed
 - `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\

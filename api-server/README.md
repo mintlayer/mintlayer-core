@@ -46,7 +46,7 @@ GET /api/v2/stream
 
 The endpoint requires no authentication, consistent with the other `/api/v2` GET endpoints, and responds with the `text/event-stream` content type.
 
-An optional `types` query parameter restricts the streamed event kinds to a comma-separated subset of `tx_seen`, `block`, and `reorg`; by default, all kinds are streamed. Invalid values are rejected with HTTP 400. For example, to receive only block and reorganization events:
+An optional `types` query parameter restricts the streamed event kinds to a comma-separated subset of `tx_seen`, `block`, `reorg`, and `lag`; by default, all kinds are streamed. Invalid values are rejected with HTTP 400. For example, to receive only block and reorganization events:
 
 ```
 GET /api/v2/stream?types=block,reorg
@@ -68,6 +68,7 @@ The content per event kind:
 | `tx_seen` | `tx_id` (hex); `origin`, which is `local` when the transaction was submitted through this node and `remote` when it was observed coming from the network |
 | `block` | `block_id` (hex); `height`; `timestamp` (unix seconds); `tx_ids`, the list of the block's transaction ids (hex) |
 | `reorg` | `common_ancestor_height`; `removed_block_ids`, the blocks disconnected by the reorganization (hex); `new_tip_height` |
+| `lag` | `skipped`, the number of events known to have been missed (zero when unknown) |
 
 A few additional frames to be aware of:
 
@@ -75,6 +76,7 @@ A few additional frames to be aware of:
 - Keepalive comment lines (`: keepalive`) are sent while the stream is idle, every 30 seconds by default, so that proxies and clients can tell the connection is alive.
 - The response carries an `x-accel-buffering: no` header to keep reverse proxies from buffering the stream. If you operate a reverse proxy in front of the web server, make sure response buffering stays disabled, or the events will not reach the clients in real time.
 - If a client falls further behind than the server's per-client event buffer (1024 events by default), it receives a `lag` advisory event, `data: {"skipped": N}`, instead of the missed events. When this happens, reconcile the current state through the regular REST endpoints.
+- A `lag` advisory with `skipped: 0` is also broadcast when the node's mempool subscription is lost (the `tx_seen` events seen during the outage cannot be replayed), and when a single persisted event cannot be decoded and had to be skipped.
 
 A minimal browser client:
 

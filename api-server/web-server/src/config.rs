@@ -22,7 +22,10 @@ use tokio::net::TcpListener;
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
-use crate::streaming;
+// Note: the constants are referenced through their defining crate (instead of
+// `crate::streaming`) so that this module does not depend on how the binary's main re-exports
+// the module into the crate root.
+use api_server_common::streaming;
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
