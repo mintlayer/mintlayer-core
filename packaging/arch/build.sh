@@ -190,15 +190,25 @@ if [ "$NATIVE" -eq 1 ]; then
         pacman -Fy --noconfirm >/dev/null
         for lib in $LIBS; do
             # --machinereadable separates fields with NUL bytes; translate
-            # them so awk can pick the package name (field 2).
-            pkg="$(pacman -F --machinereadable "usr/lib/$lib" 2>/dev/null \
-                | tr '\0' '\t' | awk -F'\t' 'NR == 1 {print $2}')"
-            if [ -z "$pkg" ]; then
+            # them so awk can pick the package name (field 2). A soname can be
+            # provided by several packages, and the row order depends on the
+            # repo/database layout, so all providers are collected and the
+            # choice is made deterministically: the shortest package name
+            # (preferring plain runtime packages over longer, more specific
+            # variants), ties broken alphabetically.
+            providers="$(pacman -F --machinereadable "usr/lib/$lib" 2>/dev/null \
+                | tr '\0' '\t' | awk -F'\t' '{print $2}' | sort -u)"
+            if [ -z "$providers" ]; then
                 echo "ERROR: no Arch package provides usr/lib/$lib" >&2
                 MISSING=1
-            else
-                DEPENDS="$DEPENDS $pkg"
+                continue
             fi
+            pkg="$(printf '%s\n' "$providers" \
+                | awk '{ print length($0), $0 }' | sort -n -k1,1 -k2,2 | head -n1 | cut -d' ' -f2-)"
+            if [ "$(printf '%s\n' "$providers" | wc -l)" -gt 1 ]; then
+                echo "note: usr/lib/$lib has multiple providers ($(printf '%s' "$providers" | tr '\n' ' ')); using $pkg" >&2
+            fi
+            DEPENDS="$DEPENDS $pkg"
         done
     fi
     [ "$MISSING" -eq 0 ] || { echo "unresolved shared library dependencies" >&2; exit 1; }

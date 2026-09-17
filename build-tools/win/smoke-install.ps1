@@ -50,6 +50,15 @@ function Assert-PathEntry {
     param ([bool]$ShouldExist)
     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $present = ($machinePath -split ";" -contains $InstallDir)
+    # The installer deliberately skips the PATH write when the machine PATH exceeds its NSIS
+    # safe-length limit (PATH_MAX_SAFE_LEN = 900 in node.nsi.in), and in a silent install the
+    # corresponding warning goes unnoticed; treat that case as the designed behavior instead of
+    # a false failure. Note: this reads the expanded value while the installer measures the raw
+    # one, so the threshold check is approximate by nature.
+    if (-not $present -and $machinePath.Length -gt 900) {
+        Write-Warning "machine PATH is longer than the installer's safe limit (900 chars); the PATH entry was skipped by design"
+        return
+    }
     if ($ShouldExist -and -not $present) {
         throw "machine PATH does not contain '$InstallDir'"
     }

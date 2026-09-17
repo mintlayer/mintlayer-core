@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: read
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -254,38 +256,38 @@ jobs:
     - name: Upload Node DEB Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}_deb
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
         path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Upload GUI DEB Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}_deb
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
         path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Upload Node RPM Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}_rpm
-        path: dist/Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}.rpm
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.rpm
 
     - name: Upload GUI RPM Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}_rpm
-        path: dist/Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}.rpm
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.rpm
 
     - name: Upload Node PKG Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}_pkg
-        path: dist/Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}.pkg.tar.zst
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_pkg
+        path: dist/Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.pkg.tar.zst
 
     - name: Upload GUI PKG Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}_pkg
-        path: dist/Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}.pkg.tar.zst
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_pkg
+        path: dist/Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.pkg.tar.zst
 
     - name: List tar.gz files
       run: |
@@ -296,12 +298,12 @@ jobs:
       uses: actions/upload-artifact@v4
       continue-on-error: true
       with:
-        name: Mintlayer_Node_GUI_linux_${VERSION}_${{ matrix.arch }}_tar.gz
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_tar.gz
         path: Mintlayer_Node_GUI_linux_*.tar.gz
 
     - name: Upload Node tar.gz Artifact (without GUI)
       uses: actions/upload-artifact@v4
       continue-on-error: true
       with:
-        name: Mintlayer_Node_linux_${VERSION}_${{ matrix.arch }}_tar.gz
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_tar.gz
         path: Mintlayer_Node_linux_*.tar.gz

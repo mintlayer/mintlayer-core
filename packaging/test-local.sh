@@ -249,19 +249,18 @@ for arch in "${ARCHES[@]}"; do
             packaging/checks/smoke-rpm.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.rpm \
             mintlayer-node-gui gui
 
-        # pacman refuses foreign-architecture packages, so the arch pkg smoke
-        # test runs on the x86_64 leg only (like in release_linux.yml).
-        if [ "$arch" = x86_64 ]; then
-            run_step "smoke pkg node ($arch)" \
-                docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
-                packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_linux_${VERSION}_${arch}.pkg.tar.zst \
-                mintlayer-node node
+        # The aarch64 leg relies on the qemu binfmt handlers (already required
+        # for the deb/rpm arm64 smoke tests) plus smoke-arch.sh's IgnoreArch
+        # handling, mirroring the arm64 leg of release_linux.yml.
+        run_step "smoke pkg node ($arch)" \
+            docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+            packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_linux_${VERSION}_${arch}.pkg.tar.zst \
+            mintlayer-node node "$arch"
 
-            run_step "smoke pkg gui ($arch)" \
-                docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
-                packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.pkg.tar.zst \
-                mintlayer-node-gui gui
-        fi
+        run_step "smoke pkg gui ($arch)" \
+            docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
+            packaging/checks/smoke-arch.sh packaging/dist/Mintlayer_Node_GUI_linux_${VERSION}_${arch}.pkg.tar.zst \
+            mintlayer-node-gui gui "$arch"
     fi
 done
 
