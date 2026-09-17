@@ -182,6 +182,7 @@ async fn stream_endpoint_contract() {
         channel.clone(),
         StreamingConfig {
             keepalive_interval: Duration::from_millis(200),
+            max_subscribers: 8,
         },
     );
 
@@ -248,6 +249,7 @@ async fn stream_types_filter() {
         channel.clone(),
         StreamingConfig {
             keepalive_interval: Duration::from_millis(200),
+            max_subscribers: 8,
         },
     );
 
@@ -351,6 +353,7 @@ async fn stream_block_event_is_queryable() {
         channel.clone(),
         StreamingConfig {
             keepalive_interval: Duration::from_millis(200),
+            max_subscribers: 8,
         },
     );
 

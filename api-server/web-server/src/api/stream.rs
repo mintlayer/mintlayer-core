@@ -34,6 +34,7 @@ use tokio::sync::broadcast;
 use crate::{
     ApiServerWebServerState, TxSubmitClient,
     error::{ApiServerWebServerClientError, ApiServerWebServerError},
+    streaming::StreamEventsSubscription,
 };
 
 /// The value of the `x-accel-buffering` header that prevents reverse proxies from buffering the
@@ -89,8 +90,12 @@ pub async fn stream_events<
         None => StreamEventsFilter::default(),
     };
 
-    let receiver = state.stream_events.channel.subscribe();
-    let event_stream = sse_event_stream(receiver, filter);
+    // Note: the subscription holds one of the bounded subscriber slots; when the limit has been
+    // reached, the client is rejected instead of accumulating unbounded per-connection state.
+    let subscription = state.stream_events.try_subscribe().ok_or(
+        ApiServerWebServerError::TooManyStreamConnections,
+    )?;
+    let event_stream = sse_event_stream(subscription, filter);
 
     let sse = Sse::new(event_stream).keep_alive(
         KeepAlive::new()
@@ -105,33 +110,38 @@ pub async fn stream_events<
 }
 
 fn sse_event_stream(
-    receiver: broadcast::Receiver<StreamEvent>,
+    subscription: StreamEventsSubscription,
     filter: StreamEventsFilter,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     // Note: the reconnection hint is sent as the first frame so that conforming clients
     // reconnect with the intended interval; the flag below tracks whether it was sent.
+    // Note: the subscription (and with it the subscriber slot) is held in the stream state, so
+    // that it is only released when the client disconnects and the response stream is dropped.
     futures::stream::unfold(
-        (receiver, filter, false),
-        |(mut receiver, filter, retry_sent)| async move {
+        (subscription, filter, false),
+        |(mut subscription, filter, retry_sent)| async move {
             if !retry_sent {
                 return Some((
                     Ok(Event::default().retry(SSE_RETRY_INTERVAL)),
-                    (receiver, filter, true),
+                    (subscription, filter, true),
                 ));
             }
 
             loop {
-                match receiver.recv().await {
+                match subscription.receiver.recv().await {
                     Ok(event) => {
                         // Note: events the client is not interested in are silently skipped.
                         if filter.allows(&event) {
-                            return Some((Ok(sse_event(&event)), (receiver, filter, retry_sent)));
+                            return Some((Ok(sse_event(&event)), (subscription, filter, retry_sent)));
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
                         // Note: the client fell too far behind; tell it what happened and
                         // continue with the fresh events.
-                        return Some((Ok(lag_event(skipped)), (receiver, filter, retry_sent)));
+                        return Some((
+                            Ok(lag_event(skipped)),
+                            (subscription, filter, retry_sent),
+                        ));
                     }
                     Err(broadcast::error::RecvError::Closed) => return None,
                 }

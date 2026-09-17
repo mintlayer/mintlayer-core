@@ -37,6 +37,17 @@ pub const DEFAULT_STREAM_EVENTS_POLL_INTERVAL: Duration = Duration::from_secs(30
 /// How often a keepalive comment is sent to connected stream clients.
 pub const DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
+/// The default maximum number of concurrently served stream (SSE) connections.
+///
+/// Note: each stream connection holds per-connection state (a broadcast receiver and a stream
+/// task) for an unbounded lifetime, so the number of connections must be bounded; a reverse
+/// proxy in front of the server may impose its own limits as well.
+pub const DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS: usize = 128;
+
+/// How long to wait for the mempool WebSocket subscription to be established before giving up
+/// and retrying (with backoff).
+const MEMPOOL_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How long to wait before the first re-attempt of the subscription to the node's mempool events
 /// after it has been lost. The delay doubles on every failed attempt, up to
 /// [`MEMPOOL_RESUBSCRIBE_DELAY_MAX`].
@@ -49,12 +60,14 @@ const MEMPOOL_RESUBSCRIBE_DELAY_MAX: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone)]
 pub struct StreamingConfig {
     pub keepalive_interval: Duration,
+    pub max_subscribers: usize,
 }
 
 impl Default for StreamingConfig {
     fn default() -> Self {
         Self {
             keepalive_interval: DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL,
+            max_subscribers: DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS,
         }
     }
 }
@@ -64,21 +77,46 @@ impl Default for StreamingConfig {
 pub struct StreamEventsHandle {
     pub channel: StreamEventsChannel,
     pub config: StreamingConfig,
+    subscriber_slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl Default for StreamEventsHandle {
     fn default() -> Self {
-        Self {
-            channel: StreamEventsChannel::new(DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY),
-            config: StreamingConfig::default(),
-        }
+        Self::new(
+            StreamEventsChannel::new(DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY),
+            StreamingConfig::default(),
+        )
     }
 }
 
 impl StreamEventsHandle {
     pub fn new(channel: StreamEventsChannel, config: StreamingConfig) -> Self {
-        Self { channel, config }
+        Self {
+            channel,
+            subscriber_slots: Arc::new(tokio::sync::Semaphore::new(config.max_subscribers)),
+            config,
+        }
     }
+
+    /// Subscribe to the stream events, unless the configured maximum number of concurrently
+    /// served stream clients has been reached; the returned subscription holds the subscriber
+    /// slot for its whole lifetime.
+    pub fn try_subscribe(&self) -> Option<StreamEventsSubscription> {
+        let permit = Arc::clone(&self.subscriber_slots).try_acquire_owned().ok()?;
+        Some(StreamEventsSubscription {
+            receiver: self.channel.subscribe(),
+            _permit: permit,
+        })
+    }
+}
+
+/// A stream event subscription: the broadcast receiver paired with the subscriber slot.
+///
+/// Note: the slot is held (and the subscriber counted) until the subscription is dropped, i.e.
+/// until the client disconnects and axum drops the response stream.
+pub struct StreamEventsSubscription {
+    pub receiver: tokio::sync::broadcast::Receiver<StreamEvent>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 /// Run the database event pump: forward the stream events committed by the scanner into the
@@ -127,8 +165,16 @@ fn map_rpc_event_to_tx_seen(event: RpcEvent) -> Option<StreamEvent> {
 pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHandle) {
     let mut resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
     loop {
-        match MempoolRpcClient::subscribe_to_events(rpc.ws_client()).await {
-            Ok(subscription) => {
+        // Note: the subscription is bounded by a timeout, so that a stalled WebSocket handshake
+        // (e.g. the node accepting the TCP connection but never completing the RPC handshake)
+        // cannot wedge the bridge forever without any log output.
+        match tokio::time::timeout(
+            MEMPOOL_SUBSCRIBE_TIMEOUT,
+            MempoolRpcClient::subscribe_to_events(rpc.ws_client()),
+        )
+        .await
+        {
+            Ok(Ok(subscription)) => {
                 logging::log::info!("Subscribed to node mempool events");
                 // Note: the subscription worked, so the next retry does not need to back off.
                 resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
@@ -149,8 +195,13 @@ pub async fn run_mempool_bridge(rpc: Arc<NodeRpcClient>, handle: StreamEventsHan
                 }
                 logging::log::warn!("Node mempool subscription closed; re-subscribing");
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 logging::log::error!("Failed to subscribe to node mempool events: {err}");
+            }
+            Err(_timed_out) => {
+                logging::log::error!(
+                    "Timed out subscribing to node mempool events; retrying after a delay"
+                );
             }
         }
         // Note: the delay doubles on every failed attempt so that a long node outage cannot

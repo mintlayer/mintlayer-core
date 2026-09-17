@@ -153,9 +153,10 @@ api-web-server --network testnet --bind-address 127.0.0.1:3000
 
 The API web server will immediately start and connect to the database locally. A specific remote database can be specified using command line arguments. Add `--help` to the previously mentioned commands to see how to do this.
 
-The [real-time event stream](#real-time-event-stream) works out of the box, with no configuration changes needed for existing deployments. Three options are available for tuning:
+The [real-time event stream](#real-time-event-stream) works out of the box, with no configuration changes needed for existing deployments. Four options are available for tuning:
 
 - `--stream-events-broadcast-capacity` (default 1024): how many events are buffered per connected client before the client receives a `lag` advisory event instead of the missed events.
+- `--stream-events-max-subscribers` (default 128): the maximum number of concurrently served stream connections; further clients are rejected with `429 Too Many Requests`.
 - `--stream-events-poll-interval-secs` (default 30): how often the event pump polls the database for new events, as a safety net for missed notifications.
 - `--stream-events-keepalive-interval-secs` (default 30): how often keepalive comments are sent to connected stream clients.
 

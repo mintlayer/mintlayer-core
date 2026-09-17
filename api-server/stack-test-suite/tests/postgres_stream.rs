@@ -141,6 +141,7 @@ async fn stream_events_postgres_end_to_end() {
         StreamEventsChannel::new(64),
         StreamingConfig {
             keepalive_interval: Duration::from_millis(200),
+            max_subscribers: 8,
         },
     );
     let event_listener = web_storage.new_event_listener().await.unwrap();
@@ -364,11 +365,37 @@ async fn stream_events_postgres_end_to_end() {
     }
 
     // -----------------------------------------------------------------------------------------
-    // No duplicates: after everything settles, no further events may arrive (the expected total
-    // is exactly one reorg + 3 + 3 block events, all of which have been consumed above). The
-    // settle and observe windows are deliberately generous, so that this assertion does not
-    // flake on slow CI machines.
+    // No duplicates: connect one sentinel block, await exactly its event, and only then assert
+    // that no further events arrive (the expected total is exactly one reorg + 3 + 3 + 1 block
+    // events, all of which have been consumed above). Once the sentinel event has arrived,
+    // every event committed before it must have been delivered (the pump forwards in commit
+    // order), so the settle and observe windows only guard against scheduling latency; they are
+    // deliberately generous, so that this assertion does not flake on slow CI machines.
     // -----------------------------------------------------------------------------------------
+    let fork_tip_id = tf.chainstate.get_block_id_from_height(BlockHeight::new(4)).unwrap().unwrap();
+    let sentinel_block_ids = tf.create_chain_return_ids(&fork_tip_id, 1, &mut rng).unwrap();
+    let sentinel_blocks: Vec<Block> =
+        sentinel_block_ids.iter().map(|id| tf.block(tf.to_chain_block_id(id))).collect();
+    let sentinel_block = sentinel_blocks[0].clone();
+    scanner.scan_blocks(BlockHeight::new(4), sentinel_blocks).await.unwrap();
+
+    let (name, event) = recv_event(&mut event_rx).await;
+    assert_eq!(name, "block");
+    assert_eq!(
+        event,
+        StreamEvent::Block {
+            block_id: sentinel_block.get_id(),
+            height: BlockHeight::new(5),
+            timestamp: sentinel_block.timestamp(),
+            tx_ids: sentinel_block
+                .transactions()
+                .iter()
+                .map(|tx| tx.transaction().get_id())
+                .collect(),
+        },
+        "unexpected sentinel event"
+    );
+
     tokio::time::sleep(Duration::from_secs(3)).await;
     match tokio::time::timeout(Duration::from_secs(3), event_rx.recv()).await {
         Err(_timed_out) => {} // no more events, as expected
@@ -390,6 +417,12 @@ async fn stream_events_postgres_end_to_end() {
         assert!(
             join_error.is_cancelled(),
             "the SSE collector task failed: {join_error}"
+        );
+    }
+    if let Err(join_error) = web_task.await {
+        assert!(
+            join_error.is_cancelled(),
+            "the web server task failed: {join_error}"
         );
     }
 }

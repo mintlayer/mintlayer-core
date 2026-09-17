@@ -2291,8 +2291,9 @@ where
     // Phase 2: the committed events are visible, in ascending id order.
     let mut tx = storage.transaction_rw().await.unwrap();
 
+    let mut appended_ids = Vec::with_capacity(events.len());
     for event in &events {
-        tx.append_stream_event(event).await.unwrap();
+        appended_ids.push(tx.append_stream_event(event).await.unwrap());
     }
 
     tx.commit().await.unwrap();
@@ -2300,14 +2301,28 @@ where
     let db_tx = storage.transaction_ro().await.unwrap();
     let read_events = db_tx.read_stream_events_after(0).await.unwrap();
 
-    // Note: backends without stream event support return an empty list.
-    assert!(
-        read_events.is_empty() || read_events.len() == events.len(),
-        "unexpected number of stream events: {}",
-        read_events.len()
-    );
+    // Note: the backends that don't support stream events (detected by the dummy ids returned
+    // from the appends) must return an empty list; the ones that do support them must return
+    // exactly the appended events, in the appended order. This way, a backend that silently
+    // drops the appended events fails the test instead of passing it vacuously.
+    let supports_stream_events = appended_ids.iter().any(|id| *id > 0);
 
-    if !read_events.is_empty() {
+    if supports_stream_events {
+        assert_eq!(
+            read_events.len(),
+            events.len(),
+            "unexpected number of stream events: {}",
+            read_events.len()
+        );
+    } else {
+        assert!(
+            read_events.is_empty(),
+            "a backend without stream event support must not return any events, got {}",
+            read_events.len()
+        );
+    }
+
+    if supports_stream_events {
         // Note: the events are returned in ascending id order and the ids are strictly monotonic.
         let ids = read_events.iter().map(|(id, _)| *id).collect::<Vec<_>>();
         assert!(

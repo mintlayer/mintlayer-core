@@ -27,7 +27,9 @@ use api_server_common::storage::storage_api::{
     PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
-use api_server_common::streaming::{StreamEvent, StreamEventId};
+use api_server_common::streaming::{
+    STREAM_EVENTS_RETENTION_COUNT, StreamEvent, StreamEventId,
+};
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
     constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
@@ -72,6 +74,12 @@ pub enum BlockchainStateError {
 pub struct BlockchainState<S: ApiServerStorage> {
     chain_config: Arc<ChainConfig>,
     storage: S,
+    /// The event id at which the next stream event retention pruning is due.
+    ///
+    /// Note: this is an in-memory watermark, so the pruning (with its `max(id)` lookup and the
+    /// DELETE) runs once per retention window instead of on every block commit, keeping it off
+    /// the critical indexing path.
+    stream_events_next_prune_id: StreamEventId,
 }
 
 impl<S: ApiServerStorage> BlockchainState<S> {
@@ -79,6 +87,7 @@ impl<S: ApiServerStorage> BlockchainState<S> {
         Self {
             chain_config,
             storage,
+            stream_events_next_prune_id: 0,
         }
     }
 
@@ -279,7 +288,12 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         // Note: the guard also skips the notify for the backends that don't support stream
         // events, since those return the dummy event id 0 from the appends.
         if last_event_id > 0 {
-            db_tx.prune_stream_events().await?;
+            // Note: the pruning runs only once per retention window, instead of on every block
+            // commit; see the `stream_events_next_prune_id` field documentation.
+            if last_event_id >= self.stream_events_next_prune_id {
+                db_tx.prune_stream_events().await?;
+                self.stream_events_next_prune_id = last_event_id + STREAM_EVENTS_RETENTION_COUNT;
+            }
             db_tx.notify_new_stream_events(last_event_id).await?;
         }
 

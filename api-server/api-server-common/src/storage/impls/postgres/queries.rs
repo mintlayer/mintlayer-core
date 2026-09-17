@@ -43,8 +43,9 @@ use crate::storage::{
     },
 };
 use crate::streaming::{
-    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_READ_BATCH_SIZE, STREAM_EVENTS_RETENTION_COUNT,
-    StreamEvent, StreamEventId,
+    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_PUMP_CURSOR_KEY, STREAM_EVENTS_READ_BATCH_SIZE,
+    STREAM_EVENTS_RETENTION_COUNT, STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR, StreamEvent,
+    StreamEventId,
 };
 
 const VERSION_STR: &str = "version";
@@ -3105,38 +3106,102 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        // Note: rows that cannot be decoded are skipped (with a warning) instead of failing the
-        // whole batch, so that a single corrupted row cannot stall the stream.
-        Ok(rows
-            .into_iter()
-            .filter_map(|row| {
-                let id: i64 = row.get(0);
-                let payload: String = row.get(1);
-                match serde_json::from_str(&payload) {
-                    Ok(event) => Some((id, event)),
-                    Err(err) => {
-                        logging::log::warn!("Skipping undecodable stream event #{id}: {err}");
-                        None
-                    }
+        // Note: a row that cannot be decoded is a hard error instead of a silent skip: the event
+        // has been durably committed alongside the data it refers to, so silently dropping it
+        // would leave the clients unaware of e.g. a reorg. The pump logs the error and retries;
+        // manual operator intervention is required in such a case anyway.
+        let mut events = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id: i64 = row.get(0);
+            let payload: String = row.get(1);
+            match serde_json::from_str(&payload) {
+                Ok(event) => events.push((id, event)),
+                Err(err) => {
+                    logging::log::error!("Undecodable stream event #{id}: {err}");
+                    return Err(ApiServerStorageError::DeserializationError(format!(
+                        "Undecodable stream event #{id}: {err}"
+                    )));
                 }
-            })
-            .collect())
+            }
+        }
+
+        Ok(events)
     }
 
     /// Delete the stream events that fell out of the retention window, returning the number of
     /// deleted rows.
+    ///
+    /// Note: the pruning is based on the consumption progress recorded by the event pump (see
+    /// `update_stream_events_pump_cursor`), so that events that have not been pumped (and thus
+    /// broadcast) yet are never deleted. To bound the growth of the event log during a pump
+    /// outage, everything below a hard limit of
+    /// `STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR * STREAM_EVENTS_RETENTION_COUNT` events is
+    /// deleted regardless of the progress, with an error being logged in that case.
     pub async fn prune_stream_events(&mut self) -> Result<u64, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_one("SELECT COALESCE(max(id), 0) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let max_id: i64 = row.get(0);
+
+        let pump_cursor = self.stream_events_pump_cursor().await?;
+
+        // Note: without a recorded cursor, the plain retention window is used, so that a
+        // database fed only by the scanner (no web server) is still bounded.
+        let retention_cutoff = max_id - STREAM_EVENTS_RETENTION_COUNT;
+        let hard_cutoff =
+            max_id - STREAM_EVENTS_RETENTION_COUNT * STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR;
+        let cutoff = match pump_cursor {
+            Some(pump_cursor) => std::cmp::max(retention_cutoff.min(pump_cursor), hard_cutoff),
+            None => retention_cutoff,
+        };
+
+        if cutoff < 0 {
+            return Ok(0);
+        }
+
+        if let Some(pump_cursor) = pump_cursor
+            && cutoff > pump_cursor
+        {
+            logging::log::error!(
+                "The stream event pump is lagging behind: pruning stream events up to \
+                #{cutoff} while the pump has only consumed up to #{pump_cursor}; connected \
+                clients will miss the pruned events"
+            );
+        }
+
         let deleted = self
             .tx
-            .execute(
-                "DELETE FROM ml.emitted_events
-                    WHERE id <= (SELECT COALESCE(max(id), 0) - $1 FROM ml.emitted_events);",
-                &[&STREAM_EVENTS_RETENTION_COUNT],
-            )
+            .execute("DELETE FROM ml.emitted_events WHERE id <= $1;", &[&cutoff])
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(deleted)
+    }
+
+    /// The stream event consumption progress recorded by the event pump, if any.
+    async fn stream_events_pump_cursor(&mut self) -> Result<Option<i64>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT value FROM ml.misc_data WHERE name = $1;",
+                &[&STREAM_EVENTS_PUMP_CURSOR_KEY],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        match row.map(|row| row.get::<_, Vec<u8>>(0)) {
+            Some(bytes) => {
+                let bytes: [u8; 8] = bytes.try_into().map_err(|_| {
+                    ApiServerStorageError::DeserializationError(
+                        "Invalid stream event pump cursor stored in the database".to_owned(),
+                    )
+                })?;
+                Ok(Some(i64::from_be_bytes(bytes)))
+            }
+            None => Ok(None),
+        }
     }
 
     /// The id of the most recently committed stream event, if any.

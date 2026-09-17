@@ -50,7 +50,22 @@ pub const STREAM_EVENTS_READ_BATCH_SIZE: i64 = 1000;
 
 /// The number of the most recent stream events the storage backend retains; older events are
 /// pruned, since the stream endpoint does not support replays anyway.
+///
+/// Note: the pruning is based on the consumption progress of the event pump (see
+/// [`StreamEventSource::update_consumed_id`]), so that unread events are never deleted.
 pub const STREAM_EVENTS_RETENTION_COUNT: i64 = 10_000;
+
+/// The absolute upper bound on the number of retained stream events, as a multiple of
+/// [`STREAM_EVENTS_RETENTION_COUNT`].
+///
+/// Note: without this bound, a prolonged outage of the event pump (e.g. the web server being
+/// down while the scanner keeps indexing) would grow the event log without limit, since the
+/// pruning waits for the pump to catch up. When this bound kicks in, unread events are lost,
+/// which is logged loudly by the pruning.
+pub const STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR: i64 = 10;
+
+/// The key under which the event pump consumption progress is stored in the database.
+pub const STREAM_EVENTS_PUMP_CURSOR_KEY: &str = "stream_events_pump_cursor";
 
 /// The simplified origin of a transaction seen in the mempool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -214,6 +229,12 @@ pub trait StreamEventSource: Send {
         last_seen_id: StreamEventId,
     ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError>;
 
+    /// Record that the pump has consumed all events up to `last_seen_id`.
+    ///
+    /// Note: the retention pruning in the database uses the recorded progress to never delete
+    /// events that have not been pumped yet; backends that don't need it do nothing.
+    async fn update_consumed_id(&mut self, _last_seen_id: StreamEventId) {}
+
     /// The event id to start streaming from.
     ///
     /// Note: backends that support stream events return the id of the most recent event, so that
@@ -249,6 +270,12 @@ pub async fn run_event_pump(
                         // error, the events are persisted and can still be read later.
                         let _ = channel.send(event);
                         last_seen_id = event_id;
+                    }
+                    if batch_size > 0 {
+                        // Note: the consumption progress is recorded so that the retention
+                        // pruning in the database never deletes events that have not been
+                        // pumped (and thus broadcast) yet.
+                        source.update_consumed_id(last_seen_id).await;
                     }
                     if batch_size < STREAM_EVENTS_READ_BATCH_SIZE {
                         break;

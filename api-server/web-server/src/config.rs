@@ -69,16 +69,44 @@ pub struct ApiServerWebServerConfig {
 
     /// The maximum number of real-time stream events buffered per connected client; a client that
     /// falls further behind receives a `lag` advisory event instead of the missed events.
-    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY)]
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY,
+        value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..)
+    )]
     pub stream_events_broadcast_capacity: usize,
+
+    /// The maximum number of concurrently served real-time stream (SSE) connections.
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS,
+        value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..)
+    )]
+    pub stream_events_max_subscribers: usize,
 
     /// The interval in seconds between real-time stream event polls; used as a safety net for
     /// missed database notifications.
-    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL.as_secs())]
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL.as_secs(),
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
     pub stream_events_poll_interval_secs: u64,
 
     /// The interval in seconds between keepalive comments sent to connected stream clients.
-    #[clap(long, default_value_t = streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs())]
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs(),
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
     pub stream_events_keepalive_interval_secs: u64,
 }
 

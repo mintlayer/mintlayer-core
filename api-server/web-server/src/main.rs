@@ -48,14 +48,18 @@ use crate::error::ApiServerWebServerInitError;
 
 utils::enable_rust_backtrace!();
 
-/// Log a critical error if one of the background streaming tasks terminates.
+/// Take the process down if one of the background streaming tasks terminates.
 fn supervise(name: &'static str, handle: tokio::task::JoinHandle<()>) {
     // Note: the background tasks are meant to run forever; without this supervisor, a panic or
     // any other terminal failure would go completely unnoticed while the REST endpoints keep
-    // working, silently disabling the event stream.
+    // working, silently disabling the event stream (connected SSE clients would only see
+    // keepalives forever). Since a terminated task is unrecoverable by design, the process is
+    // brought down so that the failure is operationally observable and the service manager can
+    // restart the server.
     tokio::spawn(async move {
         if let Err(err) = handle.await {
             logging::log::error!("CRITICAL: the {name} task terminated: {err}");
+            std::process::exit(1);
         }
     });
 }
@@ -85,12 +89,12 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     );
 
     let stream_events = {
-        // Note: the values are clamped so that operator error cannot crash or wedge the server.
-        let channel = StreamEventsChannel::new(args.stream_events_broadcast_capacity.max(1));
+        let channel = StreamEventsChannel::new(args.stream_events_broadcast_capacity);
         let config = streaming::StreamingConfig {
             keepalive_interval: std::time::Duration::from_secs(
-                args.stream_events_keepalive_interval_secs.max(1),
+                args.stream_events_keepalive_interval_secs,
             ),
+            max_subscribers: args.stream_events_max_subscribers,
         };
         StreamEventsHandle::new(channel, config)
     };
@@ -104,7 +108,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     let event_source = PostgresStreamEventSource::new(
         Arc::clone(&storage),
         event_listener,
-        std::time::Duration::from_secs(args.stream_events_poll_interval_secs.max(1)),
+        std::time::Duration::from_secs(args.stream_events_poll_interval_secs),
     );
     supervise(
         "stream event pump",

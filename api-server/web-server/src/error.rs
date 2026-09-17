@@ -43,6 +43,8 @@ pub enum ApiServerWebServerError {
     Forbidden(#[from] ApiServerWebServerForbiddenError),
     #[error("Server error: {0}")]
     ServerError(#[from] ApiServerWebServerServerError),
+    #[error("Too many concurrent stream connections")]
+    TooManyStreamConnections,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -140,6 +142,9 @@ impl IntoResponse for ApiServerWebServerError {
             ApiServerWebServerError::Forbidden(error) => (StatusCode::FORBIDDEN, error.to_string()),
             ApiServerWebServerError::ServerError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+            }
+            ApiServerWebServerError::TooManyStreamConnections => {
+                (StatusCode::TOO_MANY_REQUESTS, self.to_string())
             }
         };
 

@@ -15,18 +15,31 @@
 
 use randomness::{RngExt as _, make_pseudo_rng};
 
-/// The container manager command to use: `podman` if available, otherwise `docker`.
+/// Resolve the container manager command to use: `podman` if available, otherwise `docker`.
 ///
 /// Note: the two CLIs are compatible for the commands used here.
-fn container_command() -> &'static str {
+///
+/// Note: the resolution happens once per container instance, so that the commands of a single
+/// container cannot be mixed between the two managers; a missing manager fails fast with a
+/// clear message instead of a confusing "command not found" later on.
+fn resolve_container_command() -> &'static str {
     // Note: `std::process::Command::new(...).status()` would print the lookup failure to stderr
     // on some systems, hence the explicit probing of the PATH.
-    let podman_on_path = std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths)
-            .any(|dir| dir.join("podman").is_file() || dir.join("podman.exe").is_file())
-    });
+    let on_path = |name: &str| {
+        std::env::var_os("PATH").is_some_and(|paths| {
+            std::env::split_paths(&paths)
+                .any(|dir| dir.join(name).is_file() || dir.join(format!("{name}.exe")).is_file())
+        })
+    };
 
-    let command = if podman_on_path { "podman" } else { "docker" };
+    let command = if on_path("podman") {
+        "podman"
+    } else if on_path("docker") {
+        "docker"
+    } else {
+        panic!("Neither `podman` nor `docker` was found on PATH; the containerized tests cannot run");
+    };
+
     logging::log::info!("Using {command} as the container manager");
     command
 }
@@ -57,6 +70,7 @@ fn current_datetime_as_string() -> String {
 
 pub struct Podman {
     name: String,
+    command: &'static str,
     env: Vec<(String, String)>,
     port_mappings: Vec<(Option<u16>, u16)>,
     container: Container,
@@ -72,6 +86,7 @@ impl Podman {
 
         Self {
             name,
+            command: resolve_container_command(),
             env: Vec::new(),
             port_mappings: Vec::new(),
             container,
@@ -91,7 +106,7 @@ impl Podman {
     }
 
     pub fn run(&mut self) {
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("run");
         command.arg("--detach");
         command.arg("--name");
@@ -113,7 +128,7 @@ impl Podman {
     }
 
     pub fn get_port_mapping(&self, container_port: u16) -> Option<u16> {
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("port");
         command.arg(&self.name);
         command.arg(format!("{}", container_port));
@@ -132,7 +147,7 @@ impl Podman {
     }
 
     pub fn stop(&mut self) {
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("stop");
         command.arg(&self.name);
         Self::run_command(command);
@@ -144,7 +159,7 @@ impl Podman {
             self.is_running == Some(false),
             "The container must have been created and stopped before it can be restarted"
         );
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("start");
         command.arg(&self.name);
         Self::run_command(command);
@@ -153,7 +168,7 @@ impl Podman {
 
     /// Uses the command `podman logs` to print the logs of the container.
     pub fn print_logs(&mut self) {
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("logs");
         command.arg(&self.name);
         let output = Self::run_command(command);
@@ -190,7 +205,7 @@ impl Podman {
         assert!(
             output.status.success(),
             "Failed to run {} command: {:?}\n{}",
-            container_command(),
+            command.get_program().to_string_lossy(),
             command,
             String::from_utf8_lossy(&output.stderr)
         );
@@ -198,7 +213,7 @@ impl Podman {
     }
 
     fn remove_container(&mut self) {
-        let mut command = std::process::Command::new(container_command());
+        let mut command = std::process::Command::new(self.command);
         command.arg("rm");
         command.arg(&self.name);
         Self::run_command(command);

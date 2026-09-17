@@ -22,12 +22,15 @@ use std::time::Duration;
 use tokio_postgres::AsyncMessage;
 
 use crate::streaming::{
-    STREAM_EVENTS_NOTIFY_CHANNEL, StreamEvent, StreamEventId, StreamEventReadError,
-    StreamEventSource,
+    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_PUMP_CURSOR_KEY, StreamEvent, StreamEventId,
+    StreamEventReadError, StreamEventSource,
 };
 
 use super::TransactionalApiServerPostgresStorage;
 use crate::storage::storage_api::{ApiServerStorageError, ApiServerStorageRead, Transactional};
+
+/// The upper bound of the retry delay of the initial event id read.
+const MAX_INITIAL_ID_RETRY_DELAY: Duration = Duration::from_secs(60);
 
 /// A dedicated Postgres connection that listens for stream event notifications.
 ///
@@ -130,20 +133,67 @@ impl StreamEventSource for PostgresStreamEventSource {
     }
 
     async fn initial_last_seen_id(&mut self) -> StreamEventId {
-        match self.latest_event_id().await {
-            Ok(last_event_id) => last_event_id,
-            Err(err) => {
-                // Note: falling back to zero would re-broadcast old events to the currently
-                // connected clients, so the failure is retried until the database answers.
-                logging::log::error!("Failed to read the latest stream event id: {err}");
-                tokio::time::sleep(self.poll_interval).await;
-                Box::pin(self.initial_last_seen_id()).await
+        // Note: an iterative retry loop is used instead of a recursive call, so that a prolonged
+        // database outage cannot build an unbounded chain of pinned futures. The delay grows
+        // exponentially (up to the reconnection timeout used elsewhere in this source) so that a
+        // dead database does not spin the pump silently.
+        let mut delay = self.poll_interval;
+        loop {
+            match self.latest_event_id().await {
+                Ok(last_event_id) => return last_event_id,
+                Err(err) => {
+                    // Note: falling back to zero would re-broadcast old events to the currently
+                    // connected clients, so the failure is retried until the database answers.
+                    logging::log::error!("Failed to read the latest stream event id: {err}");
+                    tokio::time::sleep(delay).await;
+                    delay = std::cmp::min(delay * 2, MAX_INITIAL_ID_RETRY_DELAY);
+                }
             }
+        }
+    }
+
+    async fn update_consumed_id(&mut self, last_seen_id: StreamEventId) {
+        if let Err(err) = self.storage.update_stream_events_pump_cursor(last_seen_id).await {
+            // Note: a failed cursor update is not fatal; the pruning falls back to the plain
+            // retention window and the cursor is refreshed on the next batch.
+            logging::log::warn!("Failed to record the stream event consumption progress: {err}");
         }
     }
 }
 
 impl TransactionalApiServerPostgresStorage {
+    /// Record the stream event consumption progress of the event pump.
+    ///
+    /// Note: the retention pruning never deletes the events above the recorded cursor, so that
+    /// a lagging pump cannot lose unread events to pruning. The stored value is only ever
+    /// advanced, even when multiple pumps write to the same database.
+    pub async fn update_stream_events_pump_cursor(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        // Note: a dedicated connection (autocommit) is used, because the pump only holds an
+        // Arc of the storage, which cannot start a read-write transaction; the single-statement
+        // upsert is atomic on its own.
+        let connection = self
+            .pool
+            .get()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        connection
+            .execute(
+                "INSERT INTO ml.misc_data (name, value) VALUES ($1, $2)
+                    ON CONFLICT (name)
+                    DO UPDATE SET value = GREATEST(ml.misc_data.value, EXCLUDED.value);",
+                &[
+                    &STREAM_EVENTS_PUMP_CURSOR_KEY,
+                    &last_seen_id.to_be_bytes().to_vec(),
+                ],
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))
+    }
+
     /// Create a dedicated connection that listens for stream event notifications.
     pub async fn new_event_listener(&self) -> Result<PostgresEventListener, ApiServerStorageError> {
         let (client, mut connection) =
