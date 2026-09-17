@@ -92,9 +92,10 @@ pub async fn stream_events<
 
     // Note: the subscription holds one of the bounded subscriber slots; when the limit has been
     // reached, the client is rejected instead of accumulating unbounded per-connection state.
-    let subscription = state.stream_events.try_subscribe().ok_or(
-        ApiServerWebServerError::TooManyStreamConnections,
-    )?;
+    let subscription = state
+        .stream_events
+        .try_subscribe()
+        .ok_or(ApiServerWebServerError::TooManyStreamConnections)?;
     let event_stream = sse_event_stream(subscription, filter);
 
     let sse = Sse::new(event_stream).keep_alive(
@@ -132,16 +133,16 @@ fn sse_event_stream(
                     Ok(event) => {
                         // Note: events the client is not interested in are silently skipped.
                         if filter.allows(&event) {
-                            return Some((Ok(sse_event(&event)), (subscription, filter, retry_sent)));
+                            return Some((
+                                Ok(sse_event(&event)),
+                                (subscription, filter, retry_sent),
+                            ));
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
                         // Note: the client fell too far behind; tell it what happened and
                         // continue with the fresh events.
-                        return Some((
-                            Ok(lag_event(skipped)),
-                            (subscription, filter, retry_sent),
-                        ));
+                        return Some((Ok(lag_event(skipped)), (subscription, filter, retry_sent)));
                     }
                     Err(broadcast::error::RecvError::Closed) => return None,
                 }

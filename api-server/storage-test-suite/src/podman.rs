@@ -37,7 +37,9 @@ fn resolve_container_command() -> &'static str {
     } else if on_path("docker") {
         "docker"
     } else {
-        panic!("Neither `podman` nor `docker` was found on PATH; the containerized tests cannot run");
+        panic!(
+            "Neither `podman` nor `docker` was found on PATH; the containerized tests cannot run"
+        );
     };
 
     logging::log::info!("Using {command} as the container manager");

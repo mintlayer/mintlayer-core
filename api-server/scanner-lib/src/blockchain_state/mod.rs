@@ -27,9 +27,7 @@ use api_server_common::storage::storage_api::{
     PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
-use api_server_common::streaming::{
-    STREAM_EVENTS_RETENTION_COUNT, StreamEvent, StreamEventId,
-};
+use api_server_common::streaming::{STREAM_EVENTS_RETENTION_COUNT, StreamEvent, StreamEventId};
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
     constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},

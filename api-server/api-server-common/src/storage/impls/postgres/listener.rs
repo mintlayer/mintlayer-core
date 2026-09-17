@@ -184,10 +184,7 @@ impl TransactionalApiServerPostgresStorage {
                 "INSERT INTO ml.misc_data (name, value) VALUES ($1, $2)
                     ON CONFLICT (name)
                     DO UPDATE SET value = GREATEST(ml.misc_data.value, EXCLUDED.value);",
-                &[
-                    &STREAM_EVENTS_PUMP_CURSOR_KEY,
-                    &last_seen_id.to_be_bytes().to_vec(),
-                ],
+                &[&STREAM_EVENTS_PUMP_CURSOR_KEY, &last_seen_id.to_be_bytes().to_vec()],
             )
             .await
             .map(|_| ())
