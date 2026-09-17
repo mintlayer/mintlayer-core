@@ -123,7 +123,7 @@ impl TestRoot {
     pub fn delete(self) {
         let inner = Arc::try_unwrap(self.0).expect("Test root still in use");
         if let Err(err) = fs::remove_dir_all(&inner.path) {
-            eprintln!("Failed to remove test dir {:?}: {}", &inner.path, err);
+            eprintln!("Failed to remove test dir {:?}: {}", inner.path, err);
         }
     }
 }

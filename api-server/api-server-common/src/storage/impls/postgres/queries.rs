@@ -42,6 +42,11 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
+use crate::streaming::{
+    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_PUMP_CURSOR_KEY, STREAM_EVENTS_READ_BATCH_SIZE,
+    STREAM_EVENTS_RETENTION_COUNT, STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR, StreamEvent,
+    StreamEventId, StreamEventReadError,
+};
 
 const VERSION_STR: &str = "version";
 
@@ -1043,6 +1048,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // Index for searching for trading pairs
         self.just_execute(
             "CREATE INDEX orders_currencies_index ON ml.orders (ask_currency, give_currency);",
+        )
+        .await?;
+
+        // Append-only log of stream events for real-time clients; the primary key index also
+        // serves the `WHERE id > $1 ORDER BY id` reads of the event pump.
+        self.just_execute(
+            "CREATE TABLE ml.emitted_events (
+                id BIGSERIAL PRIMARY KEY,
+                kind TEXT NOT NULL,
+                payload JSONB NOT NULL
+            );",
         )
         .await?;
 
@@ -3046,6 +3062,181 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                  decode_order_from_row(&row, chain_config)
             })
             .collect()
+    }
+
+    pub async fn append_stream_event(
+        &mut self,
+        event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        let kind = event.event_name();
+        let payload = serde_json::to_string(event).map_err(|e| {
+            ApiServerStorageError::LowLevelStorageError(format!(
+                "Stream event serialization failed: {e}"
+            ))
+        })?;
+
+        let row = self
+            .tx
+            .query_one(
+                // Note: the payload is bound as text and cast to jsonb, because the string types
+                // of the postgres driver do not serialize into the jsonb type directly.
+                "INSERT INTO ml.emitted_events (kind, payload) VALUES ($1, ($2::text)::jsonb)
+                    RETURNING id;",
+                &[&kind, &payload],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.get(0))
+    }
+
+    pub async fn read_stream_events_after(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+        let rows = self
+            .tx
+            .query(
+                // Note: the reads are batched to keep the memory use of the event pump bounded
+                // regardless of the backlog size.
+                "SELECT id, payload::text FROM ml.emitted_events WHERE id > $1
+                    ORDER BY id ASC LIMIT $2;",
+                &[&last_seen_id, &STREAM_EVENTS_READ_BATCH_SIZE],
+            )
+            .await
+            .map_err(|e| StreamEventReadError::Other(e.to_string()))?;
+
+        // Note: a row that cannot be decoded is surfaced to the pump as a dedicated error (so
+        // that the pump can skip the event loudly instead of being permanently stalled by it):
+        // the event has been durably committed alongside the data it refers to, so silently
+        // dropping it would hide e.g. a reorg from the clients.
+        let mut events = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id: i64 = row.get(0);
+            let payload: String = row.get(1);
+            match serde_json::from_str(&payload) {
+                Ok(event) => events.push((id, event)),
+                Err(err) => {
+                    logging::log::error!(
+                        "Undecodable stream event #{id}: {err} (payload: {payload})"
+                    );
+                    return Err(StreamEventReadError::UndecodableEvent {
+                        id,
+                        error: err.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(events)
+    }
+
+    /// Delete the stream events that fell out of the retention window, returning the number of
+    /// deleted rows.
+    ///
+    /// Note: the pruning is based on the consumption progress recorded by the event pump (see
+    /// `update_stream_events_pump_cursor`), so that events that have not been pumped (and thus
+    /// broadcast) yet are never deleted. To bound the growth of the event log before any
+    /// progress has been recorded (no web server) or during a pump outage, everything below a
+    /// hard limit of `STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR * STREAM_EVENTS_RETENTION_COUNT`
+    /// events is deleted regardless of the progress, with an error being logged in that case.
+    pub async fn prune_stream_events(&mut self) -> Result<u64, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_one("SELECT COALESCE(max(id), 0) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let max_id: i64 = row.get(0);
+
+        let pump_cursor = self.stream_events_pump_cursor().await?;
+
+        // Note: without a recorded cursor, only the hard limit bounds the log: pruning below the
+        // plain retention window before the pump has recorded any progress could delete events
+        // that have not been consumed yet (e.g. in a scanner-only deployment, or in the window
+        // between the scanner's first commits and the pump's first cursor write).
+        let retention_cutoff = max_id - STREAM_EVENTS_RETENTION_COUNT;
+        let hard_cutoff =
+            max_id - STREAM_EVENTS_RETENTION_COUNT * STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR;
+        let cutoff = match pump_cursor {
+            Some(pump_cursor) => std::cmp::max(retention_cutoff.min(pump_cursor), hard_cutoff),
+            None => hard_cutoff,
+        };
+
+        if cutoff < 0 {
+            return Ok(0);
+        }
+
+        if let Some(pump_cursor) = pump_cursor
+            && cutoff > pump_cursor
+        {
+            logging::log::error!(
+                "The stream event pump is lagging behind: pruning stream events up to \
+                #{cutoff} while the pump has only consumed up to #{pump_cursor}; connected \
+                clients will miss the pruned events"
+            );
+        }
+
+        let deleted = self
+            .tx
+            .execute("DELETE FROM ml.emitted_events WHERE id <= $1;", &[&cutoff])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(deleted)
+    }
+
+    /// The stream event consumption progress recorded by the event pump, if any.
+    async fn stream_events_pump_cursor(&mut self) -> Result<Option<i64>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT value FROM ml.misc_data WHERE name = $1;",
+                &[&STREAM_EVENTS_PUMP_CURSOR_KEY],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        match row.map(|row| row.get::<_, Vec<u8>>(0)) {
+            Some(bytes) => {
+                let bytes: [u8; 8] = bytes.try_into().map_err(|_| {
+                    ApiServerStorageError::DeserializationError(
+                        "Invalid stream event pump cursor stored in the database".to_owned(),
+                    )
+                })?;
+                Ok(Some(i64::from_be_bytes(bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// The id of the most recently committed stream event, if any.
+    pub async fn latest_stream_event_id(
+        &mut self,
+    ) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt("SELECT max(id) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.and_then(|row| row.get(0)))
+    }
+
+    pub async fn notify_new_stream_events(
+        &mut self,
+        last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        // Note: the notification is sent within the transaction that appends the events, so
+        // Postgres delivers it only if/when that transaction commits.
+        self.tx
+            .execute(
+                "SELECT pg_notify($1, $2::text);",
+                &[&STREAM_EVENTS_NOTIFY_CHANNEL, &last_event_id.to_string()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
     }
 }
 

@@ -390,8 +390,7 @@ impl TrezorSigner {
         ptx: &PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
     ) -> SignerResult<Vec<MintlayerTxOutput>> {
-        let outputs = ptx
-            .tx()
+        ptx.tx()
             .outputs()
             .iter()
             .map(|out| {
@@ -402,8 +401,7 @@ impl TrezorSigner {
                     tokens_additional_info,
                 )
             })
-            .collect();
-        outputs
+            .collect()
     }
 
     fn check_signature_status(

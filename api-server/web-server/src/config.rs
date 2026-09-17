@@ -22,6 +22,11 @@ use tokio::net::TcpListener;
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
+// Note: the constants are referenced through their defining crate (instead of
+// `crate::streaming`) so that this module does not depend on how the binary's main re-exports
+// the module into the crate root.
+use api_server_common::streaming;
+
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Parser)]
@@ -64,6 +69,48 @@ pub struct ApiServerWebServerConfig {
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
     pub node_rpc_password: Option<String>,
+
+    /// The maximum number of real-time stream events buffered per connected client; a client that
+    /// falls further behind receives a `lag` advisory event instead of the missed events.
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY,
+        value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..)
+    )]
+    pub stream_events_broadcast_capacity: usize,
+
+    /// The maximum number of concurrently served real-time stream (SSE) connections.
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS,
+        value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..)
+    )]
+    pub stream_events_max_subscribers: usize,
+
+    /// The interval in seconds between real-time stream event polls; used as a safety net for
+    /// missed database notifications.
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL.as_secs(),
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    pub stream_events_poll_interval_secs: u64,
+
+    /// The interval in seconds between keepalive comments sent to connected stream clients.
+    ///
+    /// Note: the value must be at least 1.
+    #[clap(
+        long,
+        default_value_t = streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs(),
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    pub stream_events_keepalive_interval_secs: u64,
 }
 
 #[derive(Clone, Debug, Parser)]

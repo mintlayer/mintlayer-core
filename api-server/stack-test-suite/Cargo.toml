@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [dev-dependencies]
 api-blockchain-scanner-lib = { path = "../scanner-lib" }
+api-server-backend-test-suite = { path = "../storage-test-suite" }
 api-server-common = { path = "../api-server-common" }
 api-web-server = { path = "../web-server" }
 chainstate = { path = "../../chainstate" }

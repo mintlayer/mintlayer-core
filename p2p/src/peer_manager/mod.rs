@@ -2273,9 +2273,7 @@ where
         // should be loaded.
         // Note: the check for reachability is a protection against a misconfigured dns seed,
         // which may return bogus addresses.
-        let peerdb_has_no_reachable_addresses = self.peerdb.reachable_addresses().next().is_none();
-
-        peerdb_has_no_reachable_addresses
+        self.peerdb.reachable_addresses().next().is_none()
     }
 
     fn load_predefined_addresses(&mut self) {

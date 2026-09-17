@@ -35,6 +35,7 @@ use crate::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
+use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
 use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
@@ -400,6 +401,38 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.del_orders_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn append_stream_event(
+        &mut self,
+        event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.append_stream_event(event).await?;
+
+        Ok(res)
+    }
+
+    async fn notify_new_stream_events(
+        &mut self,
+        last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.notify_new_stream_events(last_event_id).await?;
+
+        Ok(())
+    }
+
+    async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let deleted = conn.prune_stream_events().await?;
+        if deleted > 0 {
+            logging::log::warn!(
+                "Pruned {deleted} stream events that fell out of the retention window"
+            );
+        }
 
         Ok(())
     }
@@ -810,6 +843,23 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn read_stream_events_after(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.read_stream_events_after(last_seen_id).await?;
+
+        Ok(res)
+    }
+
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.latest_stream_event_id().await?;
 
         Ok(res)
     }

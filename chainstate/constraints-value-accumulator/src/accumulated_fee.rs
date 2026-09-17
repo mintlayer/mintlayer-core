@@ -28,6 +28,12 @@ pub struct AccumulatedFee {
     timelock_constrained: BTreeMap<NonZeroU64, Amount>,
 }
 
+impl Default for AccumulatedFee {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AccumulatedFee {
     pub fn new() -> Self {
         Self {

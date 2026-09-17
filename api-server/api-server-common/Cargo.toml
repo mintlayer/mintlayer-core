@@ -21,6 +21,8 @@ clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true, default-features = false }
 itertools.workspace = true
 parity-scale-codec.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-postgres = "0.7"

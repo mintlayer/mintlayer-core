@@ -30,6 +30,7 @@ use crate::storage::{
         UtxoWithExtraInfo, block_aux_data::BlockAuxData,
     },
 };
+use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 use std::collections::BTreeMap;
 
 use common::chain::UtxoOutPoint;
@@ -445,6 +446,23 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn read_stream_events_after(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.read_stream_events_after(last_seen_id).await?;
+
+        Ok(res)
+    }
+
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.latest_stream_event_id().await?;
 
         Ok(res)
     }

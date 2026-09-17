@@ -33,6 +33,7 @@ mod pool;
 mod pool_block_stats;
 mod pools;
 mod statistics;
+mod stream;
 mod token;
 mod token_ids;
 mod token_ticker;
@@ -124,6 +125,7 @@ async fn chain_genesis() {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
+                    stream_events: Default::default(),
                 }
             };
 

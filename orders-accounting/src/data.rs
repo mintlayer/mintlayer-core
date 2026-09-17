@@ -98,6 +98,12 @@ pub struct OrdersAccountingData {
     pub give_balances: BTreeMap<OrderId, Amount>,
 }
 
+impl Default for OrdersAccountingData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrdersAccountingData {
     pub fn new() -> Self {
         Self {
@@ -113,6 +119,12 @@ pub struct OrdersAccountingDeltaData {
     pub(crate) order_data: DeltaDataCollection<OrderId, OrderData>,
     pub(crate) ask_balances: DeltaAmountCollection<OrderId>,
     pub(crate) give_balances: DeltaAmountCollection<OrderId>,
+}
+
+impl Default for OrdersAccountingDeltaData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OrdersAccountingDeltaData {
@@ -151,6 +163,12 @@ pub struct OrdersAccountingDeltaUndoData {
     pub(crate) order_data: DeltaDataUndoCollection<OrderId, OrderData>,
     pub(crate) ask_balances: DeltaAmountCollection<OrderId>,
     pub(crate) give_balances: DeltaAmountCollection<OrderId>,
+}
+
+impl Default for OrdersAccountingDeltaUndoData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OrdersAccountingDeltaUndoData {

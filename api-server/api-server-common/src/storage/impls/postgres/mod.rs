@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod listener;
 pub mod transactional;
 
 mod queries;
@@ -31,8 +32,12 @@ use crate::storage::storage_api::ApiServerStorageError;
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
 
+pub use self::listener::{PostgresEventListener, PostgresStreamEventSource};
+
 pub struct TransactionalApiServerPostgresStorage {
     pool: Pool<PostgresConnectionManager<NoTls>>,
+    /// The connection configuration, used to create dedicated connections, e.g. for LISTEN/NOTIFY.
+    connection_config: tokio_postgres::Config,
     /// This task is responsible for rolling back failed RW/RO transactions, since closing connections are pooled
     tx_dropper_joiner: tokio::task::JoinHandle<()>,
     /// This channel is used to send transactions that are not manually rolled back to the tx_dropper task to roll them back
@@ -81,7 +86,7 @@ impl TransactionalApiServerPostgresStorage {
                 ))
             })?;
 
-        let manager = PostgresConnectionManager::new(config, NoTls);
+        let manager = PostgresConnectionManager::new(config.clone(), NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(
                 "Postgres connection pool creation error: {}",
@@ -106,6 +111,7 @@ impl TransactionalApiServerPostgresStorage {
 
         let result = Self {
             pool,
+            connection_config: config,
             tx_dropper_joiner,
             db_tx_conn_sender: conn_tx,
             chain_config,

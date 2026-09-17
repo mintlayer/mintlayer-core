@@ -256,6 +256,7 @@ async fn ok_tokens(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -413,6 +414,7 @@ async fn ok_coins(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 

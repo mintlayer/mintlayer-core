@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+- New endpoint `/v2/stream` (Server-Sent Events) that streams `tx_seen`, `block` and `reorg` events in real time, with an optional `types` filter parameter.\
+  The stream carries keepalive comments, an in-stream reconnection hint, and a `lag` advisory for clients that fall behind; there is no replay, so missed events must be recovered through the regular REST endpoints.
+- New web server options: `--stream-events-broadcast-capacity`, `--stream-events-max-subscribers`, `--stream-events-poll-interval-secs`, `--stream-events-keepalive-interval-secs`.
+- The scanner now emits block/reorg events into a new `ml.emitted_events` table (transactionally consistent with the indexed data) and notifies listeners on commit.\
+  Transactions seen in the node's mempool are bridged into `tx_seen` events by the web server.
+
+### Changed
+- The api-server storage version was bumped from 25 to 26 (new `ml.emitted_events` table); the scanner re-initializes the database when it finds a different version, as before. Full resync is required.
+- The stream event retention pruning no longer deletes events that the event pump has not consumed yet: the pump records its progress in the database and the pruning never overtakes it (with a hard limit of 100k retained events before the first progress record or during a pump outage, logged as an error when it kicks in).
+- A terminated streaming background task (the event pump or the mempool bridge) now brings the web server process down instead of leaving the event stream silently dead while the REST endpoints keep working.
+- The streaming CLI options are validated (`clap` range checks) instead of silently clamping invalid values, and an SSE connection above `--stream-events-max-subscribers` is rejected with `429 Too Many Requests`.
+- A `lag` advisory (`skipped: 0`) is now broadcast when the node's mempool subscription is lost or an event cannot be decoded, so clients can detect gaps; a single undecodable event no longer stalls the whole stream.
+
 ### Fixed
 - `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\
   Both tokens and NFTs are stored with a row per block height they changed at, and every one

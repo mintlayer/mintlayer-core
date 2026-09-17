@@ -22,6 +22,12 @@ pub struct PeerBlockSyncStatus {
     pub expecting_blocks_since: Option<Time>,
 }
 
+impl Default for PeerBlockSyncStatus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PeerBlockSyncStatus {
     pub fn new() -> Self {
         Self {

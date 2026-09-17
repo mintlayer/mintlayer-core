@@ -1339,8 +1339,7 @@ async fn assert_fees(
         .chainstate
         .call(|cs| {
             let tip = cs.get_best_block_id().unwrap();
-            let tip_index = cs.get_gen_block_index_for_persisted_block(&tip).unwrap().unwrap();
-            tip_index
+            cs.get_gen_block_index_for_persisted_block(&tip).unwrap().unwrap()
         })
         .await
         .unwrap();

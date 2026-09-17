@@ -68,3 +68,9 @@ impl std::fmt::Display for PeerId {
         write!(f, "{}", self.0)
     }
 }
+
+impl Default for PeerId {
+    fn default() -> Self {
+        Self::new()
+    }
+}

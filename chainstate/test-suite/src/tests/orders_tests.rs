@@ -1049,10 +1049,7 @@ fn fill_order_check_storage(#[case] seed: Seed, #[case] version: OrdersVersion) 
                         / ask_amount.into_atoms();
                     let filled2 = (give_amount.into_atoms() * left_to_fill.into_atoms())
                         / ask_amount.into_atoms();
-                    let remainder = (give_amount - Amount::from_atoms(filled1 + filled2))
-                        .unwrap()
-                        .as_non_zero();
-                    remainder
+                    (give_amount - Amount::from_atoms(filled1 + filled2)).unwrap().as_non_zero()
                 }
             };
 

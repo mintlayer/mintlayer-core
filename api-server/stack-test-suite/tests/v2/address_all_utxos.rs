@@ -281,6 +281,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -537,6 +538,7 @@ async fn ok(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 

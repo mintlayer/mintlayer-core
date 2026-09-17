@@ -115,6 +115,7 @@ async fn no_reward(#[case] seed: Seed) {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
+                    stream_events: Default::default(),
                 }
             };
 
@@ -219,6 +220,7 @@ async fn has_reward(#[case] seed: Seed) {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
+                    stream_events: Default::default(),
                 }
             };
 

@@ -149,6 +149,12 @@ impl ConnectedSocketInfo for TcpTransportStream {
     }
 }
 
+impl Default for TcpTransportSocket {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serialization::Encode;

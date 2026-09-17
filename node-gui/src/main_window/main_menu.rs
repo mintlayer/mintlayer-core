@@ -100,7 +100,7 @@ fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced
 }
 
 fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, iced::Renderer> {
-    let root = Item::with_menu(
+    Item::with_menu(
         labeled_button("File", MenuMessage::NoOp),
         Menu::new(match wallet_mode {
             WalletMode::Hot => {
@@ -199,7 +199,5 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
             }
         })
         .width(300),
-    );
-
-    root
+    )
 }

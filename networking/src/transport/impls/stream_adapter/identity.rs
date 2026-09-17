@@ -43,3 +43,9 @@ impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for Identit
         Box::pin(ready(Ok(base)))
     }
 }
+
+impl Default for IdentityStreamAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
