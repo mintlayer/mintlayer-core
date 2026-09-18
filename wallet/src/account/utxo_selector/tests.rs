@@ -450,3 +450,70 @@ fn test_srd_solver_max_weight(#[case] seed: Seed) {
 
     assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
 }
+
+#[test]
+fn test_prefer_confirmed_uses_confirmed_when_sufficient() {
+    // The confirmed pool alone can cover the target, so it must be used and the full pool
+    // (deliberately given a different, larger value) must be left untouched.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(60), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(1000), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_insufficient() {
+    // The confirmed pool can't reach the target on its own, so selection must fall back to the
+    // full pool, which additionally contains a larger (unconfirmed) utxo.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(10), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(10), &mut full);
+    add_output(Amount::from_atoms(90), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert!(result.effective_value >= Amount::from_atoms(50));
+}
+
+#[test]
+fn test_prefer_confirmed_without_preference_uses_full_pool() {
+    // With no confirmed pool the full pool is used directly.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        None,
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
+}
