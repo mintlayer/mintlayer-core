@@ -35,15 +35,29 @@ jobs:
       id: version
       run: |
         if [[ $GITHUB_REF == refs/tags/* ]]; then
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          VERSION=${GITHUB_REF#refs/tags/}
+          # Validate the grammar up front (the version flows into docker build/push
+          # command lines inside build.py), so a non-semver tag fails here with a
+          # clear message. The leading 'v' is allowed here; build.py strips it.
+          if ! echo "$VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "derived version '$VERSION' is not [v]X.Y.Z[-suffix]; tag a semver release" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         else
           echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         fi
 
+    # Note: the version (and the Docker Hub username) are passed through environment
+    # variables instead of direct ${{ }} interpolation into the run block, so that a
+    # crafted tag/ref/input cannot inject shell into the step.
     - name: Build and Push Docker images
+      env:
+        VERSION: ${{ steps.version.outputs.VERSION }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       run: |
-        python build-tools/docker/build.py --push --docker-hub-user ${{ secrets.DOCKERHUB_USERNAME }} \
-          --version ${{ steps.version.outputs.VERSION }} --latest
+        python build-tools/docker/build.py --push --docker-hub-user "$DOCKERHUB_USERNAME" \
+          --version "$VERSION" --latest
 
     env:
       DOCKER_BUILDKIT: 1
