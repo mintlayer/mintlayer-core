@@ -49,12 +49,15 @@ pub struct MapPrefixIter<'m, T> {
 }
 
 impl<'m, T> MapPrefixIter<'m, T> {
-    pub fn new(map: &'m BTreeMap<Data, T>, prefix: Data) -> Self {
+    pub fn new(map: &'m BTreeMap<Data, T>, prefix: &[u8]) -> Self {
         let inner = map.range(SliceRange {
-            start: std::ops::Bound::Included(prefix.as_slice()),
+            start: std::ops::Bound::Included(prefix),
             end: std::ops::Bound::Unbounded,
         });
-        Self { inner, prefix }
+        Self {
+            inner,
+            prefix: prefix.to_vec(),
+        }
     }
 }
 

@@ -30,24 +30,24 @@ use utils::{const_value::ConstValue, sync};
 // Read-only transaction just holds a read lock to the database
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
-impl<T: ReadOps> ReadOps for TxRo<'_, T> {
+impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>> {
         self.0.get(map_id, key)
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        prefix: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
         self.0.prefix_iter(map_id, prefix)
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        key: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
         self.0.greater_equal_iter(map_id, key)
     }
 }
@@ -70,7 +70,7 @@ impl<T> TxRw<'_, T> {
     }
 }
 
-impl<T: ReadOps> ReadOps for TxRw<'_, T> {
+impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<'_, [u8]>>> {
         self.deltas[map_id].get(key).map_or_else(
             || self.db.get(map_id, key),
@@ -78,24 +78,24 @@ impl<T: ReadOps> ReadOps for TxRw<'_, T> {
         )
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        let db_iter = self.db.prefix_iter(map_id, prefix.clone())?;
-        let delta_iter = MapPrefixIter::new(&self.deltas[map_id], prefix.clone());
+        prefix: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
+        let db_iter = self.db.prefix_iter(map_id, prefix)?;
+        let delta_iter = MapPrefixIter::new(&self.deltas[map_id], prefix);
 
         Ok(merge_iterators(db_iter, delta_iter))
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        let db_iter = self.db.greater_equal_iter(map_id, key.clone())?;
-        let delta_iter = self.deltas[map_id].range(key..);
+        key: &[u8],
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
+        let db_iter = self.db.greater_equal_iter(map_id, key)?;
+        let delta_iter = self.deltas[map_id].range(key.to_vec()..);
 
         Ok(merge_iterators(db_iter, delta_iter))
     }

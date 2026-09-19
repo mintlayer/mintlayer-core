@@ -403,26 +403,26 @@ fn prefix_iteration<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
             // Check iteration over keys prefixed "a"
             let model_a = Model::from_actions(actions_a);
             let dbtx = store.transaction_ro().unwrap();
-            let iter_a = dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap();
+            let iter_a = dbtx.prefix_iter(MAPID.0, &[b'a']).unwrap();
             assert!(model_a.into_iter().eq(iter_a));
             drop(dbtx);
 
             // Check iteration over keys prefixed "b"
             let model_b = Model::from_actions(actions_b);
             let dbtx = store.transaction_ro().unwrap();
-            let iter_b = dbtx.prefix_iter(MAPID.0, vec![b'b']).unwrap();
+            let iter_b = dbtx.prefix_iter(MAPID.0, &[b'b']).unwrap();
             assert!(model_b.into_iter().eq(iter_b));
             drop(dbtx);
 
             // Check there are no entries prefixed "c"
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.prefix_iter(MAPID.0, vec![b'c']).unwrap().next(), None);
+            assert_eq!(dbtx.prefix_iter(MAPID.0, &[b'c']).unwrap().next(), None);
             drop(dbtx);
 
             // Take all entries prefixed "a" and remove them
             let mut dbtx = store.transaction_rw(None).unwrap();
             let keys_a: Vec<_> =
-                dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap().map(|(k, _)| k).collect();
+                dbtx.prefix_iter(MAPID.0, &[b'a']).unwrap().map(|(k, _)| k).collect();
             for key in keys_a {
                 dbtx.del(MAPID.0, &key).unwrap();
             }
@@ -430,7 +430,7 @@ fn prefix_iteration<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
 
             // Check there are no entries prefixed "a"
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap().next(), None);
+            assert_eq!(dbtx.prefix_iter(MAPID.0, &[b'a']).unwrap().next(), None);
             drop(dbtx);
         },
     )
