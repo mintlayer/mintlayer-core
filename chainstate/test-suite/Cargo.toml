@@ -42,5 +42,9 @@ strum.workspace = true
 name = "benches"
 harness = false
 
+[[bench]]
+name = "reorg_growth"
+harness = false
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
