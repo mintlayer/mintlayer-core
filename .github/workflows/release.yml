@@ -44,6 +44,12 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
+        # Validate the grammar up front, so a non-semver tag fails here with a clear
+        # message (the same grammar the Linux, Windows and macOS builders enforce).
+        if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+          echo "derived version '$VERSION' is not X.Y.Z[-suffix]; tag a semver release" >&2
+          exit 1
+        fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Download Artifacts
@@ -60,11 +66,17 @@ jobs:
         done
         echo "EOF" >> $GITHUB_OUTPUT
 
+    # Note: the version and the hashes are passed through environment variables
+    # instead of direct ${{ }} interpolation into the run block, so that a crafted
+    # tag/ref/input cannot inject shell into the step.
     - name: Generate Release Body
       id: generate_body
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+        HASHES: ${{ steps.generate_hashes.outputs.HASHES }}
       run: |
         echo "BODY<<EOF" >> $GITHUB_OUTPUT
-        echo "Release version ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+        echo "Release version $VERSION" >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
         echo "Please download the appropriate package for your system." >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
@@ -74,7 +86,7 @@ jobs:
         echo "" >> $GITHUB_OUTPUT
         echo "File Hashes (SHA256):" >> $GITHUB_OUTPUT
         echo "\`\`\`" >> $GITHUB_OUTPUT
-        echo "${{ steps.generate_hashes.outputs.HASHES }}" >> $GITHUB_OUTPUT
+        echo "$HASHES" >> $GITHUB_OUTPUT
         echo "\`\`\`" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
