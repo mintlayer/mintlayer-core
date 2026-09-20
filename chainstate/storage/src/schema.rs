@@ -15,7 +15,10 @@
 
 //! Chainstate database schema
 
-use chainstate_types::{BlockIndex, EpochData};
+use chainstate_types::{
+    BlockIndex, EpochData,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
+};
 use common::{
     chain::{
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
@@ -97,5 +100,12 @@ storage::decl_schema! {
         pub DBAccountingDelegationBalancesSealed: Map<DelegationId, Amount>,
         /// Store for sealed accounting pool delegations balances
         pub DBAccountingPoolDelegationSharesSealed: Map<(PoolId, DelegationId), Amount>,
+
+        /// Store for PoS seal index entries, i.e. the blocks known to carry each seal.
+        /// The number of blocks per entry is bounded by the seal indexing logic.
+        pub DBSealIndex: Map<BlockSeal, SealIndexEntry>,
+        /// Store for duplicate PoS seal evidence records, keyed by the id of the block
+        /// whose processing discovered the duplication.
+        pub DBDuplicateSealEvidence: Map<Id<Block>, DuplicateSealEvidence>,
     }
 }

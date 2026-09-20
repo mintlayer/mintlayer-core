@@ -16,8 +16,8 @@
 //! The seal of a proof-of-stake block.
 
 use common::{
-    chain::{PoolId, block::ConsensusData},
-    primitives::H256,
+    chain::{Block, PoolId, block::ConsensusData, block::signed_block_header::SignedBlockHeader},
+    primitives::{BlockHeight, H256, Id},
 };
 use crypto::vrf::VRFReturn;
 use serialization::{Decode, Encode};
@@ -73,6 +73,65 @@ impl BlockSeal {
 
     pub fn vrf_output(&self) -> &H256 {
         &self.vrf_output
+    }
+}
+
+/// An index entry of a seal: the blocks known to carry it.
+///
+/// The number of blocks per entry is bounded by the storage layer, so the index
+/// stays bounded even if a seal is deliberately reused on many blocks.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct SealIndexEntry {
+    seal: BlockSeal,
+    blocks: Vec<(Id<Block>, BlockHeight)>,
+}
+
+impl SealIndexEntry {
+    pub fn new(seal: BlockSeal, blocks: Vec<(Id<Block>, BlockHeight)>) -> Self {
+        Self { seal, blocks }
+    }
+
+    pub fn seal(&self) -> &BlockSeal {
+        &self.seal
+    }
+
+    pub fn blocks(&self) -> &[(Id<Block>, BlockHeight)] {
+        &self.blocks
+    }
+
+    pub fn push_block(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+        self.blocks.push((block_id, block_height));
+    }
+}
+
+/// Evidence that a single seal was seen on more than one block.
+///
+/// The record is self-certifying: each header carries the block signature of the
+/// pool and its own VRF data, so a third party can verify that the same pool
+/// produced all the listed blocks for the same slot. The headers are retained in
+/// the record itself, so the evidence stays verifiable even if the blocks are
+/// later removed from storage.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct DuplicateSealEvidence {
+    seal: BlockSeal,
+    headers: Vec<SignedBlockHeader>,
+}
+
+impl DuplicateSealEvidence {
+    pub fn new(seal: BlockSeal, headers: Vec<SignedBlockHeader>) -> Self {
+        Self { seal, headers }
+    }
+
+    pub fn seal(&self) -> &BlockSeal {
+        &self.seal
+    }
+
+    pub fn headers(&self) -> &[SignedBlockHeader] {
+        &self.headers
+    }
+
+    pub fn push_header(&mut self, header: SignedBlockHeader) {
+        self.headers.push(header);
     }
 }
 

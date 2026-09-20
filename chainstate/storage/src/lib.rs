@@ -25,6 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_types::{
     BlockIndex, EpochStorageRead, EpochStorageWrite, SealedStorageTag, TipStorageTag,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
 };
 use common::{
     chain::{
@@ -161,6 +162,15 @@ pub trait BlockchainStorageRead:
     /// Get the entire mainchain-block-by-height map as BTreeMap. This is used in the chainstate's
     /// "heavy" consistency checks.
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
+
+    /// Get the seal index entry of the given seal, if the seal has been seen on any block
+    fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
+
+    /// Get the duplicate seal evidence that was recorded for the given block, if any
+    fn get_duplicate_seal_evidence(
+        &self,
+        block_id: &Id<Block>,
+    ) -> crate::Result<Option<DuplicateSealEvidence>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -278,6 +288,19 @@ pub trait BlockchainStorageWrite:
     fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce)
     -> Result<()>;
     fn del_account_nonce_count(&mut self, account: &AccountType) -> Result<()>;
+
+    /// Set the seal index entry of the given seal
+    fn set_seal_index_entry(&mut self, seal: &BlockSeal, entry: &SealIndexEntry) -> Result<()>;
+
+    /// Remove the seal index entry of the given seal
+    fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> Result<()>;
+
+    /// Record the duplicate seal evidence for the given block
+    fn set_duplicate_seal_evidence(
+        &mut self,
+        block_id: &Id<Block>,
+        evidence: &DuplicateSealEvidence,
+    ) -> Result<()>;
 }
 
 /// Operations on read-only transactions

@@ -34,7 +34,7 @@ pub use crate::{
     gen_block_index::{GenBlockIndex, GenBlockIndexRef},
     height_skip::get_skip_height,
     locator::Locator,
-    seal::BlockSeal,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
 };
 
 mod ancestor;
