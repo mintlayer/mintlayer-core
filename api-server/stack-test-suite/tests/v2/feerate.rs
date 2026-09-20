@@ -40,7 +40,7 @@ async fn invalid_query_parameter() {
         "Invalid in top X MB query parameter"
     );
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -92,7 +92,7 @@ async fn ok(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     assert_eq!(body, format!("\"{in_top_x_mb}\""));
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -199,5 +199,5 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
     let new_feerate = in_top_x_mb * 2;
     assert_eq!(body, format!("\"{new_feerate}\""));
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

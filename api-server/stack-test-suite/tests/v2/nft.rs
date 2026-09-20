@@ -40,7 +40,7 @@ async fn invalid_nft_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid NFT Id");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -63,7 +63,7 @@ async fn nft_not_found(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "NFT not found");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -224,5 +224,5 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body, expected_values);
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

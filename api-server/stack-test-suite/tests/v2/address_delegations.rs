@@ -39,7 +39,7 @@ async fn invalid_address() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid address");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -65,7 +65,7 @@ async fn address_not_found(#[case] seed: Seed) {
 
     assert!(utxos.is_empty());
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -241,5 +241,5 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body, expected);
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

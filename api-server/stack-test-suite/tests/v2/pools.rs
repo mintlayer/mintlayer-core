@@ -34,7 +34,7 @@ async fn invalid_offset() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -48,7 +48,7 @@ async fn invalid_num_items() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -67,7 +67,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -81,7 +81,7 @@ async fn invalid_sort_order() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid pools sort order");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -334,5 +334,5 @@ async fn ok(#[case] seed: Seed) {
         }
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

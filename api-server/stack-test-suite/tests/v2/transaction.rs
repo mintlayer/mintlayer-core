@@ -30,7 +30,7 @@ async fn invalid_transaction_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn transaction_not_found() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Transaction not found");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -95,7 +95,7 @@ async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
     assert_eq!(body.get("timestamp").unwrap().as_str().unwrap(), "");
     assert_eq!(body.get("confirmations").unwrap().as_str().unwrap(), "");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -335,7 +335,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
         &expected_transaction["confirmations"]
     );
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -484,7 +484,7 @@ async fn ok(#[case] seed: Seed) {
         &expected_transaction["confirmations"]
     );
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -672,5 +672,5 @@ async fn mint_tokens(#[case] seed: Seed) {
     let burn_out = outputs.first().unwrap().as_object().unwrap();
     assert_eq!(burn_out.get("type").unwrap().as_str().unwrap(), "Burn",);
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

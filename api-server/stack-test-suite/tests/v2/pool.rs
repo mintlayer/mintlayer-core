@@ -35,7 +35,7 @@ async fn invalid_pool_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid pool Id");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -52,7 +52,7 @@ async fn pool_id_not_fund() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Stake pool not found");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -318,5 +318,5 @@ async fn ok(#[case] seed: Seed) {
         }
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

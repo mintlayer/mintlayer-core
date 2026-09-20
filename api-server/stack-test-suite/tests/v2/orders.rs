@@ -197,7 +197,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
     check_url(format!("/api/v2/transaction/{tx2_id}")).await;
     check_url(format!("/api/v2/transaction/{tx3_id}")).await;
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -367,5 +367,5 @@ async fn order_pairs(#[case] seed: Seed) {
     let arr_body = body.as_array().unwrap();
     assert!(arr_body.is_empty());
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

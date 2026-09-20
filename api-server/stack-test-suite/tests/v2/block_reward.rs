@@ -33,7 +33,7 @@ async fn invalid_block_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid block Id");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn block_not_found() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Block not found");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -141,7 +141,7 @@ async fn no_reward(#[case] seed: Seed) {
 
     assert!(body.is_empty());
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -245,5 +245,5 @@ async fn has_reward(#[case] seed: Seed) {
 
     assert_eq!(body, expected_reward);
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

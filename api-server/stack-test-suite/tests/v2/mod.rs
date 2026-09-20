@@ -46,7 +46,7 @@ mod transaction_submit;
 mod transactions;
 
 use crate::{
-    DummyRPC, shutdown_webserver, spawn_webserver, spawn_webserver_with_mempool, submit_transaction,
+    DummyRPC, shutdown_task, spawn_webserver, spawn_webserver_with_mempool, submit_transaction,
 };
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
@@ -152,5 +152,5 @@ async fn chain_genesis() {
 
     assert_eq!(body, expected_genesis);
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }

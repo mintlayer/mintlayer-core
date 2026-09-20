@@ -33,7 +33,7 @@ async fn invalid_address() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid address");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -57,7 +57,7 @@ async fn address_not_found(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Address not found");
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -301,7 +301,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
         assert_eq!(body, expected_balance);
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -554,7 +554,7 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
         assert_eq!(body, expected_balance);
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -783,7 +783,7 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body, expected_values);
     }
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 // TODO test address balances after a reorg

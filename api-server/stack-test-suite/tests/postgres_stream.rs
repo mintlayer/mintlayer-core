@@ -49,7 +49,7 @@ use common::{
     primitives::{BlockHeight, Id, Idable, time::get_time},
 };
 use hex::ToHex as _;
-use test_common::{DummyRPC, frame_data, frame_event_name, shutdown_webserver};
+use test_common::{DummyRPC, frame_data, frame_event_name, shutdown_task};
 use test_utils::random::{Seed, make_seedable_rng};
 
 #[ctor::ctor]
@@ -406,12 +406,16 @@ async fn stream_events_postgres_end_to_end() {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Shutdown: stop the web server and the collector. The collector is aborted as well, since
-    // it would otherwise keep running indefinitely (the server keepalives prevent its internal
-    // chunk timeout from firing; the terminated server connection also ends its read loop);
-    // the abort does not swallow a panic that has already happened, which the join inside
-    // `shutdown_webserver` propagates with the actual panic message.
+    // Shutdown: stop the web server and the collector. Both tasks are aborted before either is
+    // awaited, so that a failure in one cannot leak the other (if, say, the web server task
+    // panicked, awaiting it first would panic here before the collector is ever aborted). The
+    // collector is aborted as well, since it would otherwise keep running indefinitely (the
+    // server keepalives prevent its internal chunk timeout from firing; the terminated server
+    // connection also ends its read loop); the abort does not swallow a panic that has already
+    // happened, which the join inside `shutdown_task` propagates with the actual panic message.
     // -----------------------------------------------------------------------------------------
-    shutdown_webserver(web_task).await;
-    shutdown_webserver(collector_task).await;
+    web_task.abort();
+    collector_task.abort();
+    shutdown_task(web_task).await;
+    shutdown_task(collector_task).await;
 }

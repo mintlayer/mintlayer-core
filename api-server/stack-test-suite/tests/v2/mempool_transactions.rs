@@ -61,7 +61,7 @@ async fn submitted_transaction_is_listed(#[case] seed: Seed) {
     assert_eq!(body.len(), 1);
     assert_eq!(body[0].get("id").unwrap(), &tx_id);
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -146,7 +146,7 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
 
     assert!(parent_position < child_position);
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -164,7 +164,7 @@ async fn invalid_ordering() {
         "Invalid transaction ordering"
     );
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -179,5 +179,5 @@ async fn empty_mempool_returns_empty_list() {
 
     assert!(body.as_array().unwrap().is_empty());
 
-    shutdown_webserver(task).await;
+    shutdown_task(task).await;
 }
