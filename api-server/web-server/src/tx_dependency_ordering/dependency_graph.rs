@@ -209,7 +209,7 @@ fn process_output_dependencies(
                     .or_default()
                     .push(tx_index);
             }
-            TxOutput::DelegateStaking(amount, delegation_id) => {
+            TxOutput::DelegateStaking(_amount, delegation_id) => {
                 // A delegation top-up provides the creation dependency of the
                 // delegation spends (mirroring the mempool of the node).
                 dependencies
@@ -299,28 +299,30 @@ fn process_input_dependencies(
                 // The delegation spends of an account are nonce-sequenced: a spend of
                 // the nonce `n` has to come after the spend of the nonce `n - 1`, and
                 // the first spend (nonce 0) has to come after the delegation creation.
-                if let AccountSpending::DelegationBalance(delegation_id, _) = acct.account() {
-                    dependencies
-                        .dependents
-                        .entry(Dependency::DelegationSpending(*delegation_id, acct.nonce()))
-                        .or_default()
-                        .push(tx_index);
-
-                    if acct.nonce().value() == 0 {
+                match acct.account() {
+                    AccountSpending::DelegationBalance(delegation_id, _) => {
                         dependencies
                             .dependents
-                            .entry(Dependency::DelegationCreation(*delegation_id))
+                            .entry(Dependency::DelegationSpending(*delegation_id, acct.nonce()))
+                            .or_default()
+                            .push(tx_index);
+
+                        if acct.nonce().value() == 0 {
+                            dependencies
+                                .dependents
+                                .entry(Dependency::DelegationCreation(*delegation_id))
+                                .or_default()
+                                .push(tx_index);
+                        }
+
+                        // The next spend of the delegation has to come after this one.
+                        let next_nonce = AccountNonce::new(acct.nonce().value() + 1);
+                        dependencies
+                            .providers
+                            .entry(Dependency::DelegationSpending(*delegation_id, next_nonce))
                             .or_default()
                             .push(tx_index);
                     }
-
-                    // The next spend of the delegation has to come after this one.
-                    let next_nonce = AccountNonce::new(acct.nonce().value() + 1);
-                    dependencies
-                        .providers
-                        .entry(Dependency::DelegationSpending(*delegation_id, next_nonce))
-                        .or_default()
-                        .push(tx_index);
                 }
             }
             TxInput::AccountCommand(nonce, cmd) => match cmd {

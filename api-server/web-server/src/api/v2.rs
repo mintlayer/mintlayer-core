@@ -516,12 +516,9 @@ async fn pending_tx_additional_info<
     };
 
     let mut token_decimals = BTreeMap::new();
+    let db_tx = state.db.transaction_ro().await.map_err(internal_error)?;
     for token_id in tx_token_ids(tx) {
-        let decimals = state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(internal_error)?
+        let decimals = db_tx
             .get_token_num_decimals(token_id)
             .await
             .map_err(internal_error)?
@@ -595,7 +592,9 @@ pub async fn mempool_transactions<
         TxOrdering::Insertion => {}
         TxOrdering::Dependency => {
             // Note: the transactions will be included into a block after the tip, which
-            // matters for the token id derivation version of a token issuance.
+            // matters for the token id derivation version of a token issuance. Note
+            // also that the storage tip may lag the tip of the connected node, in which
+            // case the ordering around a token id derivation upgrade may be incomplete.
             let tip_height = best_block(&state).await?.block_height().next_height();
             let chain_config = Arc::clone(&state.chain_config);
             // The sorting is CPU-bound and proportional to the mempool size; run it
