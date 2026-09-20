@@ -173,6 +173,8 @@ fn chainstate_config(
         max_tip_age,
         enable_heavy_checks,
         allow_checkpoints_mismatch,
+        // Intentionally not overridden by a CLI option: the config file is the only
+        // control surface for this setting.
         pos_seal_duplication_tracking,
     };
     ChainstateLauncherConfigFile {

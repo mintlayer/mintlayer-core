@@ -20,8 +20,10 @@
 //! the seal are retained as a self-certifying evidence record.
 //!
 //! The index entry of a single seal is capped at [`MAX_BLOCKS_PER_SEAL`] blocks.
-//! Once the cap is reached, the evidence records are still written for any new
-//! blocks that carry the seal, but the index entry is no longer extended.
+//! Once the cap is reached, neither the index entry nor the evidence records of
+//! the seal are extended anymore, so the storage footprint of a single reused
+//! seal stays bounded. The evidence records that were already recorded are never
+//! removed by this module.
 
 use std::num::NonZeroUsize;
 
@@ -71,11 +73,20 @@ pub fn index_block_seal<S: BlockchainStorageWrite>(
         return Ok(());
     }
 
-    record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block)?;
-
     if entry.blocks().len() < MAX_BLOCKS_PER_SEAL.get() {
+        record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block)?;
         entry.push_block(block_id, block_height);
         db_tx.set_seal_index_entry(entry.seal(), &entry)?;
+    } else {
+        // The index entry of the seal is at its cap, so the seal reuse is already
+        // covered by the recorded evidence. Log the sighting, but do not extend the
+        // index and do not record redundant evidence, keeping the storage footprint
+        // of a single reused seal bounded.
+        log::info!(
+            "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached (block {})",
+            seal.pool_id(),
+            block.get_id(),
+        );
     }
 
     Ok(())
@@ -91,8 +102,17 @@ fn record_duplicate_seal_evidence<S: BlockchainStorageWrite>(
 ) -> Result<(), BlockError> {
     let mut evidence = DuplicateSealEvidence::new(seal.clone(), Vec::new());
     for (existing_id, _) in known_blocks {
-        if let Some(header) = db_tx.get_block_header(existing_id)? {
-            evidence.push_header(header);
+        match db_tx.get_block_header(existing_id)? {
+            Some(header) => evidence.push_header(header),
+            None => {
+                // Unreachable in practice: indexed blocks are persisted together with
+                // their headers. If it ever happens, retain the rest of the evidence,
+                // but make the gap visible instead of silently writing a weak record.
+                log::warn!(
+                    "The header of the indexed block {} is missing while recording duplicate seal evidence",
+                    existing_id
+                );
+            }
         }
     }
     evidence.push_header(block.header().clone());
@@ -265,11 +285,9 @@ mod tests {
     }
 
     #[test]
-    fn index_entry_is_capped_and_evidence_is_kept() {
+    fn index_entry_is_capped() {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         let block = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, H256::zero());
-        let block_id = block.get_id();
-        let header = block.header().clone();
 
         let seal = BlockSeal::from_consensus_data(block.header().consensus_data()).unwrap();
         let known_blocks = (0..MAX_BLOCKS_PER_SEAL.get())
@@ -279,19 +297,53 @@ mod tests {
 
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
-        // The headers of the known blocks may be unavailable, in which case the
-        // evidence record still retains the header of the new block.
-        db.expect_get_block_header().times(..).return_const(Ok(None));
-        db.expect_set_duplicate_seal_evidence()
-            .times(1)
-            .withf(move |recorded_id, evidence| {
-                recorded_id == &block_id
-                    && evidence.headers().len() == 1
-                    && evidence.headers()[0] == header
-            })
-            .return_const(Ok(()));
+        // The index entry of the seal is at its cap, so the seal reuse is already
+        // covered by the previously recorded evidence: no header is looked up, no
+        // new evidence is written and the index entry is not extended, keeping the
+        // storage footprint of a single reused seal bounded.
+        db.expect_get_block_header().times(0);
+        db.expect_set_duplicate_seal_evidence().times(0);
         db.expect_set_seal_index_entry().times(0);
 
         index_block_seal(&mut db, &block, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn duplicate_seal_records_evidence_with_missing_known_block_header() {
+        // Same as `duplicate_seal_records_evidence`, but the header of the known
+        // block is unavailable. The evidence record still gets written, retaining
+        // the header of the new block.
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let seed = H256::zero();
+        let block_1 = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, seed);
+        let block_2 = make_pos_block(H256::from([1u8; 32]), &vrf_sk, &vrf_pk, seed);
+
+        assert_ne!(block_1.get_id(), block_2.get_id());
+
+        let id_1 = block_1.get_id();
+        let id_2 = block_2.get_id();
+        let header_2 = block_2.header().clone();
+        let entry = SealIndexEntry::new(
+            BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap(),
+            vec![(id_1, TEST_HEIGHT)],
+        );
+
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        db.expect_get_block_header().times(1).with(eq(id_1)).return_const(Ok(None));
+        db.expect_set_duplicate_seal_evidence()
+            .times(1)
+            .withf(move |block_id, evidence| {
+                block_id == &id_2
+                    && evidence.headers().len() == 1
+                    && evidence.headers()[0] == header_2
+            })
+            .return_const(Ok(()));
+        db.expect_set_seal_index_entry()
+            .times(1)
+            .withf(|_, entry| entry.blocks().len() == 2)
+            .return_const(Ok(()));
+
+        index_block_seal(&mut db, &block_2, TEST_HEIGHT).unwrap();
     }
 }

@@ -255,6 +255,7 @@ mockall::mock! {
             block_id: &Id<Block>,
             evidence: &DuplicateSealEvidence,
         ) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for Store {
@@ -704,6 +705,7 @@ mockall::mock! {
             block_id: &Id<Block>,
             evidence: &DuplicateSealEvidence,
         ) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for StoreTxRw {

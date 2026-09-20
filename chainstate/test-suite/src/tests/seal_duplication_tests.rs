@@ -241,3 +241,75 @@ fn seal_tracking_disabled_records_nothing(#[case] seed: Seed) {
     assert!(db_tx.get_seal_index_entry(&seal).unwrap().is_none());
     assert!(db_tx.get_duplicate_seal_evidence(&block_id_b).unwrap().is_none());
 }
+
+// Create a chain genesis <- block_1(StakePool), then process two blocks (block_2a and
+// block_2b) that carry the same PoS seal, with block_2b remaining a side block (see
+// `process_two_blocks_with_same_seal`). Then extend the branch of block_2b with a child
+// block, which makes it the best chain and triggers a reorg that disconnects block_2a.
+// Check that the seal records survive the reorg: they are not rolled back on disconnect,
+// so the seal is still indexed for both blocks and the evidence recorded for block_2b
+// still retains both signed headers.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool(&mut rng, vrf_pk);
+
+    let (seal, block_id_a, block_id_b) = process_two_blocks_with_same_seal(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+    );
+
+    // block_2a is the tip and block_2b is its side sibling.
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(block_id_a)
+    );
+
+    // Advance the time, so that the child block below is staked in a different slot
+    // and thus carries a different seal than the one under test.
+    tf.progress_time_seconds_since_epoch(30);
+
+    // Extend the branch of block_2b with a child block, which makes it the best chain
+    // and triggers a reorg that disconnects block_2a.
+    let child_index = tf
+        .make_pos_block_builder()
+        .with_parent(block_id_b.into())
+        .with_stake_pool_id(pool_id)
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk)
+        .build_and_process(&mut rng)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(*child_index.block_id())
+    );
+
+    let db_tx = tf.storage.transaction_ro().unwrap();
+
+    // The seal index still contains both blocks at the same height; in particular,
+    // the record of the disconnected block_2a was not rolled back.
+    let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
+    let expected_block_height = BlockHeight::new(2);
+    assert_eq!(
+        index_entry.blocks(),
+        &[(block_id_a, expected_block_height), (block_id_b, expected_block_height),]
+    );
+
+    // The evidence recorded for block_2b survived the reorg as well.
+    let evidence = db_tx.get_duplicate_seal_evidence(&block_id_b).unwrap().unwrap();
+    assert_eq!(evidence.seal(), &seal);
+    assert_eq!(
+        evidence.headers().iter().map(|header| header.get_id()).collect::<Vec<_>>(),
+        vec![block_id_a, block_id_b]
+    );
+    assert!(db_tx.get_duplicate_seal_evidence(&block_id_a).unwrap().is_none());
+}

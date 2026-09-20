@@ -78,8 +78,8 @@ impl BlockSeal {
 
 /// An index entry of a seal: the blocks known to carry it.
 ///
-/// The number of blocks per entry is bounded by the storage layer, so the index
-/// stays bounded even if a seal is deliberately reused on many blocks.
+/// The number of blocks per entry is bounded by the seal indexing logic, so the
+/// index stays bounded even if a seal is deliberately reused on many blocks.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct SealIndexEntry {
     seal: BlockSeal,

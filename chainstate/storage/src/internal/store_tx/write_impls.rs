@@ -243,6 +243,11 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     ) -> crate::Result<()> {
         self.write::<db::DBDuplicateSealEvidence, _, _, _>(block_id, evidence)
     }
+
+    #[log_error]
+    fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
+        self.del::<db::DBDuplicateSealEvidence, _, _>(block_id)
+    }
 }
 
 impl<B: storage::SharedBackend> EpochStorageWrite for StoreTxRw<'_, B> {
