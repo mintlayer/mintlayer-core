@@ -361,6 +361,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
         block_index: BlockIndex,
+        seal_duplication_tracking_enabled: bool,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
@@ -380,6 +381,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))
             .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+
+        if seal_duplication_tracking_enabled {
+            chainstate_ref
+                .index_block_seal(block, block_index.block_height())
+                .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        }
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
         // if we know that a reorg has occurred, because during a reorg multiple blocks get
@@ -436,8 +443,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
+        let seal_duplication_tracking_enabled =
+            self.chainstate_config.pos_seal_duplication_tracking_enabled();
         let integrate_block_result = self.with_rw_tx(
-            |chainstate_ref| Self::integrate_block(chainstate_ref, &block, block_index.clone()),
+            |chainstate_ref| {
+                Self::integrate_block(
+                    chainstate_ref,
+                    &block,
+                    block_index.clone(),
+                    seal_duplication_tracking_enabled,
+                )
+            },
             |attempt_number| {
                 log::info!("Processing block {block_id}, attempt #{attempt_number}");
             },

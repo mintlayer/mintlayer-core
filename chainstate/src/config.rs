@@ -21,6 +21,7 @@ use utils::make_config_setting;
 make_config_setting!(MaxDbCommitAttempts, usize, 10);
 make_config_setting!(MaxOrphanBlocks, usize, 512);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
+make_config_setting!(PosSealDuplicationTracking, bool, true);
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
@@ -47,6 +48,10 @@ pub struct ChainstateConfig {
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
     pub allow_checkpoints_mismatch: Option<bool>,
+
+    /// If true, the seals (stake pool id + VRF output) of the processed PoS blocks will be
+    /// indexed and the evidence of a seal seen on more than one block will be recorded.
+    pub pos_seal_duplication_tracking: PosSealDuplicationTracking,
 }
 
 impl ChainstateConfig {
@@ -68,6 +73,15 @@ impl ChainstateConfig {
     pub fn with_heavy_checks_enabled(mut self, enable: bool) -> Self {
         self.enable_heavy_checks = Some(enable);
         self
+    }
+
+    pub fn with_pos_seal_duplication_tracking(mut self, enable: bool) -> Self {
+        self.pos_seal_duplication_tracking = enable.into();
+        self
+    }
+
+    pub fn pos_seal_duplication_tracking_enabled(&self) -> bool {
+        *self.pos_seal_duplication_tracking
     }
 
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
