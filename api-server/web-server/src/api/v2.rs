@@ -41,6 +41,7 @@ use common::{
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
         TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
+        make_token_id,
         output_value::OutputValue,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
@@ -501,14 +502,13 @@ impl FromStr for TxOrdering {
 /// number of the transaction inputs.
 ///
 /// The decimals of the tokens transferred by the outputs are resolved from the
-/// api-server storage; tokens whose issuance is itself still pending are not in the
-/// storage and are rendered with zero decimals.
-async fn pending_tx_additional_info<
-    T: ApiServerStorage,
-    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
->(
-    state: &ApiServerWebServerState<Arc<T>, Arc<R>>,
+/// api-server storage or, if the issuance of the token is part of the pending listing
+/// itself, from the issuing transaction; tokens whose decimals cannot be known are
+/// rendered with zero decimals.
+async fn pending_tx_additional_info<S: ApiServerStorageRead>(
+    db_tx: &S,
     tx: &SignedTransaction,
+    pending_issuance_decimals: &BTreeMap<TokenId, u8>,
 ) -> Result<TxAdditionalInfo, ApiServerWebServerError> {
     let internal_error = |e: ApiServerStorageError| {
         logging::log::error!("internal error: {e}");
@@ -516,15 +516,19 @@ async fn pending_tx_additional_info<
     };
 
     let mut token_decimals = BTreeMap::new();
-    let db_tx = state.db.transaction_ro().await.map_err(internal_error)?;
     for token_id in tx_token_ids(tx) {
-        let decimals = db_tx
-            .get_token_num_decimals(token_id)
-            .await
-            .map_err(internal_error)?
-            // The issuance of the token may itself still be pending, in which case the
-            // storage has no decimals for it yet.
-            .unwrap_or(0);
+        let decimals = match pending_issuance_decimals.get(&token_id) {
+            // The issuance of the token is pending as well: the storage has no decimals
+            // for it yet, but the issuing transaction carries them.
+            Some(decimals) => *decimals,
+            None => db_tx
+                .get_token_num_decimals(token_id)
+                .await
+                .map_err(internal_error)?
+                // The issuance of the token is neither pending in the listing nor
+                // indexed, so its decimals cannot be known.
+                .unwrap_or(0),
+        };
         token_decimals.insert(token_id, decimals);
     }
 
@@ -533,6 +537,32 @@ async fn pending_tx_additional_info<
         input_utxos: vec![None; tx.transaction().inputs().len()],
         token_decimals,
     })
+}
+
+/// The decimals of the fungible token issuances carried by the given transactions.
+///
+/// Returns the decimals by token id; the token ids are derived like the consensus
+/// derives them for a block at the given height. Issuances whose id cannot be derived
+/// are skipped.
+fn pending_issuance_decimals(
+    txs: &[SignedTransaction],
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+) -> BTreeMap<TokenId, u8> {
+    let mut decimals = BTreeMap::new();
+    for tx in txs {
+        for out in tx.transaction().outputs() {
+            if let TxOutput::IssueFungibleToken(issuance) = out {
+                let common::chain::tokens::TokenIssuance::V1(issuance) = issuance.as_ref();
+                if let Ok(token_id) =
+                    make_token_id(chain_config, block_height, tx.transaction().inputs())
+                {
+                    decimals.insert(token_id, issuance.number_of_decimals);
+                }
+            }
+        }
+    }
+    decimals
 }
 
 /// The ids of the version 1 tokens transferred by the outputs of the transaction.
@@ -629,16 +659,29 @@ pub async fn mempool_transactions<
         .collect::<Vec<_>>();
 
     let mut jsons = Vec::with_capacity(txs.len());
-    for tx in &txs {
-        let additional_info = pending_tx_additional_info(&state, tx).await?;
-        let mut json = tx_to_json(tx, &additional_info, &state.chain_config);
-        let obj = json.as_object_mut().expect("object");
-        // The fee of a pending transaction is not known to the api-server.
-        obj.remove("fee");
-        obj.insert("block_id".into(), "".into());
-        obj.insert("timestamp".into(), "".into());
-        obj.insert("confirmations".into(), "".into());
-        jsons.push(json);
+    if !txs.is_empty() {
+        let db_tx = state.db.transaction_ro().await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+        // The token id derivation height matches the one used for the dependency
+        // ordering.
+        let inclusion_height = best_block(&state).await?.block_height().next_height();
+        let issuance_decimals =
+            pending_issuance_decimals(&txs, &state.chain_config, inclusion_height);
+
+        for tx in &txs {
+            let additional_info =
+                pending_tx_additional_info(&db_tx, tx, &issuance_decimals).await?;
+            let mut json = tx_to_json(tx, &additional_info, &state.chain_config);
+            let obj = json.as_object_mut().expect("object");
+            // The fee of a pending transaction is not known to the api-server.
+            obj.remove("fee");
+            obj.insert("block_id".into(), "".into());
+            obj.insert("timestamp".into(), "".into());
+            obj.insert("confirmations".into(), "".into());
+            jsons.push(json);
+        }
     }
 
     Ok(Json(serde_json::Value::Array(jsons)))
@@ -733,7 +776,13 @@ pub async fn transaction<
                 .ok_or(ApiServerWebServerError::NotFound(
                     ApiServerWebServerNotFoundError::TransactionNotFound,
                 ))?;
-            let additional_info = pending_tx_additional_info(&state, &tx).await?;
+            let db_tx = state.db.transaction_ro().await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
+            let additional_info = pending_tx_additional_info(&db_tx, &tx, &BTreeMap::new()).await?;
 
             (
                 None,

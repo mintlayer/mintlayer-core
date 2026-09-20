@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         AccountCommand, AccountNonce, AccountSpending, ChainConfig, DelegationId,
-        OrderAccountCommand, OrderId, OutPointSourceId, SignedTransaction, Transaction, TxInput,
-        TxOutput, UtxoOutPoint, make_order_id, make_token_id, output_value::OutputValue,
+        OrderAccountCommand, OrderId, OutPointSourceId, PoolId, SignedTransaction, Transaction,
+        TxInput, TxOutput, UtxoOutPoint, make_order_id, make_token_id, output_value::OutputValue,
         tokens::TokenId,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -36,6 +36,7 @@ enum Dependency {
     OrderFreeze(OrderId),
     DelegationCreation(DelegationId),
     DelegationSpending(DelegationId, AccountNonce),
+    PoolCreation(PoolId),
 }
 
 type TxIndex = usize;
@@ -203,21 +204,14 @@ fn process_output_dependencies(
                     .push(tx_index);
             }
             TxOutput::IssueNft(token_id, _, _) => {
-                dependencies
-                    .providers
-                    .entry(Dependency::TokenCreation(*token_id))
-                    .or_default()
-                    .push(tx_index);
+                // Note: an nft issuance mints an nft of an existing token; it does not
+                // create the token itself, so it provides no token creation dependency.
+                let _ = token_id;
             }
-            TxOutput::DelegateStaking(_amount, delegation_id) => {
-                // A delegation top-up provides the creation dependency of the
-                // delegation spends (mirroring the mempool of the node).
-                dependencies
-                    .providers
-                    .entry(Dependency::DelegationCreation(*delegation_id))
-                    .or_default()
-                    .push(tx_index);
-
+            TxOutput::DelegateStaking(_amount, _delegation_id) => {
+                // Note: in the mempool of the node, a delegation stake provides no
+                // mempool-side dependency: staking requires the delegation to be
+                // already known to the chain, like the first spend of it does.
                 let outpoint = UtxoOutPoint::new(
                     OutPointSourceId::Transaction(tx.transaction().get_id()),
                     out_index as u32,
@@ -225,6 +219,21 @@ fn process_output_dependencies(
                 dependencies
                     .providers
                     .entry(Dependency::Utxo(outpoint))
+                    .or_default()
+                    .push(tx_index);
+            }
+            TxOutput::CreateStakePool(pool_id, _) => {
+                dependencies
+                    .providers
+                    .entry(Dependency::PoolCreation(*pool_id))
+                    .or_default()
+                    .push(tx_index);
+            }
+            TxOutput::CreateDelegationId(_, pool_id) => {
+                // Creating a delegation requires the stake pool to be known already.
+                dependencies
+                    .dependents
+                    .entry(Dependency::PoolCreation(*pool_id))
                     .or_default()
                     .push(tx_index);
             }
