@@ -325,12 +325,13 @@ fn process_input_dependencies(
                         }
 
                         // The next spend of the delegation has to come after this one.
-                        let next_nonce = AccountNonce::new(acct.nonce().value() + 1);
-                        dependencies
-                            .providers
-                            .entry(Dependency::DelegationSpending(*delegation_id, next_nonce))
-                            .or_default()
-                            .push(tx_index);
+                        if let Some(next_nonce) = acct.nonce().increment() {
+                            dependencies
+                                .providers
+                                .entry(Dependency::DelegationSpending(*delegation_id, next_nonce))
+                                .or_default()
+                                .push(tx_index);
+                        }
                     }
                 }
             }

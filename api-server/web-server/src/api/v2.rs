@@ -43,7 +43,6 @@ use common::{
         TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
         make_token_id,
-        output_value::OutputValue,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
@@ -576,34 +575,7 @@ fn pending_issuance_decimals(
 
 /// The ids of the version 1 tokens transferred by the outputs of the transaction.
 fn tx_token_ids(tx: &SignedTransaction) -> BTreeSet<TokenId> {
-    let mut token_ids = BTreeSet::new();
-    let mut collect_value = |value: &OutputValue| {
-        if let OutputValue::TokenV1(token_id, _) = value {
-            token_ids.insert(*token_id);
-        }
-    };
-
-    for out in tx.transaction().outputs() {
-        match out {
-            TxOutput::Transfer(value, _)
-            | TxOutput::LockThenTransfer(value, _, _)
-            | TxOutput::Burn(value)
-            | TxOutput::Htlc(value, _) => collect_value(value),
-            TxOutput::CreateOrder(order_data) => {
-                collect_value(order_data.ask());
-                collect_value(order_data.give());
-            }
-            TxOutput::CreateStakePool(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => {}
-        }
-    }
-
-    token_ids
+    common::chain::output_values_holder::collect_token_v1_ids_from_output_values_holder(tx)
 }
 
 pub async fn mempool_transactions<
