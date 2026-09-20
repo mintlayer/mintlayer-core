@@ -54,9 +54,14 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener
     // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = match reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port())).await {
+        Ok(response) => response,
+        Err(err) => {
+            task.abort();
+            let join_err = task.await.err();
+            panic!("the web server died before responding: {err}; task outcome: {join_err:?}");
+        }
+    };
 
     (task, response)
 }

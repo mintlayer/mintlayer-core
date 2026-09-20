@@ -57,7 +57,9 @@ async fn at_genesis() {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("at genesis web server failed");
         }
     });
 
@@ -150,7 +152,9 @@ async fn height_n(#[case] seed: Seed) {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("height n web server failed");
         }
     });
 
