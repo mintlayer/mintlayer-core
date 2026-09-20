@@ -613,6 +613,10 @@ pub async fn mempool_transactions<
 
     let offset_and_items = get_offset_and_items(&params)?;
 
+    // Note: the tip of the storage is read once and used for both the token id
+    // derivation of the dependency ordering and of the pending issuances.
+    let inclusion_height = best_block(&state).await?.block_height().next_height();
+
     let mut txs = state.rpc.mempool_transactions().await.map_err(|e| {
         logging::log::error!("internal error: {e}");
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
@@ -621,34 +625,41 @@ pub async fn mempool_transactions<
     match ordering {
         TxOrdering::Insertion => {}
         TxOrdering::Dependency => {
-            // Note: the transactions will be included into a block after the tip, which
-            // matters for the token id derivation version of a token issuance. Note
-            // also that the storage tip may lag the tip of the connected node, in which
-            // case the ordering around a token id derivation upgrade may be incomplete.
-            let tip_height = best_block(&state).await?.block_height().next_height();
             let chain_config = Arc::clone(&state.chain_config);
             // The sorting is CPU-bound and proportional to the mempool size; run it
-            // off the async runtime threads.
-            txs = tokio::task::spawn_blocking(move || {
+            // off the async runtime threads. A transaction that cannot be sorted (an
+            // id derivation failure of an invalid transaction) must not take down the
+            // whole listing: serve the insertion order instead.
+            txs = match tokio::task::spawn_blocking(move || {
                 tx_dependency_ordering::order_transactions_by_dependency(
                     txs,
                     &chain_config,
-                    tip_height,
+                    inclusion_height,
                 )
             })
             .await
-            .map_err(|e| {
-                logging::log::error!("internal error: {e}");
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .map_err(|e| {
-                logging::log::error!("internal error: {e}");
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
-                )
-            })?;
+            {
+                Ok(Ok(sorted)) => sorted,
+                Ok(Err(err)) => {
+                    // The transactions were consumed by the failed ordering: refetch
+                    // them in the insertion order rather than failing the whole
+                    // listing (an ordering failure of an invalid transaction must not
+                    // take it down).
+                    logging::log::warn!("Falling back to the mempool insertion order: {err}");
+                    state.rpc.mempool_transactions().await.map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?
+                }
+                Err(err) => {
+                    logging::log::error!("internal error: {err}");
+                    return Err(ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    ));
+                }
+            };
         }
     }
 
