@@ -17,6 +17,7 @@ pub mod api;
 pub mod config;
 pub mod error;
 pub mod streaming;
+pub mod tx_dependency_ordering;
 
 pub use error::ApiServerWebServerError;
 pub use streaming::{StreamEventsHandle, StreamingConfig};
