@@ -35,6 +35,18 @@ async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> se
     body
 }
 
+/// Return the ids of the transactions listed by the mempool transactions endpoint,
+/// preserving the order in which they are listed.
+async fn listed_transaction_ids(addr: std::net::SocketAddr, query: &str) -> Vec<String> {
+    let body = get_mempool_transactions(addr, query).await;
+
+    body.as_array()
+        .unwrap()
+        .iter()
+        .map(|tx| tx.get("id").unwrap().as_str().unwrap().to_owned())
+        .collect()
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -55,11 +67,10 @@ async fn submitted_transaction_is_listed(#[case] seed: Seed) {
 
     let tx_id = submit_transaction(addr, tx).await;
 
-    let body = get_mempool_transactions(addr, "").await;
-    let body = body.as_array().unwrap();
+    let ids = listed_transaction_ids(addr, "").await;
 
-    assert_eq!(body.len(), 1);
-    assert_eq!(body[0].get("id").unwrap(), &tx_id);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], tx_id);
 
     shutdown_task(task).await;
 }
@@ -110,37 +121,26 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
     // imitating the out-of-order arrival of the transactions.
     let child_tx_id = submit_transaction(addr, child_tx).await;
 
-    let body = get_mempool_transactions(addr, "").await;
-    let body = body.as_array().unwrap();
-    assert_eq!(body.len(), 1);
-    assert_eq!(body[0].get("id").unwrap(), &child_tx_id);
+    let ids = listed_transaction_ids(addr, "").await;
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], child_tx_id);
 
     let parent_id_hex = submit_transaction(addr, parent_tx).await;
 
     // With the default, insertion-based ordering, the child, which was submitted
     // first, must be listed before the parent
-    let body = get_mempool_transactions(addr, "").await;
-    let body = body.as_array().unwrap();
+    let ids = listed_transaction_ids(addr, "").await;
 
-    assert_eq!(body.len(), 2);
-    let ids = body
-        .iter()
-        .map(|tx| tx.get("id").unwrap().as_str().unwrap())
-        .collect::<Vec<_>>();
+    assert_eq!(ids.len(), 2);
     let parent_position = ids.iter().position(|id| *id == parent_id_hex).unwrap();
     let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
 
     assert!(child_position < parent_position);
 
     // The dependency ordering must list the parent before the child
-    let body = get_mempool_transactions(addr, "?order=dependency").await;
-    let body = body.as_array().unwrap();
+    let ids = listed_transaction_ids(addr, "?order=dependency").await;
 
-    assert_eq!(body.len(), 2);
-    let ids = body
-        .iter()
-        .map(|tx| tx.get("id").unwrap().as_str().unwrap())
-        .collect::<Vec<_>>();
+    assert_eq!(ids.len(), 2);
     let parent_position = ids.iter().position(|id| *id == parent_id_hex).unwrap();
     let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
 
