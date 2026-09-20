@@ -132,7 +132,9 @@ async fn chain_genesis() {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("chain genesis web server failed");
         }
     });
 

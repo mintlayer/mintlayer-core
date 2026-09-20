@@ -172,16 +172,23 @@ pub async fn spawn_webserver_with_mempool(
 }
 
 /// Abort the task and observe its outcome: tolerated if cancelled or completed, panics
-/// with the actual cause otherwise.
+/// with the actual panic message otherwise.
 ///
-/// Generic over the task output, since the spawned tasks do not all resolve to `()`
-/// (e.g. the `chain_genesis` task returns the `web_server` result).
-pub async fn shutdown_task<T>(mut handle: tokio::task::JoinHandle<T>) {
+/// Generic over the task output.
+pub async fn shutdown_task<T: Send + 'static>(handle: tokio::task::JoinHandle<T>) {
     handle.abort();
     match handle.await {
         Ok(_) => {}
         Err(err) if err.is_cancelled() => {}
-        Err(err) => panic!("task failed: {err}"),
+        Err(err) => {
+            let payload = err.into_panic();
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "non-string panic payload".to_string());
+            panic!("task panicked: {message}");
+        }
     }
 }
 
