@@ -190,6 +190,24 @@ mod tests {
     }
 
     #[test]
+    fn seal_encoding_is_stable() {
+        // The seal is used as a database key: any change to the encoding would make
+        // previously written entries unreadable, so pin the exact encoding here.
+        let seal = BlockSeal {
+            pool_id: PoolId::new(H256::from([1u8; 32])),
+            vrf_output: H256::from([2u8; 32]),
+        };
+
+        let expected_encoded = {
+            let mut encoded = Vec::new();
+            encoded.extend_from_slice(H256::from([1u8; 32]).as_bytes());
+            encoded.extend_from_slice(H256::from([2u8; 32]).as_bytes());
+            encoded
+        };
+        assert_eq!(seal.encode(), expected_encoded);
+    }
+
+    #[test]
     fn same_slot_draw_produces_same_seal() {
         let pool_id = PoolId::new(H256::zero());
         let (vrf_sk, seal_1) = make_seal(0, H256::zero());

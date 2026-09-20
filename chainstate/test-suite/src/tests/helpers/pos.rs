@@ -74,6 +74,10 @@ pub fn create_custom_genesis_with_stake_pool(
     )
 }
 
+/// The height of the first PoS block in chains built by these helpers: the
+/// stake-pool block sits at height 1, so the PoS (seal) blocks live at height 2.
+pub const FIRST_POS_BLOCK_HEIGHT: BlockHeight = BlockHeight::new(2);
+
 pub fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<ConsensusUpgrade> {
     NetUpgrades::initialize(vec![
         (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
@@ -131,7 +135,7 @@ pub fn setup_chain_with_stake_pool_with_chainstate_config(
     vrf_pk: VRFPublicKey,
     chainstate_config: ChainstateConfig,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
-    let net_upgrades = consensus_upgrades_with_pos_at_height(BlockHeight::new(2));
+    let net_upgrades = consensus_upgrades_with_pos_at_height(FIRST_POS_BLOCK_HEIGHT);
     let chain_config = ConfigBuilder::test_chain()
         .consensus_upgrades(net_upgrades)
         .epoch_length(TEST_EPOCH_LENGTH)

@@ -27,7 +27,7 @@ use common::{
         block::{ConsensusData, timestamp::BlockTimestamp},
         signature::inputsig::InputWitness,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Id, Idable},
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
@@ -37,7 +37,7 @@ use randomness::CryptoRng;
 use test_utils::random::{Seed, make_seedable_rng};
 
 use super::helpers::pos::{
-    calculate_new_target, get_pos_chain_config, produce_kernel_signature,
+    FIRST_POS_BLOCK_HEIGHT, calculate_new_target, get_pos_chain_config, produce_kernel_signature,
     setup_chain_with_stake_pool, setup_chain_with_stake_pool_with_chainstate_config,
 };
 
@@ -190,7 +190,7 @@ fn duplicate_pos_seal_records_evidence(#[case] seed: Seed) {
     // The seal index contains both blocks at the same height.
     let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
     assert_eq!(index_entry.seal(), &seal);
-    let expected_block_height = BlockHeight::new(2);
+    let expected_block_height = FIRST_POS_BLOCK_HEIGHT;
     assert_eq!(
         index_entry.blocks(),
         &[(block_id_a, expected_block_height), (block_id_b, expected_block_height),]
@@ -298,7 +298,7 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
     // The seal index still contains both blocks at the same height; in particular,
     // the record of the disconnected block_2a was not rolled back.
     let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
-    let expected_block_height = BlockHeight::new(2);
+    let expected_block_height = FIRST_POS_BLOCK_HEIGHT;
     assert_eq!(
         index_entry.blocks(),
         &[(block_id_a, expected_block_height), (block_id_b, expected_block_height),]
