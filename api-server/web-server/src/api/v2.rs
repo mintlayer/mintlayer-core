@@ -495,8 +495,9 @@ impl FromStr for TxOrdering {
 /// Additional info of a pending (mempool) transaction.
 ///
 /// The fee and the utxos spent by the inputs are not known to the api-server without
-/// indexing the mempool, so they are left empty; the number of the input entries still
-/// matches the number of the transaction inputs.
+/// indexing the mempool: the fee field is omitted from the response and the input
+/// entries carry no utxo details; the number of the input entries still matches the
+/// number of the transaction inputs.
 fn pending_tx_additional_info(tx: &SignedTransaction) -> TxAdditionalInfo {
     TxAdditionalInfo {
         fee: Amount::ZERO,
@@ -530,11 +531,23 @@ pub async fn mempool_transactions<
         TxOrdering::Insertion => {}
         TxOrdering::Dependency => {
             let tip_height = best_block(&state).await?.block_height();
-            txs = tx_dependency_ordering::order_transactions_by_dependency(
-                txs,
-                &state.chain_config,
-                tip_height,
-            )
+            let chain_config = Arc::clone(&state.chain_config);
+            // The sorting is CPU-bound and proportional to the mempool size; run it
+            // off the async runtime threads.
+            txs = tokio::task::spawn_blocking(move || {
+                tx_dependency_ordering::order_transactions_by_dependency(
+                    txs,
+                    &chain_config,
+                    tip_height,
+                )
+            })
+            .await
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
             .map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
@@ -551,6 +564,8 @@ pub async fn mempool_transactions<
         .map(|tx| {
             let mut json = tx_to_json(&tx, &pending_tx_additional_info(&tx), &state.chain_config);
             let obj = json.as_object_mut().expect("object");
+            // The fee of a pending transaction is not known to the api-server.
+            obj.remove("fee");
             obj.insert("block_id".into(), "".into());
             obj.insert("timestamp".into(), "".into());
             obj.insert("confirmations".into(), "".into());
@@ -676,6 +691,12 @@ pub async fn transaction<
     };
     let mut json = tx_to_json(&tx, &additional_info, &state.chain_config);
     let obj = json.as_object_mut().expect("object");
+
+    if block.is_none() {
+        // The transaction is pending in the mempool: the fee of a pending
+        // transaction is not known to the api-server.
+        obj.remove("fee");
+    }
 
     obj.insert(
         "block_id".into(),

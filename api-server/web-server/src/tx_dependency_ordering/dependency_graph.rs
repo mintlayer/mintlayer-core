@@ -426,7 +426,7 @@ mod tests {
         let chain_config = create_regtest();
         let block_height = BlockHeight::new(0);
 
-        // A creates a new token, B uses a comand on it
+        // A creates a new token, B uses a command on it
         let random_tx_id = Id::new(H256::random_using(&mut rng));
         let random_utxo_outpoint =
             UtxoOutPoint::new(OutPointSourceId::Transaction(random_tx_id), 0);
@@ -450,7 +450,7 @@ mod tests {
 
         let random_utxo_outpoint2 =
             UtxoOutPoint::new(OutPointSourceId::Transaction(random_tx_id), 1);
-        let random_command1 = make_random_token_comand(token_id, &mut rng);
+        let random_command1 = make_random_token_command(token_id, &mut rng);
         let txb = TransactionBuilder::new()
             .add_input(
                 TxInput::Utxo(random_utxo_outpoint2),
@@ -466,7 +466,7 @@ mod tests {
 
         let random_utxo_outpoint3 =
             UtxoOutPoint::new(OutPointSourceId::Transaction(random_tx_id), 2);
-        let random_command2 = make_random_token_comand(token_id, &mut rng);
+        let random_command2 = make_random_token_command(token_id, &mut rng);
         let txc = TransactionBuilder::new()
             .add_input(
                 TxInput::Utxo(random_utxo_outpoint3),
@@ -647,7 +647,7 @@ mod tests {
         );
     }
 
-    fn make_random_token_comand(token_id: TokenId, rng: &mut impl Rng) -> AccountCommand {
+    fn make_random_token_command(token_id: TokenId, rng: &mut impl Rng) -> AccountCommand {
         match AccountCommandTag::iter().choose(rng).unwrap() {
             AccountCommandTag::MintTokens => {
                 AccountCommand::MintTokens(token_id, Amount::from_atoms(rng.random_range(1..100)))

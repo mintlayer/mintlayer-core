@@ -26,7 +26,7 @@ use dependency_graph::{DependencyNode, build_dependency_graph};
 
 // Order transactions by dependency between each other.
 // Returns a Vec of transactions starting from the top-most parent transaction
-// which doesn't depend on any other transaction fallowing it, and ending with the leafs.
+// which doesn't depend on any other transaction following it, and ending with the leaves.
 pub fn order_transactions_by_dependency(
     transactions: Vec<SignedTransaction>,
     chain_config: &ChainConfig,
@@ -75,7 +75,9 @@ where
 
     impl<P: Ord> Ord for QueueItem<P> {
         fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            self.priority.cmp(&other.priority)
+            // The tie-breaker on the index makes the pop order of the equal-priority
+            // items deterministic: the items earlier in the input vector come first.
+            self.priority.cmp(&other.priority).then_with(|| other.idx.cmp(&self.idx))
         }
     }
 
@@ -228,7 +230,7 @@ mod tests {
         let expected_sorted_ids = vec![
             // should be first as everyone depends on it
             root_node.id,
-            // those depend on the root but internaly will be ordered highest, stake then withdrawal
+            // those depend on the root but internally will be ordered highest, stake then withdrawal
             highest_dependent_node.id,
             delegation_stake_node.id,
             delegation_withdrawal_node.id,
@@ -264,7 +266,7 @@ mod tests {
             id: 2,
             dependencies: vec![1],
         };
-        // even though this has higher priorty than TokenFreeze it still depends on it
+        // even though this has higher priority than TokenFreeze it still depends on it
         let dependent_node2 = DummyNode {
             priority: TxPriorityOrder::Highest,
             id: 3,
