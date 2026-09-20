@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    TxSubmitClient,
+    MempoolQueryClient, TxSubmitClient,
     api::json_helpers::{
         self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
         to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
@@ -23,10 +23,11 @@ use crate::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
     },
+    tx_dependency_ordering,
 };
 use api_server_common::storage::storage_api::{
     AmountWithDecimals, ApiServerStorage, ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic,
-    Order, TransactionInfo, block_aux_data::BlockAuxData,
+    Order, TransactionInfo, TxAdditionalInfo, block_aux_data::BlockAuxData,
 };
 use axum::{
     Json, Router,
@@ -67,7 +68,7 @@ const TX_BODY_LIMIT: usize = 10240;
 
 pub fn routes<
     T: ApiServerStorage + Send + Sync + 'static,
-    R: TxSubmitClient + Send + Sync + 'static,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
 >(
     enable_post_routes: bool,
 ) -> Router<ApiServerWebServerState<Arc<T>, Arc<R>>> {
@@ -100,6 +101,8 @@ pub fn routes<
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path))
         .route("/transaction/:id/output/:idx", get(transaction_output));
+
+    let router = router.route("/mempool/transactions", get(mempool_transactions));
 
     let router = router
         .route("/address/:address", get(address))
@@ -469,6 +472,95 @@ impl FromStr for OffsetMode {
     }
 }
 
+/// The order in which the mempool transactions are returned.
+enum TxOrdering {
+    /// The order in which the transactions entered the mempool of the node.
+    Insertion,
+    /// Transactions that other returned transactions depend on come first.
+    Dependency,
+}
+
+impl FromStr for TxOrdering {
+    type Err = ApiServerWebServerClientError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "insertion" => Ok(Self::Insertion),
+            "dependency" => Ok(Self::Dependency),
+            _ => Err(ApiServerWebServerClientError::InvalidTransactionOrdering),
+        }
+    }
+}
+
+/// Additional info of a pending (mempool) transaction.
+///
+/// The fee and the utxos spent by the inputs are not known to the api-server without
+/// indexing the mempool, so they are left empty; the number of the input entries still
+/// matches the number of the transaction inputs.
+fn pending_tx_additional_info(tx: &SignedTransaction) -> TxAdditionalInfo {
+    TxAdditionalInfo {
+        fee: Amount::ZERO,
+        input_utxos: vec![None; tx.transaction().inputs().len()],
+        token_decimals: BTreeMap::new(),
+    }
+}
+
+pub async fn mempool_transactions<
+    T: ApiServerStorage,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
+>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<R>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const ORDERING: &str = "order";
+    let ordering = params
+        .get(ORDERING)
+        .map(|order| TxOrdering::from_str(order))
+        .transpose()?
+        .unwrap_or(TxOrdering::Insertion);
+
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let mut txs = state.rpc.mempool_transactions().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    match ordering {
+        TxOrdering::Insertion => {}
+        TxOrdering::Dependency => {
+            let tip_height = best_block(&state).await?.block_height();
+            txs = tx_dependency_ordering::order_transactions_by_dependency(
+                txs,
+                &state.chain_config,
+                tip_height,
+            )
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
+        }
+    }
+
+    let txs = txs
+        .into_iter()
+        .skip(offset_and_items.offset as usize)
+        .take(offset_and_items.items as usize)
+        .map(|tx| {
+            let mut json = tx_to_json(&tx, &pending_tx_additional_info(&tx), &state.chain_config);
+            let obj = json.as_object_mut().expect("object");
+            obj.insert("block_id".into(), "".into());
+            obj.insert("timestamp".into(), "".into());
+            obj.insert("confirmations".into(), "".into());
+            json
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(serde_json::Value::Array(txs)))
+}
+
 pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -523,17 +615,58 @@ pub async fn transactions<T: ApiServerStorage>(
     Ok(Json(serde_json::Value::Array(txs)))
 }
 
-pub async fn transaction<T: ApiServerStorage>(
+pub async fn transaction<
+    T: ApiServerStorage,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
+>(
     Path(transaction_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<R>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (
-        block,
-        TransactionInfo {
-            tx,
-            additional_info,
-        },
-    ) = get_transaction(&transaction_id, &state).await?;
+    let (block, tx_info) = match get_transaction(&transaction_id, &state).await {
+        Ok(tx_info) => tx_info,
+        Err(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionNotFound,
+        )) => {
+            // The transaction is not confirmed (yet); it may still be pending in the
+            // mempool of the connected node.
+            let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+                .map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidTransactionId,
+                    )
+                })?
+                .into();
+
+            let tx = state
+                .rpc
+                .mempool_transaction(transaction_id)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .ok_or(ApiServerWebServerError::NotFound(
+                    ApiServerWebServerNotFoundError::TransactionNotFound,
+                ))?;
+            let additional_info = pending_tx_additional_info(&tx);
+
+            (
+                None,
+                TransactionInfo {
+                    tx,
+                    additional_info,
+                },
+            )
+        }
+        Err(err) => return Err(err),
+    };
+
+    let TransactionInfo {
+        tx,
+        additional_info,
+    } = tx_info;
 
     let confirmations = if let Some(block) = &block {
         let tip_height = best_block(&state).await?.block_height();

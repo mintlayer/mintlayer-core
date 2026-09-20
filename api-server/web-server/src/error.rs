@@ -97,6 +97,8 @@ pub enum ApiServerWebServerClientError {
     InvalidOffset,
     #[error("Invalid offset mode")]
     InvalidOffsetMode,
+    #[error("Invalid transaction ordering")]
+    InvalidTransactionOrdering,
     #[error("Invalid number of items")]
     InvalidNumItems,
     #[error("Invalid pools sort order")]

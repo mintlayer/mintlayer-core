@@ -22,8 +22,8 @@ use api_server_common::storage::impls::postgres::{
 };
 use api_server_common::streaming::StreamEventsChannel;
 use api_web_server::{
-    ApiServerWebServerState, CachedValues, StreamEventsHandle, TxSubmitClient, api::web_server,
-    config::ApiServerWebServerConfig, streaming,
+    ApiServerWebServerState, CachedValues, MempoolQueryClient, StreamEventsHandle, TxSubmitClient,
+    api::web_server, config::ApiServerWebServerConfig, streaming, tx_dependency_ordering,
 };
 use clap::Parser;
 use common::{
