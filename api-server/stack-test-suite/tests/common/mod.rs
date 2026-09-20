@@ -188,7 +188,9 @@ pub async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransactio
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 200);
+    let status = response.status();
+    let body = response.text().await.unwrap();
+    assert_eq!(status, 200, "transaction submission failed: {body}");
 
     tx_id
 }

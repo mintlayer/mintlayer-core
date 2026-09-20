@@ -25,7 +25,7 @@ use common::{chain::config::create_unit_test_config, primitives::time::get_time}
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 
-pub use test_common::{DummyRPC, MempoolRPC, spawn_webserver_with_mempool, submit_transaction};
+pub use test_common::{DummyRPC, spawn_webserver_with_mempool, submit_transaction};
 
 pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

@@ -104,16 +104,33 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
         ))
         .build();
 
-    // Submit the parent and wait for it to appear in the mempool
-    let parent_id_hex = submit_transaction(addr, parent_tx).await;
+    // Submit the child first: the mock mempool accepts chains of unconfirmed
+    // transactions without validation, so the child spending the unconfirmed
+    // output of the parent is accepted before the parent itself is submitted,
+    // imitating the out-of-order arrival of the transactions.
+    let child_tx_id = submit_transaction(addr, child_tx).await;
 
     let body = get_mempool_transactions(addr, "").await;
     let body = body.as_array().unwrap();
     assert_eq!(body.len(), 1);
-    assert_eq!(body[0].get("id").unwrap(), &parent_id_hex);
+    assert_eq!(body[0].get("id").unwrap(), &child_tx_id);
 
-    // Submit the child spending the unconfirmed output of the parent
-    let child_tx_id = submit_transaction(addr, child_tx).await;
+    let parent_id_hex = submit_transaction(addr, parent_tx).await;
+
+    // With the default, insertion-based ordering, the child, which was submitted
+    // first, must be listed before the parent
+    let body = get_mempool_transactions(addr, "").await;
+    let body = body.as_array().unwrap();
+
+    assert_eq!(body.len(), 2);
+    let ids = body
+        .iter()
+        .map(|tx| tx.get("id").unwrap().as_str().unwrap())
+        .collect::<Vec<_>>();
+    let parent_position = ids.iter().position(|id| *id == parent_id_hex).unwrap();
+    let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
+
+    assert!(child_position < parent_position);
 
     // The dependency ordering must list the parent before the child
     let body = get_mempool_transactions(addr, "?order=dependency").await;
