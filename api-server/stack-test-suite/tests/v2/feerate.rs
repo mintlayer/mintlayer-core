@@ -115,6 +115,20 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
             ])
         }
     }
+
+    #[async_trait::async_trait]
+    impl MempoolQueryClient for DummyRPC2 {
+        async fn mempool_transaction(
+            &self,
+            _: Id<Transaction>,
+        ) -> Result<Option<SignedTransaction>, NodeRpcError> {
+            Ok(None)
+        }
+
+        async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError> {
+            Ok(vec![])
+        }
+    }
     let mut rng = make_seedable_rng(seed);
     let in_top_x_mb = rng.random_range(1..100);
 

@@ -20,10 +20,17 @@
 
 #![allow(dead_code)]
 
-use api_web_server::TxSubmitClient;
-use common::chain::SignedTransaction;
+use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
+use api_web_server::{
+    ApiServerWebServerState, CachedValues, MempoolQueryClient, TxSubmitClient, api::web_server,
+};
+use common::{
+    chain::{SignedTransaction, Transaction, config::create_unit_test_config},
+    primitives::{Id, Idable, time::get_time},
+};
 use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
+use std::sync::{Arc, RwLock};
 
 /// A no-op RPC client for the web server state under test.
 pub struct DummyRPC {}
@@ -37,6 +44,129 @@ impl TxSubmitClient for DummyRPC {
     async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
         Ok(vec![])
     }
+}
+
+#[async_trait::async_trait]
+impl MempoolQueryClient for DummyRPC {
+    async fn mempool_transaction(
+        &self,
+        _: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, NodeRpcError> {
+        Ok(None)
+    }
+
+    async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError> {
+        Ok(vec![])
+    }
+}
+
+/// An RPC client mock with an in-memory mempool.
+///
+/// Transactions submitted through [`TxSubmitClient::submit_tx`] are added to the mock
+/// mempool in the order of submission, imitating the insertion order of the mempool
+/// of a node. The mock does not validate the transactions (e.g. it does not check
+/// that the spent outputs exist), just like a node mempool accepts chain of unconfirmed
+/// transactions.
+pub struct MempoolRPC {
+    mempool: RwLock<Vec<SignedTransaction>>,
+}
+
+impl MempoolRPC {
+    pub fn new() -> Self {
+        Self {
+            mempool: RwLock::new(vec![]),
+        }
+    }
+}
+
+impl Default for MempoolRPC {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl TxSubmitClient for MempoolRPC {
+    async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
+        self.mempool.write().unwrap().push(tx);
+        Ok(())
+    }
+
+    async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
+        Ok(vec![])
+    }
+}
+
+#[async_trait::async_trait]
+impl MempoolQueryClient for MempoolRPC {
+    async fn mempool_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, NodeRpcError> {
+        Ok(self
+            .mempool
+            .read()
+            .unwrap()
+            .iter()
+            .find(|tx| tx.transaction().get_id() == tx_id)
+            .cloned())
+    }
+
+    async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError> {
+        Ok(self.mempool.read().unwrap().clone())
+    }
+}
+
+/// Spawn the web server backed by the [`MempoolRPC`] client and an empty in-memory
+/// api-server storage.
+///
+/// Imitating the `spawn_webserver` helper of the test binaries, the returned response
+/// is the response to the `url` request, which doubles as the barrier ensuring that
+/// the server is up before the test proceeds.
+pub async fn spawn_webserver_with_mempool(
+    url: &str,
+) -> (
+    tokio::task::JoinHandle<()>,
+    reqwest::Response,
+    Arc<MempoolRPC>,
+    std::net::SocketAddr,
+) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let rpc = Arc::new(MempoolRPC::new());
+
+    let task = tokio::spawn({
+        let rpc = std::sync::Arc::clone(&rpc);
+        async move {
+            let web_server_state = {
+                let chain_config = Arc::new(create_unit_test_config());
+                let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                ApiServerWebServerState {
+                    db: Arc::new(storage),
+                    chain_config: Arc::clone(&chain_config),
+                    rpc,
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
+                    time_getter: Default::default(),
+                    stream_events: Default::default(),
+                }
+            };
+
+            web_server(listener, web_server_state, true).await.unwrap();
+        }
+    });
+
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+
+    (task, response, rpc, addr)
 }
 
 /// The value of the `event:` field of an SSE frame, if any.

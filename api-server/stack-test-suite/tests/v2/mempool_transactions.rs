@@ -1,0 +1,189 @@
+// Copyright (c) 2026 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use chainstate_test_framework::empty_witness;
+use common::{chain::UtxoOutPoint, primitives::H256};
+use serialization::hex_encoded::HexEncoded;
+
+use super::*;
+
+/// Submit the transaction through the POST endpoint, imitating a user of the
+/// api-server, and return the hex-encoded id of the submitted transaction.
+async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransaction) -> String {
+    let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
+
+    let hex_tx: HexEncoded<SignedTransaction> = tx.into();
+    let response = reqwest::Client::new()
+        .post(format!(
+            "http://{}:{}/api/v2/transaction",
+            addr.ip(),
+            addr.port()
+        ))
+        .body(hex_tx.to_string())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    tx_id
+}
+
+async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> serde_json::Value {
+    let response = reqwest::get(format!(
+        "http://{}:{}/api/v2/mempool/transactions{query}",
+        addr.ip(),
+        addr.port()
+    ))
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    body
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn submitted_transaction_is_listed(#[case] seed: Seed) {
+    let (task, _response, _rpc, addr) = spawn_webserver_with_mempool("/").await;
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(&mut rng))),
+                0,
+            )),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    let tx_id = submit_transaction(addr, tx).await;
+
+    let body = get_mempool_transactions(addr, "").await;
+    let body = body.as_array().unwrap();
+
+    assert_eq!(body.len(), 1);
+    assert_eq!(body[0].get("id").unwrap(), &tx_id);
+
+    task.abort();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
+    let (task, _response, _rpc, addr) = spawn_webserver_with_mempool("/").await;
+    let mut rng = make_seedable_rng(seed);
+
+    // The parent spends an output unknown to this stack; the child spends the first
+    // output of the parent, imitating a chain of unconfirmed transactions in the
+    // mempool of the node.
+    let parent_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(&mut rng))),
+                0,
+            )),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let parent_tx_id = parent_tx.transaction().get_id();
+
+    let child_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(parent_tx_id),
+                0,
+            )),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(500)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    // Submit the parent and wait for it to appear in the mempool
+    let parent_tx_id = submit_transaction(addr, parent_tx).await;
+
+    let body = get_mempool_transactions(addr, "").await;
+    let body = body.as_array().unwrap();
+    assert_eq!(body.len(), 1);
+    assert_eq!(body[0].get("id").unwrap(), &parent_tx_id);
+
+    // Submit the child spending the unconfirmed output of the parent
+    let child_tx_id = submit_transaction(addr, child_tx).await;
+
+    // The dependency ordering must list the parent before the child
+    let body = get_mempool_transactions(addr, "?order=dependency").await;
+    let body = body.as_array().unwrap();
+
+    assert_eq!(body.len(), 2);
+    let ids = body
+        .iter()
+        .map(|tx| tx.get("id").unwrap().as_str().unwrap())
+        .collect::<Vec<_>>();
+    let parent_position = ids.iter().position(|id| *id == parent_tx_id).unwrap();
+    let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
+
+    assert!(parent_position < child_position);
+
+    task.abort();
+}
+
+#[tokio::test]
+async fn invalid_ordering() {
+    let (task, response, _rpc, _addr) =
+        spawn_webserver_with_mempool("/api/v2/mempool/transactions?order=garbage").await;
+
+    assert_eq!(response.status(), 400);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(
+        body["error"].as_str().unwrap(),
+        "Invalid transaction ordering"
+    );
+
+    task.abort();
+}
+
+#[tokio::test]
+async fn empty_mempool_returns_empty_list() {
+    let (task, response, _rpc, _addr) =
+        spawn_webserver_with_mempool("/api/v2/mempool/transactions").await;
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert!(body.as_array().unwrap().is_empty());
+
+    task.abort();
+}

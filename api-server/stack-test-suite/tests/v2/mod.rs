@@ -27,6 +27,7 @@ mod chain_tip;
 mod feerate;
 mod helpers;
 mod htlc;
+mod mempool_transactions;
 mod nft;
 mod orders;
 mod pool;
@@ -44,7 +45,7 @@ mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
-use crate::{DummyRPC, spawn_webserver};
+use crate::{DummyRPC, spawn_webserver, spawn_webserver_with_mempool};
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
 };
@@ -53,7 +54,7 @@ use api_server_common::storage::{
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
 use api_web_server::{
-    ApiServerWebServerState, CachedValues,
+    ApiServerWebServerState, CachedValues, MempoolQueryClient,
     api::{
         json_helpers::{TokenDecimals, txoutput_to_json},
         web_server,
