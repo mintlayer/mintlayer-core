@@ -17,9 +17,10 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, ChainConfig, OrderAccountCommand, OrderId,
-        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
-        make_order_id, make_token_id, output_value::OutputValue, tokens::TokenId,
+        AccountCommand, AccountNonce, AccountSpending, ChainConfig, DelegationId,
+        OrderAccountCommand, OrderId, OutPointSourceId, SignedTransaction, Transaction, TxInput,
+        TxOutput, UtxoOutPoint, make_order_id, make_token_id, output_value::OutputValue,
+        tokens::TokenId,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -33,6 +34,8 @@ enum Dependency {
     OrderCreation(OrderId),
     OrderFill(OrderId),
     OrderFreeze(OrderId),
+    DelegationCreation(DelegationId),
+    DelegationSpending(DelegationId, AccountNonce),
 }
 
 type TxIndex = usize;
@@ -206,6 +209,25 @@ fn process_output_dependencies(
                     .or_default()
                     .push(tx_index);
             }
+            TxOutput::DelegateStaking(amount, delegation_id) => {
+                // A delegation top-up provides the creation dependency of the
+                // delegation spends (mirroring the mempool of the node).
+                dependencies
+                    .providers
+                    .entry(Dependency::DelegationCreation(*delegation_id))
+                    .or_default()
+                    .push(tx_index);
+
+                let outpoint = UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(tx.transaction().get_id()),
+                    out_index as u32,
+                );
+                dependencies
+                    .providers
+                    .entry(Dependency::Utxo(outpoint))
+                    .or_default()
+                    .push(tx_index);
+            }
             _ => {
                 let outpoint = UtxoOutPoint::new(
                     OutPointSourceId::Transaction(tx.transaction().get_id()),
@@ -273,7 +295,34 @@ fn process_input_dependencies(
                     .or_default()
                     .push(tx_index);
             }
-            TxInput::Account(_) => {}
+            TxInput::Account(acct) => {
+                // The delegation spends of an account are nonce-sequenced: a spend of
+                // the nonce `n` has to come after the spend of the nonce `n - 1`, and
+                // the first spend (nonce 0) has to come after the delegation creation.
+                if let AccountSpending::DelegationBalance(delegation_id, _) = acct.account() {
+                    dependencies
+                        .dependents
+                        .entry(Dependency::DelegationSpending(*delegation_id, acct.nonce()))
+                        .or_default()
+                        .push(tx_index);
+
+                    if acct.nonce().value() == 0 {
+                        dependencies
+                            .dependents
+                            .entry(Dependency::DelegationCreation(*delegation_id))
+                            .or_default()
+                            .push(tx_index);
+                    }
+
+                    // The next spend of the delegation has to come after this one.
+                    let next_nonce = AccountNonce::new(acct.nonce().value() + 1);
+                    dependencies
+                        .providers
+                        .entry(Dependency::DelegationSpending(*delegation_id, next_nonce))
+                        .or_default()
+                        .push(tx_index);
+                }
+            }
             TxInput::AccountCommand(nonce, cmd) => match cmd {
                 AccountCommand::MintTokens(token_id, _)
                 | AccountCommand::FreezeToken(token_id, _)

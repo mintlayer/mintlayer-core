@@ -26,8 +26,8 @@ use crate::{
     tx_dependency_ordering,
 };
 use api_server_common::storage::storage_api::{
-    AmountWithDecimals, ApiServerStorage, ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic,
-    Order, TransactionInfo, TxAdditionalInfo, block_aux_data::BlockAuxData,
+    AmountWithDecimals, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
+    CoinOrTokenStatistic, Order, TransactionInfo, TxAdditionalInfo, block_aux_data::BlockAuxData,
 };
 use axum::{
     Json, Router,
@@ -39,8 +39,9 @@ use common::{
     address::Address,
     chain::{
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
-        UtxoOutPoint,
+        TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
+        output_value::OutputValue,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
@@ -498,12 +499,75 @@ impl FromStr for TxOrdering {
 /// indexing the mempool: the fee field is omitted from the response and the input
 /// entries carry no utxo details; the number of the input entries still matches the
 /// number of the transaction inputs.
-fn pending_tx_additional_info(tx: &SignedTransaction) -> TxAdditionalInfo {
-    TxAdditionalInfo {
+///
+/// The decimals of the tokens transferred by the outputs are resolved from the
+/// api-server storage; tokens whose issuance is itself still pending are not in the
+/// storage and are rendered with zero decimals.
+async fn pending_tx_additional_info<
+    T: ApiServerStorage,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
+>(
+    state: &ApiServerWebServerState<Arc<T>, Arc<R>>,
+    tx: &SignedTransaction,
+) -> Result<TxAdditionalInfo, ApiServerWebServerError> {
+    let internal_error = |e: ApiServerStorageError| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    };
+
+    let mut token_decimals = BTreeMap::new();
+    for token_id in tx_token_ids(tx) {
+        let decimals = state
+            .db
+            .transaction_ro()
+            .await
+            .map_err(internal_error)?
+            .get_token_num_decimals(token_id)
+            .await
+            .map_err(internal_error)?
+            // The issuance of the token may itself still be pending, in which case the
+            // storage has no decimals for it yet.
+            .unwrap_or(0);
+        token_decimals.insert(token_id, decimals);
+    }
+
+    Ok(TxAdditionalInfo {
         fee: Amount::ZERO,
         input_utxos: vec![None; tx.transaction().inputs().len()],
-        token_decimals: BTreeMap::new(),
+        token_decimals,
+    })
+}
+
+/// The ids of the version 1 tokens transferred by the outputs of the transaction.
+fn tx_token_ids(tx: &SignedTransaction) -> BTreeSet<TokenId> {
+    let mut token_ids = BTreeSet::new();
+    let mut collect_value = |value: &OutputValue| {
+        if let OutputValue::TokenV1(token_id, _) = value {
+            token_ids.insert(*token_id);
+        }
+    };
+
+    for out in tx.transaction().outputs() {
+        match out {
+            TxOutput::Transfer(value, _)
+            | TxOutput::LockThenTransfer(value, _, _)
+            | TxOutput::Burn(value)
+            | TxOutput::Htlc(value, _) => collect_value(value),
+            TxOutput::CreateOrder(order_data) => {
+                collect_value(order_data.ask());
+                collect_value(order_data.give());
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::ProduceBlockFromStake(_, _) => {}
+        }
     }
+
+    token_ids
 }
 
 pub async fn mempool_transactions<
@@ -563,19 +627,22 @@ pub async fn mempool_transactions<
         .into_iter()
         .skip(offset_and_items.offset as usize)
         .take(offset_and_items.items as usize)
-        .map(|tx| {
-            let mut json = tx_to_json(&tx, &pending_tx_additional_info(&tx), &state.chain_config);
-            let obj = json.as_object_mut().expect("object");
-            // The fee of a pending transaction is not known to the api-server.
-            obj.remove("fee");
-            obj.insert("block_id".into(), "".into());
-            obj.insert("timestamp".into(), "".into());
-            obj.insert("confirmations".into(), "".into());
-            json
-        })
         .collect::<Vec<_>>();
 
-    Ok(Json(serde_json::Value::Array(txs)))
+    let mut jsons = Vec::with_capacity(txs.len());
+    for tx in &txs {
+        let additional_info = pending_tx_additional_info(&state, tx).await?;
+        let mut json = tx_to_json(tx, &additional_info, &state.chain_config);
+        let obj = json.as_object_mut().expect("object");
+        // The fee of a pending transaction is not known to the api-server.
+        obj.remove("fee");
+        obj.insert("block_id".into(), "".into());
+        obj.insert("timestamp".into(), "".into());
+        obj.insert("confirmations".into(), "".into());
+        jsons.push(json);
+    }
+
+    Ok(Json(serde_json::Value::Array(jsons)))
 }
 
 pub async fn transactions<T: ApiServerStorage>(
@@ -667,7 +734,7 @@ pub async fn transaction<
                 .ok_or(ApiServerWebServerError::NotFound(
                     ApiServerWebServerNotFoundError::TransactionNotFound,
                 ))?;
-            let additional_info = pending_tx_additional_info(&tx);
+            let additional_info = pending_tx_additional_info(&state, &tx).await?;
 
             (
                 None,
