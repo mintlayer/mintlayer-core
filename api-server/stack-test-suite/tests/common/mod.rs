@@ -171,6 +171,23 @@ pub async fn spawn_webserver_with_mempool(
     (task, response, rpc, addr)
 }
 
+/// Stop the spawned web server.
+///
+/// The server loop only ever exits by being aborted, so a `JoinError` here means the
+/// server task panicked; fail the test with the actual cause instead of letting the
+/// panic surface as opaque connection errors.
+///
+/// Generic over the task output, since the spawned server futures do not all resolve to
+/// `()` (e.g. the `chain_genesis` task returns the `web_server` result).
+pub async fn shutdown_webserver<T>(mut handle: tokio::task::JoinHandle<T>) {
+    handle.abort();
+    match handle.await {
+        Ok(_) => {}
+        Err(err) if err.is_cancelled() => {}
+        Err(err) => panic!("web server task failed: {err}"),
+    }
+}
+
 /// Submit the transaction through the POST endpoint, imitating a user of the
 /// api-server, and return the hex-encoded id of the submitted transaction.
 pub async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransaction) -> String {

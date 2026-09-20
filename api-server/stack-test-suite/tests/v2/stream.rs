@@ -42,7 +42,7 @@ use hex::ToHex as _;
 use test_utils::random::{Seed, make_seedable_rng};
 
 use crate::DummyRPC;
-use crate::test_common::{frame_data, frame_event_name};
+use crate::test_common::{frame_data, frame_event_name, shutdown_webserver};
 
 /// The time to wait for a single expected SSE frame.
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
@@ -236,7 +236,7 @@ async fn stream_endpoint_contract() {
     let frame = sse.next_frame(FRAME_TIMEOUT).await;
     assert_eq!(frame.trim(), ": keepalive", "expected a keepalive comment");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[tokio::test]
@@ -308,7 +308,7 @@ async fn stream_types_filter() {
         .unwrap();
     assert_eq!(response.status(), 400);
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 /// A block event must refer to block data that is queryable through the regular REST endpoint.
@@ -415,7 +415,7 @@ async fn stream_block_event_is_queryable() {
         tx_ids.iter().map(|tx_id| tx_id.to_hash().encode_hex::<String>()).collect();
     assert_eq!(served_tx_ids, expected_tx_ids);
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 /// The subscriber limit must be enforced, and the slot must be released on client disconnect, so
@@ -527,5 +527,5 @@ async fn stream_subscriber_limit() {
         assert_eq!(&parsed, expected, "event roundtrip mismatch");
     }
 
-    task.abort();
+    shutdown_webserver(task).await;
 }

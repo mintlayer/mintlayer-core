@@ -221,7 +221,7 @@ async fn spend(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     assert!(body.contains(&format!("\"secret\":{}", to_json_string(secret.secret()))));
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[rstest]
@@ -387,5 +387,5 @@ async fn refund(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     assert!(body.contains("\"secret\":null"));
 
-    task.abort();
+    shutdown_webserver(task).await;
 }

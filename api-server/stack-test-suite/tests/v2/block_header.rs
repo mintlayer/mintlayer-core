@@ -36,7 +36,7 @@ async fn invalid_block_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid block Id");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[tokio::test]
@@ -53,7 +53,7 @@ async fn block_not_found() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Block not found");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[rstest]
@@ -162,5 +162,5 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body, expected_header);
 
-    task.abort();
+    shutdown_webserver(task).await;
 }

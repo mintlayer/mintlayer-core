@@ -77,7 +77,7 @@ async fn at_genesis() {
 
     assert_eq!(body, expected_tip);
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[rstest]
@@ -170,5 +170,5 @@ async fn height_n(#[case] seed: Seed) {
 
     assert_eq!(body, expected_tip);
 
-    task.abort();
+    shutdown_webserver(task).await;
 }

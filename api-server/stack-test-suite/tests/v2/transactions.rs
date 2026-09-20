@@ -33,7 +33,7 @@ async fn invalid_offset() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn invalid_before_tx_global_index() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset mode");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[tokio::test]
@@ -61,7 +61,7 @@ async fn invalid_num_items() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[rstest]
@@ -81,7 +81,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[rstest]
@@ -274,7 +274,7 @@ async fn ok(#[case] seed: Seed) {
         compare_body(body, expected_transaction);
     }
 
-    task.abort();
+    shutdown_webserver(task).await;
 }
 
 #[track_caller]
