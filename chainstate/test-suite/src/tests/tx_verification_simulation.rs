@@ -16,6 +16,7 @@
 use std::{collections::BTreeMap, num::NonZeroU64};
 
 use super::*;
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{
@@ -167,16 +168,19 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 // reference would need; `WithId<Block>` derefs to `Block`.
                 let block = WithId::new(block);
                 db_tx.add_block(&block).unwrap();
-                // This replicates the integration-path seal indexing, which is gated by
-                // `pos_seal_duplication_tracking`; parity with `tf.storage` holds because all
-                // frameworks in this test use the default config (tracking enabled), which
-                // implies the corollary: if any framework in this test ever switches to
-                // `pos_seal_duplication_tracking: false`, or the setting default changes,
-                // this call must be gated the same way as the integration path
-                // (`chainstate/src/detail/mod.rs`) or the storage dump comparison will
+                // This replicates the integration-path seal indexing and is gated the same
+                // way, on the effective config of the reference framework
+                // (`pos_seal_duplication_tracking`), mirroring the integration path
+                // (`chainstate/src/detail/mod.rs`) so the storage dump comparison cannot
                 // diverge on the seal tables.
-                chainstate::index_block_seal(&mut db_tx, &block, block_index.block_height())
-                    .unwrap();
+                if reference_tf
+                    .chainstate
+                    .get_chainstate_config()
+                    .pos_seal_duplication_tracking_enabled()
+                {
+                    chainstate::index_block_seal(&mut db_tx, &block, block_index.block_height())
+                        .unwrap();
+                }
             }
             db_tx.commit().unwrap();
         }

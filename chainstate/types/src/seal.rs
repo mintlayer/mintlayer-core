@@ -32,7 +32,7 @@ use serialization::{Decode, Encode};
 /// Note that the VRF proof is not a part of the seal: unlike the VRF output, the
 /// proof bytes may differ between two signings of the same transcript, so the
 /// proof cannot be used to identify a slot draw.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct BlockSeal {
     /// Id of the stake pool that produced the block.
     pool_id: PoolId,
@@ -181,12 +181,10 @@ mod tests {
     fn seal_codec_roundtrip() {
         let (_, seal) = make_seal(0, H256::zero());
 
-        let encoded = seal.encode();
-        let decoded = BlockSeal::decode(&mut &encoded[..]).unwrap();
+        // The exact encoding is pinned by `seal_encoding_is_stable`; here we only
+        // verify that decoding recovers the encoded seal.
+        let decoded = BlockSeal::decode(&mut &seal.encode()[..]).unwrap();
         assert_eq!(decoded, seal);
-
-        // The seal is used as a database key, so its encoding must be deterministic.
-        assert_eq!(seal.encode(), encoded);
     }
 
     #[test]
