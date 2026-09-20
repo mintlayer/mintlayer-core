@@ -103,9 +103,12 @@ storage::decl_schema! {
 
         /// Store for PoS seal index entries, i.e. the blocks known to carry each seal.
         /// The number of blocks per entry is bounded by the seal indexing logic.
+        /// Note: nodes that upgrade from a storage version without this map start with
+        /// an empty index; the index only covers the blocks processed after the upgrade.
         pub DBSealIndex: Map<BlockSeal, SealIndexEntry>,
         /// Store for duplicate PoS seal evidence records, keyed by the id of the block
         /// whose processing discovered the duplication.
+        /// Note: like the seal index, this map starts empty on upgraded nodes.
         pub DBDuplicateSealEvidence: Map<Id<Block>, DuplicateSealEvidence>,
     }
 }

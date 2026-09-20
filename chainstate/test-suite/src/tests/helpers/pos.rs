@@ -184,8 +184,8 @@ pub fn get_pos_chain_config(
 ) -> PoSChainConfig {
     match chain_config.consensus_upgrades().consensus_status(block_height) {
         RequiredConsensus::PoS(status) => status.get_chain_config().clone(),
-        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Invalid consensus")
+        status @ (RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus) => {
+            panic!("Invalid consensus at height {block_height}: {status:?}")
         }
     }
 }

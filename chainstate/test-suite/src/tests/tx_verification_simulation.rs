@@ -167,8 +167,9 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 // reference would need; `WithId<Block>` derefs to `Block`.
                 let block = WithId::new(block);
                 db_tx.add_block(&block).unwrap();
-                // A processed block also gets its seal indexed (see the seal indexing in the
-                // chainstate block integration).
+                // This replicates the integration-path seal indexing, which is gated by
+                // `pos_seal_duplication_tracking`; parity with `tf.storage` holds because all
+                // frameworks in this test use the default config (tracking enabled).
                 chainstate::index_block_seal(&mut db_tx, &block, block_index.block_height())
                     .unwrap();
             }

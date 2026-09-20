@@ -41,13 +41,6 @@ pub struct BlockSeal {
 }
 
 impl BlockSeal {
-    pub fn new(pool_id: PoolId, vrf_output: H256) -> Self {
-        Self {
-            pool_id,
-            vrf_output,
-        }
-    }
-
     /// Extract the seal from the block's consensus data.
     ///
     /// Returns `None` if the consensus data does not carry a proof-of-stake seal,
