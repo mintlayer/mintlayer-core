@@ -1430,7 +1430,6 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     /// Index the seal of the given block, recording evidence if the seal was already
     /// seen on another block.
-    #[log_error]
     pub fn index_block_seal(
         &mut self,
         block: &WithId<Block>,

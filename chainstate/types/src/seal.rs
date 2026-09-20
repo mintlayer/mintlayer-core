@@ -25,13 +25,18 @@ use serialization::{Decode, Encode};
 /// The seal of a proof-of-stake block: the stake pool that produced the block and
 /// the VRF output that authorized the block production for the given slot.
 ///
-/// The VRF output is uniquely determined by the transcript it was produced over
+/// A VRF proof is uniquely determined by the transcript it was produced over
 /// (epoch index, randomness seed, block timestamp), so all valid blocks that share
 /// the same seal were authorized by the same pool for the same slot.
 ///
 /// Note that the VRF proof is not a part of the seal: unlike the VRF output, the
 /// proof bytes may differ between two signings of the same transcript, so the
 /// proof cannot be used to identify a slot draw.
+///
+/// Note also that the seal identity is bound to the timestamp of the slot: two
+/// blocks that a pool produced for different (valid) timestamps have different
+/// seals. The seal index detects the reuse of a single slot draw, not every form
+/// of double block production.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct BlockSeal {
     /// Id of the stake pool that produced the block.
