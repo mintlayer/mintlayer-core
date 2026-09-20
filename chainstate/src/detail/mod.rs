@@ -14,6 +14,8 @@
 // limitations under the License.
 
 mod chainstateref;
+
+pub use chainstateref::seal_index::index_block_seal;
 mod error;
 mod error_classification;
 mod info;

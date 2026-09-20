@@ -745,6 +745,7 @@ fn initial_block_download(
                 max_tip_age: Duration::from_secs(1).into(),
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
+                pos_seal_duplication_tracking: Default::default(),
             })
             .with_initial_time_since_genesis(2)
             .build();

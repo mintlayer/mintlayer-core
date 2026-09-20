@@ -164,6 +164,14 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             for (block, block_index) in all_blocks {
                 db_tx.set_block_index(&block_index).unwrap();
                 db_tx.add_block(&block).unwrap();
+                // A processed block also gets its seal indexed (see the seal indexing in the
+                // chainstate block integration).
+                chainstate::index_block_seal(
+                    &mut db_tx,
+                    &block.clone().into(),
+                    block_index.block_height(),
+                )
+                .unwrap();
             }
             db_tx.commit().unwrap();
         }

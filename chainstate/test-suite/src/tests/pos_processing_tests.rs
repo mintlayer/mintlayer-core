@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{borrow::Cow, num::NonZeroU64, time::Duration};
+use std::{num::NonZeroU64, time::Duration};
 
 use rstest::rstest;
 
@@ -32,23 +32,18 @@ use chainstate_types::{
     vrf_tools::{ProofOfStakeVRFError, construct_transcript},
 };
 use common::{
-    Uint256,
     chain::{
-        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ChainstateUpgradeBuilder,
-        ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig,
-        PoSChainConfigBuilder, PoolId, PoolIdMismatchInKernelUtxoAndPoSDataForbidden,
-        RequiredConsensus, SignedTransaction, StakerDestinationUpdateForbidden, TxInput, TxOutput,
-        UtxoOutPoint,
-        block::{
-            BlockRewardTransactable, ConsensusData, consensus_data::PoSData,
-            timestamp::BlockTimestamp,
-        },
+        AccountNonce, AccountOutPoint, AccountSpending, ChainstateUpgradeBuilder, ConsensusUpgrade,
+        Destination, GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        PoolIdMismatchInKernelUtxoAndPoSDataForbidden, SignedTransaction,
+        StakerDestinationUpdateForbidden, TxInput, TxOutput, UtxoOutPoint,
+        block::{ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
         config::{Builder as ConfigBuilder, ChainType, EpochIndex, create_unit_test_config},
         make_delegation_id,
         output_value::OutputValue,
         signature::{
             inputsig::{InputWitness, standard_signature::StandardInputSignature},
-            sighash::{input_commitments::SighashInputCommitment, sighashtype::SigHashType},
+            sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -66,45 +61,13 @@ use test_utils::{
     assert_matches,
     random::{Seed, make_seedable_rng},
 };
-use utils::const_nz_u64;
 
-use super::helpers::pos::{calculate_new_target, create_custom_genesis_with_stake_pool};
-
-// It's important to have short epoch length, so that genesis and the first block can seal
-// an epoch with pool, which is required for PoS validation to work.
-const TEST_EPOCH_LENGTH: NonZeroU64 = const_nz_u64!(2);
-const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
-
-const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
-
-fn add_block_with_stake_pool(
-    rng: &mut impl CryptoRng,
-    tf: &mut TestFramework,
-    stake_pool_data: StakePoolData,
-) -> (UtxoOutPoint, PoolId) {
-    let genesis_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
-    let pool_id = PoolId::from_utxo(&genesis_outpoint);
-    let tx = TransactionBuilder::new()
-        .add_input(genesis_outpoint.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(
-            pool_id,
-            Box::new(stake_pool_data),
-        ))
-        .build();
-    let tx_id = tx.transaction().get_id();
-
-    tf.make_block_builder().add_transaction(tx).build_and_process(rng).unwrap();
-
-    tf.progress_time_seconds_since_epoch(1);
-
-    (
-        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
-        pool_id,
-    )
-}
+use super::helpers::pos::{
+    MIN_DIFFICULTY, TEST_EPOCH_LENGTH, TEST_SEALED_EPOCH_DISTANCE, add_block_with_stake_pool,
+    calculate_new_target, consensus_upgrades_with_pos_at_height,
+    create_custom_genesis_with_stake_pool, get_pos_chain_config, produce_kernel_signature,
+    setup_chain_with_stake_pool as setup_test_chain_with_stake_pool,
+};
 
 fn add_block_with_2_stake_pools(
     rng: &mut impl CryptoRng,
@@ -151,45 +114,6 @@ fn add_block_with_2_stake_pools(
     tf.progress_time_seconds_since_epoch(1);
 
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
-}
-
-fn consensus_upgrades_with_pos_at_height(height: BlockHeight) -> NetUpgrades<ConsensusUpgrade> {
-    NetUpgrades::initialize(vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
-        (
-            height,
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
-        ),
-    ])
-    .unwrap()
-}
-
-// Create a chain genesis <- block_1
-// block_1 has tx with StakePool output
-fn setup_test_chain_with_stake_pool(
-    rng: &mut impl CryptoRng,
-    vrf_pk: VRFPublicKey,
-) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
-    let net_upgrades = consensus_upgrades_with_pos_at_height(BlockHeight::new(2));
-    let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
-        .epoch_length(TEST_EPOCH_LENGTH)
-        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
-        .build();
-
-    let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
-
-    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
-        rng,
-        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
-        vrf_pk,
-    );
-    let (stake_pool_outpoint, pool_id) = add_block_with_stake_pool(rng, &mut tf, stake_pool_data);
-
-    (tf, stake_pool_outpoint, pool_id, staking_sk)
 }
 
 // Create a chain genesis <- block_1
@@ -266,40 +190,6 @@ fn setup_test_chain_with_2_stake_pools_with_net_upgrades(
         pool_id2,
         sk2,
     )
-}
-
-fn produce_kernel_signature(
-    rng: &mut impl CryptoRng,
-    tf: &TestFramework,
-    staking_sk: &PrivateKey,
-    reward_outputs: &[TxOutput],
-    staking_destination: Destination,
-    kernel_outpoint: UtxoOutPoint,
-) -> StandardInputSignature {
-    let kernel_input_utxo = tf.utxo(&kernel_outpoint).take_output();
-    let kernel_inputs = vec![kernel_outpoint.into()];
-
-    let block_reward_tx =
-        BlockRewardTransactable::new(Some(kernel_inputs.as_slice()), Some(reward_outputs), None);
-    StandardInputSignature::produce_uniparty_signature_for_input(
-        staking_sk,
-        SigHashType::default(),
-        staking_destination,
-        &block_reward_tx,
-        &[SighashInputCommitment::Utxo(Cow::Borrowed(&kernel_input_utxo))],
-        0,
-        rng,
-    )
-    .unwrap()
-}
-
-fn get_pos_chain_config(chain_config: &ChainConfig, block_height: BlockHeight) -> PoSChainConfig {
-    match chain_config.consensus_upgrades().consensus_status(block_height) {
-        RequiredConsensus::PoS(status) => status.get_chain_config().clone(),
-        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Invalid consensus")
-        }
-    }
 }
 
 #[rstest]

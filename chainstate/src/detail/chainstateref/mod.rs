@@ -17,7 +17,7 @@ mod block_info;
 mod consistency_checker;
 mod epoch_seal;
 mod in_memory_reorg;
-mod seal_index;
+pub(crate) mod seal_index;
 mod tx_verifier_storage;
 
 use itertools::Itertools;

@@ -746,6 +746,7 @@ fn check_reckless_mode(
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Default::default(),
                 allow_checkpoints_mismatch: Default::default(),
+                pos_seal_duplication_tracking: Default::default(),
             })
             .build();
         let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
