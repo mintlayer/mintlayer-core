@@ -15,31 +15,8 @@
 
 use chainstate_test_framework::empty_witness;
 use common::{chain::UtxoOutPoint, primitives::H256};
-use serialization::hex_encoded::HexEncoded;
 
 use super::*;
-
-/// Submit the transaction through the POST endpoint, imitating a user of the
-/// api-server, and return the hex-encoded id of the submitted transaction.
-async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransaction) -> String {
-    let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
-
-    let hex_tx: HexEncoded<SignedTransaction> = tx.into();
-    let response = reqwest::Client::new()
-        .post(format!(
-            "http://{}:{}/api/v2/transaction",
-            addr.ip(),
-            addr.port()
-        ))
-        .body(hex_tx.to_string())
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), 200);
-
-    tx_id
-}
 
 async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> serde_json::Value {
     let response = reqwest::get(format!(
@@ -111,12 +88,12 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ))
         .build();
-    let parent_tx_id = parent_tx.transaction().get_id();
+    let parent_id = parent_tx.transaction().get_id();
 
     let child_tx = TransactionBuilder::new()
         .add_input(
             TxInput::Utxo(UtxoOutPoint::new(
-                OutPointSourceId::Transaction(parent_tx_id),
+                OutPointSourceId::Transaction(parent_id),
                 0,
             )),
             empty_witness(&mut rng),
@@ -128,12 +105,12 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
         .build();
 
     // Submit the parent and wait for it to appear in the mempool
-    let parent_tx_id = submit_transaction(addr, parent_tx).await;
+    let parent_id_hex = submit_transaction(addr, parent_tx).await;
 
     let body = get_mempool_transactions(addr, "").await;
     let body = body.as_array().unwrap();
     assert_eq!(body.len(), 1);
-    assert_eq!(body[0].get("id").unwrap(), &parent_tx_id);
+    assert_eq!(body[0].get("id").unwrap(), &parent_id_hex);
 
     // Submit the child spending the unconfirmed output of the parent
     let child_tx_id = submit_transaction(addr, child_tx).await;
@@ -147,7 +124,7 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
         .iter()
         .map(|tx| tx.get("id").unwrap().as_str().unwrap())
         .collect::<Vec<_>>();
-    let parent_position = ids.iter().position(|id| *id == parent_tx_id).unwrap();
+    let parent_position = ids.iter().position(|id| *id == parent_id_hex).unwrap();
     let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
 
     assert!(parent_position < child_position);

@@ -28,8 +28,10 @@ use common::{
     chain::{SignedTransaction, Transaction, config::create_unit_test_config},
     primitives::{Id, Idable, time::get_time},
 };
+use hex::ToHex;
 use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
+use serialization::hex_encoded::HexEncoded;
 use std::sync::{Arc, RwLock};
 
 /// A no-op RPC client for the web server state under test.
@@ -167,6 +169,28 @@ pub async fn spawn_webserver_with_mempool(
         .unwrap();
 
     (task, response, rpc, addr)
+}
+
+/// Submit the transaction through the POST endpoint, imitating a user of the
+/// api-server, and return the hex-encoded id of the submitted transaction.
+pub async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransaction) -> String {
+    let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
+
+    let hex_tx: HexEncoded<SignedTransaction> = tx.into();
+    let response = reqwest::Client::new()
+        .post(format!(
+            "http://{}:{}/api/v2/transaction",
+            addr.ip(),
+            addr.port()
+        ))
+        .body(hex_tx.to_string())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    tx_id
 }
 
 /// The value of the `event:` field of an SSE frame, if any.

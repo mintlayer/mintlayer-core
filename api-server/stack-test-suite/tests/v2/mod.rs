@@ -45,7 +45,7 @@ mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
-use crate::{DummyRPC, spawn_webserver, spawn_webserver_with_mempool};
+use crate::{DummyRPC, spawn_webserver, spawn_webserver_with_mempool, submit_transaction};
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
 };

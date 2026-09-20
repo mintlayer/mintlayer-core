@@ -57,7 +57,6 @@ async fn transaction_not_found() {
 async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
     use chainstate_test_framework::empty_witness;
     use common::{chain::UtxoOutPoint, primitives::H256};
-    use serialization::hex_encoded::HexEncoded;
 
     let (task, _response, _rpc, addr) = spawn_webserver_with_mempool("/").await;
     let mut rng = make_seedable_rng(seed);
@@ -72,23 +71,9 @@ async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
         )
         .build();
 
-    let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
-
     // Submit the transaction through the POST endpoint; it stays pending in the
     // mempool of the node behind the web server.
-    let hex_tx: HexEncoded<SignedTransaction> = tx.into();
-    let response = reqwest::Client::new()
-        .post(format!(
-            "http://{}:{}/api/v2/transaction",
-            addr.ip(),
-            addr.port()
-        ))
-        .body(hex_tx.to_string())
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), 200);
+    let tx_id = submit_transaction(addr, tx).await;
 
     let response = reqwest::get(format!(
         "http://{}:{}/api/v2/transaction/{tx_id}",
