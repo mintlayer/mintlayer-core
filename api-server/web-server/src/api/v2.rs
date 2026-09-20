@@ -530,7 +530,9 @@ pub async fn mempool_transactions<
     match ordering {
         TxOrdering::Insertion => {}
         TxOrdering::Dependency => {
-            let tip_height = best_block(&state).await?.block_height();
+            // Note: the transactions will be included into a block after the tip, which
+            // matters for the token id derivation version of a token issuance.
+            let tip_height = best_block(&state).await?.block_height().next_height();
             let chain_config = Arc::clone(&state.chain_config);
             // The sorting is CPU-bound and proportional to the mempool size; run it
             // off the async runtime threads.

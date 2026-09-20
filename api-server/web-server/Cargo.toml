@@ -32,7 +32,6 @@ tower-http = { workspace = true, features = ["cors"] }
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
-crypto = { path = "../../crypto" }
 randomness = { path = "../../randomness" }
 rstest.workspace = true
 strum.workspace = true

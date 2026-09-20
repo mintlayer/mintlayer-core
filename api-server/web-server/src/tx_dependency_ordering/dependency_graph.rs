@@ -137,7 +137,14 @@ pub fn build_dependency_graph(
                 .collect::<Vec<_>>();
 
             for tx_index in tx_indices {
-                dependency_nodes[*tx_index].dependencies.extend(providers.clone());
+                // A transaction can be both a provider and a dependent of the same
+                // dependency (e.g. a transaction carrying two account commands of the
+                // same token at consecutive nonces): such a self-dependency carries no
+                // ordering information and would be reported as a cycle.
+                let self_id = dependency_nodes[*tx_index].id;
+                dependency_nodes[*tx_index]
+                    .dependencies
+                    .extend(providers.iter().filter(|id| **id != self_id).copied());
             }
         }
     }
@@ -294,7 +301,39 @@ fn process_input_dependencies(
                             .push(tx_index);
                     }
                 }
-                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {}
+                // The deprecated order commands (before the orders v1 upgrade) operate
+                // on the same orders as their `OrderAccountCommand` counterparts, so
+                // they carry the same dependencies.
+                AccountCommand::FillOrder(order_id, _, _) => {
+                    dependencies
+                        .providers
+                        .entry(Dependency::OrderFill(*order_id))
+                        .or_default()
+                        .push(tx_index);
+
+                    dependencies
+                        .dependents
+                        .entry(Dependency::OrderCreation(*order_id))
+                        .or_default()
+                        .push(tx_index);
+                }
+                AccountCommand::ConcludeOrder(order_id) => {
+                    dependencies
+                        .dependents
+                        .entry(Dependency::OrderCreation(*order_id))
+                        .or_default()
+                        .push(tx_index);
+                    dependencies
+                        .dependents
+                        .entry(Dependency::OrderFill(*order_id))
+                        .or_default()
+                        .push(tx_index);
+                    dependencies
+                        .dependents
+                        .entry(Dependency::OrderFreeze(*order_id))
+                        .or_default()
+                        .push(tx_index);
+                }
             },
             TxInput::OrderAccountCommand(cmd) => match cmd {
                 OrderAccountCommand::FillOrder(order_id, _) => {
@@ -417,7 +456,7 @@ mod tests {
         assert_eq!(dependency_graph[1].dependencies, vec![txa_id]);
     }
 
-    // test txs not dependednt on UTXO input/outputs but on token creation/command
+    // test txs not dependent on UTXO input/outputs but on token creation/command
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
