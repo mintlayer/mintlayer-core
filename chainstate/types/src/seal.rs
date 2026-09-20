@@ -1,0 +1,156 @@
+// Copyright (c) 2026 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! The seal of a proof-of-stake block.
+
+use common::{
+    chain::{PoolId, block::ConsensusData},
+    primitives::H256,
+};
+use crypto::vrf::VRFReturn;
+use serialization::{Decode, Encode};
+
+/// The seal of a proof-of-stake block: the stake pool that produced the block and
+/// the VRF output that authorized the block production for the given slot.
+///
+/// The VRF output is uniquely determined by the transcript it was produced over
+/// (epoch index, randomness seed, block timestamp), so all valid blocks that share
+/// the same seal were authorized by the same pool for the same slot.
+///
+/// Note that the VRF proof is not a part of the seal: unlike the VRF output, the
+/// proof bytes may differ between two signings of the same transcript, so the
+/// proof cannot be used to identify a slot draw.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct BlockSeal {
+    /// Id of the stake pool that produced the block.
+    pool_id: PoolId,
+    /// The 32-byte VRF output from the block's consensus data.
+    vrf_output: H256,
+}
+
+impl BlockSeal {
+    pub fn new(pool_id: PoolId, vrf_output: H256) -> Self {
+        Self {
+            pool_id,
+            vrf_output,
+        }
+    }
+
+    /// Extract the seal from the block's consensus data.
+    ///
+    /// Returns `None` if the consensus data does not carry a proof-of-stake seal,
+    /// i.e. for `ConsensusData::None` and `ConsensusData::PoW`.
+    pub fn from_consensus_data(consensus_data: &ConsensusData) -> Option<Self> {
+        match consensus_data {
+            ConsensusData::PoS(pos_data) => {
+                let vrf_output = match pos_data.vrf_data() {
+                    VRFReturn::Schnorrkel(vrf_data) => vrf_data.vrf_preout().into(),
+                };
+                Some(Self {
+                    pool_id: *pos_data.stake_pool_id(),
+                    vrf_output,
+                })
+            }
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+        }
+    }
+
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+
+    pub fn vrf_output(&self) -> &H256 {
+        &self.vrf_output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::chain::{
+        block::{consensus_data::PoSData, consensus_data::PoWData, timestamp::BlockTimestamp},
+        config::EpochIndex,
+    };
+    use common::primitives::Compact;
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+
+    fn make_pos_consensus_data(
+        vrf_sk: &VRFPrivateKey,
+        pool_id: PoolId,
+        epoch_index: EpochIndex,
+        seed: H256,
+    ) -> ConsensusData {
+        let timestamp = BlockTimestamp::from_int_seconds(1);
+        let transcript = crate::vrf_tools::construct_transcript(epoch_index, &seed, timestamp);
+        let vrf_data = vrf_sk.produce_vrf_data(transcript);
+        ConsensusData::PoS(PoSData::new(vec![], vec![], pool_id, vrf_data, Compact(1)).into())
+    }
+
+    fn make_seal(epoch_index: EpochIndex, seed: H256) -> (VRFPrivateKey, BlockSeal) {
+        let vrf_sk = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel).0;
+        let consensus_data =
+            make_pos_consensus_data(&vrf_sk, PoolId::new(H256::zero()), epoch_index, seed);
+        let seal = BlockSeal::from_consensus_data(&consensus_data).unwrap();
+        (vrf_sk, seal)
+    }
+
+    #[test]
+    fn seal_extraction_from_pos_consensus_data() {
+        let (vrf_sk, seal) = make_seal(0, H256::zero());
+        let consensus_data = make_pos_consensus_data(&vrf_sk, *seal.pool_id(), 0, H256::zero());
+
+        assert_eq!(BlockSeal::from_consensus_data(&consensus_data), Some(seal));
+    }
+
+    #[test]
+    fn seal_extraction_from_non_pos_consensus_data() {
+        assert_eq!(BlockSeal::from_consensus_data(&ConsensusData::None), None);
+
+        let pow_data = PoWData::new(Compact(1), 0);
+        assert_eq!(
+            BlockSeal::from_consensus_data(&ConsensusData::PoW(pow_data.into())),
+            None
+        );
+    }
+
+    #[test]
+    fn seal_codec_roundtrip() {
+        let (_, seal) = make_seal(0, H256::zero());
+
+        let encoded = seal.encode();
+        let decoded = BlockSeal::decode(&mut &encoded[..]).unwrap();
+        assert_eq!(decoded, seal);
+
+        // The seal is used as a database key, so its encoding must be deterministic.
+        assert_eq!(seal.encode(), encoded);
+    }
+
+    #[test]
+    fn same_slot_draw_produces_same_seal() {
+        let pool_id = PoolId::new(H256::zero());
+        let (vrf_sk, seal_1) = make_seal(0, H256::zero());
+
+        // The VRF output is deterministic over the transcript even though the proof
+        // bytes are not, so two signings of the same transcript yield the same seal.
+        let consensus_data = make_pos_consensus_data(&vrf_sk, pool_id, 0, H256::zero());
+        let seal_2 = BlockSeal::from_consensus_data(&consensus_data).unwrap();
+        assert_eq!(seal_1, seal_2);
+
+        // A different epoch means a different transcript and thus a different seal.
+        let consensus_data_other = make_pos_consensus_data(&vrf_sk, pool_id, 1, H256::zero());
+        let seal_other = BlockSeal::from_consensus_data(&consensus_data_other).unwrap();
+        assert_ne!(seal_1, seal_other);
+    }
+}
