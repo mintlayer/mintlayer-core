@@ -32,6 +32,7 @@ use api_server_common::storage::storage_api::{
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Path, Query, State},
+    http::HeaderMap,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -509,6 +510,7 @@ async fn pending_tx_additional_info<S: ApiServerStorageRead>(
     db_tx: &S,
     tx: &SignedTransaction,
     pending_issuance_decimals: &BTreeMap<TokenId, u8>,
+    decimals_cache: &mut BTreeMap<TokenId, u8>,
 ) -> Result<TxAdditionalInfo, ApiServerWebServerError> {
     let internal_error = |e: ApiServerStorageError| {
         logging::log::error!("internal error: {e}");
@@ -521,13 +523,20 @@ async fn pending_tx_additional_info<S: ApiServerStorageRead>(
             // The issuance of the token is pending as well: the storage has no decimals
             // for it yet, but the issuing transaction carries them.
             Some(decimals) => *decimals,
-            None => db_tx
-                .get_token_num_decimals(token_id)
-                .await
-                .map_err(internal_error)?
-                // The issuance of the token is neither pending in the listing nor
-                // indexed, so its decimals cannot be known.
-                .unwrap_or(0),
+            None => match decimals_cache.get(&token_id) {
+                Some(decimals) => *decimals,
+                None => {
+                    let decimals = db_tx
+                        .get_token_num_decimals(token_id)
+                        .await
+                        .map_err(internal_error)?
+                        // The issuance of the token is neither pending in the listing
+                        // nor indexed, so its decimals cannot be known.
+                        .unwrap_or(0);
+                    decimals_cache.insert(token_id, decimals);
+                    decimals
+                }
+            },
         };
         token_decimals.insert(token_id, decimals);
     }
@@ -622,6 +631,10 @@ pub async fn mempool_transactions<
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
+    // Whether the listing is ordered by the dependencies between the transactions;
+    // a request for the dependency ordering can fall back to the insertion order.
+    let mut ordered_by_dependency = matches!(ordering, TxOrdering::Dependency);
+
     match ordering {
         TxOrdering::Insertion => {}
         TxOrdering::Dependency => {
@@ -645,6 +658,7 @@ pub async fn mempool_transactions<
                     // them in the insertion order rather than failing the whole
                     // listing (an ordering failure of an invalid transaction must not
                     // take it down).
+                    ordered_by_dependency = false;
                     logging::log::warn!("Falling back to the mempool insertion order: {err}");
                     state.rpc.mempool_transactions().await.map_err(|e| {
                         logging::log::error!("internal error: {e}");
@@ -663,6 +677,11 @@ pub async fn mempool_transactions<
         }
     }
 
+    // The decimals of the issuances of the whole fetched mempool listing are resolved
+    // before the pagination: a transaction of the requested page may spend or transfer
+    // a token issued by a transaction outside of it.
+    let issuance_decimals = pending_issuance_decimals(&txs, &state.chain_config, inclusion_height);
+
     let txs = txs
         .into_iter()
         .skip(offset_and_items.offset as usize)
@@ -675,15 +694,13 @@ pub async fn mempool_transactions<
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
-        // The token id derivation height matches the one used for the dependency
-        // ordering.
-        let inclusion_height = best_block(&state).await?.block_height().next_height();
-        let issuance_decimals =
-            pending_issuance_decimals(&txs, &state.chain_config, inclusion_height);
+        // The decimals of the same token are looked up only once per request.
+        let mut decimals_cache = BTreeMap::new();
 
         for tx in &txs {
             let additional_info =
-                pending_tx_additional_info(&db_tx, tx, &issuance_decimals).await?;
+                pending_tx_additional_info(&db_tx, tx, &issuance_decimals, &mut decimals_cache)
+                    .await?;
             let mut json = tx_to_json(tx, &additional_info, &state.chain_config);
             let obj = json.as_object_mut().expect("object");
             // The fee of a pending transaction is not known to the api-server.
@@ -695,7 +712,21 @@ pub async fn mempool_transactions<
         }
     }
 
-    Ok(Json(serde_json::Value::Array(jsons)))
+    // Tell the clients which ordering the listing ended up in: a request for the
+    // dependency ordering can be served in the insertion order as a fallback.
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "x-mempool-ordering",
+        if ordered_by_dependency {
+            "dependency"
+        } else {
+            "insertion"
+        }
+        .parse()
+        .expect("valid header value"),
+    );
+
+    Ok((headers, Json(serde_json::Value::Array(jsons))))
 }
 
 pub async fn transactions<T: ApiServerStorage>(
@@ -793,7 +824,10 @@ pub async fn transaction<
                     ApiServerWebServerServerError::InternalServerError,
                 )
             })?;
-            let additional_info = pending_tx_additional_info(&db_tx, &tx, &BTreeMap::new()).await?;
+            let mut decimals_cache = BTreeMap::new();
+            let additional_info =
+                pending_tx_additional_info(&db_tx, &tx, &BTreeMap::new(), &mut decimals_cache)
+                    .await?;
 
             (
                 None,
