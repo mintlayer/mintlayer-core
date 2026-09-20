@@ -292,7 +292,8 @@ pub trait BlockchainStorageWrite:
     /// Set the seal index entry of the given seal
     fn set_seal_index_entry(&mut self, seal: &BlockSeal, entry: &SealIndexEntry) -> Result<()>;
 
-    /// Remove the seal index entry of the given seal
+    /// Remove the seal index entry of the given seal. Used by the seal index pruning
+    /// of the entries whose blocks fell out of the reorg range.
     fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> Result<()>;
 
     /// Record the duplicate seal evidence for the given block

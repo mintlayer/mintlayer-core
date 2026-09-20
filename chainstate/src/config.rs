@@ -75,11 +75,6 @@ impl ChainstateConfig {
         self
     }
 
-    pub fn with_pos_seal_duplication_tracking(mut self, enable: bool) -> Self {
-        self.pos_seal_duplication_tracking = enable.into();
-        self
-    }
-
     pub fn pos_seal_duplication_tracking_enabled(&self) -> bool {
         *self.pos_seal_duplication_tracking
     }
