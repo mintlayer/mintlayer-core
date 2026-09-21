@@ -165,6 +165,18 @@ fn process_output_dependencies(
 ) {
     let inputs = tx.transaction().inputs();
     for (out_index, out) in tx.transaction().outputs().iter().enumerate() {
+        // Every output is a spendable utxo regardless of its type, so the
+        // transactions spending it depend on this one.
+        let outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(tx.transaction().get_id()),
+            out_index as u32,
+        );
+        dependencies
+            .providers
+            .entry(Dependency::Utxo(outpoint))
+            .or_default()
+            .push(tx_index);
+
         match out {
             TxOutput::CreateOrder(order_data) => {
                 let order_id = match make_order_id(inputs) {
@@ -237,15 +249,6 @@ fn process_output_dependencies(
                 // Note: in the mempool of the node, a delegation stake provides no
                 // mempool-side dependency: staking requires the delegation to be
                 // already known to the chain, like the first spend of it does.
-                let outpoint = UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(tx.transaction().get_id()),
-                    out_index as u32,
-                );
-                dependencies
-                    .providers
-                    .entry(Dependency::Utxo(outpoint))
-                    .or_default()
-                    .push(tx_index);
             }
             TxOutput::CreateStakePool(pool_id, _) => {
                 dependencies
@@ -262,17 +265,8 @@ fn process_output_dependencies(
                     .or_default()
                     .push(tx_index);
             }
-            _ => {
-                let outpoint = UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(tx.transaction().get_id()),
-                    out_index as u32,
-                );
-                dependencies
-                    .providers
-                    .entry(Dependency::Utxo(outpoint))
-                    .or_default()
-                    .push(tx_index);
-            }
+            // The remaining outputs carry no dependencies beyond the utxo one.
+            _ => {}
         }
     }
 }
@@ -611,6 +605,52 @@ mod tests {
         assert!(dependency_graph[0].dependencies.is_empty());
         assert_eq!(dependency_graph[1].dependencies, vec![txa_id]);
         assert_eq!(dependency_graph[2].dependencies, vec![txa_id, txb_id]);
+    }
+
+    // The outputs of all the types are spendable utxos: a mempool transaction
+    // spending the output of a typed-output transaction (e.g. a token issuance)
+    // must depend on it, like the spends of the plain transfer outputs do;
+    // otherwise the ordering fails with a missing dependency.
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_typed_output_utxo_dependency_chain(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = create_regtest();
+        let block_height = BlockHeight::new(0);
+
+        let random_tx_id = Id::new(H256::random_using(&mut rng));
+        let random_utxo_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(random_tx_id), 0);
+        let txa = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(random_utxo_outpoint),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                random_token_issuance_v1(&chain_config, Destination::AnyoneCanSpend, &mut rng),
+            ))))
+            .add_anyone_can_spend_output(100)
+            .build();
+        let txa_id = txa.transaction().get_id();
+
+        let output_from_txa = UtxoOutPoint::new(OutPointSourceId::Transaction(txa_id), 0);
+        let txb = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(output_from_txa),
+                InputWitness::NoSignature(None),
+            )
+            .add_anyone_can_spend_output(100)
+            .build();
+        let txb_id = txb.transaction().get_id();
+
+        let transactions = vec![txa, txb];
+        let dependency_graph = build_dependency_graph(transactions, &chain_config, block_height);
+        assert_eq!(dependency_graph.len(), 2);
+        assert_eq!(dependency_graph[0].id, txa_id);
+        assert_eq!(dependency_graph[1].id, txb_id);
+        assert!(dependency_graph[0].dependencies.is_empty());
+        assert_eq!(dependency_graph[1].dependencies, vec![txa_id]);
     }
 
     // test new order depending on new token creation

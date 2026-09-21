@@ -833,6 +833,12 @@ pub async fn transaction<
             // be an issuance pending in the mempool itself, so that the cost
             // of the request does not scale with the size of the mempool for
             // the transactions transferring the already known tokens.
+            //
+            // Note that a transaction referencing a token that does not exist
+            // at all keeps taking this path: the cost of a listing fetch per
+            // such request is accepted, since it is the same cost class as the
+            // listing endpoint itself, and the concurrency (and the wait for
+            // it) is bounded by the query permits.
             let token_ids = tx_token_ids(&tx);
             let db_tx = state.db.transaction_ro().await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
