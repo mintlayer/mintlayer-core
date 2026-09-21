@@ -32,8 +32,13 @@ use hex::ToHex;
 use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
 use serialization::hex_encoded::HexEncoded;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
+use tokio::sync::RwLock;
+
+/// The time to wait for the web server to respond to the barrier request.
+const BARRIER_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A no-op RPC client for the web server state under test.
 pub struct DummyRPC {}
@@ -70,28 +75,27 @@ impl MempoolQueryClient for DummyRPC {
 /// of a node. The mock does not validate the transactions (e.g. it does not check
 /// that the spent outputs exist), just like a node mempool accepts chain of unconfirmed
 /// transactions.
+#[derive(Default)]
 pub struct MempoolRPC {
     mempool: RwLock<Vec<SignedTransaction>>,
+    fetch_count: AtomicUsize,
 }
 
 impl MempoolRPC {
     pub fn new() -> Self {
-        Self {
-            mempool: RwLock::new(vec![]),
-        }
+        Self::default()
     }
-}
 
-impl Default for MempoolRPC {
-    fn default() -> Self {
-        Self::new()
+    /// The number of times the mempool listing has been fetched from this client.
+    pub fn fetch_count(&self) -> usize {
+        self.fetch_count.load(Ordering::Relaxed)
     }
 }
 
 #[async_trait::async_trait]
 impl TxSubmitClient for MempoolRPC {
     async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
-        self.mempool.write().unwrap().push(tx);
+        self.mempool.write().await.push(tx);
         Ok(())
     }
 
@@ -109,14 +113,15 @@ impl MempoolQueryClient for MempoolRPC {
         Ok(self
             .mempool
             .read()
-            .unwrap()
+            .await
             .iter()
             .find(|tx| tx.transaction().get_id() == tx_id)
             .cloned())
     }
 
     async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError> {
-        Ok(self.mempool.read().unwrap().clone())
+        self.fetch_count.fetch_add(1, Ordering::Relaxed);
+        Ok(self.mempool.read().await.clone())
     }
 }
 
@@ -144,9 +149,6 @@ pub async fn wait_for_web_server(
     addr: std::net::SocketAddr,
     url: &str,
 ) -> reqwest::Response {
-    /// The time to wait for the web server to respond to the barrier request.
-    const BARRIER_TIMEOUT: Duration = Duration::from_secs(30);
-
     let request = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()));
 
     let err = match tokio::time::timeout(BARRIER_TIMEOUT, request).await {
@@ -199,7 +201,7 @@ pub async fn spawn_webserver_with_mempool(
                     chain_config: Arc::clone(&chain_config),
                     rpc,
                     cached_values: Arc::new(CachedValues {
-                        feerate_points: RwLock::new((get_time(), vec![])),
+                        feerate_points: std::sync::RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
                     stream_events: Default::default(),
@@ -237,16 +239,20 @@ pub async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransactio
     let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
 
     let hex_tx: HexEncoded<SignedTransaction> = tx.into();
-    let response = reqwest::Client::new()
-        .post(format!(
-            "http://{}:{}/api/v2/transaction",
-            addr.ip(),
-            addr.port()
-        ))
-        .body(hex_tx.to_string())
-        .send()
-        .await
-        .unwrap();
+    let response = tokio::time::timeout(
+        BARRIER_TIMEOUT,
+        reqwest::Client::new()
+            .post(format!(
+                "http://{}:{}/api/v2/transaction",
+                addr.ip(),
+                addr.port()
+            ))
+            .body(hex_tx.to_string())
+            .send(),
+    )
+    .await
+    .expect("transaction submission timed out")
+    .unwrap();
 
     let status = response.status();
     let body = response.text().await.unwrap();

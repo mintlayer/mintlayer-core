@@ -54,7 +54,7 @@ async fn ok(#[case] seed: Seed) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let task = tokio::spawn(async move {
+    let mut task = tokio::spawn(async move {
         let web_server_state = {
             let chain_config = Arc::new(create_unit_test_config());
             let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
@@ -80,13 +80,9 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state, true).await.unwrap();
     });
 
-    let response = reqwest::get(format!(
-        "http://{}:{}/api/v2/feerate?in_top_x_mb={in_top_x_mb}",
-        addr.ip(),
-        addr.port()
-    ))
-    .await
-    .unwrap();
+    let url = format!("/api/v2/feerate?in_top_x_mb={in_top_x_mb}");
+
+    let response = wait_for_web_server(&mut task, addr, &url).await;
     assert_eq!(response.status(), 200);
 
     let body = response.text().await.unwrap();
@@ -138,7 +134,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
     let seconds = Arc::new(SeqCstAtomicU64::new(12345));
     let time_getter = mocked_time_getter_seconds(Arc::clone(&seconds));
 
-    let task = tokio::spawn(async move {
+    let mut task = tokio::spawn(async move {
         let web_server_state = {
             let chain_config = Arc::new(create_unit_test_config());
             let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
@@ -163,6 +159,14 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
 
         web_server(listener, web_server_state, true).await.unwrap();
     });
+
+    let url = format!("/api/v2/feerate?in_top_x_mb={in_top_x_mb}");
+
+    let response = wait_for_web_server(&mut task, addr, &url).await;
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    assert_eq!(body, format!("\"{in_top_x_mb}\""));
 
     const REFRESH_INTERVAL_SEC: u64 = 30;
     let mut time_passed = 0;

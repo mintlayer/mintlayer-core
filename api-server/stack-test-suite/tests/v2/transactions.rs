@@ -94,7 +94,7 @@ async fn ok(#[case] seed: Seed) {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn(async move {
+    let mut task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
             let n_blocks = rng.random_range(3..100);
@@ -207,7 +207,7 @@ async fn ok(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let expected_transactions = rx.await.unwrap();
@@ -215,9 +215,7 @@ async fn ok(#[case] seed: Seed) {
 
     let url = format!("/api/v2/transaction?offset=0&items={num_tx}");
 
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, &url).await;
 
     assert_eq!(response.status(), 200);
 

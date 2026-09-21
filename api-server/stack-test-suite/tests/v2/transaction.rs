@@ -90,10 +90,11 @@ async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
     let body = body.as_object().unwrap();
 
     assert_eq!(body.get("id").unwrap().as_str().unwrap(), tx_id);
-    // The block-related fields of a pending transaction are empty
-    assert_eq!(body.get("block_id").unwrap().as_str().unwrap(), "");
-    assert_eq!(body.get("timestamp").unwrap().as_str().unwrap(), "");
-    assert_eq!(body.get("confirmations").unwrap().as_str().unwrap(), "");
+    // The block-related fields of a pending transaction are null: the values
+    // are not applicable until the transaction is confirmed.
+    assert_eq!(body.get("block_id"), Some(&serde_json::Value::Null));
+    assert_eq!(body.get("timestamp"), Some(&serde_json::Value::Null));
+    assert_eq!(body.get("confirmations"), Some(&serde_json::Value::Null));
     // The fee of a pending transaction is not known, so the key is omitted
     assert!(body.get("fee").is_none());
 

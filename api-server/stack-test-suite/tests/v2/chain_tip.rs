@@ -31,7 +31,7 @@ async fn at_genesis() {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let web_server_state = {
                 let chain_config = Arc::new(create_unit_test_config());
@@ -63,12 +63,7 @@ async fn at_genesis() {
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 
@@ -94,7 +89,7 @@ async fn height_n(#[case] seed: Seed) {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let mut rng = make_seedable_rng(seed);
             let n_blocks = rng.random_range(1..100);
@@ -158,12 +153,7 @@ async fn height_n(#[case] seed: Seed) {
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 

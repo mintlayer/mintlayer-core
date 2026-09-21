@@ -18,7 +18,10 @@ use common::{chain::UtxoOutPoint, primitives::H256};
 
 use super::*;
 
-async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> serde_json::Value {
+async fn get_mempool_transactions_response(
+    addr: std::net::SocketAddr,
+    query: &str,
+) -> reqwest::Response {
     let response = reqwest::get(format!(
         "http://{}:{}/api/v2/mempool/transactions{query}",
         addr.ip(),
@@ -29,10 +32,34 @@ async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> se
 
     assert_eq!(response.status(), 200);
 
+    response
+}
+
+async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> serde_json::Value {
+    let response = get_mempool_transactions_response(addr, query).await;
+
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
     body
+}
+
+/// The ids of the transactions of the given mempool listing, preserving the
+/// order in which they are listed.
+fn listed_transaction_ids_in(body: serde_json::Value) -> Vec<String> {
+    let array = body
+        .as_array()
+        .unwrap_or_else(|| panic!("the mempool listing is not an array: {body}"));
+    array
+        .iter()
+        .map(|tx| {
+            tx.get("id")
+                .unwrap_or_else(|| panic!("a listed transaction is missing the id field: {tx}"))
+                .as_str()
+                .unwrap_or_else(|| panic!("the id field is not a string: {tx}"))
+                .to_owned()
+        })
+        .collect()
 }
 
 /// Return the ids of the transactions listed by the mempool transactions endpoint,
@@ -40,11 +67,30 @@ async fn get_mempool_transactions(addr: std::net::SocketAddr, query: &str) -> se
 async fn listed_transaction_ids(addr: std::net::SocketAddr, query: &str) -> Vec<String> {
     let body = get_mempool_transactions(addr, query).await;
 
-    body.as_array()
+    listed_transaction_ids_in(body)
+}
+
+/// Return the value of the `x-mempool-ordering` response header and the ids of the
+/// transactions listed by the mempool transactions endpoint, preserving the order in
+/// which they are listed.
+async fn listed_transaction_ids_with_ordering(
+    addr: std::net::SocketAddr,
+    query: &str,
+) -> (String, Vec<String>) {
+    let response = get_mempool_transactions_response(addr, query).await;
+
+    let ordering = response
+        .headers()
+        .get("x-mempool-ordering")
+        .unwrap_or_else(|| panic!("the x-mempool-ordering header is missing"))
+        .to_str()
         .unwrap()
-        .iter()
-        .map(|tx| tx.get("id").unwrap().as_str().unwrap().to_owned())
-        .collect()
+        .to_owned();
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    (ordering, listed_transaction_ids_in(body))
 }
 
 #[rstest]
@@ -67,10 +113,24 @@ async fn submitted_transaction_is_listed(#[case] seed: Seed) {
 
     let tx_id = submit_transaction(addr, tx).await;
 
-    let ids = listed_transaction_ids(addr, "").await;
+    let body = get_mempool_transactions(addr, "").await;
+    let tx_json = body
+        .as_array()
+        .unwrap_or_else(|| panic!("the mempool listing is not an array: {body}"))
+        .first()
+        .cloned()
+        .expect("the submitted transaction is not listed");
+
+    let ids = listed_transaction_ids_in(body);
 
     assert_eq!(ids.len(), 1);
     assert_eq!(ids[0], tx_id);
+
+    // The block-related fields of a pending transaction are null: the values
+    // are not applicable until the transaction is confirmed.
+    assert_eq!(tx_json.get("block_id"), Some(&serde_json::Value::Null));
+    assert_eq!(tx_json.get("timestamp"), Some(&serde_json::Value::Null));
+    assert_eq!(tx_json.get("confirmations"), Some(&serde_json::Value::Null));
 
     shutdown_task(task).await;
 }
@@ -145,6 +205,40 @@ async fn dependency_ordering_lists_parents_before_children(#[case] seed: Seed) {
     let child_position = ids.iter().position(|id| *id == child_tx_id).unwrap();
 
     assert!(parent_position < child_position);
+
+    shutdown_task(task).await;
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn dependency_ordering_falls_back_without_refetching_the_mempool(#[case] seed: Seed) {
+    let (task, _response, rpc, addr) = spawn_webserver_with_mempool("/").await;
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(&mut rng))),
+                0,
+            )),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    // The same transaction is submitted twice, so the mempool listing contains
+    // duplicated ids, which makes the dependency ordering fail.
+    let tx_id = submit_transaction(addr, tx.clone()).await;
+    submit_transaction(addr, tx).await;
+
+    let (ordering, ids) = listed_transaction_ids_with_ordering(addr, "?order=dependency").await;
+
+    // The listing fell back to the insertion order of the same snapshot.
+    assert_eq!(ordering, "insertion");
+    assert_eq!(ids, vec![tx_id.clone(), tx_id]);
+    // The mempool was fetched exactly once: the fallback did not refetch it.
+    assert_eq!(rpc.fetch_count(), 1);
 
     shutdown_task(task).await;
 }
