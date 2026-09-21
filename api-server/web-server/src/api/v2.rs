@@ -58,6 +58,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio::sync::Semaphore;
 use utils::ensure;
 
 use crate::ApiServerWebServerState;
@@ -67,6 +68,12 @@ use super::json_helpers::{nft_with_owner_to_json, to_json_string};
 pub const API_VERSION: &str = "2.0.0";
 
 const TX_BODY_LIMIT: usize = 10240;
+
+/// The maximum number of the concurrently served requests to the mempool-proxying
+/// endpoints, whose cost is proportional to the size of the mempool of the node
+/// instead of the size of the requested page. Additional requests wait for a free
+/// permit instead of loading the node in parallel.
+static MEMPOOL_QUERY_PERMITS: Semaphore = Semaphore::const_new(8);
 
 pub fn routes<
     T: ApiServerStorage + Send + Sync + 'static,
@@ -594,6 +601,13 @@ pub async fn mempool_transactions<
 
     let offset_and_items = get_offset_and_items(&params)?;
 
+    // Note: the cost of this endpoint is proportional to the size of the mempool of
+    // the node, so the number of the concurrently served requests is bounded.
+    let _query_permit = MEMPOOL_QUERY_PERMITS.acquire().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
     // Note: the tip of the storage is read once and used for both the token id
     // derivation of the dependency ordering and of the pending issuances.
     let inclusion_height = best_block(&state).await?.block_height().next_height();
@@ -790,6 +804,29 @@ pub async fn transaction<
                 .ok_or(ApiServerWebServerError::NotFound(
                     ApiServerWebServerNotFoundError::TransactionNotFound,
                 ))?;
+            // If the transaction transfers tokens whose issuance is pending as well,
+            // the decimals are taken from the mempool listing, like in the listing
+            // endpoint; otherwise the storage is the only source.
+            let token_ids = tx_token_ids(&tx);
+            let pending_issuance_decimals = if token_ids.is_empty() {
+                BTreeMap::new()
+            } else {
+                let _query_permit = MEMPOOL_QUERY_PERMITS.acquire().await.map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?;
+                let mempool_txs = state.rpc.mempool_transactions().await.map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?;
+                let inclusion_height = best_block(&state).await?.block_height().next_height();
+                pending_issuance_decimals(&mempool_txs, &state.chain_config, inclusion_height)
+            };
+
             let db_tx = state.db.transaction_ro().await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
@@ -797,9 +834,13 @@ pub async fn transaction<
                 )
             })?;
             let mut decimals_cache = BTreeMap::new();
-            let additional_info =
-                pending_tx_additional_info(&db_tx, &tx, &BTreeMap::new(), &mut decimals_cache)
-                    .await?;
+            let additional_info = pending_tx_additional_info(
+                &db_tx,
+                &tx,
+                &pending_issuance_decimals,
+                &mut decimals_cache,
+            )
+            .await?;
 
             (
                 None,
