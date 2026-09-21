@@ -1429,13 +1429,18 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     }
 
     /// Index the seal of the given block, recording evidence if the seal was already
-    /// seen on another block.
-    pub fn index_block_seal(
+    /// seen on another block. A no-op if seal duplication tracking is disabled.
+    pub fn index_block_seal_if_enabled(
         &mut self,
         block: &WithId<Block>,
         block_height: BlockHeight,
     ) -> Result<(), BlockError> {
-        seal_index::index_block_seal(&mut self.db_tx, block, block_height)
+        seal_index::index_block_seal_if_enabled(
+            self.chainstate_config,
+            &mut self.db_tx,
+            block,
+            block_height,
+        )
     }
 
     #[log_error]

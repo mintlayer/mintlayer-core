@@ -168,19 +168,16 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 // reference would need; `WithId<Block>` derefs to `Block`.
                 let block = WithId::new(block);
                 db_tx.add_block(&block).unwrap();
-                // This replicates the integration-path seal indexing and is gated the same
-                // way, on the effective config of the reference framework
-                // (`pos_seal_duplication_tracking`), mirroring the integration path
-                // (`chainstate/src/detail/mod.rs`) so the storage dump comparison cannot
-                // diverge on the seal tables.
-                if reference_tf
-                    .chainstate
-                    .get_chainstate_config()
-                    .pos_seal_duplication_tracking_enabled()
-                {
-                    chainstate::index_block_seal(&mut db_tx, &block, block_index.block_height())
-                        .unwrap();
-                }
+                // The single shared helper keeps the seal-index gating identical to
+                // the integration path (`chainstate/src/detail/mod.rs`), so the
+                // storage dump comparison cannot diverge on the seal tables.
+                chainstate::index_block_seal_if_enabled(
+                    &reference_tf.chainstate.get_chainstate_config(),
+                    &mut db_tx,
+                    &block,
+                    block_index.block_height(),
+                )
+                .unwrap();
             }
             db_tx.commit().unwrap();
         }

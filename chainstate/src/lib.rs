@@ -48,7 +48,7 @@ pub use crate::{
 };
 pub use chainstate_types::{BlockIndex, GenBlockIndex, GenBlockIndexRef, PropertyQueryError};
 pub use constraints_value_accumulator;
-pub use detail::index_block_seal;
+pub use detail::index_block_seal_if_enabled;
 pub use detail::tx_verification_strategy::*;
 pub use interface::{chainstate_interface, chainstate_interface_impl_delegation};
 pub use tx_verifier;

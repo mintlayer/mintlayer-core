@@ -114,7 +114,7 @@ mockall::mock! {
         fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
         fn get_duplicate_seal_evidence(
             &self,
-            block_id: &Id<Block>,
+            seal: &BlockSeal,
         ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
@@ -252,10 +252,10 @@ mockall::mock! {
         fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> crate::Result<()>;
         fn set_duplicate_seal_evidence(
             &mut self,
-            block_id: &Id<Block>,
+            seal: &BlockSeal,
             evidence: &DuplicateSealEvidence,
         ) -> crate::Result<()>;
-        fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for Store {
@@ -431,7 +431,7 @@ mockall::mock! {
         fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
         fn get_duplicate_seal_evidence(
             &self,
-            block_id: &Id<Block>,
+            seal: &BlockSeal,
         ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
@@ -564,7 +564,7 @@ mockall::mock! {
         fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
         fn get_duplicate_seal_evidence(
             &self,
-            block_id: &Id<Block>,
+            seal: &BlockSeal,
         ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
@@ -702,10 +702,10 @@ mockall::mock! {
         fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> crate::Result<()>;
         fn set_duplicate_seal_evidence(
             &mut self,
-            block_id: &Id<Block>,
+            seal: &BlockSeal,
             evidence: &DuplicateSealEvidence,
         ) -> crate::Result<()>;
-        fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for StoreTxRw {

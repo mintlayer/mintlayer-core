@@ -106,9 +106,9 @@ storage::decl_schema! {
         /// Note: nodes that upgrade from a storage version without this map start with
         /// an empty index; the index only covers the blocks processed after the upgrade.
         pub DBSealIndex: Map<BlockSeal, SealIndexEntry>,
-        /// Store for duplicate PoS seal evidence records, keyed by the id of the block
-        /// whose processing discovered the duplication.
+        /// Store for duplicate PoS seal evidence records, keyed by the seal itself,
+        /// so a reused seal is covered by a single, extendable evidence record.
         /// Note: like the seal index, this map starts empty on upgraded nodes.
-        pub DBDuplicateSealEvidence: Map<Id<Block>, DuplicateSealEvidence>,
+        pub DBDuplicateSealEvidence: Map<BlockSeal, DuplicateSealEvidence>,
     }
 }

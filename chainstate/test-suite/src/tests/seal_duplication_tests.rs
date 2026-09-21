@@ -159,8 +159,8 @@ fn process_two_blocks_with_same_seal(
 // Create a chain genesis <- block_1(StakePool), then process two blocks (block_2a and
 // block_2b) that carry the same PoS seal (same pool and same VRF output) on top of
 // block_1. Both blocks are fully valid; block_2b remains a side block.
-// Check that the seal is indexed for both blocks and that the evidence recorded for the
-// block on which the seal was seen for the second time retains both signed headers.
+// Check that the seal is indexed for both blocks and that the single evidence
+// record of the seal retains both signed headers.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -196,10 +196,9 @@ fn duplicate_pos_seal_records_evidence(#[case] seed: Seed) {
         &[(block_id_a, expected_block_height), (block_id_b, expected_block_height),]
     );
 
-    // The evidence is recorded for the block on which the seal was seen for the second
-    // time and it retains the signed headers of both blocks.
-    assert!(db_tx.get_duplicate_seal_evidence(&block_id_a).unwrap().is_none());
-    let evidence = db_tx.get_duplicate_seal_evidence(&block_id_b).unwrap().unwrap();
+    // The evidence is recorded per seal: a single record keyed by the seal
+    // itself retains the signed headers of both blocks.
+    let evidence = db_tx.get_duplicate_seal_evidence(&seal).unwrap().unwrap();
     assert_eq!(evidence.seal(), &seal);
     assert_eq!(
         evidence.headers().iter().map(|header| header.get_id()).collect::<Vec<_>>(),
@@ -239,7 +238,7 @@ fn seal_tracking_disabled_records_nothing(#[case] seed: Seed) {
 
     let db_tx = tf.storage.transaction_ro().unwrap();
     assert!(db_tx.get_seal_index_entry(&seal).unwrap().is_none());
-    assert!(db_tx.get_duplicate_seal_evidence(&block_id_b).unwrap().is_none());
+    assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_none());
 }
 
 // Create a chain genesis <- block_1(StakePool), then process two blocks (block_2a and
@@ -247,7 +246,7 @@ fn seal_tracking_disabled_records_nothing(#[case] seed: Seed) {
 // `process_two_blocks_with_same_seal`). Then extend the branch of block_2b with a child
 // block, which makes it the best chain and triggers a reorg that disconnects block_2a.
 // Check that the seal records survive the reorg: they are not rolled back on disconnect,
-// so the seal is still indexed for both blocks and the evidence recorded for block_2b
+// so the seal is still indexed for both blocks and the evidence recorded for the seal
 // still retains both signed headers.
 #[rstest]
 #[trace]
@@ -304,12 +303,11 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
         &[(block_id_a, expected_block_height), (block_id_b, expected_block_height),]
     );
 
-    // The evidence recorded for block_2b survived the reorg as well.
-    let evidence = db_tx.get_duplicate_seal_evidence(&block_id_b).unwrap().unwrap();
+    // The evidence recorded for the seal survived the reorg as well.
+    let evidence = db_tx.get_duplicate_seal_evidence(&seal).unwrap().unwrap();
     assert_eq!(evidence.seal(), &seal);
     assert_eq!(
         evidence.headers().iter().map(|header| header.get_id()).collect::<Vec<_>>(),
         vec![block_id_a, block_id_b]
     );
-    assert!(db_tx.get_duplicate_seal_evidence(&block_id_a).unwrap().is_none());
 }

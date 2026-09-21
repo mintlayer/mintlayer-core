@@ -166,10 +166,10 @@ pub trait BlockchainStorageRead:
     /// Get the seal index entry of the given seal, if the seal has been seen on any block
     fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
 
-    /// Get the duplicate seal evidence that was recorded for the given block, if any
+    /// Get the duplicate seal evidence that was recorded for the given seal, if any
     fn get_duplicate_seal_evidence(
         &self,
-        block_id: &Id<Block>,
+        seal: &BlockSeal,
     ) -> crate::Result<Option<DuplicateSealEvidence>>;
 }
 
@@ -298,18 +298,19 @@ pub trait BlockchainStorageWrite:
     /// the pruning of the entries whose blocks fell out of the reorg range.
     fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> Result<()>;
 
-    /// Record the duplicate seal evidence for the given block
+    /// Record the duplicate seal evidence of the given seal, replacing any
+    /// previously recorded evidence of the seal
     fn set_duplicate_seal_evidence(
         &mut self,
-        block_id: &Id<Block>,
+        seal: &BlockSeal,
         evidence: &DuplicateSealEvidence,
     ) -> Result<()>;
 
-    /// Remove the duplicate seal evidence recorded for the given block.
+    /// Remove the duplicate seal evidence recorded for the given seal.
     ///
     /// Currently unused: it is the deletion counterpart of the map, for future
     /// tooling (the indexing logic never removes already recorded evidence).
-    fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> Result<()>;
+    fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> Result<()>;
 }
 
 /// Operations on read-only transactions

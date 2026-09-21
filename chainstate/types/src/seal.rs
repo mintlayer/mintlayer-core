@@ -36,7 +36,10 @@ use serialization::{Decode, Encode};
 /// Note also that the seal identity is bound to the timestamp of the slot: two
 /// blocks that a pool produced for different (valid) timestamps have different
 /// seals. The seal index detects the reuse of a single slot draw, not every form
-/// of double block production.
+/// of double block production: closing that gap, e.g. by coarsening the slot
+/// identity below the one-second granularity of the VRF transcript, would have
+/// to be anchored in the consensus rules themselves and is out of scope for the
+/// index, which only retains what the consensus rules already authorize.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct BlockSeal {
     /// Id of the stake pool that produced the block.

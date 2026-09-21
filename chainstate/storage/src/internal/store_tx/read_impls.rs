@@ -264,9 +264,9 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     #[log_error]
     fn get_duplicate_seal_evidence(
         &self,
-        block_id: &Id<Block>,
+        seal: &BlockSeal,
     ) -> crate::Result<Option<DuplicateSealEvidence>> {
-        self.read::<db::DBDuplicateSealEvidence, _, _>(block_id)
+        self.read::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 
@@ -609,9 +609,9 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_duplicate_seal_evidence(
         &self,
-        block_id: &Id<Block>,
+        seal: &BlockSeal,
     ) -> crate::Result<Option<DuplicateSealEvidence>> {
-        self.read::<db::DBDuplicateSealEvidence, _, _>(block_id)
+        self.read::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 

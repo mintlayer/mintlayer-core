@@ -238,15 +238,15 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_duplicate_seal_evidence(
         &mut self,
-        block_id: &Id<Block>,
+        seal: &BlockSeal,
         evidence: &DuplicateSealEvidence,
     ) -> crate::Result<()> {
-        self.write::<db::DBDuplicateSealEvidence, _, _, _>(block_id, evidence)
+        self.write::<db::DBDuplicateSealEvidence, _, _, _>(seal, evidence)
     }
 
     #[log_error]
-    fn del_duplicate_seal_evidence(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
-        self.del::<db::DBDuplicateSealEvidence, _, _>(block_id)
+    fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()> {
+        self.del::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 

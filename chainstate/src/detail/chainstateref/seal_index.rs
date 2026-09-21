@@ -20,10 +20,11 @@
 //! the seal are retained as a self-certifying evidence record.
 //!
 //! The index entry of a single seal is capped at [`MAX_BLOCKS_PER_SEAL`] blocks.
-//! Once the cap is reached, neither the index entry nor the evidence records of
+//! Once the cap is reached, neither the index entry nor the evidence record of
 //! the seal are extended anymore, so the storage footprint of a single reused
-//! seal stays bounded. The evidence records that were already recorded are never
-//! removed by this module.
+//! seal stays bounded. A seal is covered by at most one evidence record, which
+//! is rewritten in full on every new sighting below the cap. The evidence
+//! records that were already recorded are never removed by this module.
 
 use std::num::NonZeroUsize;
 
@@ -36,13 +37,32 @@ use common::{
 use logging::log;
 use utils::log_error;
 
-use crate::BlockError;
+use crate::{BlockError, config::ChainstateConfig};
 
 /// The maximum number of blocks a single seal is indexed for.
 // The cap exists to bound the storage and processing costs of seal reuse. It is
 // deliberately conservative: honest blocks never share a seal, so the cap only
 // matters for deliberately reused seals.
 pub const MAX_BLOCKS_PER_SEAL: NonZeroUsize = NonZeroUsize::new(8).unwrap();
+
+/// Index the seal of the given block if seal duplication tracking is enabled in
+/// the given config.
+///
+/// This is the single place where the indexing is gated on the config, so that
+/// all the callers (the block integration path and the storage replication in
+/// the test suite) cannot diverge on the seal tables.
+pub fn index_block_seal_if_enabled<S: BlockchainStorageWrite>(
+    chainstate_config: &ChainstateConfig,
+    db_tx: &mut S,
+    block: &WithId<Block>,
+    block_height: BlockHeight,
+) -> Result<(), BlockError> {
+    if chainstate_config.pos_seal_duplication_tracking_enabled() {
+        index_block_seal(db_tx, block, block_height)
+    } else {
+        Ok(())
+    }
+}
 
 /// Index the seal of the given block, recording evidence if the seal was already
 /// seen on another block.
@@ -51,7 +71,7 @@ pub const MAX_BLOCKS_PER_SEAL: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 /// integration into the block tree, so that the seal index covers the blocks of
 /// all branches, not only those of the best chain.
 #[log_error]
-pub fn index_block_seal<S: BlockchainStorageWrite>(
+fn index_block_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     block: &WithId<Block>,
     block_height: BlockHeight,
@@ -92,18 +112,47 @@ pub fn index_block_seal<S: BlockchainStorageWrite>(
     Ok(())
 }
 
-/// Retain the headers of the known blocks that carry the given seal, plus the
-/// header of the newly seen block, as a duplicate seal evidence record.
+/// Extend the evidence record of the given seal with the header of the newly
+/// seen block and the headers of the known blocks that carry the seal.
+///
+/// The seal is covered by a single evidence record, which is extended with the
+/// missing headers on every sighting below the cap and written back, so a
+/// reused seal never stores more than one copy of each header. A header is only
+/// retained if its consensus data carries the seal under test, so the record
+/// stays self-certifying on its own.
 fn record_duplicate_seal_evidence<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     seal: &BlockSeal,
     known_blocks: &[(Id<Block>, BlockHeight)],
     block: &WithId<Block>,
 ) -> Result<(), BlockError> {
-    let mut evidence = DuplicateSealEvidence::new(seal.clone(), Vec::new());
+    let mut evidence = db_tx
+        .get_duplicate_seal_evidence(seal)?
+        .unwrap_or_else(|| DuplicateSealEvidence::new(seal.clone(), Vec::new()));
+
     for (existing_id, _) in known_blocks {
+        // The headers of the previously seen blocks are already retained in the
+        // record, so only the ones that are missing have to be collected.
+        if evidence.headers().iter().any(|header| header.get_id() == *existing_id) {
+            continue;
+        }
         match db_tx.get_block_header(existing_id)? {
-            Some(header) => evidence.push_header(header),
+            Some(header)
+                if BlockSeal::from_consensus_data(header.consensus_data()).as_ref()
+                    == Some(seal) =>
+            {
+                evidence.push_header(header)
+            }
+            Some(_) => {
+                // Unreachable in practice: the index entry only lists the blocks
+                // that were seen carrying this seal. Skip such a header instead of
+                // weakening the record with one that does not corroborate it.
+                log::warn!(
+                    "The header of the indexed block {} does not carry the expected seal of pool {} while recording duplicate seal evidence",
+                    existing_id,
+                    seal.pool_id(),
+                );
+            }
             None => {
                 // Unreachable in practice: indexed blocks are persisted together with
                 // their headers. If it ever happens, retain the rest of the evidence,
@@ -117,13 +166,25 @@ fn record_duplicate_seal_evidence<S: BlockchainStorageWrite>(
     }
     evidence.push_header(block.header().clone());
 
+    // A single signed header proves nothing about duplication: if no headers of
+    // the other blocks that carry the seal could be collected, there is no
+    // evidence to record. The seal is still indexed by the caller, so the
+    // evidence can be filled in by a later sighting.
+    if evidence.headers().len() < 2 {
+        log::warn!(
+            "No corroborating headers available for the duplicate seal of pool {}; no evidence recorded",
+            seal.pool_id(),
+        );
+        return Ok(());
+    }
+
     log::info!(
         "A PoS seal of pool {} was seen on more than one block; recorded evidence for block {}",
         seal.pool_id(),
         block.get_id(),
     );
 
-    db_tx.set_duplicate_seal_evidence(&block.get_id(), &evidence)?;
+    db_tx.set_duplicate_seal_evidence(seal, &evidence)?;
     Ok(())
 }
 
@@ -156,11 +217,26 @@ mod tests {
         vrf_pk: &VRFPublicKey,
         seed: H256,
     ) -> WithId<Block> {
+        make_pos_block_with_epoch(prev_block_id, vrf_sk, vrf_pk, seed, 0)
+    }
+
+    /// Make a PoS block whose seal is derived from the given seed and the epoch
+    /// index offset from the epoch of the test height, so blocks made with the
+    /// same arguments share the seal, while a different epoch offset yields a
+    /// different seal.
+    fn make_pos_block_with_epoch(
+        prev_block_id: H256,
+        vrf_sk: &VRFPrivateKey,
+        vrf_pk: &VRFPublicKey,
+        seed: H256,
+        epoch_offset: u64,
+    ) -> WithId<Block> {
         let chain_config =
             ConfigBuilder::test_chain().epoch_length(NonZeroU64::new(3).unwrap()).build();
 
         let timestamp = BlockTimestamp::from_int_seconds(1);
-        let epoch_index = chain_config.epoch_index_from_height(&TEST_HEIGHT.next_height());
+        let epoch_index =
+            chain_config.epoch_index_from_height(&TEST_HEIGHT.next_height()) + epoch_offset;
         let transcript = construct_transcript(epoch_index, &seed, timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(transcript);
         let pool_id = PoolId::new(H256::zero());
@@ -237,24 +313,25 @@ mod tests {
         );
 
         let id_1 = block_1.get_id();
-        let id_2 = block_2.get_id();
         let header_1 = block_1.header().clone();
         let header_2 = block_2.header().clone();
-        let entry = SealIndexEntry::new(
-            BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap(),
-            vec![(id_1, TEST_HEIGHT)],
-        );
+        let seal = BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap();
+        let entry = SealIndexEntry::new(seal.clone(), vec![(id_1, TEST_HEIGHT)]);
 
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        db.expect_get_duplicate_seal_evidence()
+            .times(1)
+            .with(eq(seal.clone()))
+            .return_const(Ok(None));
         db.expect_get_block_header()
             .times(1)
             .with(eq(id_1))
             .return_const(Ok(Some(header_1.clone())));
         db.expect_set_duplicate_seal_evidence()
             .times(1)
-            .withf(move |block_id, evidence| {
-                block_id == &id_2
+            .withf(move |seal, evidence| {
+                evidence.seal() == seal
                     && evidence.headers().len() == 2
                     && evidence.headers()[0] == header_1
                     && evidence.headers()[1] == header_2
@@ -266,6 +343,116 @@ mod tests {
             .return_const(Ok(()));
 
         index_block_seal(&mut db, &block_2, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn duplicate_seal_extends_the_existing_evidence_record() {
+        // Same as `duplicate_seal_records_evidence`, but the seal already has an
+        // evidence record from a previous sighting. The record must be extended
+        // with the header of the newly seen block only, without duplicating the
+        // headers it already retains and without writing a second record.
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let seed = H256::zero();
+        let block_1 = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, seed);
+        let block_2 = make_pos_block(H256::from([1u8; 32]), &vrf_sk, &vrf_pk, seed);
+        let block_3 = make_pos_block(H256::from([2u8; 32]), &vrf_sk, &vrf_pk, seed);
+
+        let id_1 = block_1.get_id();
+        let id_2 = block_2.get_id();
+        let header_1 = block_1.header().clone();
+        let header_2 = block_2.header().clone();
+        let header_3 = block_3.header().clone();
+        let seal = BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap();
+
+        let entry =
+            SealIndexEntry::new(seal.clone(), vec![(id_1, TEST_HEIGHT), (id_2, TEST_HEIGHT)]);
+        let existing_evidence =
+            DuplicateSealEvidence::new(seal.clone(), vec![header_1.clone(), header_2.clone()]);
+
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        db.expect_get_duplicate_seal_evidence()
+            .times(1)
+            .with(eq(seal.clone()))
+            .return_const(Ok(Some(existing_evidence)));
+        // The headers of both known blocks are already retained in the record,
+        // so no header is looked up.
+        db.expect_get_block_header().times(0);
+        db.expect_set_duplicate_seal_evidence()
+            .times(1)
+            .withf(move |seal, evidence| {
+                evidence.seal() == seal
+                    && evidence.headers().len() == 3
+                    && evidence.headers()[0] == header_1
+                    && evidence.headers()[1] == header_2
+                    && evidence.headers()[2] == header_3
+            })
+            .return_const(Ok(()));
+        db.expect_set_seal_index_entry()
+            .times(1)
+            .withf(|_, entry| entry.blocks().len() == 3)
+            .return_const(Ok(()));
+
+        index_block_seal(&mut db, &block_3, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn evidence_skips_headers_that_do_not_carry_the_seal() {
+        // Same as `duplicate_seal_records_evidence`, but the header stored for one
+        // of the known blocks, while available, does not carry the seal under test
+        // (e.g. because of a storage inconsistency). Such a header must not weaken
+        // the evidence record.
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let seed = H256::zero();
+        let block_1 = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, seed);
+        let block_2 = make_pos_block(H256::from([1u8; 32]), &vrf_sk, &vrf_pk, seed);
+        let block_3 = make_pos_block(H256::from([2u8; 32]), &vrf_sk, &vrf_pk, seed);
+        // A block that carries a different seal: the same seed signed for a
+        // different epoch produces a different VRF output.
+        let block_other_seal =
+            make_pos_block_with_epoch(H256::from([3u8; 32]), &vrf_sk, &vrf_pk, seed, 1);
+        assert_ne!(
+            BlockSeal::from_consensus_data(block_1.header().consensus_data()),
+            BlockSeal::from_consensus_data(block_other_seal.header().consensus_data()),
+        );
+
+        let id_1 = block_1.get_id();
+        let id_2 = block_2.get_id();
+        let header_1 = block_1.header().clone();
+        let header_3 = block_3.header().clone();
+        let seal = BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap();
+        let entry =
+            SealIndexEntry::new(seal.clone(), vec![(id_1, TEST_HEIGHT), (id_2, TEST_HEIGHT)]);
+
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        db.expect_get_duplicate_seal_evidence()
+            .times(1)
+            .with(eq(seal.clone()))
+            .return_const(Ok(None));
+        db.expect_get_block_header()
+            .times(1)
+            .with(eq(id_1))
+            .return_const(Ok(Some(header_1.clone())));
+        db.expect_get_block_header()
+            .times(1)
+            .with(eq(id_2))
+            .return_const(Ok(Some(block_other_seal.header().clone())));
+        db.expect_set_duplicate_seal_evidence()
+            .times(1)
+            .withf(move |seal, evidence| {
+                evidence.seal() == seal
+                    && evidence.headers().len() == 2
+                    && evidence.headers()[0] == header_1
+                    && evidence.headers()[1] == header_3
+            })
+            .return_const(Ok(()));
+        db.expect_set_seal_index_entry()
+            .times(1)
+            .withf(|_, entry| entry.blocks().len() == 3)
+            .return_const(Ok(()));
+
+        index_block_seal(&mut db, &block_3, TEST_HEIGHT).unwrap();
     }
 
     #[test]
@@ -309,10 +496,11 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_seal_records_evidence_with_missing_known_block_header() {
+    fn evidence_is_not_recorded_without_corroborating_headers() {
         // Same as `duplicate_seal_records_evidence`, but the header of the known
-        // block is unavailable. The evidence record still gets written, retaining
-        // the header of the new block.
+        // block is unavailable. A record of the new block's header alone proves
+        // nothing about the duplication, so no evidence is recorded; the block is
+        // still indexed, so a later sighting can fill in the evidence.
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         let seed = H256::zero();
         let block_1 = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, seed);
@@ -321,29 +509,50 @@ mod tests {
         assert_ne!(block_1.get_id(), block_2.get_id());
 
         let id_1 = block_1.get_id();
-        let id_2 = block_2.get_id();
-        let header_2 = block_2.header().clone();
-        let entry = SealIndexEntry::new(
-            BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap(),
-            vec![(id_1, TEST_HEIGHT)],
-        );
+        let seal = BlockSeal::from_consensus_data(block_1.header().consensus_data()).unwrap();
+        let entry = SealIndexEntry::new(seal.clone(), vec![(id_1, TEST_HEIGHT)]);
 
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
-        db.expect_get_block_header().times(1).with(eq(id_1)).return_const(Ok(None));
-        db.expect_set_duplicate_seal_evidence()
+        db.expect_get_duplicate_seal_evidence()
             .times(1)
-            .withf(move |block_id, evidence| {
-                block_id == &id_2
-                    && evidence.headers().len() == 1
-                    && evidence.headers()[0] == header_2
-            })
-            .return_const(Ok(()));
+            .with(eq(seal.clone()))
+            .return_const(Ok(None));
+        db.expect_get_block_header().times(1).with(eq(id_1)).return_const(Ok(None));
+        db.expect_set_duplicate_seal_evidence().times(0);
         db.expect_set_seal_index_entry()
             .times(1)
             .withf(|_, entry| entry.blocks().len() == 2)
             .return_const(Ok(()));
 
         index_block_seal(&mut db, &block_2, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn seal_indexing_is_gated_on_the_config() {
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let block = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, H256::zero());
+
+        // Disabled: the seal is not indexed, so no storage access happens at all.
+        let chainstate_config = ChainstateConfig {
+            pos_seal_duplication_tracking: false.into(),
+            ..Default::default()
+        };
+        let mut db = MockStoreTxRw::new();
+        index_block_seal_if_enabled(&chainstate_config, &mut db, &block, TEST_HEIGHT).unwrap();
+
+        // Enabled: the seal gets indexed.
+        let chainstate_config = ChainstateConfig::default();
+        let block_id = block.get_id();
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
+        db.expect_set_seal_index_entry()
+            .times(1)
+            .withf(move |seal, entry| {
+                entry.seal() == seal && entry.blocks() == [(block_id, TEST_HEIGHT)]
+            })
+            .return_const(Ok(()));
+        db.expect_set_duplicate_seal_evidence().times(0);
+        index_block_seal_if_enabled(&chainstate_config, &mut db, &block, TEST_HEIGHT).unwrap();
     }
 }
