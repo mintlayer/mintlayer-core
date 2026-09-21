@@ -38,7 +38,6 @@ use common::{
     primitives::{BlockHeight, Id, Idable, id::WithId},
 };
 use logging::log;
-use utils::log_error;
 
 use crate::{BlockError, config::ChainstateConfig};
 
@@ -73,7 +72,6 @@ pub fn index_block_seal_if_enabled<S: BlockchainStorageWrite>(
 /// This must be called for every block that has passed all checks, along with its
 /// integration into the block tree, so that the seal index covers the blocks of
 /// all branches, not only those of the best chain.
-#[log_error]
 fn index_block_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     block: &WithId<Block>,
@@ -97,7 +95,7 @@ fn index_block_seal<S: BlockchainStorageWrite>(
     }
 
     if entry.blocks().len() < MAX_BLOCKS_PER_SEAL.get() {
-        record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block)?;
+        record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block, None)?;
         entry.push_block(block_id, block_height);
         db_tx.set_seal_index_entry(entry.seal(), &entry)?;
     } else {
@@ -111,13 +109,22 @@ fn index_block_seal<S: BlockchainStorageWrite>(
         // headers, and past the cap no sighting would ever fill it in. The
         // record written here is bounded by the index entry anyway, and once
         // it exists, the sightings are only logged again.
-        if db_tx.get_duplicate_seal_evidence(&seal)?.is_none() {
+        let existing_evidence = db_tx.get_duplicate_seal_evidence(&seal)?;
+        if existing_evidence.is_none() {
             log::info!(
                 "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached without any evidence (block {})",
                 seal.pool_id(),
                 block.get_id(),
             );
-            record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block)?;
+            // The record is known to be absent, so it is started from empty
+            // instead of being loaded again.
+            record_duplicate_seal_evidence(
+                db_tx,
+                &seal,
+                entry.blocks(),
+                block,
+                Some(DuplicateSealEvidence::new(seal.clone(), Vec::new())),
+            )?;
         } else {
             log::info!(
                 "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached (block {})",
@@ -138,15 +145,23 @@ fn index_block_seal<S: BlockchainStorageWrite>(
 /// reused seal never stores more than one copy of each header. A header is only
 /// retained if its consensus data carries the seal under test, so the record
 /// stays self-certifying on its own.
+///
+/// The already loaded record of the seal can be passed as `existing_evidence`
+/// (an empty record if the caller knows that no evidence exists yet);
+/// otherwise it is loaded here.
 fn record_duplicate_seal_evidence<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     seal: &BlockSeal,
     known_blocks: &[(Id<Block>, BlockHeight)],
     block: &WithId<Block>,
+    existing_evidence: Option<DuplicateSealEvidence>,
 ) -> Result<(), BlockError> {
-    let mut evidence = db_tx
-        .get_duplicate_seal_evidence(seal)?
-        .unwrap_or_else(|| DuplicateSealEvidence::new(seal.clone(), Vec::new()));
+    let mut evidence = match existing_evidence {
+        Some(evidence) => evidence,
+        None => db_tx
+            .get_duplicate_seal_evidence(seal)?
+            .unwrap_or_else(|| DuplicateSealEvidence::new(seal.clone(), Vec::new())),
+    };
 
     for (existing_id, _) in known_blocks {
         // The headers of the previously seen blocks are already retained in the
@@ -537,10 +552,8 @@ mod tests {
 
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
-        // The record is looked up once for the backfill check and once while
-        // recording.
         db.expect_get_duplicate_seal_evidence()
-            .times(2)
+            .times(1)
             .with(eq(seal.clone()))
             .return_const(Ok(None));
         // The headers of the known blocks are unavailable, so the backfilled
@@ -571,7 +584,7 @@ mod tests {
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
         db.expect_get_duplicate_seal_evidence()
-            .times(2)
+            .times(1)
             .with(eq(seal.clone()))
             .return_const(Ok(None));
         db.expect_get_block_header()

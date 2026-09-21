@@ -81,6 +81,10 @@ impl BlockSeal {
 ///
 /// The number of blocks per entry is bounded by the seal indexing logic, so the
 /// index stays bounded even if a seal is deliberately reused on many blocks.
+///
+/// Note: the entry is stored as the value of the seal index, so, like the seal
+/// key itself, any change to its encoding would make the previously written
+/// entries unreadable.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct SealIndexEntry {
     seal: BlockSeal,
@@ -112,6 +116,10 @@ impl SealIndexEntry {
 /// produced all the listed blocks for the same slot. The headers are retained in
 /// the record itself, so the evidence stays verifiable even if the blocks are
 /// later removed from storage.
+///
+/// Note: the record is stored as the value of the duplicate seal evidence map,
+/// so, like the seal key itself, any change to its encoding would make the
+/// previously written records unreadable.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct DuplicateSealEvidence {
     seal: BlockSeal,

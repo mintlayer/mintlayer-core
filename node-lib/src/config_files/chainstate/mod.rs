@@ -48,6 +48,7 @@ pub struct ChainstateConfigFile {
 
     /// If true, the seals (stake pool id + VRF output) of the processed PoS blocks will be
     /// indexed and the evidence of a seal seen on more than one block will be recorded.
+    /// Defaults to true.
     pub pos_seal_duplication_tracking: Option<bool>,
 }
 
