@@ -541,7 +541,10 @@ async fn pending_tx_additional_info<S: ApiServerStorageRead>(
                         .await
                         .map_err(internal_error)?
                         // The issuance of the token is neither pending in the listing
-                        // nor indexed, so its decimals cannot be known.
+                        // nor indexed, so its decimals cannot be known, and the token
+                        // is rendered with zero decimals. Note that the rendering is
+                        // presentational: the atoms amounts of the response are
+                        // authoritative regardless of the decimals.
                         .unwrap_or(0);
                     decimals_cache.insert(token_id, decimals);
                     decimals
@@ -563,6 +566,13 @@ async fn pending_tx_additional_info<S: ApiServerStorageRead>(
 /// Returns the decimals by token id; the token ids are derived like the consensus
 /// derives them for a block at the given height. Issuances whose id cannot be derived
 /// are skipped.
+///
+/// Note: the given height is the tip of the storage at the time of the call, while
+/// a pending transaction is actually included at some later height. The derivation
+/// only diverges from the consensus one if a consensus upgrade activating a new
+/// token id generation version lands in between, in which case the derived ids
+/// (and thus the resolved decimals and the dependency edges) are wrong until the
+/// transactions are confirmed; the pending data is provisional by nature.
 fn pending_issuance_decimals(
     txs: &[SignedTransaction],
     chain_config: &ChainConfig,
