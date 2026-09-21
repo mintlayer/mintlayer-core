@@ -120,6 +120,16 @@ impl MempoolQueryClient for MempoolRPC {
     }
 }
 
+/// Extract the panic message from a panic payload, falling back to a
+/// placeholder if the payload is not a string.
+fn panic_payload_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "non-string panic payload".to_string())
+}
+
 /// The barrier request ensuring that the spawned web server is up: given that the
 /// listener port is open, the request to the `url` blocks until a response is made
 /// (by the web server, which takes the listener over), and the response is returned
@@ -151,12 +161,7 @@ pub async fn wait_for_web_server(
         Ok(()) => "the task finished".to_string(),
         Err(join_err) if join_err.is_cancelled() => "the task was aborted".to_string(),
         Err(join_err) => {
-            let payload = join_err.into_panic();
-            let message = payload
-                .downcast_ref::<&str>()
-                .map(|s| (*s).to_string())
-                .or_else(|| payload.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "non-string panic payload".to_string());
+            let message = panic_payload_message(join_err.into_panic());
             format!("the task panicked: {message}")
         }
     };
@@ -220,12 +225,7 @@ pub async fn shutdown_task<T: Send + 'static>(handle: tokio::task::JoinHandle<T>
         Ok(_) => {}
         Err(err) if err.is_cancelled() => {}
         Err(err) => {
-            let payload = err.into_panic();
-            let message = payload
-                .downcast_ref::<&str>()
-                .map(|s| (*s).to_string())
-                .or_else(|| payload.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "non-string panic payload".to_string());
+            let message = panic_payload_message(err.into_panic());
             panic!("task panicked: {message}");
         }
     }

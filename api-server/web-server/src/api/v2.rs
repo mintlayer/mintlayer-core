@@ -568,6 +568,8 @@ fn pending_issuance_decimals(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
 ) -> BTreeMap<TokenId, u8> {
+    // Note: walking the transactions is cheap (a match per output); the token id
+    // derivation only runs for the rare fungible token issuances of the mempool.
     let mut decimals = BTreeMap::new();
     for tx in txs {
         for out in tx.transaction().outputs() {

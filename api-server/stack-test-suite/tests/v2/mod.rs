@@ -47,6 +47,7 @@ mod transactions;
 
 use crate::{
     DummyRPC, shutdown_task, spawn_webserver, spawn_webserver_with_mempool, submit_transaction,
+    wait_for_web_server,
 };
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
@@ -102,7 +103,7 @@ async fn chain_genesis() {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let web_server_state = {
                 let chain_config = Arc::new(create_unit_test_config());
@@ -138,12 +139,7 @@ async fn chain_genesis() {
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 
