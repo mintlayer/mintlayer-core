@@ -158,7 +158,12 @@ pub async fn wait_for_web_server(
     };
 
     task.abort();
-    let join_result = task.await;
+    let join_result = match tokio::time::timeout(BARRIER_TIMEOUT, task).await {
+        Ok(join_result) => join_result,
+        Err(_timed_out) => {
+            panic!("the aborted server task did not terminate within {BARRIER_TIMEOUT:?}")
+        }
+    };
     let outcome = match join_result {
         Ok(()) => "the task finished".to_string(),
         Err(join_err) if join_err.is_cancelled() => "the task was aborted".to_string(),
@@ -255,7 +260,10 @@ pub async fn submit_transaction(addr: std::net::SocketAddr, tx: SignedTransactio
     .unwrap();
 
     let status = response.status();
-    let body = response.text().await.unwrap();
+    let body = tokio::time::timeout(BARRIER_TIMEOUT, response.text())
+        .await
+        .expect("reading the submission response timed out")
+        .unwrap();
     assert_eq!(status, 200, "transaction submission failed: {body}");
 
     tx_id
