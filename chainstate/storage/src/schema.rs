@@ -105,10 +105,17 @@ storage::decl_schema! {
         /// The number of blocks per entry is bounded by the seal indexing logic.
         /// Note: nodes that upgrade from a storage version without this map start with
         /// an empty index; the index only covers the blocks processed after the upgrade.
+        /// The map grows by roughly one entry per processed PoS block, i.e. proportionally
+        /// to the chain history like the other per-block tables; its pruning is tracked
+        /// by mintlayer/mintlayer-core#2123.
         pub DBSealIndex: Map<BlockSeal, SealIndexEntry>,
         /// Store for duplicate PoS seal evidence records, keyed by the seal itself,
         /// so a reused seal is covered by a single, extendable evidence record.
         /// Note: like the seal index, this map starts empty on upgraded nodes.
+        /// The records exist only for the seals that were actually reused (none on
+        /// an honest network, at most one bounded record per reused seal here),
+        /// and they are kept permanently as the self-certifying duplication
+        /// evidence.
         pub DBDuplicateSealEvidence: Map<BlockSeal, DuplicateSealEvidence>,
     }
 }
