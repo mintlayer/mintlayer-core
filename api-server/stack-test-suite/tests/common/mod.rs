@@ -33,6 +33,7 @@ use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
 use serialization::hex_encoded::HexEncoded;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 /// A no-op RPC client for the web server state under test.
 pub struct DummyRPC {}
@@ -119,6 +120,49 @@ impl MempoolQueryClient for MempoolRPC {
     }
 }
 
+/// The barrier request ensuring that the spawned web server is up: given that the
+/// listener port is open, the request to the `url` blocks until a response is made
+/// (by the web server, which takes the listener over), and the response is returned
+/// to the caller. The request is bounded by a timeout, so that a hung server task
+/// does not hang the test.
+///
+/// On any failure, the `task` running the web server is aborted and awaited, and the
+/// test panics with the failure context, including the outcome of the task (with the
+/// actual panic message, if the task panicked).
+pub async fn wait_for_web_server(
+    task: &mut tokio::task::JoinHandle<()>,
+    addr: std::net::SocketAddr,
+    url: &str,
+) -> reqwest::Response {
+    /// The time to wait for the web server to respond to the barrier request.
+    const BARRIER_TIMEOUT: Duration = Duration::from_secs(30);
+
+    let request = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()));
+
+    let err = match tokio::time::timeout(BARRIER_TIMEOUT, request).await {
+        Ok(Ok(response)) => return response,
+        Ok(Err(err)) => format!("request failed: {err}"),
+        Err(_timed_out) => format!("the request timed out after {BARRIER_TIMEOUT:?}"),
+    };
+
+    task.abort();
+    let join_result = task.await;
+    let outcome = match join_result {
+        Ok(()) => "the task finished".to_string(),
+        Err(join_err) if join_err.is_cancelled() => "the task was aborted".to_string(),
+        Err(join_err) => {
+            let payload = join_err.into_panic();
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "non-string panic payload".to_string());
+            format!("the task panicked: {message}")
+        }
+    };
+    panic!("the web server died before responding on {addr}: {err}; {outcome}");
+}
+
 /// Spawn the web server backed by the [`MempoolRPC`] client and an empty in-memory
 /// api-server storage.
 ///
@@ -138,7 +182,7 @@ pub async fn spawn_webserver_with_mempool(
 
     let rpc = Arc::new(MempoolRPC::new());
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         let rpc = std::sync::Arc::clone(&rpc);
         async move {
             let web_server_state = {
@@ -161,17 +205,7 @@ pub async fn spawn_webserver_with_mempool(
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = match reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port())).await {
-        Ok(response) => response,
-        Err(err) => {
-            task.abort();
-            let join_err = task.await.err();
-            panic!("the web server died before responding: {err}; task outcome: {join_err:?}");
-        }
-    };
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     (task, response, rpc, addr)
 }

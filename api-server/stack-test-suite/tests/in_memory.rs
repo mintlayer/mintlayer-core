@@ -25,13 +25,15 @@ use common::{chain::config::create_unit_test_config, primitives::time::get_time}
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 
-pub use test_common::{DummyRPC, shutdown_task, spawn_webserver_with_mempool, submit_transaction};
+pub use test_common::{
+    DummyRPC, shutdown_task, spawn_webserver_with_mempool, submit_transaction, wait_for_web_server,
+};
 
 pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let task = tokio::spawn(async move {
+    let mut task = tokio::spawn(async move {
         let web_server_state = {
             let chain_config = Arc::new(create_unit_test_config());
             let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
@@ -51,17 +53,7 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
         web_server(listener, web_server_state, true).await.unwrap();
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = match reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port())).await {
-        Ok(response) => response,
-        Err(err) => {
-            task.abort();
-            let join_err = task.await.err();
-            panic!("the web server died before responding: {err}; task outcome: {join_err:?}");
-        }
-    };
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     (task, response)
 }

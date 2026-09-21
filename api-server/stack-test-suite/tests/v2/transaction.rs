@@ -94,6 +94,8 @@ async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
     assert_eq!(body.get("block_id").unwrap().as_str().unwrap(), "");
     assert_eq!(body.get("timestamp").unwrap().as_str().unwrap(), "");
     assert_eq!(body.get("confirmations").unwrap().as_str().unwrap(), "");
+    // The fee of a pending transaction is not known, so the key is omitted
+    assert!(body.get("fee").is_none());
 
     shutdown_task(task).await;
 }
