@@ -222,7 +222,7 @@ fn seal_tracking_disabled_records_nothing(#[case] seed: Seed) {
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, chainstate_config);
 
-    let (seal, block_id_a, block_id_b) = process_two_blocks_with_same_seal(
+    let (seal, block_id_a, _block_id_b) = process_two_blocks_with_same_seal(
         &mut rng,
         &mut tf,
         &vrf_sk,
