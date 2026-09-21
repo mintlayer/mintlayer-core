@@ -383,9 +383,19 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .and_then(|_| chainstate_ref.persist_block(block))
             .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
 
-        chainstate_ref
-            .index_block_seal_if_enabled(block, block_index.block_height())
-            .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        // Seal duplication tracking is observational: it feeds no validation
+        // rule, so its failure (e.g. a storage issue in the seal tables) must
+        // not reject an otherwise valid block and harm the liveness of the
+        // node. The indexing of the affected block is lost, which the logging
+        // makes visible.
+        if let Err(err) =
+            chainstate_ref.index_block_seal_if_enabled(block, block_index.block_height())
+        {
+            log::error!(
+                "Failed to index the seal of the block {}: {err}",
+                block.get_id()
+            );
+        }
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
         // if we know that a reorg has occurred, because during a reorg multiple blocks get

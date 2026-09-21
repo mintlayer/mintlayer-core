@@ -20,11 +20,14 @@
 //! the seal are retained as a self-certifying evidence record.
 //!
 //! The index entry of a single seal is capped at [`MAX_BLOCKS_PER_SEAL`] blocks.
-//! Once the cap is reached, neither the index entry nor the evidence record of
-//! the seal are extended anymore, so the storage footprint of a single reused
-//! seal stays bounded. A seal is covered by at most one evidence record, which
-//! is rewritten in full on every new sighting below the cap. The evidence
-//! records that were already recorded are never removed by this module.
+//! Once the cap is reached, the index entry is not extended anymore, so the
+//! storage footprint of a single reused seal stays bounded. The seal is covered
+//! by at most one evidence record, which is extended with the missing headers
+//! on every new sighting below the cap; past the cap, the sightings are only
+//! logged, except that a seal without any evidence gets its record backfilled,
+//! since earlier sightings may have failed to collect corroborating headers.
+//! The evidence records that were already recorded are never removed by this
+//! module.
 
 use std::num::NonZeroUsize;
 
@@ -98,15 +101,30 @@ fn index_block_seal<S: BlockchainStorageWrite>(
         entry.push_block(block_id, block_height);
         db_tx.set_seal_index_entry(entry.seal(), &entry)?;
     } else {
-        // The index entry of the seal is at its cap, so the seal reuse is already
-        // covered by the recorded evidence. Log the sighting, but do not extend the
-        // index and do not record redundant evidence, keeping the storage footprint
-        // of a single reused seal bounded.
-        log::info!(
-            "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached (block {})",
-            seal.pool_id(),
-            block.get_id(),
-        );
+        // The index entry of the seal is at its cap, so the seal reuse is
+        // already covered by the recorded evidence. Log the sighting, but do
+        // not extend the index and do not extend the evidence, keeping the
+        // storage footprint of a single reused seal bounded.
+        //
+        // The evidence is backfilled if it does not exist at all: earlier
+        // sightings below the cap may have failed to collect corroborating
+        // headers, and past the cap no sighting would ever fill it in. The
+        // record written here is bounded by the index entry anyway, and once
+        // it exists, the sightings are only logged again.
+        if db_tx.get_duplicate_seal_evidence(&seal)?.is_none() {
+            log::info!(
+                "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached without any evidence (block {})",
+                seal.pool_id(),
+                block.get_id(),
+            );
+            record_duplicate_seal_evidence(db_tx, &seal, entry.blocks(), block)?;
+        } else {
+            log::info!(
+                "A PoS seal of pool {} was seen on more than one block; the evidence cap is reached (block {})",
+                seal.pool_id(),
+                block.get_id(),
+            );
+        }
     }
 
     Ok(())
@@ -484,12 +502,89 @@ mod tests {
 
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
-        // The index entry of the seal is at its cap, so the seal reuse is already
-        // covered by the previously recorded evidence: no header is looked up, no
-        // new evidence is written and the index entry is not extended, keeping the
+        // The index entry of the seal is at its cap and its evidence exists, so
+        // the seal reuse is already covered: no header is looked up, no new
+        // evidence is written and the index entry is not extended, keeping the
         // storage footprint of a single reused seal bounded.
+        db.expect_get_duplicate_seal_evidence().times(1).return_const(Ok(Some(
+            DuplicateSealEvidence::new(
+                BlockSeal::from_consensus_data(block.header().consensus_data()).unwrap(),
+                vec![block.header().clone(), block.header().clone()],
+            ),
+        )));
         db.expect_get_block_header().times(0);
         db.expect_set_duplicate_seal_evidence().times(0);
+        db.expect_set_seal_index_entry().times(0);
+
+        index_block_seal(&mut db, &block, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn evidence_is_backfilled_when_the_cap_is_reached_without_evidence() {
+        // Same as `index_entry_is_capped`, but the seal has no evidence record:
+        // earlier sightings may have failed to collect corroborating headers,
+        // and past the cap no sighting would ever fill it in, so the sighting
+        // at the cap backfills the evidence instead of only being logged. The
+        // index entry is still not extended.
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let block = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, H256::zero());
+
+        let seal = BlockSeal::from_consensus_data(block.header().consensus_data()).unwrap();
+        let known_blocks = (0..MAX_BLOCKS_PER_SEAL.get())
+            .map(|i| (Id::new(H256::from([(i + 1) as u8; 32])), TEST_HEIGHT))
+            .collect::<Vec<_>>();
+        let entry = SealIndexEntry::new(seal.clone(), known_blocks);
+
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        // The record is looked up once for the backfill check and once while
+        // recording.
+        db.expect_get_duplicate_seal_evidence()
+            .times(2)
+            .with(eq(seal.clone()))
+            .return_const(Ok(None));
+        // The headers of the known blocks are unavailable, so the backfilled
+        // record would carry the new block's header alone and is not written.
+        db.expect_get_block_header()
+            .times(MAX_BLOCKS_PER_SEAL.get())
+            .return_const(Ok(None));
+        db.expect_set_duplicate_seal_evidence().times(0);
+        db.expect_set_seal_index_entry().times(0);
+
+        index_block_seal(&mut db, &block, TEST_HEIGHT).unwrap();
+    }
+
+    #[test]
+    fn evidence_is_backfilled_with_the_known_headers_at_the_cap() {
+        // Same as above, but the headers of the known blocks are available: the
+        // backfilled evidence retains them along with the new block's header.
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let block = make_pos_block(H256::zero(), &vrf_sk, &vrf_pk, H256::zero());
+
+        let seal = BlockSeal::from_consensus_data(block.header().consensus_data()).unwrap();
+        let known_blocks = (0..MAX_BLOCKS_PER_SEAL.get())
+            .map(|i| (Id::new(H256::from([(i + 1) as u8; 32])), TEST_HEIGHT))
+            .collect::<Vec<_>>();
+        let entry = SealIndexEntry::new(seal.clone(), known_blocks);
+
+        let header = block.header().clone();
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(Some(entry)));
+        db.expect_get_duplicate_seal_evidence()
+            .times(2)
+            .with(eq(seal.clone()))
+            .return_const(Ok(None));
+        db.expect_get_block_header()
+            .times(MAX_BLOCKS_PER_SEAL.get())
+            .return_const(Ok(Some(header.clone())));
+        db.expect_set_duplicate_seal_evidence()
+            .times(1)
+            .withf(move |seal, evidence| {
+                evidence.seal() == seal
+                    && evidence.headers().len() == MAX_BLOCKS_PER_SEAL.get() + 1
+                    && evidence.headers().iter().all(|h| *h == header)
+            })
+            .return_const(Ok(()));
         db.expect_set_seal_index_entry().times(0);
 
         index_block_seal(&mut db, &block, TEST_HEIGHT).unwrap();

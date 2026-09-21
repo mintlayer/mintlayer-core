@@ -294,8 +294,9 @@ pub trait BlockchainStorageWrite:
 
     /// Remove the seal index entry of the given seal.
     ///
-    /// Currently unused: it is the deletion counterpart of the map, to be used by
-    /// the pruning of the entries whose blocks fell out of the reorg range.
+    /// Currently unused: it is the deletion counterpart of the map, to be used
+    /// by the pruning of the entries whose blocks fell out of the reorg range.
+    /// The pruning itself is tracked by mintlayer/mintlayer-core#2123.
     fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> Result<()>;
 
     /// Record the duplicate seal evidence of the given seal, replacing any
@@ -310,6 +311,7 @@ pub trait BlockchainStorageWrite:
     ///
     /// Currently unused: it is the deletion counterpart of the map, for future
     /// tooling (the indexing logic never removes already recorded evidence).
+    /// The growth of the seal tables is tracked by mintlayer/mintlayer-core#2123.
     fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> Result<()>;
 }
 
