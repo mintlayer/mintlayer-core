@@ -122,12 +122,12 @@ pub fn build_dependency_graph(
     transactions: Vec<SignedTransaction>,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-) -> Result<Vec<TxDependencyNode>, super::TopoSortError> {
+) -> Vec<TxDependencyNode> {
     let mut dependencies = DependenciesMap::new();
 
     for (tx_index, tx) in transactions.iter().enumerate() {
         process_input_dependencies(tx_index, &mut dependencies, tx);
-        process_output_dependencies(tx_index, chain_config, block_height, &mut dependencies, tx)?;
+        process_output_dependencies(tx_index, chain_config, block_height, &mut dependencies, tx);
     }
 
     let mut dependency_nodes =
@@ -153,7 +153,7 @@ pub fn build_dependency_graph(
         }
     }
 
-    Ok(dependency_nodes)
+    dependency_nodes
 }
 
 fn process_output_dependencies(
@@ -162,12 +162,26 @@ fn process_output_dependencies(
     block_height: BlockHeight,
     dependencies: &mut DependenciesMap,
     tx: &SignedTransaction,
-) -> Result<(), super::TopoSortError> {
+) {
     let inputs = tx.transaction().inputs();
     for (out_index, out) in tx.transaction().outputs().iter().enumerate() {
         match out {
             TxOutput::CreateOrder(order_data) => {
-                let order_id = make_order_id(inputs)?;
+                let order_id = match make_order_id(inputs) {
+                    Ok(order_id) => order_id,
+                    Err(err) => {
+                        // A transaction whose order id cannot be derived is
+                        // invalid, but the node may still track it in the
+                        // mempool: such a transaction must not take down the
+                        // ordering of the whole listing, so only its
+                        // dependency edges are skipped.
+                        logging::log::warn!(
+                            "The order id of the output {out_index} of the transaction {} cannot be derived; skipping its dependency edges: {err}",
+                            tx.transaction().get_id(),
+                        );
+                        continue;
+                    }
+                };
                 dependencies
                     .providers
                     .entry(Dependency::OrderCreation(order_id))
@@ -196,7 +210,18 @@ fn process_output_dependencies(
                 }
             }
             TxOutput::IssueFungibleToken(_) => {
-                let token_id = make_token_id(chain_config, block_height, inputs)?;
+                let token_id = match make_token_id(chain_config, block_height, inputs) {
+                    Ok(token_id) => token_id,
+                    Err(err) => {
+                        // See the order id derivation above: the dependency
+                        // edges of an un-derivable transaction are skipped.
+                        logging::log::warn!(
+                            "The token id of the output {out_index} of the transaction {} cannot be derived; skipping its dependency edges: {err}",
+                            tx.transaction().get_id(),
+                        );
+                        continue;
+                    }
+                };
                 dependencies
                     .providers
                     .entry(Dependency::TokenCreation(token_id))
@@ -250,8 +275,6 @@ fn process_output_dependencies(
             }
         }
     }
-
-    Ok(())
 }
 
 fn tx_priority_order(tx: &SignedTransaction) -> TxPriorityOrder {
@@ -508,8 +531,7 @@ mod tests {
         let txb_id = txb.transaction().get_id();
 
         let transactions = vec![txa, txb];
-        let dependency_graph =
-            build_dependency_graph(transactions, &chain_config, block_height).unwrap();
+        let dependency_graph = build_dependency_graph(transactions, &chain_config, block_height);
         assert_eq!(dependency_graph.len(), 2);
         assert_eq!(dependency_graph[0].id, txa_id);
         assert_eq!(dependency_graph[1].id, txb_id);
@@ -581,8 +603,7 @@ mod tests {
         let txc_id = txc.transaction().get_id();
 
         let transactions = vec![txa, txb, txc];
-        let dependency_graph =
-            build_dependency_graph(transactions, &chain_config, block_height).unwrap();
+        let dependency_graph = build_dependency_graph(transactions, &chain_config, block_height);
         assert_eq!(dependency_graph.len(), 3);
         assert_eq!(dependency_graph[0].id, txa_id);
         assert_eq!(dependency_graph[1].id, txb_id);
@@ -642,8 +663,7 @@ mod tests {
         let txb_id = txb.transaction().get_id();
 
         let transactions = vec![txa, txb];
-        let dependency_graph =
-            build_dependency_graph(transactions, &chain_config, block_height).unwrap();
+        let dependency_graph = build_dependency_graph(transactions, &chain_config, block_height);
         assert_eq!(dependency_graph.len(), 2);
         assert_eq!(dependency_graph[0].id, txa_id);
         assert_eq!(dependency_graph[1].id, txb_id);
@@ -731,8 +751,7 @@ mod tests {
         let txd_id = txd.transaction().get_id();
 
         let transactions = vec![txa, txb, txc, txd];
-        let dependency_graph =
-            build_dependency_graph(transactions, &chain_config, block_height).unwrap();
+        let dependency_graph = build_dependency_graph(transactions, &chain_config, block_height);
         assert_eq!(dependency_graph.len(), 4);
         assert_eq!(dependency_graph[0].id, txa_id);
         assert_eq!(dependency_graph[1].id, txb_id);

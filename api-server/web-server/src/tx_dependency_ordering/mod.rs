@@ -15,10 +15,7 @@
 
 use std::collections::{BTreeMap, BinaryHeap};
 
-use common::{
-    chain::{ChainConfig, IdCreationError, SignedTransaction},
-    primitives::BlockHeight,
-};
+use common::{chain::ChainConfig, chain::SignedTransaction, primitives::BlockHeight};
 
 mod dependency_graph;
 
@@ -27,19 +24,26 @@ use dependency_graph::{DependencyNode, build_dependency_graph};
 // Order transactions by dependency between each other.
 // Returns a Vec of transactions starting from the top-most parent transaction
 // which doesn't depend on any other transaction following it, and ending with the leaves.
+//
+// On failure, the transactions are returned unsorted in the original (insertion)
+// order along with the error, so that the caller can fall back to the insertion
+// order without refetching a possibly different mempool snapshot.
 pub fn order_transactions_by_dependency(
     transactions: Vec<SignedTransaction>,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-) -> Result<Vec<SignedTransaction>, TopoSortError> {
-    let graph = build_dependency_graph(transactions, chain_config, block_height)?;
+) -> Result<Vec<SignedTransaction>, (TopoSortError, Vec<SignedTransaction>)> {
+    let graph = build_dependency_graph(transactions, chain_config, block_height);
 
-    let sorted_graph = topological_sort(graph)?;
-
-    let sorted_transactions =
-        sorted_graph.into_iter().map(|node| node.into_signed_transaction()).collect();
-
-    Ok(sorted_transactions)
+    match topological_sort(graph) {
+        Ok(sorted_graph) => {
+            Ok(sorted_graph.into_iter().map(|node| node.into_signed_transaction()).collect())
+        }
+        Err((err, graph)) => Err((
+            err,
+            graph.into_iter().map(|node| node.into_signed_transaction()).collect(),
+        )),
+    }
 }
 
 /// Errors that can occur during topological sorting.
@@ -49,14 +53,16 @@ pub enum TopoSortError {
     CycleDetected,
     #[error("A node declared a dependency that is not present in the provided vector.")]
     MissingDependency,
-    #[error("Failed to derive an id from the transaction inputs: {0}")]
-    IdCreation(#[from] IdCreationError),
+    #[error("The same node id was provided more than once")]
+    DuplicateId,
 }
 
 /// Sorts a vector of `DependencyNode`s topologically.
 ///
 /// Items with no dependencies (roots) will appear first in the resulting vector.
-fn topological_sort<T>(nodes: Vec<T>) -> Result<Vec<T>, TopoSortError>
+/// On failure, the nodes are returned unsorted in the original order together
+/// with the error.
+fn topological_sort<T>(nodes: Vec<T>) -> Result<Vec<T>, (TopoSortError, Vec<T>)>
 where
     T: DependencyNode,
 {
@@ -94,8 +100,13 @@ where
 
     // Map each node's ID to its index in the original vector.
     let mut id_to_index = BTreeMap::new();
-    for (i, node) in nodes.iter().enumerate() {
-        id_to_index.insert(node.id(), i);
+    for i in 0..n {
+        // A duplicated id would make the failure surface later as a bogus
+        // cycle (the earlier node with the same id could never be popped),
+        // so it is reported distinctly here.
+        if id_to_index.insert(nodes[i].id(), i).is_some() {
+            return Err((TopoSortError::DuplicateId, nodes));
+        }
     }
 
     // Adjacency list: dependents[i] contains indices of nodes that depend on node i.
@@ -104,11 +115,13 @@ where
     let mut indegrees: Vec<usize> = vec![0; n];
 
     // Build the graph
-    for (i, node) in nodes.iter().enumerate() {
-        for dep_id in node.dependencies() {
-            let dep_index = id_to_index.get(dep_id).ok_or(TopoSortError::MissingDependency)?;
+    for i in 0..n {
+        for dep_id in nodes[i].dependencies() {
+            let Some(&dep_index) = id_to_index.get(dep_id) else {
+                return Err((TopoSortError::MissingDependency, nodes));
+            };
 
-            dependents[*dep_index].push(i);
+            dependents[dep_index].push(i);
             indegrees[i] += 1;
         }
     }
@@ -148,7 +161,7 @@ where
 
     // If we haven't sorted all items, there must be a cycle
     if sorted_indices.len() != n {
-        return Err(TopoSortError::CycleDetected);
+        return Err((TopoSortError::CycleDetected, nodes));
     }
 
     // Reconstruct the sorted vector without cloning `T`
@@ -360,10 +373,12 @@ mod tests {
             id: 2,
             dependencies: vec![1],
         };
-        let nodes = vec![root_node, dependent_node];
-        let err = topological_sort(nodes).unwrap_err();
+        let nodes = vec![root_node.clone(), dependent_node.clone()];
+        let (err, unsorted) = topological_sort(nodes).unwrap_err();
 
         assert_eq!(err, TopoSortError::CycleDetected);
+        // The nodes are returned unsorted in the original order.
+        assert_eq!(unsorted, vec![root_node, dependent_node]);
     }
 
     #[test]
@@ -379,10 +394,32 @@ mod tests {
             // 3 is not in the nodes list
             dependencies: vec![3],
         };
-        let nodes = vec![node1, node2];
-        let err = topological_sort(nodes).unwrap_err();
+        let nodes = vec![node1.clone(), node2.clone()];
+        let (err, unsorted) = topological_sort(nodes).unwrap_err();
 
         assert_eq!(err, TopoSortError::MissingDependency);
+        assert_eq!(unsorted, vec![node1, node2]);
+    }
+
+    #[test]
+    fn test_duplicate_id() {
+        // A duplicated id would be indistinguishable from a cycle without the
+        // dedicated check: the earlier node could never be popped.
+        let node1 = DummyNode {
+            priority: TxPriorityOrder::Highest,
+            id: 1,
+            dependencies: vec![],
+        };
+        let node2 = DummyNode {
+            priority: TxPriorityOrder::Highest,
+            id: 1,
+            dependencies: vec![],
+        };
+        let nodes = vec![node1.clone(), node2.clone()];
+        let (err, unsorted) = topological_sort(nodes).unwrap_err();
+
+        assert_eq!(err, TopoSortError::DuplicateId);
+        assert_eq!(unsorted, vec![node1, node2]);
     }
 
     #[test]

@@ -652,19 +652,15 @@ pub async fn mempool_transactions<
             .await
             {
                 Ok(Ok(sorted)) => sorted,
-                Ok(Err(err)) => {
-                    // The transactions were consumed by the failed ordering: refetch
-                    // them in the insertion order rather than failing the whole
-                    // listing (an ordering failure of an invalid transaction must not
-                    // take it down).
+                Ok(Err((err, fallback_txs))) => {
+                    // The failed ordering returns the transactions unsorted in
+                    // the original (insertion) order, so the listing falls back
+                    // to it without refetching the mempool: a refetch could
+                    // return a different snapshot, which would skew both the
+                    // listing and the pending issuance decimals resolved below.
                     ordered_by_dependency = false;
                     logging::log::warn!("Falling back to the mempool insertion order: {err}");
-                    state.rpc.mempool_transactions().await.map_err(|e| {
-                        logging::log::error!("internal error: {e}");
-                        ApiServerWebServerError::ServerError(
-                            ApiServerWebServerServerError::InternalServerError,
-                        )
-                    })?
+                    fallback_txs
                 }
                 Err(err) => {
                     logging::log::error!("internal error: {err}");
@@ -683,7 +679,7 @@ pub async fn mempool_transactions<
 
     let txs = txs
         .into_iter()
-        .skip(usize::try_from(offset_and_items.offset).unwrap_or(usize::MAX))
+        .skip(offset_and_items.offset as usize)
         .take(offset_and_items.items as usize)
         .collect::<Vec<_>>();
 
@@ -704,9 +700,11 @@ pub async fn mempool_transactions<
             let obj = json.as_object_mut().expect("object");
             // The fee of a pending transaction is not known to the api-server.
             obj.remove("fee");
-            obj.insert("block_id".into(), "".into());
-            obj.insert("timestamp".into(), "".into());
-            obj.insert("confirmations".into(), "".into());
+            // The block-related fields of a pending transaction are null: the
+            // values are not applicable until the transaction is confirmed.
+            obj.insert("block_id".into(), serde_json::Value::Null);
+            obj.insert("timestamp".into(), serde_json::Value::Null);
+            obj.insert("confirmations".into(), serde_json::Value::Null);
             jsons.push(json);
         }
     }
@@ -817,38 +815,75 @@ pub async fn transaction<
                 .ok_or(ApiServerWebServerError::NotFound(
                     ApiServerWebServerNotFoundError::TransactionNotFound,
                 ))?;
-            // If the transaction transfers tokens whose issuance is pending as well,
-            // the decimals are taken from the mempool listing, like in the listing
-            // endpoint; otherwise the storage is the only source. Note that fetching
-            // the listing (bounded by the query permits) is the price of serving the
-            // correct decimals for a pending token transfer.
+            // If the transaction transfers tokens whose issuance is pending as
+            // well, the decimals are taken from the mempool listing, like in
+            // the listing endpoint; otherwise the storage is the only source.
+            // The listing (bounded by the query permits) is only fetched if
+            // some of the transferred tokens is not indexed yet, i.e. it may
+            // be an issuance pending in the mempool itself, so that the cost
+            // of the request does not scale with the size of the mempool for
+            // the transactions transferring the already known tokens.
             let token_ids = tx_token_ids(&tx);
-            let pending_issuance_decimals = if token_ids.is_empty() {
-                BTreeMap::new()
-            } else {
-                let _query_permit = MEMPOOL_QUERY_PERMITS.acquire().await.map_err(|e| {
-                    logging::log::error!("internal error: {e}");
-                    ApiServerWebServerError::ServerError(
-                        ApiServerWebServerServerError::InternalServerError,
-                    )
-                })?;
-                let mempool_txs = state.rpc.mempool_transactions().await.map_err(|e| {
-                    logging::log::error!("internal error: {e}");
-                    ApiServerWebServerError::ServerError(
-                        ApiServerWebServerServerError::InternalServerError,
-                    )
-                })?;
-                let inclusion_height = best_block(&state).await?.block_height().next_height();
-                pending_issuance_decimals(&mempool_txs, &state.chain_config, inclusion_height)
-            };
-
             let db_tx = state.db.transaction_ro().await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
                     ApiServerWebServerServerError::InternalServerError,
                 )
             })?;
+            // The decimals of the same token are looked up only once.
             let mut decimals_cache = BTreeMap::new();
+            let pending_issuance_decimals = if token_ids.is_empty() {
+                BTreeMap::new()
+            } else {
+                // The tokens with the decimals already indexed are resolved
+                // from the storage right away; only the missing ones can be
+                // the issuances pending in the mempool listing.
+                let mut pending_token_ids = BTreeSet::new();
+                for token_id in token_ids {
+                    match db_tx.get_token_num_decimals(token_id).await.map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })? {
+                        Some(decimals) => {
+                            decimals_cache.insert(token_id, decimals);
+                        }
+                        None => {
+                            pending_token_ids.insert(token_id);
+                        }
+                    }
+                }
+
+                if pending_token_ids.is_empty() {
+                    BTreeMap::new()
+                } else {
+                    // Note: like in the listing endpoint, the number of the
+                    // concurrently served mempool queries is bounded, and a
+                    // request that waits for a permit for too long is rejected.
+                    let _query_permit = tokio::time::timeout(
+                        MEMPOOL_QUERY_WAIT_TIMEOUT,
+                        MEMPOOL_QUERY_PERMITS.acquire(),
+                    )
+                    .await
+                    .map_err(|_timed_out| ApiServerWebServerError::TooManyMempoolRequests)?
+                    .map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?;
+                    let mempool_txs = state.rpc.mempool_transactions().await.map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?;
+                    let inclusion_height = best_block(&state).await?.block_height().next_height();
+                    pending_issuance_decimals(&mempool_txs, &state.chain_config, inclusion_height)
+                }
+            };
+
             let additional_info = pending_tx_additional_info(
                 &db_tx,
                 &tx,
@@ -890,23 +925,19 @@ pub async fn transaction<
 
     obj.insert(
         "block_id".into(),
-        block
-            .as_ref()
-            .map_or("".to_string(), |b| {
-                b.block_id().to_hash().encode_hex::<String>()
-            })
-            .into(),
+        block.as_ref().map_or(serde_json::Value::Null, |b| {
+            b.block_id().to_hash().encode_hex::<String>().into()
+        }),
     );
     obj.insert(
         "timestamp".into(),
-        block
-            .as_ref()
-            .map_or("".to_string(), |b| b.block_timestamp().to_string())
-            .into(),
+        block.as_ref().map_or(serde_json::Value::Null, |b| {
+            b.block_timestamp().to_string().into()
+        }),
     );
     obj.insert(
         "confirmations".into(),
-        confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+        confirmations.map_or(serde_json::Value::Null, |c| c.to_string().into()),
     );
 
     Ok(Json(json))
@@ -2013,4 +2044,46 @@ fn get_offset_and_items(
     );
 
     Ok(OffsetAndItems { offset, items })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chainstate_test_framework::TransactionBuilder;
+    use common::{
+        chain::{TxInput, config::create_regtest, signature::inputsig::InputWitness},
+        primitives::Id,
+    };
+
+    /// The pending-transaction responses are derived from the output of
+    /// `tx_to_json` by removing the `fee` key (the fee of a pending transaction
+    /// is not known to the api-server) and overwriting the block-related keys.
+    /// This pins the contract: `tx_to_json` must always emit the `fee` key, so
+    /// that its removal in the pending responses cannot silently stop working.
+    #[test]
+    fn tx_to_json_always_emits_the_fee_key_removed_by_the_pending_responses() {
+        let chain_config = create_regtest();
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
+                    0,
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let additional_info = TxAdditionalInfo {
+            fee: Amount::ZERO,
+            input_utxos: vec![],
+            token_decimals: BTreeMap::new(),
+        };
+
+        let json = tx_to_json(&tx, &additional_info, &chain_config);
+
+        let obj = json.as_object().expect("tx_to_json must produce an object");
+        assert!(
+            obj.contains_key("fee"),
+            "tx_to_json must emit the `fee` key: {obj:?}"
+        );
+    }
 }
