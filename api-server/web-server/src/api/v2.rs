@@ -72,8 +72,12 @@ const TX_BODY_LIMIT: usize = 10240;
 /// The maximum number of the concurrently served requests to the mempool-proxying
 /// endpoints, whose cost is proportional to the size of the mempool of the node
 /// instead of the size of the requested page. Additional requests wait for a free
-/// permit instead of loading the node in parallel.
+/// permit (up to [`MEMPOOL_QUERY_WAIT_TIMEOUT`]) instead of loading the node in
+/// parallel.
 static MEMPOOL_QUERY_PERMITS: Semaphore = Semaphore::const_new(8);
+
+/// How long a request waits for a free mempool query permit before it is rejected.
+const MEMPOOL_QUERY_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn routes<
     T: ApiServerStorage + Send + Sync + 'static,
@@ -602,11 +606,18 @@ pub async fn mempool_transactions<
     let offset_and_items = get_offset_and_items(&params)?;
 
     // Note: the cost of this endpoint is proportional to the size of the mempool of
-    // the node, so the number of the concurrently served requests is bounded.
-    let _query_permit = MEMPOOL_QUERY_PERMITS.acquire().await.map_err(|e| {
-        logging::log::error!("internal error: {e}");
-        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-    })?;
+    // the node, so the number of the concurrently served requests is bounded, and a
+    // request that waits for a permit for too long is rejected.
+    let _query_permit =
+        tokio::time::timeout(MEMPOOL_QUERY_WAIT_TIMEOUT, MEMPOOL_QUERY_PERMITS.acquire())
+            .await
+            .map_err(|_timed_out| ApiServerWebServerError::TooManyMempoolRequests)?
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
 
     // Note: the tip of the storage is read once and used for both the token id
     // derivation of the dependency ordering and of the pending issuances.
@@ -670,7 +681,7 @@ pub async fn mempool_transactions<
 
     let txs = txs
         .into_iter()
-        .skip(offset_and_items.offset as usize)
+        .skip(usize::try_from(offset_and_items.offset).unwrap_or(usize::MAX))
         .take(offset_and_items.items as usize)
         .collect::<Vec<_>>();
 
@@ -806,7 +817,9 @@ pub async fn transaction<
                 ))?;
             // If the transaction transfers tokens whose issuance is pending as well,
             // the decimals are taken from the mempool listing, like in the listing
-            // endpoint; otherwise the storage is the only source.
+            // endpoint; otherwise the storage is the only source. Note that fetching
+            // the listing (bounded by the query permits) is the price of serving the
+            // correct decimals for a pending token transfer.
             let token_ids = tx_token_ids(&tx);
             let pending_issuance_decimals = if token_ids.is_empty() {
                 BTreeMap::new()
