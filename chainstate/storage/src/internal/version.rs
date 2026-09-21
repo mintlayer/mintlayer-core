@@ -19,6 +19,10 @@ use serialization::{Decode, Encode};
 pub struct ChainstateStorageVersion(u32);
 
 impl ChainstateStorageVersion {
+    /// Note: the PoS seal maps introduced alongside this version start empty on
+    /// the nodes that upgrade, so the seal duplication tracking only covers the
+    /// blocks processed after the upgrade and does not backfill the history
+    /// (see the schema docs).
     pub const CURRENT: Self = Self(11);
 
     pub fn new(value: u32) -> Self {

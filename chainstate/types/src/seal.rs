@@ -148,7 +148,11 @@ impl DuplicateSealEvidence {
 mod tests {
     use super::*;
     use common::chain::{
-        block::{consensus_data::PoSData, consensus_data::PoWData, timestamp::BlockTimestamp},
+        GenBlock,
+        block::{
+            BlockHeader, consensus_data::PoSData, consensus_data::PoWData,
+            signed_block_header::BlockHeaderSignature, timestamp::BlockTimestamp,
+        },
         config::EpochIndex,
     };
     use common::primitives::Compact;
@@ -236,5 +240,56 @@ mod tests {
         let consensus_data_other = make_pos_consensus_data(&vrf_sk, pool_id, 1, H256::zero());
         let seal_other = BlockSeal::from_consensus_data(&consensus_data_other).unwrap();
         assert_ne!(seal_1, seal_other);
+    }
+
+    #[test]
+    fn seal_index_entry_codec_roundtrip() {
+        let (_, seal) = make_seal(0, H256::zero());
+        let entry = SealIndexEntry::new(
+            seal,
+            vec![
+                (Id::new(H256::from([3u8; 32])), BlockHeight::new(7)),
+                (Id::new(H256::from([4u8; 32])), BlockHeight::new(8)),
+            ],
+        );
+
+        // The entry is stored as the value of the seal index: like the seal key,
+        // its encoding must stay readable (see `seal_encoding_is_stable`).
+        let decoded = SealIndexEntry::decode(&mut &entry.encode()[..]).unwrap();
+        assert_eq!(decoded, entry);
+    }
+
+    #[test]
+    fn duplicate_seal_evidence_codec_roundtrip() {
+        let (vrf_sk, seal) = make_seal(0, H256::zero());
+        let block_header = BlockHeader::new(
+            Id::<GenBlock>::new(H256::from([1u8; 32])),
+            H256::from([2u8; 32]),
+            H256::from([3u8; 32]),
+            BlockTimestamp::from_int_seconds(1),
+            make_pos_consensus_data(&vrf_sk, *seal.pool_id(), 0, H256::zero()),
+        );
+        let evidence = DuplicateSealEvidence::new(
+            seal,
+            vec![
+                SignedBlockHeader::new(BlockHeaderSignature::None, block_header),
+                SignedBlockHeader::new(
+                    BlockHeaderSignature::None,
+                    BlockHeader::new(
+                        Id::<GenBlock>::new(H256::from([5u8; 32])),
+                        H256::from([6u8; 32]),
+                        H256::from([7u8; 32]),
+                        BlockTimestamp::from_int_seconds(2),
+                        ConsensusData::None,
+                    ),
+                ),
+            ],
+        );
+
+        // The record is stored as the value of the duplicate seal evidence map:
+        // like the seal key, its encoding must stay readable (see
+        // `seal_encoding_is_stable`).
+        let decoded = DuplicateSealEvidence::decode(&mut &evidence.encode()[..]).unwrap();
+        assert_eq!(decoded, evidence);
     }
 }
