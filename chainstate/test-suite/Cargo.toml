@@ -17,6 +17,7 @@ constraints-value-accumulator = { path = "../constraints-value-accumulator" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 orders-accounting = { path = "../../orders-accounting" }
+is-empty = { path = "../../utils/is-empty" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
