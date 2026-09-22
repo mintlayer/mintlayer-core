@@ -45,6 +45,11 @@ pub struct ChainstateConfigFile {
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
     pub allow_checkpoints_mismatch: Option<bool>,
+
+    /// If true, the seals (stake pool id + VRF output) of the processed PoS blocks will be
+    /// indexed and the evidence of a seal seen on more than one block will be recorded.
+    /// Defaults to true.
+    pub pos_seal_duplication_tracking: Option<bool>,
 }
 
 impl From<ChainstateConfigFile> for ChainstateConfig {
@@ -56,6 +61,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_tip_age,
             enable_heavy_checks,
             allow_checkpoints_mismatch,
+            pos_seal_duplication_tracking,
         } = config_file;
 
         ChainstateConfig {
@@ -65,6 +71,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_tip_age: max_tip_age.map(Duration::from_secs).into(),
             enable_heavy_checks,
             allow_checkpoints_mismatch,
+            pos_seal_duplication_tracking: pos_seal_duplication_tracking.into(),
         }
     }
 }

@@ -17,6 +17,7 @@ mod block_info;
 mod consistency_checker;
 mod epoch_seal;
 mod in_memory_reorg;
+pub(crate) mod seal_index;
 mod tx_verifier_storage;
 
 use itertools::Itertools;
@@ -1425,6 +1426,21 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         }
 
         self.db_tx.add_block(block).map_err(BlockError::from)
+    }
+
+    /// Index the seal of the given block, recording evidence if the seal was already
+    /// seen on another block. A no-op if seal duplication tracking is disabled.
+    pub fn index_block_seal_if_enabled(
+        &mut self,
+        block: &WithId<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), BlockError> {
+        seal_index::index_block_seal_if_enabled(
+            self.chainstate_config,
+            &mut self.db_tx,
+            block,
+            block_height,
+        )
     }
 
     #[log_error]

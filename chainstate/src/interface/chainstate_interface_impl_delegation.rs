@@ -503,6 +503,7 @@ mod tests {
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
+                pos_seal_duplication_tracking: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

@@ -55,6 +55,7 @@ mod pos_processing_tests;
 mod pos_retargeting_tests;
 mod processing_tests;
 mod reorgs_tests;
+mod seal_duplication_tests;
 mod signature_tests;
 mod stake_pool_tests;
 mod syncing_tests;

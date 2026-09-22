@@ -15,7 +15,10 @@
 
 use super::{StoreTxRw, well_known};
 use crate::{BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
-use chainstate_types::{BlockIndex, EpochData, EpochStorageWrite};
+use chainstate_types::{
+    BlockIndex, EpochData, EpochStorageWrite,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
+};
 use common::{
     chain::{
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
@@ -216,6 +219,34 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()> {
         self.del::<db::DBAccountNonceCount, _, _>(account)
+    }
+
+    #[log_error]
+    fn set_seal_index_entry(
+        &mut self,
+        seal: &BlockSeal,
+        entry: &SealIndexEntry,
+    ) -> crate::Result<()> {
+        self.write::<db::DBSealIndex, _, _, _>(seal, entry)
+    }
+
+    #[log_error]
+    fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> crate::Result<()> {
+        self.del::<db::DBSealIndex, _, _>(seal)
+    }
+
+    #[log_error]
+    fn set_duplicate_seal_evidence(
+        &mut self,
+        seal: &BlockSeal,
+        evidence: &DuplicateSealEvidence,
+    ) -> crate::Result<()> {
+        self.write::<db::DBDuplicateSealEvidence, _, _, _>(seal, evidence)
+    }
+
+    #[log_error]
+    fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()> {
+        self.del::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 
