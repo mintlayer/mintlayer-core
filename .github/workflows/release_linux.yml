@@ -18,11 +18,6 @@ concurrency:
   group: release_linux-${{ github.ref }}
   cancel-in-progress: true
 
-# Container image pins live in packaging/images.env (shared with
-# packaging/test-local.sh) and are sourced by the steps that need them.
-# Debian's builder also runs a full cargo build inside debian:12 in
-# packaging/test-local.sh.
-
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -150,6 +145,9 @@ jobs:
 
     # Arch-matched container (qemu on the arm64 leg): native strip works and
     # the binaries run under emulation so help2man generates real man pages.
+    #
+    # Container image pins live in packaging/images.env, shared with the
+    # other steps that source it and with packaging/test-local.sh.
     - name: Create RPM packages
       env:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
