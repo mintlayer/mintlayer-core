@@ -62,8 +62,9 @@ pub use wallet_controller::types::{
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType, types::WalletTypeArgs};
 use wallet_types::{
-    ImportOrCreate, KeyPurpose, partially_signed_transaction::PartiallySignedTransaction,
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus,
+    ImportOrCreate, KeyPurpose, generic_transaction::GenericTransactionError,
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus,
 };
 
 use crate::service::SubmitError;
@@ -124,8 +125,8 @@ pub enum RpcError<N: NodeInterface> {
     #[error("{0}")]
     SubmitError(#[from] SubmitError),
 
-    #[error("Invalid raw transaction")]
-    InvalidRawTransaction,
+    #[error("Invalid raw transaction: {0}")]
+    InvalidRawTransaction(#[from] GenericTransactionError),
 
     #[error(
         "Expecting an unsigned or partially signed transaction, but a fully signed one was passed"
