@@ -30,5 +30,12 @@ thiserror.workspace = true
 tokio = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
 
+[dev-dependencies]
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
+randomness = { path = "../../randomness" }
+rstest.workspace = true
+strum.workspace = true
+test-utils = { path = "../../test-utils" }
+
 [build-dependencies]
 build_utils = { path = "../../utils/build_utils" }

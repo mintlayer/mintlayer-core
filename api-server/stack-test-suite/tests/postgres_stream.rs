@@ -49,7 +49,7 @@ use common::{
     primitives::{BlockHeight, Id, Idable, time::get_time},
 };
 use hex::ToHex as _;
-use test_common::{DummyRPC, frame_data, frame_event_name};
+use test_common::{DummyRPC, frame_data, frame_event_name, shutdown_task};
 use test_utils::random::{Seed, make_seedable_rng};
 
 #[ctor::ctor]
@@ -406,23 +406,16 @@ async fn stream_events_postgres_end_to_end() {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Shutdown: stop the web server and join the collector. The collector is aborted as well,
-    // since it would otherwise keep running indefinitely (the server keepalives prevent its
-    // internal chunk timeout from firing); aborting it does not swallow a panic that has
-    // already happened, which the join below propagates with the actual panic message.
+    // Shutdown: stop the web server and the collector. Both tasks are aborted before either is
+    // awaited, so that a failure in one cannot leak the other (if, say, the web server task
+    // panicked, awaiting it first would panic here before the collector is ever aborted). The
+    // collector is aborted as well, since it would otherwise keep running indefinitely (the
+    // server keepalives prevent its internal chunk timeout from firing; the terminated server
+    // connection also ends its read loop); the abort does not swallow a panic that has already
+    // happened, which the join inside `shutdown_task` propagates with the actual panic message.
     // -----------------------------------------------------------------------------------------
     web_task.abort();
     collector_task.abort();
-    if let Err(join_error) = collector_task.await {
-        assert!(
-            join_error.is_cancelled(),
-            "the SSE collector task failed: {join_error}"
-        );
-    }
-    if let Err(join_error) = web_task.await {
-        assert!(
-            join_error.is_cancelled(),
-            "the web server task failed: {join_error}"
-        );
-    }
+    shutdown_task(web_task).await;
+    shutdown_task(collector_task).await;
 }

@@ -33,7 +33,7 @@ async fn invalid_offset() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn invalid_num_items() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -67,7 +67,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -258,5 +258,5 @@ async fn ok(#[case] seed: Seed) {
         }
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }

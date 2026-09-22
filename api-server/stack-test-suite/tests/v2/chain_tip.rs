@@ -31,7 +31,7 @@ async fn at_genesis() {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let web_server_state = {
                 let chain_config = Arc::new(create_unit_test_config());
@@ -57,16 +57,13 @@ async fn at_genesis() {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("at genesis web server failed");
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 
@@ -77,7 +74,7 @@ async fn at_genesis() {
 
     assert_eq!(body, expected_tip);
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -92,7 +89,7 @@ async fn height_n(#[case] seed: Seed) {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let mut rng = make_seedable_rng(seed);
             let n_blocks = rng.random_range(1..100);
@@ -150,16 +147,13 @@ async fn height_n(#[case] seed: Seed) {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("height n web server failed");
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 
@@ -170,5 +164,5 @@ async fn height_n(#[case] seed: Seed) {
 
     assert_eq!(body, expected_tip);
 
-    task.abort();
+    shutdown_task(task).await;
 }

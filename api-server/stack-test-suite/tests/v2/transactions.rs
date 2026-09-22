@@ -33,7 +33,7 @@ async fn invalid_offset() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn invalid_before_tx_global_index() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset mode");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -61,7 +61,7 @@ async fn invalid_num_items() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -81,7 +81,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -94,7 +94,7 @@ async fn ok(#[case] seed: Seed) {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn(async move {
+    let mut task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
             let n_blocks = rng.random_range(3..100);
@@ -207,7 +207,7 @@ async fn ok(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let expected_transactions = rx.await.unwrap();
@@ -215,9 +215,7 @@ async fn ok(#[case] seed: Seed) {
 
     let url = format!("/api/v2/transaction?offset=0&items={num_tx}");
 
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, &url).await;
 
     assert_eq!(response.status(), 200);
 
@@ -274,7 +272,7 @@ async fn ok(#[case] seed: Seed) {
         compare_body(body, expected_transaction);
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[track_caller]

@@ -30,7 +30,7 @@ async fn invalid_transaction_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn transaction_not_found() {
         "Transaction output not found"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -185,5 +185,5 @@ async fn ok(#[case] seed: Seed) {
     );
     assert!(body.get("spent_at_block_height").unwrap().is_null());
 
-    task.abort();
+    shutdown_task(task).await;
 }

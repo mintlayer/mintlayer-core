@@ -44,7 +44,7 @@ async fn invalid_token_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid token Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -68,7 +68,7 @@ async fn token_not_found(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Token not found");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -287,7 +287,7 @@ async fn ok_tokens(#[case] seed: Seed) {
         assert_eq!(body, expected_values);
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -439,5 +439,5 @@ async fn ok_coins(#[case] seed: Seed) {
         assert_eq!(body, expected_values);
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }

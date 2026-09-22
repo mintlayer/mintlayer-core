@@ -27,6 +27,7 @@ mod chain_tip;
 mod feerate;
 mod helpers;
 mod htlc;
+mod mempool_transactions;
 mod nft;
 mod orders;
 mod pool;
@@ -44,7 +45,10 @@ mod transaction_output;
 mod transaction_submit;
 mod transactions;
 
-use crate::{DummyRPC, spawn_webserver};
+use crate::{
+    DummyRPC, shutdown_task, spawn_webserver, spawn_webserver_with_mempool, submit_transaction,
+    wait_for_web_server,
+};
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
 };
@@ -53,7 +57,7 @@ use api_server_common::storage::{
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
 use api_web_server::{
-    ApiServerWebServerState, CachedValues,
+    ApiServerWebServerState, CachedValues, MempoolQueryClient,
     api::{
         json_helpers::{TokenDecimals, txoutput_to_json},
         web_server,
@@ -99,7 +103,7 @@ async fn chain_genesis() {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task = tokio::spawn({
+    let mut task = tokio::spawn({
         async move {
             let web_server_state = {
                 let chain_config = Arc::new(create_unit_test_config());
@@ -129,16 +133,13 @@ async fn chain_genesis() {
                 }
             };
 
-            web_server(listener, web_server_state, true).await
+            web_server(listener, web_server_state, true)
+                .await
+                .expect("chain genesis web server failed");
         }
     });
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .await
-        .unwrap();
+    let response = wait_for_web_server(&mut task, addr, url).await;
 
     assert_eq!(response.status(), 200);
 
@@ -149,5 +150,5 @@ async fn chain_genesis() {
 
     assert_eq!(body, expected_genesis);
 
-    task.abort();
+    shutdown_task(task).await;
 }

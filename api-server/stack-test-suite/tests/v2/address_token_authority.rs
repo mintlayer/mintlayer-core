@@ -266,5 +266,5 @@ async fn ok(#[case] seed: Seed) {
         }
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }

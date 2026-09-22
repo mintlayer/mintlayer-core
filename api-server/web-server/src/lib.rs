@@ -17,13 +17,14 @@ pub mod api;
 pub mod config;
 pub mod error;
 pub mod streaming;
+pub mod tx_dependency_ordering;
 
 pub use error::ApiServerWebServerError;
 pub use streaming::{StreamEventsHandle, StreamingConfig};
 
 use common::{
-    chain::{ChainConfig, SignedTransaction},
-    primitives::time::Time,
+    chain::{ChainConfig, SignedTransaction, Transaction},
+    primitives::{Id, time::Time},
     time_getter::TimeGetter,
 };
 use mempool::FeeRate;
@@ -40,6 +41,21 @@ pub trait TxSubmitClient {
     async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError>;
 }
 
+/// Queries into the mempool of the connected node.
+///
+/// The returned transactions are pending: they may be included into a block later,
+/// or disappear (e.g. by being evicted or by being included into a block that is
+/// later reorganized away).
+#[async_trait::async_trait]
+pub trait MempoolQueryClient {
+    async fn mempool_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, NodeRpcError>;
+
+    async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError>;
+}
+
 #[async_trait::async_trait]
 impl TxSubmitClient for NodeRpcClient {
     async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
@@ -48,6 +64,20 @@ impl TxSubmitClient for NodeRpcClient {
 
     async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
         self.mempool_get_fee_rate_points().await
+    }
+}
+
+#[async_trait::async_trait]
+impl MempoolQueryClient for NodeRpcClient {
+    async fn mempool_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, NodeRpcError> {
+        NodeInterface::mempool_get_transaction(self, tx_id).await
+    }
+
+    async fn mempool_transactions(&self) -> Result<Vec<SignedTransaction>, NodeRpcError> {
+        NodeInterface::mempool_get_transactions(self).await
     }
 }
 

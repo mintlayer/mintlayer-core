@@ -29,7 +29,7 @@ async fn get_transaction_failed() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -160,7 +160,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
         "Cannot find transaction in block"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -271,5 +271,5 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body, expected_path);
 
-    task.abort();
+    shutdown_task(task).await;
 }

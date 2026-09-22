@@ -33,7 +33,7 @@ async fn invalid_height() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid block height");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn height_zero() {
         "No block found at supplied height"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -67,7 +67,7 @@ async fn height_past_tip() {
         "No block found at supplied height"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -160,5 +160,5 @@ async fn height_n(#[case] seed: Seed) {
         expected_block_id.to_hash().encode_hex::<String>()
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }

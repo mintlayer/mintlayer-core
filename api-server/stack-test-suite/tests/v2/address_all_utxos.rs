@@ -33,7 +33,7 @@ async fn invalid_address() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid address");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -59,7 +59,7 @@ async fn address_not_found(#[case] seed: Seed) {
 
     assert!(utxos.is_empty());
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -311,7 +311,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
         assert_eq!(body, expected);
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -567,7 +567,7 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body, expected_values);
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 // TODO test address balances after a reorg

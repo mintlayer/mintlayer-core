@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    TxSubmitClient,
+    MempoolQueryClient, TxSubmitClient,
     api::json_helpers::{
         self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
         to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
@@ -23,14 +23,16 @@ use crate::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
     },
+    tx_dependency_ordering,
 };
 use api_server_common::storage::storage_api::{
-    AmountWithDecimals, ApiServerStorage, ApiServerStorageRead, BlockInfo, CoinOrTokenStatistic,
-    Order, TransactionInfo, block_aux_data::BlockAuxData,
+    AmountWithDecimals, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
+    CoinOrTokenStatistic, Order, TransactionInfo, TxAdditionalInfo, block_aux_data::BlockAuxData,
 };
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Path, Query, State},
+    http::HeaderMap,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -38,8 +40,9 @@ use common::{
     address::Address,
     chain::{
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
-        UtxoOutPoint,
+        TxOutput, UtxoOutPoint,
         block::timestamp::BlockTimestamp,
+        make_token_id,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
@@ -55,6 +58,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio::sync::Semaphore;
 use utils::ensure;
 
 use crate::ApiServerWebServerState;
@@ -65,9 +69,19 @@ pub const API_VERSION: &str = "2.0.0";
 
 const TX_BODY_LIMIT: usize = 10240;
 
+/// The maximum number of the concurrently served requests to the mempool-proxying
+/// endpoints, whose cost is proportional to the size of the mempool of the node
+/// instead of the size of the requested page. Additional requests wait for a free
+/// permit (up to [`MEMPOOL_QUERY_WAIT_TIMEOUT`]) instead of loading the node in
+/// parallel.
+static MEMPOOL_QUERY_PERMITS: Semaphore = Semaphore::const_new(8);
+
+/// How long a request waits for a free mempool query permit before it is rejected.
+const MEMPOOL_QUERY_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub fn routes<
     T: ApiServerStorage + Send + Sync + 'static,
-    R: TxSubmitClient + Send + Sync + 'static,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
 >(
     enable_post_routes: bool,
 ) -> Router<ApiServerWebServerState<Arc<T>, Arc<R>>> {
@@ -100,6 +114,8 @@ pub fn routes<
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path))
         .route("/transaction/:id/output/:idx", get(transaction_output));
+
+    let router = router.route("/mempool/transactions", get(mempool_transactions));
 
     let router = router
         .route("/address/:address", get(address))
@@ -469,6 +485,257 @@ impl FromStr for OffsetMode {
     }
 }
 
+/// The order in which the mempool transactions are returned.
+enum TxOrdering {
+    /// The order in which the transactions entered the mempool of the node.
+    Insertion,
+    /// Transactions that other returned transactions depend on come first.
+    Dependency,
+}
+
+impl FromStr for TxOrdering {
+    type Err = ApiServerWebServerClientError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "insertion" => Ok(Self::Insertion),
+            "dependency" => Ok(Self::Dependency),
+            _ => Err(ApiServerWebServerClientError::InvalidTransactionOrdering),
+        }
+    }
+}
+
+/// Additional info of a pending (mempool) transaction.
+///
+/// The fee and the utxos spent by the inputs are not known to the api-server without
+/// indexing the mempool: the fee field is omitted from the response and the input
+/// entries carry no utxo details; the number of the input entries still matches the
+/// number of the transaction inputs.
+///
+/// The decimals of the tokens transferred by the outputs are resolved from the
+/// api-server storage or, if the issuance of the token is part of the pending listing
+/// itself, from the issuing transaction; tokens whose decimals cannot be known are
+/// rendered with zero decimals.
+async fn pending_tx_additional_info<S: ApiServerStorageRead>(
+    db_tx: &S,
+    tx: &SignedTransaction,
+    pending_issuance_decimals: &BTreeMap<TokenId, u8>,
+    decimals_cache: &mut BTreeMap<TokenId, u8>,
+) -> Result<TxAdditionalInfo, ApiServerWebServerError> {
+    let internal_error = |e: ApiServerStorageError| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    };
+
+    let mut token_decimals = BTreeMap::new();
+    for token_id in tx_token_ids(tx) {
+        let decimals = match pending_issuance_decimals.get(&token_id) {
+            // The issuance of the token is pending as well: the storage has no decimals
+            // for it yet, but the issuing transaction carries them.
+            Some(decimals) => *decimals,
+            None => match decimals_cache.get(&token_id) {
+                Some(decimals) => *decimals,
+                None => {
+                    let decimals = db_tx
+                        .get_token_num_decimals(token_id)
+                        .await
+                        .map_err(internal_error)?
+                        // The issuance of the token is neither pending in the listing
+                        // nor indexed, so its decimals cannot be known, and the token
+                        // is rendered with zero decimals. Note that the rendering is
+                        // presentational: the atoms amounts of the response are
+                        // authoritative regardless of the decimals.
+                        .unwrap_or(0);
+                    decimals_cache.insert(token_id, decimals);
+                    decimals
+                }
+            },
+        };
+        token_decimals.insert(token_id, decimals);
+    }
+
+    Ok(TxAdditionalInfo {
+        fee: Amount::ZERO,
+        input_utxos: vec![None; tx.transaction().inputs().len()],
+        token_decimals,
+    })
+}
+
+/// The decimals of the fungible token issuances carried by the given transactions.
+///
+/// Returns the decimals by token id; the token ids are derived like the consensus
+/// derives them for a block at the given height. Issuances whose id cannot be derived
+/// are skipped.
+///
+/// Note: the given height is the tip of the storage at the time of the call, while
+/// a pending transaction is actually included at some later height. The derivation
+/// only diverges from the consensus one if a consensus upgrade activating a new
+/// token id generation version lands in between, in which case the derived ids
+/// (and thus the resolved decimals and the dependency edges) are wrong until the
+/// transactions are confirmed; the pending data is provisional by nature.
+fn pending_issuance_decimals(
+    txs: &[SignedTransaction],
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+) -> BTreeMap<TokenId, u8> {
+    // Note: walking the transactions is cheap (a match per output); the token id
+    // derivation only runs for the rare fungible token issuances of the mempool.
+    let mut decimals = BTreeMap::new();
+    for tx in txs {
+        for out in tx.transaction().outputs() {
+            if let TxOutput::IssueFungibleToken(issuance) = out {
+                let common::chain::tokens::TokenIssuance::V1(issuance) = issuance.as_ref();
+                if let Ok(token_id) =
+                    make_token_id(chain_config, block_height, tx.transaction().inputs())
+                {
+                    decimals.insert(token_id, issuance.number_of_decimals);
+                }
+            }
+        }
+    }
+    decimals
+}
+
+/// The ids of the version 1 tokens transferred by the outputs of the transaction.
+fn tx_token_ids(tx: &SignedTransaction) -> BTreeSet<TokenId> {
+    common::chain::output_values_holder::collect_token_v1_ids_from_output_values_holder(tx)
+}
+
+pub async fn mempool_transactions<
+    T: ApiServerStorage,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
+>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<R>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const ORDERING: &str = "order";
+    let ordering = params
+        .get(ORDERING)
+        .map(|order| TxOrdering::from_str(order))
+        .transpose()?
+        .unwrap_or(TxOrdering::Insertion);
+
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    // Note: the cost of this endpoint is proportional to the size of the mempool of
+    // the node, so the number of the concurrently served requests is bounded, and a
+    // request that waits for a permit for too long is rejected.
+    let _query_permit =
+        tokio::time::timeout(MEMPOOL_QUERY_WAIT_TIMEOUT, MEMPOOL_QUERY_PERMITS.acquire())
+            .await
+            .map_err(|_timed_out| ApiServerWebServerError::TooManyMempoolRequests)?
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
+
+    // Note: the tip of the storage is read once and used for both the token id
+    // derivation of the dependency ordering and of the pending issuances.
+    let inclusion_height = best_block(&state).await?.block_height().next_height();
+
+    let mut txs = state.rpc.mempool_transactions().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    // Whether the listing is ordered by the dependencies between the transactions;
+    // a request for the dependency ordering can fall back to the insertion order.
+    let mut ordered_by_dependency = matches!(ordering, TxOrdering::Dependency);
+
+    match ordering {
+        TxOrdering::Insertion => {}
+        TxOrdering::Dependency => {
+            let chain_config = Arc::clone(&state.chain_config);
+            // The sorting is CPU-bound and proportional to the mempool size; run it
+            // off the async runtime threads. A transaction that cannot be sorted (an
+            // id derivation failure of an invalid transaction) must not take down the
+            // whole listing: serve the insertion order instead.
+            txs = match tokio::task::spawn_blocking(move || {
+                tx_dependency_ordering::order_transactions_by_dependency(
+                    txs,
+                    &chain_config,
+                    inclusion_height,
+                )
+            })
+            .await
+            {
+                Ok(Ok(sorted)) => sorted,
+                Ok(Err((err, fallback_txs))) => {
+                    // The failed ordering returns the transactions unsorted in
+                    // the original (insertion) order, so the listing falls back
+                    // to it without refetching the mempool: a refetch could
+                    // return a different snapshot, which would skew both the
+                    // listing and the pending issuance decimals resolved below.
+                    ordered_by_dependency = false;
+                    logging::log::warn!("Falling back to the mempool insertion order: {err}");
+                    fallback_txs
+                }
+                Err(err) => {
+                    logging::log::error!("internal error: {err}");
+                    return Err(ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    ));
+                }
+            };
+        }
+    }
+
+    // The decimals of the issuances of the whole fetched mempool listing are resolved
+    // before the pagination: a transaction of the requested page may spend or transfer
+    // a token issued by a transaction outside of it.
+    let issuance_decimals = pending_issuance_decimals(&txs, &state.chain_config, inclusion_height);
+
+    let txs = txs
+        .into_iter()
+        .skip(offset_and_items.offset as usize)
+        .take(offset_and_items.items as usize)
+        .collect::<Vec<_>>();
+
+    let mut jsons = Vec::with_capacity(txs.len());
+    if !txs.is_empty() {
+        let db_tx = state.db.transaction_ro().await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+        // The decimals of the same token are looked up only once per request.
+        let mut decimals_cache = BTreeMap::new();
+
+        for tx in &txs {
+            let additional_info =
+                pending_tx_additional_info(&db_tx, tx, &issuance_decimals, &mut decimals_cache)
+                    .await?;
+            let mut json = tx_to_json(tx, &additional_info, &state.chain_config);
+            let obj = json.as_object_mut().expect("object");
+            // The fee of a pending transaction is not known to the api-server.
+            obj.remove("fee");
+            // The block-related fields of a pending transaction are null: the
+            // values are not applicable until the transaction is confirmed.
+            obj.insert("block_id".into(), serde_json::Value::Null);
+            obj.insert("timestamp".into(), serde_json::Value::Null);
+            obj.insert("confirmations".into(), serde_json::Value::Null);
+            jsons.push(json);
+        }
+    }
+
+    // Tell the clients which ordering the listing ended up in: a request for the
+    // dependency ordering can be served in the insertion order as a fallback.
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "x-mempool-ordering",
+        if ordered_by_dependency {
+            "dependency"
+        } else {
+            "insertion"
+        }
+        .parse()
+        .expect("valid header value"),
+    );
+
+    Ok((headers, Json(serde_json::Value::Array(jsons))))
+}
+
 pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -523,17 +790,139 @@ pub async fn transactions<T: ApiServerStorage>(
     Ok(Json(serde_json::Value::Array(txs)))
 }
 
-pub async fn transaction<T: ApiServerStorage>(
+pub async fn transaction<
+    T: ApiServerStorage,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
+>(
     Path(transaction_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<R>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (
-        block,
-        TransactionInfo {
-            tx,
-            additional_info,
-        },
-    ) = get_transaction(&transaction_id, &state).await?;
+    let (block, tx_info) = match get_transaction(&transaction_id, &state).await {
+        Ok(tx_info) => tx_info,
+        Err(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionNotFound,
+        )) => {
+            // The transaction is not confirmed (yet); it may still be pending in the
+            // mempool of the connected node.
+            let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+                .map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidTransactionId,
+                    )
+                })?
+                .into();
+
+            let tx = state
+                .rpc
+                .mempool_transaction(transaction_id)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .ok_or(ApiServerWebServerError::NotFound(
+                    ApiServerWebServerNotFoundError::TransactionNotFound,
+                ))?;
+            // If the transaction transfers tokens whose issuance is pending as
+            // well, the decimals are taken from the mempool listing, like in
+            // the listing endpoint; otherwise the storage is the only source.
+            // The listing (bounded by the query permits) is only fetched if
+            // some of the transferred tokens is not indexed yet, i.e. it may
+            // be an issuance pending in the mempool itself, so that the cost
+            // of the request does not scale with the size of the mempool for
+            // the transactions transferring the already known tokens.
+            //
+            // Note that a transaction referencing a token that does not exist
+            // at all keeps taking this path: the cost of a listing fetch per
+            // such request is accepted, since it is the same cost class as the
+            // listing endpoint itself, and the concurrency (and the wait for
+            // it) is bounded by the query permits.
+            let token_ids = tx_token_ids(&tx);
+            let db_tx = state.db.transaction_ro().await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
+            // The decimals of the same token are looked up only once.
+            let mut decimals_cache = BTreeMap::new();
+            let pending_issuance_decimals = if token_ids.is_empty() {
+                BTreeMap::new()
+            } else {
+                // The tokens with the decimals already indexed are resolved
+                // from the storage right away; only the missing ones can be
+                // the issuances pending in the mempool listing.
+                let mut pending_token_ids = BTreeSet::new();
+                for token_id in token_ids {
+                    match db_tx.get_token_num_decimals(token_id).await.map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })? {
+                        Some(decimals) => {
+                            decimals_cache.insert(token_id, decimals);
+                        }
+                        None => {
+                            pending_token_ids.insert(token_id);
+                        }
+                    }
+                }
+
+                if pending_token_ids.is_empty() {
+                    BTreeMap::new()
+                } else {
+                    // Note: like in the listing endpoint, the number of the
+                    // concurrently served mempool queries is bounded, and a
+                    // request that waits for a permit for too long is rejected.
+                    let _query_permit = tokio::time::timeout(
+                        MEMPOOL_QUERY_WAIT_TIMEOUT,
+                        MEMPOOL_QUERY_PERMITS.acquire(),
+                    )
+                    .await
+                    .map_err(|_timed_out| ApiServerWebServerError::TooManyMempoolRequests)?
+                    .map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?;
+                    let mempool_txs = state.rpc.mempool_transactions().await.map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?;
+                    let inclusion_height = best_block(&state).await?.block_height().next_height();
+                    pending_issuance_decimals(&mempool_txs, &state.chain_config, inclusion_height)
+                }
+            };
+
+            let additional_info = pending_tx_additional_info(
+                &db_tx,
+                &tx,
+                &pending_issuance_decimals,
+                &mut decimals_cache,
+            )
+            .await?;
+
+            (
+                None,
+                TransactionInfo {
+                    tx,
+                    additional_info,
+                },
+            )
+        }
+        Err(err) => return Err(err),
+    };
+
+    let TransactionInfo {
+        tx,
+        additional_info,
+    } = tx_info;
 
     let confirmations = if let Some(block) = &block {
         let tip_height = best_block(&state).await?.block_height();
@@ -544,25 +933,27 @@ pub async fn transaction<T: ApiServerStorage>(
     let mut json = tx_to_json(&tx, &additional_info, &state.chain_config);
     let obj = json.as_object_mut().expect("object");
 
+    if block.is_none() {
+        // The transaction is pending in the mempool: the fee of a pending
+        // transaction is not known to the api-server.
+        obj.remove("fee");
+    }
+
     obj.insert(
         "block_id".into(),
-        block
-            .as_ref()
-            .map_or("".to_string(), |b| {
-                b.block_id().to_hash().encode_hex::<String>()
-            })
-            .into(),
+        block.as_ref().map_or(serde_json::Value::Null, |b| {
+            b.block_id().to_hash().encode_hex::<String>().into()
+        }),
     );
     obj.insert(
         "timestamp".into(),
-        block
-            .as_ref()
-            .map_or("".to_string(), |b| b.block_timestamp().to_string())
-            .into(),
+        block.as_ref().map_or(serde_json::Value::Null, |b| {
+            b.block_timestamp().to_string().into()
+        }),
     );
     obj.insert(
         "confirmations".into(),
-        confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+        confirmations.map_or(serde_json::Value::Null, |c| c.to_string().into()),
     );
 
     Ok(Json(json))
@@ -1669,4 +2060,46 @@ fn get_offset_and_items(
     );
 
     Ok(OffsetAndItems { offset, items })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chainstate_test_framework::TransactionBuilder;
+    use common::{
+        chain::{TxInput, config::create_regtest, signature::inputsig::InputWitness},
+        primitives::Id,
+    };
+
+    /// The pending-transaction responses are derived from the output of
+    /// `tx_to_json` by removing the `fee` key (the fee of a pending transaction
+    /// is not known to the api-server) and overwriting the block-related keys.
+    /// This pins the contract: `tx_to_json` must always emit the `fee` key, so
+    /// that its removal in the pending responses cannot silently stop working.
+    #[test]
+    fn tx_to_json_always_emits_the_fee_key_removed_by_the_pending_responses() {
+        let chain_config = create_regtest();
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
+                    0,
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let additional_info = TxAdditionalInfo {
+            fee: Amount::ZERO,
+            input_utxos: vec![],
+            token_decimals: BTreeMap::new(),
+        };
+
+        let json = tx_to_json(&tx, &additional_info, &chain_config);
+
+        let obj = json.as_object().expect("tx_to_json must produce an object");
+        assert!(
+            obj.contains_key("fee"),
+            "tx_to_json must emit the `fee` key: {obj:?}"
+        );
+    }
 }

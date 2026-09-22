@@ -30,7 +30,7 @@ async fn invalid_transaction_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid transaction Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -47,7 +47,58 @@ async fn transaction_not_found() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Transaction not found");
 
-    task.abort();
+    shutdown_task(task).await;
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn pending_transaction_is_served_from_the_mempool(#[case] seed: Seed) {
+    use chainstate_test_framework::empty_witness;
+    use common::{chain::UtxoOutPoint, primitives::H256};
+
+    let (task, _response, _rpc, addr) = spawn_webserver_with_mempool("/").await;
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(&mut rng))),
+                0,
+            )),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    // Submit the transaction through the POST endpoint; it stays pending in the
+    // mempool of the node behind the web server.
+    let tx_id = submit_transaction(addr, tx).await;
+
+    let response = reqwest::get(format!(
+        "http://{}:{}/api/v2/transaction/{tx_id}",
+        addr.ip(),
+        addr.port()
+    ))
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = body.as_object().unwrap();
+
+    assert_eq!(body.get("id").unwrap().as_str().unwrap(), tx_id);
+    // The block-related fields of a pending transaction are null: the values
+    // are not applicable until the transaction is confirmed.
+    assert_eq!(body.get("block_id"), Some(&serde_json::Value::Null));
+    assert_eq!(body.get("timestamp"), Some(&serde_json::Value::Null));
+    assert_eq!(body.get("confirmations"), Some(&serde_json::Value::Null));
+    // The fee of a pending transaction is not known, so the key is omitted
+    assert!(body.get("fee").is_none());
+
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -287,7 +338,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
         &expected_transaction["confirmations"]
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -436,7 +487,7 @@ async fn ok(#[case] seed: Seed) {
         &expected_transaction["confirmations"]
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -624,5 +675,5 @@ async fn mint_tokens(#[case] seed: Seed) {
     let burn_out = outputs.first().unwrap().as_object().unwrap();
     assert_eq!(burn_out.get("type").unwrap().as_str().unwrap(), "Burn",);
 
-    task.abort();
+    shutdown_task(task).await;
 }

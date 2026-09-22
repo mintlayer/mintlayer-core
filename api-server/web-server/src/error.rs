@@ -45,6 +45,8 @@ pub enum ApiServerWebServerError {
     ServerError(#[from] ApiServerWebServerServerError),
     #[error("Too many concurrent stream connections")]
     TooManyStreamConnections,
+    #[error("Too many concurrent mempool requests")]
+    TooManyMempoolRequests,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -97,6 +99,8 @@ pub enum ApiServerWebServerClientError {
     InvalidOffset,
     #[error("Invalid offset mode")]
     InvalidOffsetMode,
+    #[error("Invalid transaction ordering")]
+    InvalidTransactionOrdering,
     #[error("Invalid number of items")]
     InvalidNumItems,
     #[error("Invalid pools sort order")]
@@ -144,6 +148,9 @@ impl IntoResponse for ApiServerWebServerError {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }
             ApiServerWebServerError::TooManyStreamConnections => {
+                (StatusCode::TOO_MANY_REQUESTS, self.to_string())
+            }
+            ApiServerWebServerError::TooManyMempoolRequests => {
                 (StatusCode::TOO_MANY_REQUESTS, self.to_string())
             }
         };

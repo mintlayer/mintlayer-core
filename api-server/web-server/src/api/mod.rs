@@ -27,7 +27,7 @@ use tower_http::cors::{AllowMethods, Any, CorsLayer};
 use api_server_common::storage::storage_api::ApiServerStorage;
 
 use crate::{
-    ApiServerWebServerState, TxSubmitClient, api,
+    ApiServerWebServerState, MempoolQueryClient, TxSubmitClient, api,
     error::{ApiServerWebServerClientError, ApiServerWebServerError},
 };
 
@@ -47,7 +47,7 @@ async fn server_status() -> Result<impl IntoResponse, ApiServerWebServerError> {
 #[allow(dead_code)]
 pub fn web_server<
     T: ApiServerStorage + Send + Sync + 'static,
-    R: TxSubmitClient + Send + Sync + 'static,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
 >(
     socket: TcpListener,
     state: ApiServerWebServerState<Arc<T>, Arc<R>>,
