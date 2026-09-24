@@ -183,6 +183,7 @@ jobs:
       env:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
+        source packaging/images.env
         ARCH=${{ matrix.arch }}
         docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${VERSION}_${ARCH}.rpm mintlayer-node node

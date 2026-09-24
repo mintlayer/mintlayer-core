@@ -2,6 +2,8 @@
 ; Rendered from gui.nsi.in by build-tools/win/create-nsis-installers.ps1 -
 ; do not use this file directly. Requires NSIS 3 (Unicode).
 Unicode true
+# 64-bit build: keeps HKLM\SOFTWARE writes out of the WOW6432Node redirect.
+TARGETDISTARCH x64
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
