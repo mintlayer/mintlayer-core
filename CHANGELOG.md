@@ -11,6 +11,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-25
+
+### Added
+  - Node:
+    - Added PoS seal indexing infrastructure: duplicate-proof evidence storage for
+      block seals, active by default, with a chainstate configuration option to disable it.
+
 ### Fixed
   - Wallet:
     - Fixed an issue where `standalone-add-watch-only-address`, `standalone-add-private-key-from-hex` and
