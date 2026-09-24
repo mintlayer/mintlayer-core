@@ -250,7 +250,7 @@ for arch in "${ARCHES[@]}"; do
             mintlayer-node-gui gui
 
         # The aarch64 leg relies on the qemu binfmt handlers (already required
-        # for the deb/rpm arm64 smoke tests) plus smoke-arch.sh's IgnoreArch
+        # for the deb/rpm arm64 smoke tests) plus smoke-arch.sh's foreign-arch
         # handling, mirroring the arm64 leg of release_linux.yml.
         run_step "smoke pkg node ($arch)" \
             docker run --rm -v "$REPO_ROOT:/work" -w /work "$ARCH_IMAGE" \
