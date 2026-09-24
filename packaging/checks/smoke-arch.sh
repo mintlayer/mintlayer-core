@@ -5,8 +5,9 @@
 #
 # The optional fourth argument is the architecture the package was built for
 # (defaults to the container architecture). For a foreign-architecture package
-# (the cross-target aarch64 leg reuses the amd64-only Arch image), pacman's
-# architecture check is bypassed via IgnoreArch and the binaries are executed
+# (the cross-target aarch64 leg reuses the amd64-only Arch image), the
+# foreign architecture is added to pacman's Architecture list and the
+# binaries are executed
 # through the host's qemu binfmt handlers — the same emulation the deb/rpm
 # legs use for their arm64 smoke tests.
 set -euo pipefail
@@ -20,8 +21,10 @@ KIND="$3"
 PKG_ARCH="${4:-$(uname -m)}"
 
 if [ "$PKG_ARCH" != "$(uname -m)" ]; then
-    echo "foreign-architecture package ($PKG_ARCH on $(uname -m)): enabling IgnoreArch"
-    sed -i "/^\[options\]$/a IgnoreArch = $PKG_ARCH" /etc/pacman.conf
+    echo "foreign-architecture package ($PKG_ARCH on $(uname -m)): adding to pacman's Architecture list"
+    # pacman has no per-package override; listing the foreign arch in the
+    # Architecture option is the supported way to allow installing it.
+    sed -i "s/^#\?Architecture.*/Architecture = $(uname -m) $PKG_ARCH/" /etc/pacman.conf
 fi
 
 # Sync the databases so the package dependencies resolve from the repos.

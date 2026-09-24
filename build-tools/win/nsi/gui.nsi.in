@@ -2,8 +2,9 @@
 ; Rendered from gui.nsi.in by build-tools/win/create-nsis-installers.ps1 -
 ; do not use this file directly. Requires NSIS 3 (Unicode).
 Unicode true
-# 64-bit build: keeps HKLM\SOFTWARE writes out of the WOW6432Node redirect.
-TARGETDISTARCH x64
+; 64-bit only: .onInit/un.onInit abort on 32-bit Windows and switch the
+; registry view to 64-bit, keeping HKLM\SOFTWARE writes out of the WOW6432Node
+; redirect (see MintlayerRequireX64 in common.nsh).
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
@@ -40,7 +41,13 @@ OutFile "Mintlayer_Node_GUI_win_${VERSION}_Setup.exe"
 ; Silently remove a previously installed version so upgrades do not leave
 ; stale files behind.
 Function .onInit
+    !insertmacro MintlayerRequireX64
     !insertmacro MintlayerRemovePreviousInstall
+FunctionEnd
+
+; The uninstaller is a separate process; give it the 64-bit registry view too.
+Function un.onInit
+    !insertmacro MintlayerRequireX64
 FunctionEnd
 
 ; The install is machine-wide (admin); make the shortcuts available to all
