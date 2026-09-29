@@ -48,6 +48,7 @@ use jsonrpsee::{
     core::RpcResult,
     types::{ErrorObjectOwned, error::INTERNAL_ERROR_CODE},
 };
+use randomness::RngExt as _;
 use rpc::RpcAuthData;
 use serialization::hex_encoded::HexEncoded;
 use test_common::proxy::ProxyHandle;
@@ -256,14 +257,25 @@ async fn scanner_reconnects_after_node_disconnection() {
     });
 
     // Index a few blocks while everything is healthy.
-    // Note: the framework mutex is shared between this (chain building, on the runtime) and
-    // the spawn_blocking-backed RPC serving; the two serialize for the duration of the chain
-    // building, which is fine at this scale (the scanner's calls resume right after).
-    let tip_3 = {
-        let mut framework = framework.lock().await;
-        let genesis_id = framework.chain_config().genesis_block_id();
-        framework.create_chain_with_empty_blocks(&genesis_id, 3, &mut rng).unwrap()
-    };
+    // Note: the framework mutex is shared between this test (chain building) and the
+    // spawn_blocking-backed RPC serving; chain building is itself moved off the runtime thread
+    // (it is synchronous, CPU-heavy block processing), and the two serialize for its duration —
+    // fine at this scale (the scanner's in-flight calls resume right after).
+    // Note: deterministic child seeds are derived from the master RNG, so that a CI failure is
+    // locally reproducible with a fixed seed.
+    let phase_1_seed = Seed(rng.random_range(0..u64::MAX));
+    let phase_2_seed = Seed(rng.random_range(0..u64::MAX));
+    let tip_3 = tokio::task::spawn_blocking({
+        let framework = Arc::clone(&framework);
+        let mut rng = make_seedable_rng(phase_1_seed);
+        move || {
+            let mut framework = framework.blocking_lock();
+            let genesis_id = framework.chain_config().genesis_block_id();
+            framework.create_chain_with_empty_blocks(&genesis_id, 3, &mut rng).unwrap()
+        }
+    })
+    .await
+    .unwrap();
     proxy.assert_alive();
     wait_for_scanner_tip(&test_storage, tip_3).await;
     assert_eq!(
@@ -279,10 +291,16 @@ async fn scanner_reconnects_after_node_disconnection() {
     proxy.set_forwarding(false);
     tokio::time::sleep(OUTAGE_DURATION).await;
 
-    let tip_5 = {
-        let mut framework = framework.lock().await;
-        framework.create_chain_with_empty_blocks(&tip_3, 2, &mut rng).unwrap()
-    };
+    let tip_5 = tokio::task::spawn_blocking({
+        let framework = Arc::clone(&framework);
+        let mut rng = make_seedable_rng(phase_2_seed);
+        move || {
+            let mut framework = framework.blocking_lock();
+            framework.create_chain_with_empty_blocks(&tip_3, 2, &mut rng).unwrap()
+        }
+    })
+    .await
+    .unwrap();
     assert_ne!(tip_3, tip_5);
 
     // The scanner must not have given up (or crashed) while the node was unreachable.
@@ -303,11 +321,10 @@ async fn scanner_reconnects_after_node_disconnection() {
     // The supervision loop is still running (the recovery happened in place).
     assert!(!scanner_task.is_finished());
 
-    // Note: the scanner task is intentionally not allowed to run to completion; the destructors
-    // of the storage handles and of the proxy close the remaining resources. Give the scanner a
-    // moment to finish the in-flight sync before the storage handles are dropped, then stop it
-    // explicitly, so that it cannot panic over the closed storage.
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Note: the scanner task is stopped explicitly before the test's handles are dropped:
+    // abort cancels it at its next await point and the join below waits for the unwind to
+    // finish, so the daemon can never race the closing Postgres pool (no timing heuristics
+    // needed).
     scanner_task.abort();
     let _ = scanner_task.await;
 }

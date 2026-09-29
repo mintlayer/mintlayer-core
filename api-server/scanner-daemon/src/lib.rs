@@ -123,7 +123,10 @@ pub async fn run<S: ApiServerStorage>(
                         .get_storage_version()
                         .await
                         .unwrap_or_else(|e| panic!("Storage version read failed {}", e))
-                        .expect("cannot be empty");
+                        .expect(
+                            "storage is initialized but has no storage version row (the row \
+                             is missing or the database is corrupt)",
+                        );
                     if storage_version != CURRENT_STORAGE_VERSION {
                         true
                     } else {
@@ -184,6 +187,13 @@ async fn reinitialize_and_rescan<S: ApiServerStorage>(
     local_block
 }
 
+/// The connection state of the supervision loop; the `Connected`/`Reconnecting` variants make
+/// the invariant "an outage tracker exists if and only if there is no client" explicit.
+enum ConnectionState {
+    Connected(NodeRpcClient),
+    Reconnecting { outage: Outage },
+}
+
 /// The supervision loop of the scanner: keeps the local state in sync with the node, recovering
 /// in place from connection-level failures by re-creating the RPC client with an exponential
 /// backoff and resuming the indexing from the tip stored in the local state.
@@ -206,80 +216,91 @@ async fn supervise_sync<S: ApiServerStorage>(
     rng: &mut impl Rng,
 ) -> Result<(), ApiServerScannerError> {
     // Note: the client is created lazily (and re-created after every connection-level failure),
-    // so that a node that is down at startup does not abort the daemon; `None` means that the
-    // connection to the node is currently broken and must be re-established.
-    let mut rpc_client: Option<NodeRpcClient> = None;
-    // Note: `outage` is `Some` if and only if `rpc_client` is `None`.
-    let mut outage: Option<Outage> = None;
+    // so that a node that is down at startup does not abort the daemon.
+    let mut state = ConnectionState::Reconnecting {
+        outage: Outage::new(),
+    };
 
     loop {
-        if rpc_client.is_none() {
-            rpc_client = Some(loop {
-                // Note: the connection attempt is bounded by a timeout so that a stalled
-                // handshake (the node accepting the TCP connection but never completing the
-                // WebSocket handshake) cannot wedge a round forever without any log output;
-                // expiry is treated like any other connection failure.
-                let connection = tokio::time::timeout(
-                    CONNECT_TIMEOUT,
-                    make_rpc_client(
-                        Arc::clone(chain_config),
-                        node_rpc_address.clone(),
-                        node_rpc_auth.clone(),
-                    ),
-                )
-                .await;
-                match connection {
-                    Ok(Ok(client)) => break client,
-                    Ok(Err(err)) if NodeRpcError::is_connection_error(&err) => {
-                        let outage = outage.get_or_insert_with(Outage::new);
-                        outage.attempts += 1;
-                        let delay = backoff.next_delay(rng);
-                        logging::log::warn!(
-                            "Failed to connect to the node (attempt {}, elapsed {:?}): {err}; \
-                            retrying in {delay:?}",
-                            outage.attempts,
-                            outage.started.elapsed(),
-                        );
-                        tokio::time::sleep(delay).await;
-                    }
-                    // A connection cannot be established, but the reason is not a temporary
-                    // connectivity problem (e.g. an invalid address); retrying is pointless.
-                    Ok(Err(err)) => return Err(ApiServerScannerError::RpcError(err)),
-                    Err(_timed_out) => {
-                        let outage = outage.get_or_insert_with(Outage::new);
-                        outage.attempts += 1;
-                        let delay = backoff.next_delay(rng);
-                        logging::log::warn!(
-                            "Timed out connecting to the node (attempt {}, elapsed {:?}); \
-                            retrying in {delay:?}",
-                            outage.attempts,
-                            outage.started.elapsed(),
-                        );
-                        tokio::time::sleep(delay).await;
+        let client = loop {
+            match &mut state {
+                ConnectionState::Connected(client) => break client.clone(),
+                ConnectionState::Reconnecting { outage } => {
+                    // Note: the connection attempt is bounded by a timeout so that a stalled
+                    // handshake (the node accepting the TCP connection but never completing
+                    // the WebSocket handshake) cannot wedge a round forever without any log
+                    // output; expiry is treated like any other connection failure.
+                    let connection = tokio::time::timeout(
+                        CONNECT_TIMEOUT,
+                        make_rpc_client(
+                            Arc::clone(chain_config),
+                            node_rpc_address.clone(),
+                            node_rpc_auth.clone(),
+                        ),
+                    )
+                    .await;
+                    match connection {
+                        // Note: the recovery is only logged when the outage actually produced
+                        // failed attempts; the very first connection is not a "recovery".
+                        Ok(Ok(new_client)) if outage.attempts > 0 => {
+                            let outage = std::mem::replace(outage, Outage::new());
+                            let local_height = match local_block.best_block().await {
+                                Ok((height, _)) => height,
+                                Err(err) => {
+                                    logging::log::warn!(
+                                        "Failed to read the local tip for the recovery log: {err}"
+                                    );
+                                    common::primitives::BlockHeight::zero()
+                                }
+                            };
+                            logging::log::info!(
+                                "Scanner reconnected to the node after {} attempt(s) ({:?} \
+                                elapsed); resuming from height {}",
+                                outage.attempts,
+                                outage.started.elapsed(),
+                                local_height,
+                            );
+                            break new_client;
+                        }
+                        Ok(Ok(new_client)) => break new_client,
+                        Ok(Err(err)) if NodeRpcError::is_connection_error(&err) => {
+                            outage.attempts += 1;
+                            let delay = backoff.next_delay(rng);
+                            logging::log::warn!(
+                                "Failed to connect to the node (attempt {}, elapsed {:?}): {err}; \
+                                retrying in {delay:?}",
+                                outage.attempts,
+                                outage.started.elapsed(),
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
+                        // A connection cannot be established, but the reason is not a temporary
+                        // connectivity problem (e.g. an invalid address); retrying is pointless.
+                        Ok(Err(err)) => return Err(ApiServerScannerError::RpcError(err)),
+                        Err(_timed_out) => {
+                            outage.attempts += 1;
+                            let delay = backoff.next_delay(rng);
+                            logging::log::warn!(
+                                "Timed out connecting to the node (attempt {}, elapsed {:?}); \
+                                retrying in {delay:?}",
+                                outage.attempts,
+                                outage.started.elapsed(),
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
                     }
                 }
-            });
-
-            if let Some(outage) = outage.take() {
-                let local_height = local_block
-                    .best_block()
-                    .await
-                    .map_or(common::primitives::BlockHeight::zero(), |(height, _)| {
-                        height
-                    });
-                logging::log::info!(
-                    "Scanner reconnected to the node after {} attempt(s) ({:?} elapsed); \
-                    resuming from height {}",
-                    outage.attempts,
-                    outage.started.elapsed(),
-                    local_height,
-                );
             }
-        }
+        };
 
-        let client = rpc_client.as_ref().expect("The RPC client must have been established above");
+        // Note: the loop above leaves the state in `Reconnecting` when it connected (the
+        // connected client is the loop's result); record the new state.
+        state = ConnectionState::Connected(client.clone());
 
-        match api_blockchain_scanner_lib::sync::sync_once(chain_config, client, local_block).await {
+        // Note: the backoff state at this point belongs to the successful connection; it is
+        // only reset after a successful sync, see below.
+        match api_blockchain_scanner_lib::sync::sync_once(chain_config, &client, local_block).await
+        {
             Ok(()) => {
                 // Note: the backoff is only reset here (after a successful sync), not after a
                 // successful connect: a flapping node must not pin the retry rate at the
@@ -290,15 +311,13 @@ async fn supervise_sync<S: ApiServerStorage>(
             Err(err) if err.is_connection_error() => {
                 // The client is permanently broken (e.g. the node has closed the WebSocket
                 // connection); drop it and re-connect on the next iteration.
-                rpc_client = None;
-                let outage = outage.get_or_insert_with(Outage::new);
-                outage.attempts += 1;
+                state = ConnectionState::Reconnecting {
+                    outage: Outage::new(),
+                };
                 let delay = backoff.next_delay(rng);
                 logging::log::warn!(
-                    "Lost the connection to the node (attempt {}, elapsed {:?}): {err}; \
-                    re-connecting in {delay:?}",
-                    outage.attempts,
-                    outage.started.elapsed(),
+                    "Lost the connection to the node (attempt 1, elapsed 0ns): {err}; \
+                    re-connecting in {delay:?}"
                 );
                 tokio::time::sleep(delay).await;
             }

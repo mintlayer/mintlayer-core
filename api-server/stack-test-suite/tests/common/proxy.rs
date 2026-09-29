@@ -30,6 +30,9 @@ pub struct ProxyHandle {
     forwarding: tokio::sync::watch::Sender<bool>,
     connections: Arc<tokio::sync::Mutex<Vec<[tokio::task::JoinHandle<()>; 2]>>>,
     task: tokio::task::JoinHandle<()>,
+    /// The number of accepted connections dropped because forwarding was disabled or the
+    /// backend was unreachable; exposed for diagnostics in test failures.
+    refused: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl ProxyHandle {
@@ -44,11 +47,13 @@ impl ProxyHandle {
         let addr = listener.local_addr().unwrap();
         let forwarding_rx = forwarding.subscribe();
         let connections = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let refused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let task = tokio::spawn(run_proxy(
             listener,
             backend_addr,
             forwarding_rx,
             Arc::clone(&connections),
+            Arc::clone(&refused),
         ));
 
         Self {
@@ -56,6 +61,7 @@ impl ProxyHandle {
             forwarding,
             connections,
             task,
+            refused,
         }
     }
 
@@ -86,6 +92,12 @@ impl ProxyHandle {
     pub fn assert_alive(&self) {
         assert!(!self.task.is_finished(), "The proxy task has terminated");
     }
+
+    /// The number of connections the proxy has dropped without forwarding them (forwarding
+    /// disabled, or the backend unreachable); useful for diagnosing test failures.
+    pub fn refused_connections(&self) -> usize {
+        self.refused.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 async fn run_proxy(
@@ -93,7 +105,10 @@ async fn run_proxy(
     backend_addr: SocketAddr,
     mut forwarding: tokio::sync::watch::Receiver<bool>,
     connections: Arc<tokio::sync::Mutex<Vec<[tokio::task::JoinHandle<()>; 2]>>>,
+    refused: Arc<std::sync::atomic::AtomicUsize>,
 ) {
+    use std::sync::atomic::Ordering;
+
     loop {
         let (client_socket, _) = tokio::select! {
             accepted = listener.accept() => accepted.expect("The proxy listener has failed"),
@@ -106,11 +121,13 @@ async fn run_proxy(
 
         if !*forwarding.borrow() {
             // The "node is down": drop the accepted connection right away.
+            refused.fetch_add(1, Ordering::Relaxed);
             continue;
         }
 
         let Ok(backend_socket) = tokio::net::TcpStream::connect(backend_addr).await else {
             // The backend is unreachable; behave like a closed connection.
+            refused.fetch_add(1, Ordering::Relaxed);
             continue;
         };
 
@@ -124,8 +141,9 @@ async fn run_proxy(
         });
 
         let mut connections = connections.lock().await;
-        // Reap the forwarding tasks that finished on their own, so that the list stays bounded.
-        connections.retain(|pair| !pair[0].is_finished() && !pair[1].is_finished());
+        // Reap the forwarding tasks of dead connections: once either direction has finished,
+        // the other is dead by construction (its peer socket has been dropped with the task).
+        connections.retain(|pair| !pair[0].is_finished() || !pair[1].is_finished());
         connections.push([client_to_backend, backend_to_client]);
     }
 }

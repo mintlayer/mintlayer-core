@@ -49,6 +49,11 @@ impl ReconnectBackoff {
             Duration::ZERO,
             "The maximum delay must not be zero"
         );
+        assert!(
+            max_delay >= initial_delay,
+            "The maximum delay ({max_delay:?}) must not be smaller than the initial delay \
+            ({initial_delay:?})"
+        );
 
         Self {
             initial_delay,
