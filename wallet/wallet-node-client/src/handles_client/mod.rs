@@ -108,6 +108,20 @@ impl WalletHandlesClient {
 }
 
 impl NodeInterfaceError for WalletHandlesClientError {
+    fn is_node_rejection(&self) -> bool {
+        // The handles client talks to an in-process node. Note that
+        // `submit_transaction` goes through the P2P handle, so a mempool
+        // rejection surfaces as `P2p(P2pError::MempoolError(_))`; direct
+        // mempool calls surface as `MempoolError`. Both mean the transaction
+        // was evaluated and rejected locally. Everything else is a
+        // delivery/processing failure.
+        matches!(
+            self,
+            WalletHandlesClientError::MempoolError(_)
+                | WalletHandlesClientError::P2p(P2pError::MempoolError(_))
+        )
+    }
+
     fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
         match self {
             WalletHandlesClientError::BlockProduction(err) => match err {

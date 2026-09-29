@@ -47,6 +47,16 @@ pub trait NodeInterfaceError: std::fmt::Debug + std::fmt::Display + Send + Sync 
     /// what transactions are eligible for inclusion in the new block.
     /// When this happens, the caller code may just retry producing a block.
     fn is_recoverable_mempool_error_during_block_production(&self) -> bool;
+
+    /// Return true if the error means the node itself rejected the transaction
+    /// submission (i.e. the node received it and responded with an error), as
+    /// opposed to a delivery failure (transport error, timeout, node unavailable).
+    /// The wallet uses this to distinguish "deterministically rejected" from
+    /// "never reached the node" when deciding whether a pending transaction may
+    /// be pruned. The default of `false` is the safe (under-pruning) choice.
+    fn is_node_rejection(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, derive_more::Display)]

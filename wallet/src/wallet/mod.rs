@@ -1542,6 +1542,34 @@ where
         })
     }
 
+    /// Prune a transaction that is known to be dead (see
+    /// [`Account::prune_dead_transaction`]) together with its pending descendants.
+    pub fn prune_dead_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.prune_dead_transaction(tx_id, db_tx)
+        })
+    }
+
+    /// Returns all pending (unconfirmed) user transactions per account. These
+    /// are the transactions the wallet may have to (re)broadcast.
+    pub fn get_unconfirmed_transactions_per_account(
+        &self,
+    ) -> WalletResult<BTreeMap<U31, Vec<SignedTransaction>>> {
+        let db_tx = self.db.transaction_ro()?;
+        let mut result = BTreeMap::new();
+
+        for (account_index, account) in &self.accounts {
+            let txs = db_tx.get_user_transactions_for_account(&account.get_account_id())?;
+            result.insert(*account_index, txs);
+        }
+
+        Ok(result)
+    }
+
     pub fn get_pools(
         &self,
         account_index: U31,

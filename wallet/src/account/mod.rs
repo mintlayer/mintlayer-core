@@ -2552,7 +2552,32 @@ impl<K: AccountKeyChains> Account<K> {
         tx_id: Id<Transaction>,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
-        let abandoned_txs = self.output_cache.abandon_transaction(&self.chain_config, tx_id)?;
+        self.abandon_transaction_impl(tx_id, db_tx, false)
+    }
+
+    /// Prune a transaction that is known to be dead (probed missing from the
+    /// mempool with its parent present, or otherwise deterministically rejected),
+    /// together with its pending descendants. Unlike [`Self::abandon_transaction`],
+    /// this tolerates a stale `InMempool` cache state.
+    pub fn prune_dead_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        self.abandon_transaction_impl(tx_id, db_tx, true)
+    }
+
+    fn abandon_transaction_impl(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        allow_stale_in_mempool: bool,
+    ) -> WalletResult<()> {
+        let abandoned_txs = if allow_stale_in_mempool {
+            self.output_cache.prune_dead_transaction(&self.chain_config, tx_id)?
+        } else {
+            self.output_cache.abandon_transaction(&self.chain_config, tx_id)?
+        };
         let acc_id = self.get_account_id();
 
         for (tx_id, tx) in abandoned_txs {

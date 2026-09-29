@@ -1791,9 +1791,30 @@ impl OutputCache {
         chain_config: &ChainConfig,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
+        self.abandon_transaction_impl(chain_config, tx_id, false)
+    }
+
+    /// Same as [`Self::abandon_transaction`], but also tolerates a stale
+    /// `InMempool` state. Used when pruning transactions that are known to be
+    /// dead (probed missing from the mempool) but are still cached as in-mempool.
+    pub fn prune_dead_transaction(
+        &mut self,
+        chain_config: &ChainConfig,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
+        self.abandon_transaction_impl(chain_config, tx_id, true)
+    }
+
+    fn abandon_transaction_impl(
+        &mut self,
+        chain_config: &ChainConfig,
+        tx_id: Id<Transaction>,
+        allow_stale_in_mempool: bool,
+    ) -> WalletResult<Vec<(Id<Transaction>, WalletTx)>> {
         if let Some(tx) = self.txs.get(&tx_id.into()) {
             let cannot_abandon = match tx.state() {
-                TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Abandoned => true,
+                TxState::Confirmed(_, _, _) | TxState::Abandoned => true,
+                TxState::InMempool(_) => !allow_stale_in_mempool,
                 TxState::Inactive(_) | TxState::Conflicted(_) => false,
             };
             if cannot_abandon {
@@ -1816,9 +1837,18 @@ impl OutputCache {
                             let need_rollback = match tx.state() {
                                 TxState::Inactive(_) => true,
                                 TxState::Conflicted(_) => false,
-                                state @ (TxState::Confirmed(_, _, _)
-                                | TxState::InMempool(_)
-                                | TxState::Abandoned) => {
+                                TxState::InMempool(_) => {
+                                    // A stale in-mempool transaction's inputs are marked as
+                                    // spent in the cache and must be un-spent on pruning.
+                                    if !allow_stale_in_mempool {
+                                        return Err(WalletError::CannotChangeTransactionState(
+                                            *tx.state(),
+                                            TxState::Abandoned,
+                                        ));
+                                    }
+                                    true
+                                }
+                                state @ (TxState::Confirmed(_, _, _) | TxState::Abandoned) => {
                                     return Err(WalletError::CannotChangeTransactionState(
                                         *state,
                                         TxState::Abandoned,

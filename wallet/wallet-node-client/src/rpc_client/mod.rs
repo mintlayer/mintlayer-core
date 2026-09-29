@@ -58,6 +58,23 @@ impl NodeInterfaceError for NodeRpcError {
             | NodeRpcError::PerThousandParseError(_) => false,
         }
     }
+
+    fn is_node_rejection(&self) -> bool {
+        // A `Call` error with a code in the JSON-RPC reserved server-error range
+        // (-32000..=-32099) is treated as an application-level rejection: the
+        // node received the submission, evaluated it and rejected it. Note that
+        // jsonrpsee reuses -32000 for server-busy/resource-unavailable replies
+        // too, so this errs on the side of "rejected" for overloaded servers.
+        // Protocol-level errors (internal error, method not found, ...) are
+        // delivery failures: the transaction was not evaluated and must be
+        // retried instead of pruned.
+        match self {
+            NodeRpcError::ResponseError(rpc::ClientError::Call(err)) => {
+                (-32099..=-32000).contains(&err.code())
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
