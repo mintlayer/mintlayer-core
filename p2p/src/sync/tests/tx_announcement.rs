@@ -465,6 +465,7 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
 
         let p2p_config = Arc::new(test_p2p_config());
         let mempool_config = MempoolConfig {
+            allow_local_orphans: Default::default(),
             min_tx_relay_fee_rate: min_fee_rate.into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -569,6 +570,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
             .with_mempool_config(MempoolConfig {
+                allow_local_orphans: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
                     .into(),
                 max_cluster_tx_count: Default::default(),
@@ -846,6 +848,7 @@ async fn transaction_announcements_are_batched_and_sorted(#[case] seed: Seed) {
             .with_chain_config(Arc::clone(&chain_config))
             .with_p2p_config(Arc::clone(&p2p_config))
             .with_mempool_config(MempoolConfig {
+                allow_local_orphans: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_tx_count: Default::default(),
                 max_cluster_size_bytes: Default::default(),
@@ -986,6 +989,7 @@ async fn unconfirmed_local_transactions_reannouncement(
             .with_chain_config(Arc::clone(&chain_config))
             .with_p2p_config(Arc::clone(&p2p_config))
             .with_mempool_config(MempoolConfig {
+                allow_local_orphans: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_tx_count: Default::default(),
                 max_cluster_size_bytes: Default::default(),

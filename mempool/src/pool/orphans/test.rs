@@ -83,8 +83,8 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Duration::from_secs(rng.random());
-    let origin = random_peer_origin(rng);
-    let options = crate::TxOptions::default_for(origin.into());
+    let origin = random_peer_origin(rng).into();
+    let options = crate::TxOptions::default_for(origin);
 
     TxEntry::new(
         transaction,
@@ -195,8 +195,8 @@ fn simulation(#[case] seed: Seed) {
 
             // Delete all txs by origin
             4..=4 => {
-                let origin = random_peer_origin(&mut rng);
-                orphans.remove_by_origin(origin);
+                let origin = TxOrigin::Remote(random_peer_origin(&mut rng));
+                orphans.remove_by_origin_impl(origin);
                 let count = orphans
                     .maps
                     .by_origin

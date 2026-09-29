@@ -42,6 +42,8 @@ use crate::{
     tx_origin::{RemoteTxOrigin, TxOrigin},
 };
 
+use p2p_types::peer_id::PeerId;
+
 use self::{
     entry::TxEntry,
     fee::Fee,
@@ -403,7 +405,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         match orphan {
             Some(Ok(orphan)) => {
-                let orphan = orphan.map_origin(TxOrigin::from);
                 let orphan_id = *orphan.tx_id();
                 log::trace!("Re-processing orphan transaction {orphan_id:x}");
                 if let Err(err) = state.add_transaction(orphan) {
@@ -546,6 +547,13 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                         }
                     }
                 })?;
+
+                // The rebuild above may have enqueued orphans for reprocessing (e.g. parked
+                // local-origin transactions whose parents have just been re-added from blocks).
+                // Pump the work queue now so they don't have to wait for an external trigger.
+                while self.has_work() {
+                    self.perform_work_unit();
+                }
             }
         };
 
@@ -601,6 +609,10 @@ enum TxFinalizerEventsMode<'a> {
     Silent,
     Broadcast(&'a mut EventsBroadcast),
 }
+
+// Sentinel peer ID used to enqueue local-origin orphans for processing. Real peer IDs start
+// from 1 (see `PeerId::new`), so the sentinel never collides with an actual peer.
+pub(crate) const LOCAL_ORIGIN_PEER_ID: PeerId = PeerId::from_u64(0);
 
 impl<'a> TxFinalizer<'a> {
     pub fn new(
@@ -695,9 +707,17 @@ impl<'a> TxFinalizer<'a> {
     pub fn enqueue_children(&mut self, tx: &TxEntry) {
         for orphan in self.orphan_pool.children_of(tx) {
             let orphan_id = *orphan.tx_id();
-            let peer_id = orphan.origin().peer_id();
+            // Local-origin orphans have no peer; enqueue them under the sentinel peer ID so
+            // that they still get picked up for processing.
+            let peer_id = match orphan.origin() {
+                TxOrigin::Remote(remote_origin) => remote_origin.peer_id(),
+                TxOrigin::Local(_) => LOCAL_ORIGIN_PEER_ID,
+            };
             if self.work_queue.insert(peer_id, orphan_id) {
-                log::trace!("Added orphan {orphan_id:x} to peer{peer_id}'s work queue");
+                log::trace!(
+                    "Added orphan {orphan_id:x} originating in {} to the work queue",
+                    orphan.origin()
+                );
             }
         }
     }
@@ -709,22 +729,32 @@ impl<'a> TxFinalizer<'a> {
         error: chainstate::ConnectTransactionError,
     ) -> Result<TxStatus, Error> {
         let orphan_type = OrphanType::from_error(error)?;
-        let transaction = Self::check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
+        let transaction = self.check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
         Ok(self.orphan_pool.insert_and_enforce_limits(transaction, self.cur_time)?)
     }
 
     fn check_orphan_pool_policy<M: MemoryUsageEstimator>(
+        &self,
         transaction: TxEntry,
         orphan_type: OrphanType,
         tx_pool: &TxPool<M>,
-    ) -> Result<TxEntry<RemoteTxOrigin>, OrphanPoolError> {
-        // Only remote transactions are allowed in the orphan pool
-        let transaction = transaction
-            .try_map_origin(|origin| match origin {
-                TxOrigin::Local(o) => Err(OrphanPoolError::NotSupportedForLocalOrigin(o)),
-                TxOrigin::Remote(o) => Ok(o),
-            })
-            .map_err(|(_, e)| e)?;
+    ) -> Result<TxEntry, OrphanPoolError> {
+        // Only remote transactions are allowed in the orphan pool, unless local orphans are
+        // explicitly enabled in the mempool config.
+        if let TxOrigin::Local(local_origin) = transaction.origin() {
+            if !*tx_pool.mempool_config().allow_local_orphans {
+                return Err(OrphanPoolError::NotSupportedForLocalOrigin(local_origin));
+            }
+
+            // Keep local-origin orphans from crowding out remote peers' orphans. Resubmissions
+            // of already-parked transactions bypass the capacity check so that they keep
+            // yielding the idempotent `InOrphanPoolDuplicate` status instead of an error.
+            if !self.orphan_pool.contains(transaction.tx_id())
+                && self.orphan_pool.local_len() >= config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY
+            {
+                return Err(OrphanPoolError::LocalCapacityExceeded);
+            }
+        }
 
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.

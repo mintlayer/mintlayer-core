@@ -119,6 +119,10 @@ pub const ROLLING_FEE_DECAY_INTERVAL: Duration = Duration::new(10, 0);
 
 pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 
+/// A separate, smaller cap for local-origin orphans, so that they cannot starve remote peers'
+/// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
+pub const DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY: usize = 25;
+
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
@@ -144,6 +148,11 @@ make_config_setting!(
 make_config_setting!(MaxClusterTxCount, usize, 64);
 make_config_setting!(MaxClusterSizeBytes, usize, 100_000);
 
+// When disabled (the default), transactions submitted locally whose inputs are not yet known are
+// rejected outright. When enabled, they are parked in the orphan pool instead and re-processed
+// once their parents arrive (or are mined), same as remote transactions.
+make_config_setting!(AllowLocalOrphans, bool, false);
+
 #[derive(Debug, Clone, Default)]
 pub struct MempoolConfig {
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
@@ -154,6 +163,9 @@ pub struct MempoolConfig {
 
     /// Maximum total size of transactions that is allowed in a single cluster.
     pub max_cluster_size_bytes: MaxClusterSizeBytes,
+
+    /// Whether to park local-origin transactions with unknown inputs in the orphan pool.
+    pub allow_local_orphans: AllowLocalOrphans,
 }
 
 impl MempoolConfig {
@@ -166,12 +178,14 @@ impl MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
         } = self;
 
         RpcMempoolConfig {
             min_tx_relay_fee_rate: **min_tx_relay_fee_rate,
             max_cluster_tx_count: **max_cluster_tx_count,
             max_cluster_size_bytes: **max_cluster_size_bytes,
+            allow_local_orphans: **allow_local_orphans,
         }
     }
 
@@ -198,12 +212,14 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
         } = value;
 
         Self {
             min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
             max_cluster_tx_count: max_cluster_tx_count.into(),
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
+            allow_local_orphans: allow_local_orphans.into(),
         }
     }
 }
@@ -214,6 +230,7 @@ pub struct RpcMempoolConfig {
     pub min_tx_relay_fee_rate: FeeRate,
     pub max_cluster_tx_count: usize,
     pub max_cluster_size_bytes: usize,
+    pub allow_local_orphans: bool,
 }
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]

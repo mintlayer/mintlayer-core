@@ -49,6 +49,7 @@ async fn tx_ids_by_score_and_ancestry(#[case] seed: Seed) {
     let mut mempool = setup_with_chainstate_generic(
         tf.chainstate(),
         MempoolConfig {
+            allow_local_orphans: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -216,6 +217,7 @@ fn stack_overflow_on_misconfigured_cluster_size_limit(#[case] seed: Seed) {
         let mut mempool = setup_with_chainstate_generic(
             tf.chainstate(),
             MempoolConfig {
+                allow_local_orphans: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_size_bytes: usize::MAX.into(),
                 max_cluster_tx_count: usize::MAX.into(),

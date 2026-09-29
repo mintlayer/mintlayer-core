@@ -559,6 +559,7 @@ async fn get_all_txs_in_insertion_order(#[case] seed: Seed) {
         .with_time_getter(time_getter.clone())
         .build();
     let mempool_config = MempoolConfig {
+        allow_local_orphans: Default::default(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count: Default::default(),
         max_cluster_size_bytes: Default::default(),
