@@ -238,7 +238,9 @@ dependencies = [
  "logging",
  "node-comm",
  "node-lib",
+ "randomness",
  "rpc",
+ "test-utils",
  "thiserror 1.0.69",
  "tokio",
  "utils",
@@ -330,6 +332,7 @@ dependencies = [
 name = "api-server-stack-test-suite"
 version = "1.4.0"
 dependencies = [
+ "api-blockchain-scanner-daemon",
  "api-blockchain-scanner-lib",
  "api-server-backend-test-suite",
  "api-server-common",
@@ -342,6 +345,7 @@ dependencies = [
  "crypto",
  "ctor",
  "hex",
+ "jsonrpsee",
  "libtest-mimic",
  "logging",
  "mempool",
@@ -349,6 +353,7 @@ dependencies = [
  "pos-accounting",
  "randomness",
  "reqwest",
+ "rpc",
  "rstest",
  "serde",
  "serde_json",
@@ -5535,6 +5540,7 @@ dependencies = [
  "crypto",
  "derive_more 1.0.0",
  "futures",
+ "jsonrpsee",
  "logging",
  "mempool",
  "mockall",

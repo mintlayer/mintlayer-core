@@ -23,6 +23,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 - A `lag` advisory (`skipped: 0`) is now broadcast when the node's mempool subscription is lost or an event cannot be decoded, so clients can detect gaps; a single undecodable event no longer stalls the whole stream.
 
 ### Fixed
+- The scanner daemon no longer requires a manual restart when the WebSocket connection to the node is lost.\
+  Connection-level failures (the node being unreachable, closing the connection or timing out) are now recovered in place: the daemon re-establishes the connection with an exponential backoff (1s doubling up to 60s, jittered by ±20%), logs each reconnection attempt and resumes indexing from the tip stored in the database. Errors that reconnecting cannot fix (e.g. an invalid RPC configuration) still terminate the process.
 - `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\
   Both tokens and NFTs are stored with a row per block height they changed at, and every one
   of those rows was being listed. Tokens that were updated, and NFTs that changed owner, now
