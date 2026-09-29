@@ -41,6 +41,7 @@ tower.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
+jsonrpsee.workspace = true
 
 [build-dependencies]
 build_utils = { path = "../../utils/build_utils" }
