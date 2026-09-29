@@ -42,6 +42,18 @@ pub trait RemoteNode {
     ) -> Result<Vec<Block>, Self::Error>;
 
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
+
+    /// Returns `true` if the given error indicates a connection-level failure between the
+    /// scanner and the node (a broken or unusable connection), as opposed to an
+    /// application-level error reported by the node. Connection-level failures are recoverable
+    /// by dropping the client and establishing a new connection.
+    fn is_connection_error(error: &Self::Error) -> bool
+    where
+        Self: Sized,
+    {
+        let _ = error;
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -69,5 +81,9 @@ impl RemoteNode for NodeRpcClient {
 
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         self.mempool_get_fee_rate_points().await
+    }
+
+    fn is_connection_error(error: &NodeRpcError) -> bool {
+        NodeRpcError::is_connection_error(error)
     }
 }
