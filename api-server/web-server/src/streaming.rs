@@ -206,6 +206,8 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
     let mut resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
     // The start of the current outage, if the bridge is not subscribed.
     let mut outage_started: Option<std::time::Instant> = None;
+    // The number of failed connection/subscription attempts of the current outage.
+    let mut outage_attempts: u64 = 0;
     // The bridge's dedicated client; `None` means "connect (or re-connect) before subscribing".
     let mut client: Option<NodeRpcClient> = None;
     loop {
@@ -218,9 +220,12 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
                     // fixed and validated at startup, where the REST client must connect), so
                     // unlike the scanner daemon, there is no reason to abort; retry with the
                     // same backoff as the re-subscription below.
+                    outage_attempts += 1;
                     logging::log::error!(
-                        "Failed to connect to the node for the mempool events: {err}; \
-                        retrying after a delay"
+                        "Failed to connect to the node for the mempool events \
+                        (attempt {}, elapsed {:?}): {err}; retrying after a delay",
+                        outage_attempts,
+                        outage_started.map_or(Duration::ZERO, |started| started.elapsed()),
                     );
                 }
             }
@@ -240,10 +245,13 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
                     logging::log::info!("Subscribed to node mempool events");
                     if let Some(started) = outage_started.take() {
                         logging::log::info!(
-                            "Node mempool events were unavailable for {:?}",
-                            started.elapsed()
+                            "Node mempool events were unavailable for {:?} \
+                            ({} failed attempt(s))",
+                            started.elapsed(),
+                            outage_attempts,
                         );
                     }
+                    outage_attempts = 0;
                     // Note: the subscription worked, so the next retry does not need to back off.
                     resubscribe_delay = MEMPOOL_RESUBSCRIBE_DELAY;
                     Some(subscription)
@@ -255,15 +263,25 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
                     if err.is_connection_error() {
                         client = None;
                     }
-                    logging::log::error!("Failed to subscribe to node mempool events: {err}");
+                    outage_attempts += 1;
+                    logging::log::error!(
+                        "Failed to subscribe to node mempool events \
+                        (attempt {}, elapsed {:?}): {err}",
+                        outage_attempts,
+                        outage_started.map_or(Duration::ZERO, |started| started.elapsed()),
+                    );
                     None
                 }
                 Err(_timed_out) => {
                     // The handshake stalled, so the state of the connection is unknown;
                     // re-connect from scratch on the next round.
                     client = None;
+                    outage_attempts += 1;
                     logging::log::error!(
-                        "Timed out subscribing to node mempool events; retrying after a delay"
+                        "Timed out subscribing to node mempool events \
+                        (attempt {}, elapsed {:?}); retrying after a delay",
+                        outage_attempts,
+                        outage_started.map_or(Duration::ZERO, |started| started.elapsed()),
                     );
                     None
                 }
