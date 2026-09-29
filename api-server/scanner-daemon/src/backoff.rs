@@ -23,10 +23,12 @@ use std::time::Duration;
 use randomness::{Rng, RngExt as _};
 
 /// The relative jitter applied to every delay: the actual delay is in
-/// `[delay * (1 - JITTER), delay * (1 + JITTER)]`.
-const JITTER: f64 = 0.2;
+/// `[delay * (100 - JITTER_PERCENT) / 100, delay * (100 + JITTER_PERCENT) / 100]`.
+const JITTER_PERCENT: i64 = 20;
 
-/// The exponential backoff schedule between connection attempts.
+/// The exponential backoff schedule between connection attempts: the delay starts at the
+/// initial delay, doubles on every attempt up to the maximum, and is jittered; a successful
+/// connection resets the schedule (see [`ReconnectBackoff::reset`]).
 #[derive(Debug)]
 pub struct ReconnectBackoff {
     initial_delay: Duration,
@@ -68,8 +70,8 @@ impl ReconnectBackoff {
     }
 
     /// Returns the delay to wait before the next connection attempt and advances the schedule
-    /// (doubling it, up to the maximum). The returned delay is jittered by ±[`JITTER`], so the
-    /// returned value can exceed `max_delay` by up to 20%.
+    /// (doubling it, up to the maximum). The returned delay is jittered by
+    /// ±[`JITTER_PERCENT`]%, so the returned value can exceed `max_delay` by up to 20%.
     pub fn next_delay(&mut self, rng: &mut impl Rng) -> Duration {
         let base_delay = self.next_delay;
         self.next_delay = std::cmp::min(base_delay * 2, self.max_delay);
@@ -77,10 +79,15 @@ impl ReconnectBackoff {
     }
 }
 
-/// Jitter the given delay by a uniformly random factor in `[1 - JITTER, 1 + JITTER]`.
+/// Jitter the given delay by a uniformly random percentage in
+/// `[100 - JITTER_PERCENT, 100 + JITTER_PERCENT]`.
+///
+/// Note: integer arithmetic only (the production-code clippy configuration rejects floating
+/// point arithmetic); the intermediate products cannot overflow, because the percentages are
+/// small and `Duration` multiplication takes a `u32`.
 fn apply_jitter(delay: Duration, rng: &mut impl Rng) -> Duration {
-    let jitter_fraction = rng.random_range(-JITTER..=JITTER);
-    delay.mul_f64(1.0 + jitter_fraction)
+    let percent = (100 + rng.random_range(-JITTER_PERCENT..=JITTER_PERCENT)) as u32;
+    delay * percent / 100
 }
 
 #[cfg(test)]
@@ -92,7 +99,7 @@ mod tests {
     const MAX_DELAY: Duration = Duration::from_secs(60);
 
     fn jitter_bounds(delay: Duration) -> (Duration, Duration) {
-        (delay.mul_f64(1.0 - JITTER), delay.mul_f64(1.0 + JITTER))
+        (delay * 80 / 100, delay * 120 / 100)
     }
 
     #[track_caller]
