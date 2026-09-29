@@ -44,12 +44,9 @@ use common::{
     chain::GenBlock,
     primitives::{BlockHeight, Id},
 };
-use jsonrpsee::{
-    core::RpcResult,
-    types::{ErrorObjectOwned, error::INTERNAL_ERROR_CODE},
-};
 use randomness::RngExt as _;
-use rpc::RpcAuthData;
+use rpc::test_support::{INTERNAL_ERROR_CODE, RpcModule, RpcResult, Server};
+use rpc::{Error as ErrorObjectOwned, RpcAuthData};
 use serialization::hex_encoded::HexEncoded;
 use test_common::proxy::ProxyHandle;
 use test_utils::random::{Seed, make_seedable_rng};
@@ -71,8 +68,8 @@ const OUTAGE_DURATION: Duration = Duration::from_secs(4);
 /// formats match the ones of the real node's RPC, so the scanner cannot tell the difference.
 fn make_chainstate_rpc_module(
     framework: Arc<tokio::sync::Mutex<TestFramework>>,
-) -> jsonrpsee::RpcModule<Arc<tokio::sync::Mutex<TestFramework>>> {
-    let mut module = jsonrpsee::RpcModule::new(framework.clone());
+) -> RpcModule<Arc<tokio::sync::Mutex<TestFramework>>> {
+    let mut module = RpcModule::new(framework.clone());
 
     module
         .register_async_method("chainstate_info", |_params, state, _| async move {
@@ -232,7 +229,7 @@ async fn scanner_reconnects_after_node_disconnection() {
     // proxy in front of it that lets the test sever the connections.
     // -----------------------------------------------------------------------------------------
     let framework = Arc::new(tokio::sync::Mutex::new(tf));
-    let backend_server = jsonrpsee::server::Server::builder().build("127.0.0.1:0").await.unwrap();
+    let backend_server = Server::builder().build("127.0.0.1:0").await.unwrap();
     let backend_addr = backend_server.local_addr().unwrap();
     let _backend_server_handle =
         backend_server.start(make_chainstate_rpc_module(Arc::clone(&framework)));

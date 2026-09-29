@@ -17,7 +17,7 @@ common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 randomness = { path = "../../randomness" }
-rpc = { path = "../../rpc" }
+rpc = { path = "../../rpc", features = ["test-support"] }
 serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
@@ -29,7 +29,6 @@ async-trait.workspace = true
 axum.workspace = true
 ctor.workspace = true
 hex.workspace = true
-jsonrpsee = { workspace = true, features = ["server", "server-core"] }
 libtest-mimic.workspace = true
 reqwest.workspace = true
 rstest.workspace = true

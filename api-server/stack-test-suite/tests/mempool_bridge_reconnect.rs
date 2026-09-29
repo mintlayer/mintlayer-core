@@ -34,9 +34,9 @@ use common::{
     chain::config::create_unit_test_config,
     primitives::{H256, Id},
 };
-use jsonrpsee::server::SubscriptionSink;
 use mempool::rpc_event::{RpcEvent, RpcTxOrigin};
 use rpc::RpcAuthData;
+use rpc::test_support::{RpcModule, Server, ServerHandle, SubscriptionSink};
 use test_common::proxy::ProxyHandle;
 
 #[ctor::ctor]
@@ -71,7 +71,7 @@ async fn start_mempool_node(
 ) -> SocketAddrWithServer {
     let genesis_id = Arc::new(create_unit_test_config()).genesis_block_id();
 
-    let mut module = jsonrpsee::RpcModule::new(sinks.clone());
+    let mut module = RpcModule::new(sinks.clone());
     module
         .register_subscription(
             // The method names match the ones the jsonrpsee-generated mempool RPC server and
@@ -92,7 +92,7 @@ async fn start_mempool_node(
         )
         .unwrap();
 
-    let server = jsonrpsee::server::Server::builder().build("127.0.0.1:0").await.unwrap();
+    let server = Server::builder().build("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr().unwrap();
     let _server_handle = server.start(module);
     SocketAddrWithServer {
@@ -104,7 +104,7 @@ async fn start_mempool_node(
 /// Keeps the RPC server (and thus its subscription sinks) alive.
 struct SocketAddrWithServer {
     addr: std::net::SocketAddr,
-    _server_handle: jsonrpsee::server::ServerHandle,
+    _server_handle: ServerHandle,
 }
 
 impl SocketAddrWithServer {

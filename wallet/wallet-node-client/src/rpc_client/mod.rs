@@ -139,7 +139,7 @@ impl NodeRpcClient {
 #[cfg(test)]
 mod connection_error_tests {
     use super::*;
-    use jsonrpsee::types::ErrorObjectOwned;
+    use rpc::test_support::CALL_EXECUTION_FAILED_CODE;
 
     /// The "background task closed ...; restart required" error reported by a WS client whose
     /// connection was closed by the node; this is the error seen by the scanner in production
@@ -178,8 +178,8 @@ mod connection_error_tests {
     #[test]
     fn node_reported_errors_are_not_connection_errors() {
         // A definitive application-level answer from the node must not trigger a reconnection.
-        let call_error = ClientError::Call(ErrorObjectOwned::owned(
-            jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE,
+        let call_error = ClientError::Call(rpc::Error::owned(
+            CALL_EXECUTION_FAILED_CODE,
             "No such block",
             None::<serde_json::Value>,
         ));
