@@ -38,7 +38,9 @@ use jsonrpsee::{
 
 use logging::log;
 
-pub use error::{ClientError, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result};
+pub use error::{
+    ClientError, ClientErrorExt, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result,
+};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;

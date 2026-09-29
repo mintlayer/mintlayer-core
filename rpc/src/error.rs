@@ -27,6 +27,46 @@ pub type RpcClientResult<T> = std::result::Result<T, jsonrpsee::core::ClientErro
 pub type Error = ErrorObjectOwned;
 pub type ClientError = jsonrpsee::core::ClientError;
 
+/// Classification of client errors into connection-level and application-level failures.
+///
+/// A connection-level error means that the RPC call did not reach the remote node (or its
+/// response was lost) because the underlying connection is broken or cannot be established;
+/// such failures are recoverable by dropping the client and re-establishing the connection.
+/// An application-level error, in contrast, is a definitive answer from the node (or a local
+/// problem) and must not trigger a reconnection.
+pub trait ClientErrorExt {
+    /// Returns `true` if the error indicates a broken or unusable connection to the node.
+    fn is_connection_error(&self) -> bool;
+}
+
+impl ClientErrorExt for ClientError {
+    fn is_connection_error(&self) -> bool {
+        match self {
+            // The connection to the node failed (e.g. the node is unreachable).
+            ClientError::Transport(_) => true,
+            // The background task of the WS client has terminated; the client is permanently
+            // broken and every subsequent call would fail until a new client is created.
+            // Note: the jsonrpsee-generated message ends with "; restart required", which is
+            // only true for clients that cannot be re-created.
+            ClientError::RestartNeeded(_) => true,
+            // The node didn't answer in time; the connection is (currently) unusable.
+            // Note: jsonrpsee does not terminate the background task on a timeout, but there is
+            // no point in keeping a client whose connection has proven to be unreliable.
+            ClientError::RequestTimeout => true,
+            // The RPC service got disconnected from its backend.
+            ClientError::ServiceDisconnect => true,
+            ClientError::Call(_)
+            | ClientError::ParseError(_)
+            | ClientError::InvalidSubscriptionId
+            | ClientError::InvalidRequestId(_)
+            | ClientError::Custom(_)
+            | ClientError::HttpNotImplemented
+            | ClientError::EmptyBatchRequest(_)
+            | ClientError::RegisterMethod(_) => false,
+        }
+    }
+}
+
 /// Handle RPC result
 ///
 /// This is a generic way of converting the likes of:
