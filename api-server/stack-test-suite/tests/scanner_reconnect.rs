@@ -29,7 +29,6 @@
 mod test_common;
 
 use std::{
-    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -51,6 +50,7 @@ use jsonrpsee::{
 };
 use rpc::RpcAuthData;
 use serialization::hex_encoded::HexEncoded;
+use test_common::proxy::ProxyHandle;
 use test_utils::random::{Seed, make_seedable_rng};
 
 #[ctor::ctor]
@@ -139,97 +139,6 @@ fn map_chainstate_error(err: chainstate::ChainstateError) -> ErrorObjectOwned {
         err.to_string(),
         None::<serde_json::Value>,
     )
-}
-
-/// A minimal TCP proxy in front of the (WebSocket) RPC server, used to sever the connections
-/// between the scanner and the node exactly like a node restart or an RPC listener shutdown
-/// would, without having to re-bind the scanner-facing port.
-struct ProxyHandle {
-    addr: SocketAddr,
-    forwarding: tokio::sync::watch::Sender<bool>,
-    connections: Arc<tokio::sync::Mutex<Vec<[tokio::task::JoinHandle<()>; 2]>>>,
-}
-
-impl ProxyHandle {
-    /// Starts the proxy: it accepts connections on `listener` and pipes them to `backend_addr`
-    /// while `forwarding` is `true`; while it is `false`, the accepted connections are dropped
-    /// immediately (the "node is down" behavior).
-    fn start(
-        listener: tokio::net::TcpListener,
-        backend_addr: SocketAddr,
-        forwarding: tokio::sync::watch::Sender<bool>,
-    ) -> Self {
-        let addr = listener.local_addr().unwrap();
-        let forwarding_rx = forwarding.subscribe();
-        let connections = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        tokio::spawn(run_proxy(
-            listener,
-            backend_addr,
-            forwarding_rx,
-            Arc::clone(&connections),
-        ));
-
-        Self {
-            addr,
-            forwarding,
-            connections,
-        }
-    }
-
-    /// Switch the proxy between forwarding (`true`) and refusing new connections (`false`).
-    fn set_forwarding(&self, forwarding: bool) {
-        self.forwarding.send(forwarding).expect("The proxy has crashed");
-    }
-
-    /// Tear down all established connections between the scanner and the "node"; the scanner
-    /// sees its WebSocket connection being closed.
-    async fn kill_connections(&self) {
-        let mut connections = self.connections.lock().await;
-        for connection in connections.drain(..) {
-            for task in connection {
-                task.abort();
-            }
-        }
-    }
-}
-
-async fn run_proxy(
-    listener: tokio::net::TcpListener,
-    backend_addr: SocketAddr,
-    mut forwarding: tokio::sync::watch::Receiver<bool>,
-    connections: Arc<tokio::sync::Mutex<Vec<[tokio::task::JoinHandle<()>; 2]>>>,
-) {
-    loop {
-        let (client_socket, _) = tokio::select! {
-            accepted = listener.accept() => accepted.expect("The proxy listener has failed"),
-            _ = forwarding.changed() => {
-                // Note: the established connections are not affected by the switch; killing them
-                // is a separate, explicit step.
-                continue;
-            }
-        };
-
-        if !*forwarding.borrow() {
-            // The "node is down": drop the accepted connection right away.
-            continue;
-        }
-
-        let Ok(backend_socket) = tokio::net::TcpStream::connect(backend_addr).await else {
-            // The backend is unreachable; behave like a closed connection.
-            continue;
-        };
-
-        let (mut client_read, mut client_write) = client_socket.into_split();
-        let (mut backend_read, mut backend_write) = backend_socket.into_split();
-        let client_to_backend = tokio::spawn(async move {
-            let _ = tokio::io::copy(&mut client_read, &mut backend_write).await;
-        });
-        let backend_to_client = tokio::spawn(async move {
-            let _ = tokio::io::copy(&mut backend_read, &mut client_write).await;
-        });
-
-        connections.lock().await.push([client_to_backend, backend_to_client]);
-    }
 }
 
 /// The best block currently known by the scanner, read through an independent storage handle.
@@ -333,10 +242,11 @@ async fn scanner_reconnects_after_node_disconnection() {
     // The scanner daemon, running exactly as in production (the supervision loop of `run`).
     // -----------------------------------------------------------------------------------------
     let chain_config_for_task = Arc::clone(&chain_config);
+    let scanner_address = proxy.addr().to_string();
     let scanner_task = tokio::spawn(async move {
         run_scanner_daemon(
             &chain_config_for_task,
-            proxy.addr.to_string(),
+            scanner_address,
             RpcAuthData::None,
             scanner_storage,
         )
