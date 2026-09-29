@@ -205,6 +205,9 @@ pub enum OrphanPoolError {
     #[error("Orphan pool full")]
     Full,
 
+    #[error("Local orphan capacity exceeded (limit: {0})")]
+    LocalCapacityExceeded(usize),
+
     #[error("Account nonces too distant, gap: {0}")]
     NonceGapTooLarge(u64),
 

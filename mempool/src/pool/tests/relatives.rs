@@ -831,6 +831,8 @@ fn create_mempool(
     max_cluster_size_bytes: MaxClusterSizeBytes,
 ) -> MempoolType {
     let mempool_config = MempoolConfig {
+        allow_local_orphans: Default::default(),
+        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count,
         max_cluster_size_bytes,

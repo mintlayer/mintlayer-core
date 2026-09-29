@@ -119,6 +119,10 @@ pub const ROLLING_FEE_DECAY_INTERVAL: Duration = Duration::new(10, 0);
 
 pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 
+/// A separate, smaller cap for local-origin orphans, so that they cannot starve remote peers'
+/// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
+pub const DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY: usize = 25;
+
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
@@ -144,6 +148,19 @@ make_config_setting!(
 make_config_setting!(MaxClusterTxCount, usize, 64);
 make_config_setting!(MaxClusterSizeBytes, usize, 100_000);
 
+// Separate cap for local-origin orphans, so that they cannot starve remote peers'
+// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
+make_config_setting!(
+    LocalOrphanPoolCapacity,
+    usize,
+    DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY
+);
+
+// When disabled (the default), transactions submitted locally whose inputs are not yet known are
+// rejected outright. When enabled, they are parked in the orphan pool instead and re-processed
+// once their parents arrive (or are mined), same as remote transactions.
+make_config_setting!(AllowLocalOrphans, bool, false);
+
 #[derive(Debug, Clone, Default)]
 pub struct MempoolConfig {
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
@@ -154,6 +171,12 @@ pub struct MempoolConfig {
 
     /// Maximum total size of transactions that is allowed in a single cluster.
     pub max_cluster_size_bytes: MaxClusterSizeBytes,
+
+    /// Whether to park local-origin transactions with unknown inputs in the orphan pool.
+    pub allow_local_orphans: AllowLocalOrphans,
+
+    /// Capacity for local-origin orphans within the orphan pool.
+    pub local_orphan_pool_capacity: LocalOrphanPoolCapacity,
 }
 
 impl MempoolConfig {
@@ -166,12 +189,16 @@ impl MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
         } = self;
 
         RpcMempoolConfig {
             min_tx_relay_fee_rate: **min_tx_relay_fee_rate,
             max_cluster_tx_count: **max_cluster_tx_count,
             max_cluster_size_bytes: **max_cluster_size_bytes,
+            allow_local_orphans: **allow_local_orphans,
+            local_orphan_pool_capacity: **local_orphan_pool_capacity,
         }
     }
 
@@ -188,6 +215,17 @@ impl MempoolConfig {
             *self.max_cluster_size_bytes > 0,
             ConfigError::MaxClusterSizeBytesCannotBeZero
         );
+        // Note: a value of 0 combined with `allow_local_orphans = true` would
+        // silently disable local orphan parking, so we forbid it like the
+        // other zero-valued limits. Also note there is no upper bound relative
+        // to the overall orphan pool capacity
+        // (`config::DEFAULT_ORPHAN_POOL_CAPACITY`): a value above it makes the
+        // separate local cap non-binding, since the total pool limit evicts
+        // without regard to origin.
+        ensure!(
+            *self.local_orphan_pool_capacity > 0,
+            ConfigError::LocalOrphanPoolCapacityCannotBeZero
+        );
         Ok(())
     }
 }
@@ -198,12 +236,16 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
         } = value;
 
         Self {
             min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
             max_cluster_tx_count: max_cluster_tx_count.into(),
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
+            allow_local_orphans: allow_local_orphans.into(),
+            local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
         }
     }
 }
@@ -214,12 +256,21 @@ pub struct RpcMempoolConfig {
     pub min_tx_relay_fee_rate: FeeRate,
     pub max_cluster_tx_count: usize,
     pub max_cluster_size_bytes: usize,
+    pub allow_local_orphans: bool,
+    pub local_orphan_pool_capacity: usize,
 }
 
+/// Mempool configuration errors.
+// The variant names intentionally share the `CannotBeZero` suffix: they all
+// describe zero-values that make no sense for the corresponding limit.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("Maximum cluster transaction count cannot be zero")]
     MaxClusterTxCountCannotBeZero,
+
+    #[error("Local orphan pool capacity cannot be zero")]
+    LocalOrphanPoolCapacityCannotBeZero,
 
     #[error("Maximum cluster size in bytes cannot be zero")]
     MaxClusterSizeBytesCannotBeZero,

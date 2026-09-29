@@ -118,6 +118,8 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&chain_config))
         .with_mempool_config(MempoolConfig {
+            allow_local_orphans: Default::default(),
+            local_orphan_pool_capacity: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -576,6 +578,8 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&chain_config))
         .with_mempool_config(MempoolConfig {
+            allow_local_orphans: Default::default(),
+            local_orphan_pool_capacity: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -706,6 +710,8 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&chain_config))
         .with_mempool_config(MempoolConfig {
+            allow_local_orphans: Default::default(),
+            local_orphan_pool_capacity: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -930,6 +936,8 @@ async fn pool_creation_and_delegation_withdrawals(
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&chain_config))
         .with_mempool_config(MempoolConfig {
+            allow_local_orphans: Default::default(),
+            local_orphan_pool_capacity: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -1093,6 +1101,8 @@ async fn order_creation_and_usage(
     let (blockprod_setup, manager) = BlockprodTestSetupBuilder::new()
         .with_chain_config(Arc::clone(&chain_config))
         .with_mempool_config(MempoolConfig {
+            allow_local_orphans: Default::default(),
+            local_orphan_pool_capacity: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
