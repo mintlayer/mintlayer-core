@@ -179,6 +179,8 @@ async fn scanner_reconnects_after_node_disconnection() {
         return;
     }
 
+    // Note: one seeded RNG drives the whole test (the framework builder and both phases of
+    // block creation), so that a CI failure is locally reproducible with a fixed seed.
     let mut rng = make_seedable_rng(Seed::from_entropy());
     let tf = TestFramework::builder(&mut rng).build();
     let chain_config = tf.chain_config().clone();
@@ -254,12 +256,15 @@ async fn scanner_reconnects_after_node_disconnection() {
     });
 
     // Index a few blocks while everything is healthy.
+    // Note: the framework mutex is shared between this (chain building, on the runtime) and
+    // the spawn_blocking-backed RPC serving; the two serialize for the duration of the chain
+    // building, which is fine at this scale (the scanner's calls resume right after).
     let tip_3 = {
         let mut framework = framework.lock().await;
-        let mut rng = make_seedable_rng(Seed::from_entropy());
         let genesis_id = framework.chain_config().genesis_block_id();
         framework.create_chain_with_empty_blocks(&genesis_id, 3, &mut rng).unwrap()
     };
+    proxy.assert_alive();
     wait_for_scanner_tip(&test_storage, tip_3).await;
     assert_eq!(
         scanner_tip(&test_storage).await.map(|(height, _)| height),
@@ -276,7 +281,6 @@ async fn scanner_reconnects_after_node_disconnection() {
 
     let tip_5 = {
         let mut framework = framework.lock().await;
-        let mut rng = make_seedable_rng(Seed::from_entropy());
         framework.create_chain_with_empty_blocks(&tip_3, 2, &mut rng).unwrap()
     };
     assert_ne!(tip_3, tip_5);
@@ -289,6 +293,7 @@ async fn scanner_reconnects_after_node_disconnection() {
     // from its stored tip, without any external restart.
     // -----------------------------------------------------------------------------------------
     proxy.set_forwarding(true);
+    proxy.assert_alive();
     wait_for_scanner_tip(&test_storage, tip_5).await;
     assert_eq!(
         scanner_tip(&test_storage).await.map(|(height, _)| height),

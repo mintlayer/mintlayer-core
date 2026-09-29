@@ -17,6 +17,9 @@
 //! connections between a daemon and the server behind it exactly like a node restart or an RPC
 //! listener shutdown would, without having to re-bind the daemon-facing port (which would be
 //! unreliable, because the closed connections would leave the port in TIME_WAIT).
+//!
+//! Note: the proxy task has no shutdown path; like the daemons under test, it runs until the
+//! test process ends (its failure is observable through [`ProxyHandle::assert_alive`]).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -26,6 +29,7 @@ pub struct ProxyHandle {
     addr: SocketAddr,
     forwarding: tokio::sync::watch::Sender<bool>,
     connections: Arc<tokio::sync::Mutex<Vec<[tokio::task::JoinHandle<()>; 2]>>>,
+    task: tokio::task::JoinHandle<()>,
 }
 
 impl ProxyHandle {
@@ -40,7 +44,7 @@ impl ProxyHandle {
         let addr = listener.local_addr().unwrap();
         let forwarding_rx = forwarding.subscribe();
         let connections = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        tokio::spawn(run_proxy(
+        let task = tokio::spawn(run_proxy(
             listener,
             backend_addr,
             forwarding_rx,
@@ -51,6 +55,7 @@ impl ProxyHandle {
             addr,
             forwarding,
             connections,
+            task,
         }
     }
 
@@ -73,6 +78,13 @@ impl ProxyHandle {
                 task.abort();
             }
         }
+    }
+
+    /// Panic unless the proxy task is still running; to be called from the test polling loops,
+    /// so that a dead proxy surfaces as a test failure at the right place instead of as a
+    /// mysterious timeout on a subsequent connection wait.
+    pub fn assert_alive(&self) {
+        assert!(!self.task.is_finished(), "The proxy task has terminated");
     }
 }
 
@@ -111,6 +123,9 @@ async fn run_proxy(
             let _ = tokio::io::copy(&mut backend_read, &mut client_write).await;
         });
 
-        connections.lock().await.push([client_to_backend, backend_to_client]);
+        let mut connections = connections.lock().await;
+        // Reap the forwarding tasks that finished on their own, so that the list stays bounded.
+        connections.retain(|pair| !pair[0].is_finished() && !pair[1].is_finished());
+        connections.push([client_to_backend, backend_to_client]);
     }
 }

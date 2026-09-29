@@ -65,8 +65,13 @@ impl NodeRpcError {
     /// and the node, i.e. the connection is broken or cannot be established, as opposed to an
     /// application-level error reported by the node.
     ///
-    /// Such errors are recoverable by dropping the client and establishing a new connection;
-    /// the request that failed may or may not have been processed by the node.
+    /// Such errors are recoverable by dropping the client and establishing a new connection.
+    ///
+    /// Caution: connection-level does not mean that the failed request was not processed. A
+    /// timeout or a lost response in particular leaves the outcome of the request unknown, so
+    /// callers retrying non-idempotent node calls must account for that instead of blindly
+    /// resending. (The scanner's sync and the mempool subscription are both idempotent: they
+    /// resume from local state.)
     pub fn is_connection_error(&self) -> bool {
         match self {
             // The client could not be created or the call did not reach the node (or its

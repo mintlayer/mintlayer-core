@@ -29,6 +29,10 @@ pub enum SyncError {
     #[error("Unexpected remote node error: {message}")]
     RemoteNode {
         message: String,
+        /// The original error, kept for diagnosis (e.g. to distinguish a definitive
+        /// application-level answer from a timeout through `e.source()`).
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
         /// Whether the underlying failure is a connection-level one (a broken or unusable
         /// connection between the scanner and the node), recoverable by re-connecting.
         is_connection_error: bool,
@@ -81,7 +85,7 @@ where
     L: LocalBlockchainState,
 {
     loop {
-        let chain_info = rpc_client.chainstate().await.map_err(|e| remote_node_error::<R>(&e))?;
+        let chain_info = rpc_client.chainstate().await.map_err(|e| remote_node_error::<R>(e))?;
 
         let (best_block_height, best_block_id) = local_state
             .best_block()
@@ -111,12 +115,13 @@ where
 }
 
 /// Map a remote node error into a [`SyncError`], preserving the connection-level
-/// classification provided by [`RemoteNode::is_connection_error`] (the error itself is
-/// stringified, so the classification cannot be recovered from the message later).
-fn remote_node_error<R: RemoteNode>(error: &R::Error) -> SyncError {
+/// classification provided by [`RemoteNode::is_connection_error`] and the original error (as
+/// the [`std::error::Error::source`] of the returned error) for diagnosis.
+fn remote_node_error<R: RemoteNode>(error: R::Error) -> SyncError {
     SyncError::RemoteNode {
         message: error.to_string(),
-        is_connection_error: R::is_connection_error(error),
+        is_connection_error: R::is_connection_error(&error),
+        source: Box::new(error),
     }
 }
 
@@ -174,7 +179,7 @@ async fn fetch_new_blocks<R: RemoteNode>(
     let blocks = rpc_client
         .mainchain_blocks(common_block_height.next_height(), MAX_FETCH_BLOCK_COUNT)
         .await
-        .map_err(|e| remote_node_error::<R>(&e))?;
+        .map_err(|e| remote_node_error::<R>(e))?;
     match blocks.first() {
         Some(block) => utils::ensure!(
             *block.header().prev_block_id() == common_block_id,
@@ -202,7 +207,7 @@ async fn get_common_block_info<R: RemoteNode>(
     let common_block_opt = rpc_client
         .last_common_ancestor(best_block_id, chain_info.best_block_id)
         .await
-        .map_err(|e| remote_node_error::<R>(&e))?;
+        .map_err(|e| remote_node_error::<R>(e))?;
 
     let (common_block_id, common_block_height) = match common_block_opt {
         // Common branch is found

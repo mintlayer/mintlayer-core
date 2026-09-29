@@ -34,6 +34,10 @@ pub type ClientError = jsonrpsee::core::ClientError;
 /// such failures are recoverable by dropping the client and re-establishing the connection.
 /// An application-level error, in contrast, is a definitive answer from the node (or a local
 /// problem) and must not trigger a reconnection.
+///
+/// Note: "connection-level" does not imply that the failed request went unprocessed. A request
+/// timeout or a lost response leaves its outcome unknown; callers retrying non-idempotent
+/// requests must handle that themselves.
 pub trait ClientErrorExt {
     /// Returns `true` if the error indicates a broken or unusable connection to the node.
     fn is_connection_error(&self) -> bool;

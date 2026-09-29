@@ -213,9 +213,13 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
     loop {
         // Establish the dedicated connection to the node, if necessary.
         if client.is_none() {
-            match connection.make_client().await {
-                Ok(new_client) => client = Some(new_client),
-                Err(err) => {
+            // Note: the connection attempt is bounded by a timeout so that a stalled
+            // TCP/WebSocket handshake cannot wedge a round forever without any log output.
+            let connection =
+                tokio::time::timeout(MEMPOOL_SUBSCRIBE_TIMEOUT, connection.make_client()).await;
+            match connection {
+                Ok(Ok(new_client)) => client = Some(new_client),
+                Ok(Err(err)) => {
                     // Note: this can only be a temporary connectivity problem (the address is
                     // fixed and validated at startup, where the REST client must connect), so
                     // unlike the scanner daemon, there is no reason to abort; retry with the
@@ -228,12 +232,21 @@ pub async fn run_mempool_bridge(connection: MempoolBridgeConnection, handle: Str
                         outage_started.map_or(Duration::ZERO, |started| started.elapsed()),
                     );
                 }
+                Err(_timed_out) => {
+                    outage_attempts += 1;
+                    logging::log::error!(
+                        "Timed out connecting to the node for the mempool events \
+                        (attempt {}, elapsed {:?}); retrying after a delay",
+                        outage_attempts,
+                        outage_started.map_or(Duration::ZERO, |started| started.elapsed()),
+                    );
+                }
             }
         }
 
-        // Note: the subscription is bounded by a timeout, so that a stalled WebSocket handshake
-        // (e.g. the node accepting the TCP connection but never completing the RPC handshake)
-        // cannot wedge the bridge forever without any log output.
+        // Note: the subscription is bounded by a timeout, so that a node that accepts the
+        // connection but never completes the RPC handshake cannot wedge the bridge forever
+        // without any log output (the connection attempt above is bounded the same way).
         let subscription = match client.as_ref() {
             Some(active_client) => match tokio::time::timeout(
                 MEMPOOL_SUBSCRIBE_TIMEOUT,

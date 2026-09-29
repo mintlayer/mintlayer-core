@@ -197,6 +197,12 @@ impl RemoteNode for MockRemoteNode {
             FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
         )])
     }
+
+    fn is_connection_error(_error: &Self::Error) -> bool {
+        // The mock never produces errors (its error type is `Infallible`); the classification
+        // is irrelevant, but the implementor must decide explicitly.
+        false
+    }
 }
 
 fn create_chain(node: &MockRemoteNode, rng: &mut impl CryptoRng, parent: u64, count: usize) {

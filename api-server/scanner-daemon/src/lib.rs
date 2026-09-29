@@ -48,11 +48,13 @@ use rpc::RpcAuthData;
 const RECONNECT_DELAY_INITIAL: Duration = Duration::from_secs(1);
 /// The upper bound of the delay between connection attempts.
 const RECONNECT_DELAY_MAX: Duration = Duration::from_secs(60);
-/// The delay before re-attempting a sync that failed with a non-connection error.
-///
-/// Note: such errors are not fixed by re-connecting, so the existing client is kept; the delay
-/// only exists to keep this loop from becoming a busy loop that floods the logs.
+/// The initial delay before re-attempting a sync that failed with a non-connection error; the
+/// delay grows with the same exponential schedule as the reconnection attempts.
 const SYNC_ERROR_DELAY: Duration = Duration::from_secs(1);
+/// How long to wait for a connection attempt to complete before treating it as failed. The
+/// bridge/scanner must never depend on the library's default timeouts for its no-wedge
+/// guarantees.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The state of an ongoing outage of the connection to the node.
 struct Outage {
@@ -99,63 +101,44 @@ pub async fn run<S: ApiServerStorage>(
     node_rpc_auth: RpcAuthData,
     mut storage: S,
 ) -> Result<(), ApiServerScannerError> {
-    // TODO: move this storage initialization into a separate function... the trait bounds are gonna be painful
-
+    // Note: the storage initialization failures below panic instead of returning `Err`, on
+    // purpose: the issue-mandated behavior is that a storage that cannot be initialized (a
+    // schema/transaction problem or a version mismatch) must fail fast and loud, rather than
+    // keep retrying against a database in an unknown state. A Postgres that is unreachable at
+    // startup already fails gracefully with an error in `make_postgres_storage`.
     let mut local_block = {
-        let mut db_tx = storage
-            .transaction_rw()
-            .await
-            .unwrap_or_else(|e| panic!("Initial transaction for initialization failed {}", e));
-        if !db_tx
-            .is_initialized()
-            .await
-            .unwrap_or_else(|e| panic!("Storage initialization checking failed {}", e))
-        {
-            db_tx
-                .reinitialize_storage(chain_config)
-                .await
-                .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
+        let needs_reinit =
+            {
+                let db_tx = storage.transaction_rw().await.unwrap_or_else(|e| {
+                    panic!("Initial transaction for initialization failed {}", e)
+                });
+                if !db_tx
+                    .is_initialized()
+                    .await
+                    .unwrap_or_else(|e| panic!("Storage initialization checking failed {}", e))
+                {
+                    true
+                } else {
+                    let storage_version = db_tx
+                        .get_storage_version()
+                        .await
+                        .unwrap_or_else(|e| panic!("Storage version read failed {}", e))
+                        .expect("cannot be empty");
+                    if storage_version != CURRENT_STORAGE_VERSION {
+                        true
+                    } else {
+                        db_tx.commit().await.unwrap_or_else(|e| {
+                            panic!("Storage initialization commit failed {}", e)
+                        });
+                        false
+                    }
+                }
+            };
 
-            db_tx
-                .commit()
-                .await
-                .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
-
-            let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
-            local_block
-                .scan_genesis(chain_config.genesis_block().as_ref())
-                .await
-                .expect("Can't scan genesis");
-            local_block
+        if needs_reinit {
+            reinitialize_and_rescan(chain_config, storage).await
         } else {
-            let storage_version = db_tx
-                .get_storage_version()
-                .await
-                .unwrap_or_else(|e| panic!("Storage version read failed {}", e))
-                .expect("cannot be empty");
-
-            if storage_version != CURRENT_STORAGE_VERSION {
-                db_tx
-                    .reinitialize_storage(chain_config)
-                    .await
-                    .unwrap_or_else(|e| panic!("Storage re-initialization failed {}", e));
-                db_tx
-                    .commit()
-                    .await
-                    .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
-                let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
-                local_block
-                    .scan_genesis(chain_config.genesis_block().as_ref())
-                    .await
-                    .expect("Can't scan genesis");
-                local_block
-            } else {
-                db_tx
-                    .commit()
-                    .await
-                    .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
-                BlockchainState::new(Arc::clone(chain_config), storage)
-            }
+            BlockchainState::new(Arc::clone(chain_config), storage)
         }
     };
 
@@ -165,23 +148,61 @@ pub async fn run<S: ApiServerStorage>(
         node_rpc_auth,
         &mut local_block,
         &mut ReconnectBackoff::new(RECONNECT_DELAY_INITIAL, RECONNECT_DELAY_MAX),
+        &mut ReconnectBackoff::new(SYNC_ERROR_DELAY, RECONNECT_DELAY_MAX),
         &mut randomness::make_true_rng(),
     )
     .await
+}
+
+/// Re-initialize the storage (wiping the indexed data) and scan the genesis block, so that the
+/// scanning starts over from scratch; used both for a fresh database and for a storage version
+/// upgrade.
+async fn reinitialize_and_rescan<S: ApiServerStorage>(
+    chain_config: &Arc<ChainConfig>,
+    mut storage: S,
+) -> BlockchainState<S> {
+    let mut db_tx = storage.transaction_rw().await.unwrap_or_else(|e| {
+        panic!(
+            "Initialization transaction for re-initialization failed {}",
+            e
+        )
+    });
+    db_tx
+        .reinitialize_storage(chain_config)
+        .await
+        .unwrap_or_else(|e| panic!("Storage (re-)initialization failed {}", e));
+    db_tx
+        .commit()
+        .await
+        .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
+
+    let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
+    local_block
+        .scan_genesis(chain_config.genesis_block().as_ref())
+        .await
+        .expect("Can't scan genesis");
+    local_block
 }
 
 /// The supervision loop of the scanner: keeps the local state in sync with the node, recovering
 /// in place from connection-level failures by re-creating the RPC client with an exponential
 /// backoff and resuming the indexing from the tip stored in the local state.
 ///
-/// Note: non-connection errors (e.g. the node being behind the local tip right after it has been
-/// restarted) are not fixed by reconnecting, so the client is kept and only the sync is retried.
+/// Note: the backoff is only reset after a successful sync (not merely after a successful
+/// connect), so that a node that accepts connections but immediately drops them or fails to
+/// serve cannot pin the retry rate at the initial delay.
+///
+/// Note: non-connection errors (e.g. the node being behind the local tip right after it has
+/// been restarted) are not fixed by reconnecting, so the client is kept and only the sync is
+/// retried, with the delay growing via `sync_error_backoff` so that a persistent failure (e.g.
+/// a broken database) cannot flood the logs.
 async fn supervise_sync<S: ApiServerStorage>(
     chain_config: &Arc<ChainConfig>,
     node_rpc_address: String,
     node_rpc_auth: RpcAuthData,
     local_block: &mut BlockchainState<S>,
     backoff: &mut ReconnectBackoff,
+    sync_error_backoff: &mut ReconnectBackoff,
     rng: &mut impl Rng,
 ) -> Result<(), ApiServerScannerError> {
     // Note: the client is created lazily (and re-created after every connection-level failure),
@@ -194,15 +215,22 @@ async fn supervise_sync<S: ApiServerStorage>(
     loop {
         if rpc_client.is_none() {
             rpc_client = Some(loop {
-                match make_rpc_client(
-                    Arc::clone(chain_config),
-                    node_rpc_address.clone(),
-                    node_rpc_auth.clone(),
+                // Note: the connection attempt is bounded by a timeout so that a stalled
+                // handshake (the node accepting the TCP connection but never completing the
+                // WebSocket handshake) cannot wedge a round forever without any log output;
+                // expiry is treated like any other connection failure.
+                let connection = tokio::time::timeout(
+                    CONNECT_TIMEOUT,
+                    make_rpc_client(
+                        Arc::clone(chain_config),
+                        node_rpc_address.clone(),
+                        node_rpc_auth.clone(),
+                    ),
                 )
-                .await
-                {
-                    Ok(client) => break client,
-                    Err(err) if NodeRpcError::is_connection_error(&err) => {
+                .await;
+                match connection {
+                    Ok(Ok(client)) => break client,
+                    Ok(Err(err)) if NodeRpcError::is_connection_error(&err) => {
                         let outage = outage.get_or_insert_with(Outage::new);
                         outage.attempts += 1;
                         let delay = backoff.next_delay(rng);
@@ -216,12 +244,21 @@ async fn supervise_sync<S: ApiServerStorage>(
                     }
                     // A connection cannot be established, but the reason is not a temporary
                     // connectivity problem (e.g. an invalid address); retrying is pointless.
-                    Err(err) => return Err(ApiServerScannerError::RpcError(err)),
+                    Ok(Err(err)) => return Err(ApiServerScannerError::RpcError(err)),
+                    Err(_timed_out) => {
+                        let outage = outage.get_or_insert_with(Outage::new);
+                        outage.attempts += 1;
+                        let delay = backoff.next_delay(rng);
+                        logging::log::warn!(
+                            "Timed out connecting to the node (attempt {}, elapsed {:?}); \
+                            retrying in {delay:?}",
+                            outage.attempts,
+                            outage.started.elapsed(),
+                        );
+                        tokio::time::sleep(delay).await;
+                    }
                 }
             });
-
-            // The connection is (re-)established; restart the backoff from scratch.
-            backoff.reset();
 
             if let Some(outage) = outage.take() {
                 let local_height = local_block
@@ -243,7 +280,13 @@ async fn supervise_sync<S: ApiServerStorage>(
         let client = rpc_client.as_ref().expect("The RPC client must have been established above");
 
         match api_blockchain_scanner_lib::sync::sync_once(chain_config, client, local_block).await {
-            Ok(()) => backoff.reset(),
+            Ok(()) => {
+                // Note: the backoff is only reset here (after a successful sync), not after a
+                // successful connect: a flapping node must not pin the retry rate at the
+                // initial delay.
+                backoff.reset();
+                sync_error_backoff.reset();
+            }
             Err(err) if err.is_connection_error() => {
                 // The client is permanently broken (e.g. the node has closed the WebSocket
                 // connection); drop it and re-connect on the next iteration.
@@ -260,8 +303,12 @@ async fn supervise_sync<S: ApiServerStorage>(
                 tokio::time::sleep(delay).await;
             }
             Err(err) => {
-                logging::log::error!("Scanner sync error: {err}");
-                tokio::time::sleep(SYNC_ERROR_DELAY).await;
+                // Note: the client is kept (re-connecting cannot fix the failure); the delay
+                // grows for as long as the errors persist so that the loop cannot flood the
+                // logs, and resets after a successful sync.
+                let delay = sync_error_backoff.next_delay(rng);
+                logging::log::error!("Scanner sync error: {err}; retrying in {delay:?}");
+                tokio::time::sleep(delay).await;
             }
         }
     }

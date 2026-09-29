@@ -117,6 +117,11 @@ impl SocketAddrWithServer {
 async fn send_event(sinks: &Arc<tokio::sync::Mutex<Vec<SubscriptionSink>>>, n: u64) {
     let sinks = sinks.lock().await;
     let sink = sinks.last().expect("The bridge must have opened a subscription by now");
+    assert!(
+        !sink.is_closed(),
+        "The latest subscription sink is already closed; the test tried to send an event \
+         into a dead subscription (a reconnection raced ahead of the test)"
+    );
     // Note: the serialized item is wrapped into the subscription response (with the method name
     // and the subscription id) by the sink itself.
     let item = serde_json::value::to_raw_value(&tx_seen_event(n))
@@ -162,7 +167,7 @@ async fn mempool_bridge_reconnects_after_node_disconnection() {
     let bridge_task = tokio::spawn(run_mempool_bridge(connection, handle.clone()));
 
     // Stream a transaction while everything is healthy.
-    wait_for_subscription(&sinks).await;
+    wait_for_subscription(&proxy, &sinks).await;
     send_event(&sinks, 1).await;
     match recv_event(&mut events.receiver).await {
         api_server_common::streaming::StreamEvent::TxSeen { tx_id, .. } => {
@@ -193,7 +198,7 @@ async fn mempool_bridge_reconnects_after_node_disconnection() {
     // client, since the old one is broken beyond repair) and resume the stream.
     // -----------------------------------------------------------------------------------------
     proxy.set_forwarding(true);
-    wait_for_subscription(&sinks).await;
+    wait_for_subscription(&proxy, &sinks).await;
 
     send_event(&sinks, 2).await;
     match recv_event(&mut events.receiver).await {
@@ -212,7 +217,10 @@ async fn mempool_bridge_reconnects_after_node_disconnection() {
 }
 
 /// Wait until the bridge (re-)opens its subscription; each opening pushes a new sink.
-async fn wait_for_subscription(sinks: &Arc<tokio::sync::Mutex<Vec<SubscriptionSink>>>) {
+async fn wait_for_subscription(
+    proxy: &ProxyHandle,
+    sinks: &Arc<tokio::sync::Mutex<Vec<SubscriptionSink>>>,
+) {
     let target_count = {
         let sinks = sinks.lock().await;
         sinks.len() + 1
@@ -223,6 +231,7 @@ async fn wait_for_subscription(sinks: &Arc<tokio::sync::Mutex<Vec<SubscriptionSi
             tokio::time::Instant::now() < deadline,
             "Timed out waiting for the bridge to open subscription #{target_count}"
         );
+        proxy.assert_alive();
         if sinks.lock().await.len() >= target_count {
             return;
         }
