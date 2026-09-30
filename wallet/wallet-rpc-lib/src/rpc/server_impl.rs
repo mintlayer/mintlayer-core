@@ -42,7 +42,8 @@ use wallet_controller::{
 };
 use wallet_types::{
     ImportOrCreate, partially_signed_transaction::PartiallySignedTransaction,
-    scan_blockchain::ScanBlockchain, signature_status::SignatureStatus, with_locked::WithLocked,
+    scan_blockchain::ScanBlockchain, signature_status::SignatureStatus, utxo_types::BitFlagError,
+    with_locked::WithLocked,
 };
 
 use crate::{
@@ -487,7 +488,7 @@ where
             .unwrap_or(UtxoState::Confirmed.into());
 
         let utxos = self
-            .get_multisig_utxos(
+            .get_multisig_utxos_with_states(
                 account_arg.index::<N>()?,
                 utxo_types,
                 utxo_states,
@@ -495,15 +496,21 @@ where
             )
             .await?;
 
-        let token_ids =
-            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_ids = collect_token_v1_ids_from_output_values_holders(
+            utxos.iter().map(|(_, output, _)| output),
+        );
         let token_decimals = self.get_tokens_decimals(token_ids).await?;
 
         let result = utxos
             .into_iter()
-            .map(|(utxo_outpoint, tx_ouput)| {
-                let result =
-                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
+            .map(|(utxo_outpoint, tx_output, state)| {
+                let result = UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_output,
+                    state,
+                    &self.chain_config,
+                    &token_decimals,
+                );
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -511,25 +518,53 @@ where
         rpc::handle_result(result)
     }
 
-    async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
+    async fn get_utxos(
+        &self,
+        account_arg: AccountArg,
+        utxo_types: Option<Vec<RpcUtxoType>>,
+        utxo_states: Option<Vec<RpcUtxoState>>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<UtxoInfo>> {
+        let utxo_types =
+            (&utxo_types.unwrap_or_default().iter().map(UtxoType::from).collect::<Vec<_>>())
+                .try_into()
+                .unwrap_or(UtxoTypes::ALL);
+
+        let utxo_state_filter: Vec<UtxoState> =
+            utxo_states.unwrap_or_default().iter().map(UtxoState::from).collect();
+        // An omitted or empty filter means "all states"; the TryFrom only
+        // fails on empty input, which the match below maps to ALL.
+        let utxo_states = match (&utxo_state_filter).try_into() {
+            Ok(states) => states,
+            // An omitted or empty filter means "all states"; matching the
+            // error explicitly keeps any future non-empty error case loud.
+            Err(BitFlagError::Empty) => UtxoStates::ALL,
+        };
+
         let utxos = self
-            .get_utxos(
+            .get_utxos_with_states(
                 account_arg.index::<N>()?,
-                UtxoTypes::ALL,
-                UtxoStates::ALL,
-                WithLocked::Unlocked,
+                utxo_types,
+                utxo_states,
+                with_locked.unwrap_or(WithLocked::Unlocked),
             )
             .await?;
 
-        let token_ids =
-            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_ids = collect_token_v1_ids_from_output_values_holders(
+            utxos.iter().map(|(_, output, _)| output),
+        );
         let token_decimals = self.get_tokens_decimals(token_ids).await?;
 
         let result = utxos
             .into_iter()
-            .map(|(utxo_outpoint, tx_ouput)| {
-                let result =
-                    UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config, &token_decimals);
+            .map(|(utxo_outpoint, tx_output, state)| {
+                let result = UtxoInfo::new(
+                    utxo_outpoint,
+                    tx_output,
+                    state,
+                    &self.chain_config,
+                    &token_decimals,
+                );
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();

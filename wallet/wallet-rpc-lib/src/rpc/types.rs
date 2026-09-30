@@ -392,18 +392,26 @@ impl VrfPublicKeyInfo {
 pub struct UtxoInfo {
     pub outpoint: RpcUtxoOutpoint,
     pub output: RpcTxOutput,
+    /// The state of the transaction that created this output.
+    ///
+    /// Note: this field is required on the wire. A client deserializing
+    /// responses from a daemon that predates it needs an update first
+    /// (wallet client and daemon are versioned and released together).
+    pub state: RpcUtxoState,
 }
 
 impl UtxoInfo {
     pub fn new(
         outpoint: UtxoOutPoint,
         output: TxOutput,
+        state: UtxoState,
         chain_config: &ChainConfig,
         token_decimals_provider: &impl TokenDecimalsProvider,
     ) -> Result<Self, RpcTypeError> {
         Ok(Self {
             output: RpcTxOutput::new(chain_config, token_decimals_provider, output)?,
             outpoint: RpcUtxoOutpoint::new(outpoint),
+            state: (&state).into(),
         })
     }
 }

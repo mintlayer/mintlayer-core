@@ -556,6 +556,12 @@ Returns:
                             },
                 },
             },
+    "state": EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool",
 }, .. ]
 ```
 
@@ -598,12 +604,45 @@ Returns:
 
 ### Method `account_utxos`
 
-Lists all the utxos owned by this account
+Lists all the utxos owned by this account.
+
+When `utxo_states` is omitted (or given as an empty array), utxos in
+all states are returned. Each utxo carries the state of the transaction
+that created it, so the results can be filtered further client-side.
+With identical `utxo_states` and `with_locked` values, the coin sum of
+the returned Transfer/LockThenTransfer outputs equals `account_balance`
+called with the same values (other utxo types are listed but not
+counted towards the balance). When `with_locked` is omitted, locked
+utxos are excluded.
 
 
 Parameters:
 ```
-{ "account": number }
+{
+    "account": number,
+    "utxo_types": EITHER OF
+         1) [ EITHER OF
+                 1) "Transfer"
+                 2) "LockThenTransfer"
+                 3) "IssueNft"
+                 4) "CreateStakePool"
+                 5) "ProduceBlockFromStake"
+                 6) "Htlc", .. ]
+         2) null,
+    "utxo_states": EITHER OF
+         1) [ EITHER OF
+                 1) "Confirmed"
+                 2) "Conflicted"
+                 3) "Inactive"
+                 4) "Abandoned"
+                 5) "InMempool", .. ]
+         2) null,
+    "with_locked": EITHER OF
+         1) "Any"
+         2) "Unlocked"
+         3) "Locked"
+         4) null,
+}
 ```
 
 Returns:
@@ -928,6 +967,12 @@ Returns:
                             },
                 },
             },
+    "state": EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool",
 }, .. ]
 ```
 
