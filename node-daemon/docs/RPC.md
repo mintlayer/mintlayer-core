@@ -1015,6 +1015,8 @@ Returns:
     "min_tx_relay_fee_rate": { "amount_per_kb": { "atoms": number string } },
     "max_cluster_tx_count": number,
     "max_cluster_size_bytes": number,
+    "allow_local_orphans": bool,
+    "local_orphan_pool_capacity": number,
 }
 ```
 
