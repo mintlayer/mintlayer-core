@@ -56,11 +56,15 @@ const SYNC_ERROR_DELAY: Duration = Duration::from_secs(1);
 /// guarantees.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The state of an ongoing outage of the connection to the node.
+/// The state of an ongoing outage of the connection to the node: counts the failed
+/// connection/sync attempts since the last successful sync and remembers when the current
+/// connectivity problem started. It deliberately survives connect/sync failures and
+/// re-connections (so that a flapping node cannot reset the diagnostics); only a successful
+/// sync clears it.
 struct Outage {
     /// When the connection was first found to be broken.
     started: std::time::Instant,
-    /// The number of reconnection attempts made so far, including the failed ones.
+    /// The number of failed connection/sync attempts since the last successful sync.
     attempts: u64,
 }
 
@@ -160,6 +164,11 @@ pub async fn run<S: ApiServerStorage>(
 /// Re-initialize the storage (wiping the indexed data) and scan the genesis block, so that the
 /// scanning starts over from scratch; used both for a fresh database and for a storage version
 /// upgrade.
+///
+/// Note: every failure in this function panics, on purpose — it is part of the issue-mandated
+/// fail-fast initialization policy (see the comment in `run`): a storage that cannot be
+/// initialized, or a genesis that cannot be scanned, leaves the daemon in a state where
+/// retrying cannot help and the operator must intervene.
 async fn reinitialize_and_rescan<S: ApiServerStorage>(
     chain_config: &Arc<ChainConfig>,
     mut storage: S,
@@ -183,15 +192,15 @@ async fn reinitialize_and_rescan<S: ApiServerStorage>(
     local_block
         .scan_genesis(chain_config.genesis_block().as_ref())
         .await
-        .expect("Can't scan genesis");
+        .expect("Scanning the genesis block failed (see the fail-fast initialization policy)");
     local_block
 }
 
-/// The connection state of the supervision loop; the `Connected`/`Reconnecting` variants make
-/// the invariant "an outage tracker exists if and only if there is no client" explicit.
+/// The connection state of the supervision loop: a connected client, or the absence of one
+/// while reconnection attempts are ongoing.
 enum ConnectionState {
     Connected(NodeRpcClient),
-    Reconnecting { outage: Outage },
+    Reconnecting,
 }
 
 /// The supervision loop of the scanner: keeps the local state in sync with the node, recovering
@@ -222,15 +231,14 @@ async fn supervise_sync<S: ApiServerStorage>(
     // (jsonrpsee's default of 60 seconds), so a node that hangs without closing the connection
     // surfaces as a request timeout, which is classified as a connection-level failure and
     // recovered below, rather than wedging the loop indefinitely.
-    let mut state = ConnectionState::Reconnecting {
-        outage: Outage::new(),
-    };
+    let mut state = ConnectionState::Reconnecting;
+    let mut outage = Outage::new();
 
     loop {
         let client = loop {
             match &mut state {
                 ConnectionState::Connected(client) => break client.clone(),
-                ConnectionState::Reconnecting { outage } => {
+                ConnectionState::Reconnecting => {
                     // Note: the connection attempt is bounded by a timeout so that a stalled
                     // handshake (the node accepting the TCP connection but never completing
                     // the WebSocket handshake) cannot wedge a round forever without any log
@@ -248,7 +256,9 @@ async fn supervise_sync<S: ApiServerStorage>(
                         // Note: the recovery is only logged when the outage actually produced
                         // failed attempts; the very first connection is not a "recovery".
                         Ok(Ok(new_client)) if outage.attempts > 0 => {
-                            let outage = std::mem::replace(outage, Outage::new());
+                            // Note: the outage tracker is deliberately kept (not reset) here:
+                            // it is only cleared after a successful sync, so that a flapping
+                            // node cannot reset the diagnostics.
                             let local_height = match local_block.best_block().await {
                                 Ok((height, _)) => height,
                                 Err(err) => {
@@ -307,19 +317,18 @@ async fn supervise_sync<S: ApiServerStorage>(
         match api_blockchain_scanner_lib::sync::sync_once(chain_config, &client, local_block).await
         {
             Ok(()) => {
-                // Note: the backoff is only reset here (after a successful sync), not after a
-                // successful connect: a flapping node must not pin the retry rate at the
-                // initial delay.
+                // Note: the backoffs and the outage diagnostics are only reset here (after a
+                // successful sync), not after a successful connect: a flapping node must not
+                // pin the retry rate at the initial delay or reset the outage counters.
                 backoff.reset();
                 sync_error_backoff.reset();
+                outage = Outage::new();
             }
             Err(err) if err.is_connection_error() => {
                 // The client is permanently broken (e.g. the node has closed the WebSocket
-                // connection); drop it and re-connect on the next iteration. This loss marks
-                // the start of a new outage, hence the fresh attempt counter.
-                state = ConnectionState::Reconnecting {
-                    outage: Outage::new(),
-                };
+                // connection); drop it and re-connect on the next iteration. Note: the outage
+                // tracker is kept, so that the diagnostics span the flapping node.
+                state = ConnectionState::Reconnecting;
                 let delay = backoff.next_delay(rng);
                 logging::log::warn!(
                     "Lost the connection to the node: {err}; re-connecting in {delay:?}"

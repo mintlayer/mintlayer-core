@@ -123,20 +123,30 @@ async fn send_event(sinks: &Arc<tokio::sync::Mutex<Vec<SubscriptionSink>>>, n: u
          into a dead subscription (a reconnection raced ahead of the test)"
     );
     // Note: the serialized item is wrapped into the subscription response (with the method name
-    // and the subscription id) by the sink itself.
+    // and the subscription id) by the sink itself. The send is bounded by a timeout so that a
+    // backpressured sink cannot hold the sinks mutex (and the test) indefinitely.
     let item = serde_json::value::to_raw_value(&tx_seen_event(n))
         .expect("Serializing the mempool event failed");
-    sink.send(item).await.expect("Sending the event failed");
+    tokio::time::timeout(EVENT_TIMEOUT, sink.send(item))
+        .await
+        .expect("timed out sending the mempool event")
+        .expect("Sending the event failed");
 }
 
 /// Receive the next stream event, failing if it doesn't arrive in time.
 async fn recv_event(
     events: &mut tokio::sync::broadcast::Receiver<api_server_common::streaming::StreamEvent>,
 ) -> api_server_common::streaming::StreamEvent {
-    tokio::time::timeout(EVENT_TIMEOUT, events.recv())
-        .await
-        .expect("timed out waiting for a stream event")
-        .expect("the stream event channel has been closed")
+    match tokio::time::timeout(EVENT_TIMEOUT, events.recv()).await {
+        Ok(Ok(event)) => event,
+        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(n))) => {
+            panic!("the stream event channel lagged; {n} events were lost")
+        }
+        Ok(Err(err @ tokio::sync::broadcast::error::RecvError::Closed)) => {
+            panic!("the stream event channel has been closed: {err}")
+        }
+        Err(_elapsed) => panic!("timed out waiting for a stream event"),
+    }
 }
 
 #[tokio::test]
