@@ -237,6 +237,8 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     };
 
     let mempool_config = MempoolConfig {
+        allow_local_orphans: Default::default(),
+        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: num_txs.into(),
@@ -455,5 +457,153 @@ async fn orphan_scheduling(#[case] seed: Seed) {
     // Now all transactions should be in mempool
     for tx_id in [&tx0_id, &tx1_id, &tx2_id, &tx3_id, &tx4_id] {
         assert!(mempool.contains_transaction(tx_id));
+    }
+}
+
+fn make_parking_mempool(
+    rng: &mut impl CryptoRng,
+) -> (
+    crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>,
+    Id<GenBlock>,
+) {
+    make_parking_mempool_with_config(rng, |_| {})
+}
+
+/// Same as [`make_parking_mempool`], but with local-orphan parking always
+/// enabled and the mempool config adjustable before the mempool is created.
+fn make_parking_mempool_with_config(
+    rng: &mut impl CryptoRng,
+    configure: impl FnOnce(&mut MempoolConfig),
+) -> (
+    crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>,
+    Id<GenBlock>,
+) {
+    let tf = TestFramework::builder(rng).build();
+    let genesis_id = tf.genesis().get_id().into();
+
+    let mut config = create_mempool_config();
+    config.allow_local_orphans = true.into();
+    configure(&mut config);
+
+    let mempool = setup_with_chainstate_generic(tf.chainstate(), config, Default::default());
+    (mempool, genesis_id)
+}
+
+#[rstest]
+#[case::p2p(Seed::from_entropy(), LocalTxOrigin::P2p)]
+#[case::mempool(Seed::from_entropy(), LocalTxOrigin::Mempool)]
+#[case::past_block(Seed::from_entropy(), LocalTxOrigin::PastBlock)]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_origins_parked_when_allowed(#[case] seed: Seed, #[case] origin: LocalTxOrigin) {
+    let mut rng = make_seedable_rng(seed);
+    let (mut mempool, genesis_id) = make_parking_mempool(&mut rng);
+
+    let tx0 = make_tx(
+        &mut rng,
+        &[(OutPointSourceId::BlockReward(genesis_id), 0)],
+        &[100_000_000],
+    );
+    let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
+
+    let tx1 = make_tx(&mut rng, &[(tx0_outpt, 0)], &[80_000_000]);
+    let tx1_id = tx1.transaction().get_id();
+
+    // The child transaction's parent is unknown, but with `AllowLocalOrphans` enabled it is
+    // parked in the orphan pool instead of being rejected.
+    let res = mempool.add_transaction_with_origin(tx1, origin.into()).unwrap();
+    res.assert_in_orphan_pool();
+    assert!(mempool.contains_orphan_transaction(&tx1_id));
+}
+
+#[rstest]
+#[case::p2p(Seed::from_entropy(), LocalTxOrigin::P2p)]
+#[case::mempool(Seed::from_entropy(), LocalTxOrigin::Mempool)]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_orphan_reprocessed_when_parent_arrives(
+    #[case] seed: Seed,
+    #[case] origin: LocalTxOrigin,
+) {
+    let mut rng = make_seedable_rng(seed);
+    let (mut mempool, genesis_id) = make_parking_mempool(&mut rng);
+
+    let tx0 = make_tx(
+        &mut rng,
+        &[(OutPointSourceId::BlockReward(genesis_id), 0)],
+        &[100_000_000],
+    );
+    let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
+
+    let tx1 = make_tx(&mut rng, &[(tx0_outpt, 0)], &[80_000_000]);
+    let tx1_id = tx1.transaction().get_id();
+
+    // Submit the child first; it must be parked
+    mempool
+        .add_transaction_with_origin(tx1, origin.into())
+        .unwrap()
+        .assert_in_orphan_pool();
+
+    // When the parent arrives, the parked child is re-processed and connected
+    mempool.add_transaction_test(tx0).unwrap().assert_in_mempool();
+
+    assert!(!mempool.contains_orphan_transaction(&tx1_id));
+    assert!(mempool.contains_transaction(&tx1_id));
+}
+
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_orphan_capacity_limit(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    // Use a non-default capacity so the test verifies that the configured
+    // limit is propagated into the error, not just the compile-time default.
+    let local_capacity = 5;
+    let (mut mempool, genesis_id) = make_parking_mempool_with_config(&mut rng, |config| {
+        config.local_orphan_pool_capacity = local_capacity.into();
+    });
+
+    // A parent with `local_capacity + 1` outputs, so that each child conflicts with no other
+    let tx0 = make_tx(
+        &mut rng,
+        &[(OutPointSourceId::BlockReward(genesis_id), 0)],
+        &[100_000_000],
+    );
+    let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
+
+    let intermediate = make_tx(
+        &mut rng,
+        &[(tx0_outpt, 0)],
+        &vec![3_000_000; local_capacity + 1],
+    );
+    let intermediate_outpt = OutPointSourceId::Transaction(intermediate.transaction().get_id());
+
+    let children: Vec<_> = (0..local_capacity + 1)
+        .map(|i| {
+            make_tx(
+                &mut rng,
+                &[(intermediate_outpt.clone(), i as u32)],
+                &[1_000_000],
+            )
+        })
+        .collect();
+
+    // The first `local_capacity` children get parked...
+    for child in &children[..local_capacity] {
+        mempool
+            .add_transaction_with_origin(child.clone(), LocalTxOrigin::P2p.into())
+            .unwrap()
+            .assert_in_orphan_pool();
+    }
+
+    // ... and the next one is rejected because the local orphan capacity is exhausted
+    let res = mempool
+        .add_transaction_with_origin(children[local_capacity].clone(), LocalTxOrigin::P2p.into());
+    match res {
+        Err(Error::Orphan(OrphanPoolError::LocalCapacityExceeded(limit))) => {
+            assert_eq!(limit, local_capacity);
+        }
+        other => panic!("Expected LocalCapacityExceeded error, got {other:?}"),
     }
 }

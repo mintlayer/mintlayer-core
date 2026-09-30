@@ -22,13 +22,19 @@ use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time};
-use crate::{config, pool::dependency::TxRequiredDependency, tx_origin::RemoteTxOrigin};
+use crate::{
+    config,
+    pool::dependency::TxRequiredDependency,
+    tx_origin::{RemoteTxOrigin, TxOrigin},
+};
 pub use detect::OrphanType;
 
 mod detect;
 
-/// Specialize [super::TxEntry] for use in orphan pool. Only allow entries coming from remote peers.
-type TxEntry = super::TxEntry<RemoteTxOrigin>;
+/// The transaction entry type used in the orphan pool. Entries are stored with their unified
+/// origin. By default only remote-origin entries are admitted; local-origin entries may be
+/// parked too when `AllowLocalOrphans` is enabled (see `MempoolConfig`).
+type TxEntry = super::TxEntry;
 
 /// Max number of transactions the orphan pool data structure can handle
 pub const ORPHAN_POOL_SIZE_HARD_LIMIT: usize = 50_000;
@@ -69,8 +75,11 @@ struct TxOrphanPoolMaps {
     /// Transactions indexed by their required dependencies
     by_deps: BTreeSet<(TxRequiredDependency, InternalId)>,
 
-    /// Transactions indexed by the origin
-    by_origin: BTreeSet<(RemoteTxOrigin, InternalId)>,
+    /// Transactions indexed by their origin
+    by_origin: BTreeSet<(TxOrigin, InternalId)>,
+
+    /// Number of stored entries with a local origin
+    local_count: usize,
 }
 
 impl TxOrphanPoolMaps {
@@ -80,6 +89,7 @@ impl TxOrphanPoolMaps {
             by_insertion_time: BTreeSet::new(),
             by_deps: BTreeSet::new(),
             by_origin: BTreeSet::new(),
+            local_count: 0,
         }
     }
 
@@ -90,8 +100,13 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_insertion_time.insert((entry.creation_time(), iid));
         assert!(inserted, "Tx entry already in insertion time map");
 
-        let inserted = self.by_origin.insert((entry.origin(), iid));
+        let origin = entry.origin();
+        let inserted = self.by_origin.insert((origin, iid));
         assert!(inserted, "Tx entry already in the origin map");
+
+        if matches!(origin, TxOrigin::Local(_)) {
+            self.local_count += 1;
+        }
 
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
@@ -104,6 +119,10 @@ impl TxOrphanPoolMaps {
 
         let removed = self.by_origin.remove(&(entry.origin(), iid));
         assert!(removed, "Tx entry not present in the origin map");
+
+        if matches!(entry.origin(), TxOrigin::Local(_)) {
+            self.local_count -= 1;
+        }
 
         entry.required_deps().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
@@ -279,6 +298,10 @@ impl TxOrphanPool {
 
     /// Remove orphans for given originator
     pub fn remove_by_origin(&mut self, origin: RemoteTxOrigin) -> usize {
+        self.remove_by_origin_impl(TxOrigin::Remote(origin))
+    }
+
+    fn remove_by_origin_impl(&mut self, origin: TxOrigin) -> usize {
         let mut n_removed = 0;
 
         while let Some(iid) = self.pick_by_origin(origin) {
@@ -290,7 +313,7 @@ impl TxOrphanPool {
     }
 
     /// Pick one orphan from given origin
-    fn pick_by_origin(&self, origin: RemoteTxOrigin) -> Option<InternalId> {
+    fn pick_by_origin(&self, origin: TxOrigin) -> Option<InternalId> {
         self.maps
             .by_origin
             .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))
@@ -300,6 +323,11 @@ impl TxOrphanPool {
 
     pub fn get_all_transaction_ids(&self) -> Vec<Id<Transaction>> {
         self.transactions.iter().map(|entry| *entry.tx_id()).collect()
+    }
+
+    /// Number of local-origin transactions in the orphan pool
+    pub fn local_len(&self) -> usize {
+        self.maps.local_count
     }
 }
 
