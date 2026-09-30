@@ -217,6 +217,11 @@ async fn supervise_sync<S: ApiServerStorage>(
 ) -> Result<(), ApiServerScannerError> {
     // Note: the client is created lazily (and re-created after every connection-level failure),
     // so that a node that is down at startup does not abort the daemon.
+    //
+    // Note: every RPC call made by `sync_once` is bounded by the WS client's request timeout
+    // (jsonrpsee's default of 60 seconds), so a node that hangs without closing the connection
+    // surfaces as a request timeout, which is classified as a connection-level failure and
+    // recovered below, rather than wedging the loop indefinitely.
     let mut state = ConnectionState::Reconnecting {
         outage: Outage::new(),
     };
@@ -310,14 +315,14 @@ async fn supervise_sync<S: ApiServerStorage>(
             }
             Err(err) if err.is_connection_error() => {
                 // The client is permanently broken (e.g. the node has closed the WebSocket
-                // connection); drop it and re-connect on the next iteration.
+                // connection); drop it and re-connect on the next iteration. This loss marks
+                // the start of a new outage, hence the fresh attempt counter.
                 state = ConnectionState::Reconnecting {
                     outage: Outage::new(),
                 };
                 let delay = backoff.next_delay(rng);
                 logging::log::warn!(
-                    "Lost the connection to the node (attempt 1, elapsed 0ns): {err}; \
-                    re-connecting in {delay:?}"
+                    "Lost the connection to the node: {err}; re-connecting in {delay:?}"
                 );
                 tokio::time::sleep(delay).await;
             }

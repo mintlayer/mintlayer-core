@@ -142,12 +142,23 @@ fn map_chainstate_error(err: chainstate::ChainstateError) -> ErrorObjectOwned {
 /// The best block currently known by the scanner, read through an independent storage handle.
 ///
 /// Returns `None` while the storage is not initialized yet: the scanner creates the schema and
-/// scans the genesis asynchronously at startup.
+/// scans the genesis asynchronously at startup. Note that the transaction handle is fail-fast:
+/// once the test's database view is readable, an error is a broken test, not a waited-for state.
 async fn scanner_tip(
     storage: &TransactionalApiServerPostgresStorage,
 ) -> Option<(BlockHeight, Id<GenBlock>)> {
-    let db_tx = storage.transaction_ro().await.ok()?;
-    let best_block = db_tx.get_best_block().await.ok()?;
+    let db_tx = storage
+        .transaction_ro()
+        .await
+        .expect("Reading the scanner storage failed; the test's view of the DB is broken");
+    // Note: `get_best_block` can legitimately fail only while the schema does not exist yet.
+    let best_block = match db_tx.get_best_block().await {
+        Ok(best_block) => best_block,
+        Err(err) => {
+            logging::log::debug!("Scanner storage is not initialized yet: {err}");
+            return None;
+        }
+    };
     Some((best_block.block_height(), best_block.block_id()))
 }
 

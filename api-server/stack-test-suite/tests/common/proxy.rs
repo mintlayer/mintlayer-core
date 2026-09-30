@@ -119,7 +119,12 @@ async fn run_proxy(
             }
         };
 
-        if !*forwarding.borrow() {
+        // Note: the lock is held until the connection is fully registered (or dropped), so that
+        // `kill_connections` can never race an in-flight accept: everything it needs to abort
+        // is visible under this lock by the time the daemon sees the connection.
+        let mut connections = connections.lock().await;
+
+        if !*forwarding.borrow_and_update() {
             // The "node is down": drop the accepted connection right away.
             refused.fetch_add(1, Ordering::Relaxed);
             continue;
@@ -140,10 +145,10 @@ async fn run_proxy(
             let _ = tokio::io::copy(&mut backend_read, &mut client_write).await;
         });
 
-        let mut connections = connections.lock().await;
-        // Reap the forwarding tasks of dead connections: once either direction has finished,
-        // the other is dead by construction (its peer socket has been dropped with the task).
-        connections.retain(|pair| !pair[0].is_finished() || !pair[1].is_finished());
+        // Reap the forwarding tasks of drained connections: a pair is removed once both of its
+        // directions have finished (a half-finished pair may still be draining data in the
+        // other direction, and ends on its own once the peer socket is closed).
+        connections.retain(|pair| !pair[0].is_finished() && !pair[1].is_finished());
         connections.push([client_to_backend, backend_to_client]);
     }
 }
