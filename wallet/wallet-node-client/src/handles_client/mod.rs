@@ -34,8 +34,8 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    FeeRate, MempoolConfig, MempoolHandle, error::Error as MempoolError, event::MempoolEvent,
-    tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
+    FeeRate, MempoolConfig, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
+    tx_options::TxOptionsOverrides,
 };
 use p2p::{
     P2pHandle,
@@ -111,14 +111,17 @@ impl NodeInterfaceError for WalletHandlesClientError {
     fn is_node_rejection(&self) -> bool {
         // The handles client talks to an in-process node; `submit_transaction`
         // goes through the P2P handle, so a mempool rejection surfaces as
-        // `P2p(P2pError::MempoolError(_))`. Building the message through the
-        // real `#[error]` Display ("Mempool error: {0}") means this cannot
-        // drift from what the JSON-RPC transport actually puts on the wire,
-        // which retires the TODO(test) about format coupling.
-        let mempool_error = |err: &MempoolError| crate::rpc_client::mempool_rejection_message(err);
+        // `P2p(P2pError::MempoolError(_))`. Classification is by error
+        // variants, so it cannot drift from the mempool crate's error type;
+        // the JSON-RPC transport mirrors the same decision on the wire
+        // message (see `classify_mempool_error_message`).
         match self {
-            WalletHandlesClientError::MempoolError(err) => mempool_error(err),
-            WalletHandlesClientError::P2p(P2pError::MempoolError(err)) => mempool_error(err),
+            WalletHandlesClientError::MempoolError(err) => {
+                crate::rpc_client::is_deterministic_mempool_rejection(err)
+            }
+            WalletHandlesClientError::P2p(P2pError::MempoolError(err)) => {
+                crate::rpc_client::is_deterministic_mempool_rejection(err)
+            }
             _ => false,
         }
     }

@@ -159,18 +159,21 @@ impl RepushTracker {
             && self.entries.get(tx_id).is_none_or(|state| state.next_attempt <= now)
     }
 
-    /// A successful (or idempotent) submission; the retry state is reset, so a
-    /// transaction that later drops out of the mempool gets a fresh budget.
-    /// Note: this also resets the "attempted" flag, meaning a transaction that
-    /// was successfully submitted before and then dropped from the mempool is
-    /// treated as resubmittable, not as rejected.
+    /// A successful (or idempotent) submission; the rejection budget is
+    /// reset, so a transaction that later drops out of the mempool gets a
+    /// fresh budget. The first-seen timestamp is kept, so the total pending
+    /// age — and the [`MAX_PENDING_AGE`] stuck limit — still applies across
+    /// resubmission cycles instead of restarting with every acceptance.
+    /// `node_observed` is cleared: a successful submission invalidates any
+    /// earlier rejection evidence.
     pub fn on_success(&mut self, tx_id: &Id<Transaction>, now: Time) {
+        let first_seen = self.entries.get(tx_id).map_or(now, |state| state.first_seen);
         self.entries.insert(
             *tx_id,
             EntryState {
                 attempts: 0,
                 next_attempt: now,
-                first_seen: now,
+                first_seen,
                 stuck: false,
                 node_observed: false,
             },
@@ -386,13 +389,19 @@ pub fn reconcile(
                 .all(|parent| presence.get(parent).copied().unwrap_or(false));
 
             if all_parents_present {
-                // The deterministic-rejection signature (all pending parents
-                // present, transaction missing, node-observed submission)
-                // held again this pass.
-                let streak = tracker.bump_absence(&tx.id);
-                if tracker.node_observed(&tx.id) && streak >= PRUNE_ABSENCE_THRESHOLD {
-                    outcome.to_prune.push(tx.id);
-                    continue;
+                // Only accumulate evidence while the node has actually
+                // observed a submission of this transaction: passes before
+                // that prove nothing about rejection, and letting the streak
+                // pre-build would let a single later ambiguous rejection
+                // instantly satisfy the threshold.
+                if tracker.node_observed(&tx.id) {
+                    let streak = tracker.bump_absence(&tx.id);
+                    if streak >= PRUNE_ABSENCE_THRESHOLD {
+                        outcome.to_prune.push(tx.id);
+                        continue;
+                    }
+                } else {
+                    tracker.reset_absence(&tx.id);
                 }
             } else {
                 // Only some pending parents are present: the signature is
@@ -532,6 +541,8 @@ mod tests {
         tracker.on_success(&id, t);
         assert!(tracker.is_due(&id, t));
         assert!(!tracker.is_stuck(&id));
+        // A successful submission invalidates earlier rejection evidence.
+        assert!(!tracker.node_observed(&id));
 
         // After a success the budget is fresh again
         for i in 0..(MAX_ATTEMPTS - 1) {
@@ -539,6 +550,32 @@ mod tests {
             tracker.on_rejected(&id, t);
         }
         assert!(!tracker.is_stuck(&id));
+    }
+
+    #[test]
+    fn on_success_keeps_first_seen() {
+        let mut tracker = RepushTracker::new();
+        let id = test_id(1);
+        let t0 = now();
+
+        tracker.on_rejected(&id, t0);
+        // Acceptance halfway to the pending-age limit must not restart the
+        // age clock: the transaction is already this old.
+        let t1 = t0.saturating_duration_add(MAX_PENDING_AGE / 2);
+        tracker.on_success(&id, t1);
+
+        // A rejection once the original first-seen age reaches the limit
+        // turns the transaction stuck, instead of resubmitting forever.
+        let t2 = t0.saturating_duration_add(MAX_PENDING_AGE);
+        assert_eq!(tracker.on_rejected(&id, t2), FailureVerdict::Stuck);
+
+        // A transaction first seen now is not stuck: the limit is on pending
+        // age, not on wall-clock time.
+        let other = test_id(2);
+        assert!(matches!(
+            tracker.on_rejected(&other, t2),
+            FailureVerdict::Retry(_)
+        ));
     }
 
     #[test]
@@ -672,6 +709,43 @@ mod tests {
                 assert_eq!(outcome.to_prune, vec![test_id(2)], "pass {pass}");
             }
         }
+    }
+
+    #[test]
+    fn reconcile_does_not_prune_on_streak_built_without_node_observation() {
+        // The signature (parent present, transaction missing) holds from the
+        // start, but the wallet never reached the node (delivery failures
+        // only), so node_observed stays false: the streak must not
+        // accumulate, and a single later rejection must not combine with the
+        // pre-built signature into an instant prune.
+        let pending = vec![pt(1, vec![]), pt(2, vec![1])];
+        let presence: BTreeMap<_, _> = (1..=2).map(|i| (test_id(i), i == 1)).collect();
+        let mut tracker = RepushTracker::new();
+        tracker.on_delivery_failure(&test_id(2), now());
+
+        for pass in 1..=PRUNE_ABSENCE_THRESHOLD {
+            let outcome = reconcile(&pending, &presence, &mut tracker);
+            assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
+            assert!(outcome.to_prune.is_empty(), "pass {pass}");
+        }
+        assert_eq!(tracker.absence_streak(&test_id(2)), 0);
+
+        // One rejection starts the evidence chain from zero.
+        tracker.on_rejected(&test_id(2), now());
+        for pass in 1..PRUNE_ABSENCE_THRESHOLD {
+            let outcome = reconcile(&pending, &presence, &mut tracker);
+            assert_eq!(
+                outcome.to_submit,
+                vec![test_id(2)],
+                "pass {pass} after rejection"
+            );
+            assert!(outcome.to_prune.is_empty(), "pass {pass} after rejection");
+        }
+
+        // Only the pass that completes the streak *after* observation prunes.
+        let outcome = reconcile(&pending, &presence, &mut tracker);
+        assert_eq!(outcome.to_prune, vec![test_id(2)]);
+        assert!(outcome.to_submit.is_empty());
     }
 
     #[test]

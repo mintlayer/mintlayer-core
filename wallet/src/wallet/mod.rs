@@ -1566,21 +1566,26 @@ where
         let mut result = BTreeMap::new();
 
         for (account_index, account) in &self.accounts {
-            let txs = db_tx
-                .get_user_transactions_for_account(&account.get_account_id())?
-                .into_iter()
-                .filter(|tx| {
-                    match account.get_transaction(tx.transaction().get_id()) {
-                        Ok(tx_data) => matches!(
+            // Only transactions that may still need a (re)broadcast: skip the
+            // ones the output cache already knows are confirmed, conflicted or
+            // abandoned. A transaction with no wallet tx entry at all is kept
+            // (absence of evidence is not evidence of death); any other
+            // lookup error is a real storage failure and propagates.
+            let mut txs = Vec::new();
+            for tx in db_tx.get_user_transactions_for_account(&account.get_account_id())? {
+                match account.get_transaction(tx.transaction().get_id()) {
+                    Ok(tx_data) => {
+                        if matches!(
                             tx_data.state(),
                             TxState::InMempool(_) | TxState::Inactive(_)
-                        ),
-                        // No wallet tx entry: keep it and let the mempool
-                        // probe decide.
-                        Err(_) => true,
+                        ) {
+                            txs.push(tx);
+                        }
                     }
-                })
-                .collect();
+                    Err(WalletError::NoTransactionFound(_)) => txs.push(tx),
+                    Err(error) => return Err(error),
+                }
+            }
             result.insert(*account_index, txs);
         }
 
