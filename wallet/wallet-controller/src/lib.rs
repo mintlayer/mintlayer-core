@@ -1842,8 +1842,6 @@ where
     /// Periodically reconcile the wallet's pending transactions against the
     /// node's mempool and (re)submit them in chain order (parents before
     /// children), with per-transaction backoff and a retry budget.
-    /// Concurrency bound for the per-pass mempool probes.
-    const PROBE_CONCURRENCY: usize = 8;
     /// Minimum gap between reconcile passes when re-timed to an earlier due
     /// time, so a due transaction can never trigger a hot loop.
     const MIN_PASS_GAP_SEC: u64 = 5;
@@ -1964,27 +1962,24 @@ where
         // continues so one blip cannot stall the others. Probes run with
         // bounded concurrency: a long pending chain must not turn the pass
         // into one serial round-trip per transaction.
-        let rpc_client = &self.rpc_client;
-        let probe_results: Vec<(Id<Transaction>, Result<Option<_>, _>)> = futures::stream::iter(
-            pending
-                .iter()
-                .map(|tx| async move { (tx.id, rpc_client.mempool_get_transaction(tx.id).await) }),
-        )
-        .buffer_unordered(Self::PROBE_CONCURRENCY)
-        .collect()
-        .await;
+        // Probes run sequentially: a concurrent (buffer_unordered) probe
+        // stream here trips the rustc auto-trait leak ("implementation of
+        // Send is not general enough") inside the event-loop future and
+        // breaks `tokio_spawn` downstream. Sequential round-trips keep the
+        // pass Send-general; revisit if the trait moves to structured
+        // futures.
         let mut presence = BTreeMap::new();
         let mut probed = std::collections::BTreeSet::new();
-        for (tx_id, result) in probe_results {
-            match result {
+        for tx in &pending {
+            match self.rpc_client.mempool_get_transaction(tx.id).await {
                 Ok(found) => {
-                    presence.insert(tx_id, found.is_some());
-                    probed.insert(tx_id);
+                    presence.insert(tx.id, found.is_some());
+                    probed.insert(tx.id);
                 }
                 Err(error) => {
                     log::warn!(
                         "Mempool probe for transaction {:x} failed: {error}; skipping it this pass",
-                        tx_id
+                        tx.id
                     );
                 }
             }
