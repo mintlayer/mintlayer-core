@@ -351,9 +351,14 @@ pub struct ReconcileOutcome {
 /// - A transaction missing from the mempool while its parent is present there
 ///   is considered deterministically rejected, but it is only marked for
 ///   pruning if the node has actually observed a submission attempt of it
-///   ([`RepushTracker::node_observed`]); mempool absence alone is not proof of
-///   rejection, since the transaction may never have been broadcast. Pruned
-///   transactions take all of their pending descendants with them.
+///   ([`RepushTracker::node_observed`]) and the signature held for
+///   [`PRUNE_ABSENCE_THRESHOLD`] consecutive passes in which the transaction
+///   was actually due. Once that evidence is established, the transaction
+///   stays in `to_prune` — a failed wallet-side prune is retried on the next
+///   pass instead of the transaction being resubmitted — until the
+///   transaction is seen in the mempool again (evidence reset) or the prune
+///   succeeds. Pruned transactions take all of their pending descendants
+///   with them.
 /// - Any other missing transaction is a candidate for (re)submission; stuck
 ///   transactions are skipped.
 ///
@@ -392,6 +397,18 @@ pub fn reconcile(
         if present {
             // Alive again: the consecutive-absence evidence no longer applies.
             tracker.reset_absence(&tx.id);
+            continue;
+        }
+
+        // Established rejection evidence survives every change that does not
+        // involve the transaction itself being seen in the mempool: the node
+        // deterministically rejected it, so it must never be resubmitted —
+        // not even after its (dead) parent has already left the wallet after
+        // a successful prune. A prune that previously failed is re-attempted.
+        if tracker.node_observed(&tx.id)
+            && tracker.absence_streak(&tx.id) >= PRUNE_ABSENCE_THRESHOLD
+        {
+            outcome.to_prune.push(tx.id);
             continue;
         }
 

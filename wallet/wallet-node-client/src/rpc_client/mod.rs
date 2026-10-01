@@ -168,6 +168,16 @@ fn classify_mempool_error_message(message: &str) -> bool {
         "blockchain storage error",
         "utxo error",
         "block undo error",
+        "blockundo error",
+        "undo info for transaction",
+        "block undo info doesn't exist",
+        "block reward undo info",
+        "header found but header not found",
+        "unable to find block index",
+        "addition of all fees in block",
+        "block reward addition error",
+        "transactionverifierstorage",
+        "cannot be zero",
         "verifier storage error",
         "fetching undo data failed",
         "staker balance of pool",
@@ -177,6 +187,10 @@ fn classify_mempool_error_message(message: &str) -> bool {
         "tokens error",
         "tokens accounting error",
         "orders accounting error",
+        "not found while traversing history",
+        "could not obtain the best block for utxos",
+        "could not find the previous tip index",
+        "could not find the new tip index",
     ];
     (message.starts_with("mempool error:") || message.starts_with("orphan transaction error:"))
         && !INDETERMINATE.iter().any(|term| message.contains(term))
@@ -522,6 +536,34 @@ mod mempool_rejection_classification_tests {
             assert!(
                 classify_mempool_error_message(&wire),
                 "wire message must be a rejection: {wire}"
+            );
+        }
+    }
+
+    #[test]
+    fn internal_failure_wire_terms_are_indeterminate() {
+        // Every internal/state-dependent variant excluded by the typed
+        // classifier must also be indeterminate on the wire, including the
+        // ones whose Display carries no mempool keyword of its own.
+        let internal_wire = [
+            "Mempool error: Maximum cluster transaction count cannot be zero",
+            "Mempool error: While disconnecting a block, undo info for transaction `abcd` doesn't exist",
+            "Mempool error: While disconnecting a block, block undo info doesn't exist for block `abcd`",
+            "Mempool error: While disconnecting a block, block reward undo info doesn't exist for block `abcd`",
+            "Mempool error: Transaction index for header found but header not found",
+            "Mempool error: Unable to find block index for block abcd",
+            "Mempool error: Addition of all fees in block `abcd` failed",
+            "Mempool error: Block reward addition error for block abcd",
+            "Mempool error: utxo BlockUndo error: something",
+            "Mempool error: Accounting BlockUndo error: something",
+            "Mempool error: Error from TransactionVerifierStorage: something",
+            "Mempool error: Reorg error: Could not obtain the best block for utxos",
+            "Mempool error: Reorg error: Block BlockIndex(1) not found while traversing history",
+        ];
+        for message in internal_wire {
+            assert!(
+                !classify_mempool_error_message(&message.to_ascii_lowercase()),
+                "internal failure must be indeterminate: {message}"
             );
         }
     }

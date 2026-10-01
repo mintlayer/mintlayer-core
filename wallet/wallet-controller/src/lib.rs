@@ -2070,10 +2070,17 @@ where
         // Transactions that will not be submitted this pass — in backoff, or
         // stuck (reconcile excludes stuck ones from `to_submit` entirely) —
         // are seeded up front, so the parent checks below see them as not
-        // ready even though they never enter the submit loop.
+        // ready even though they never enter the submit loop. A transaction
+        // that the probe showed to be present in the mempool never blocks a
+        // child, so it is excluded: seeding it would needlessly defer the
+        // child while its deterministic-rejection evidence (missing while the
+        // present parent is there) keeps accumulating toward a prune without
+        // the child ever actually being attempted.
         let mut unsubmitted: BTreeSet<Id<Transaction>> = pending_by_id
             .keys()
-            .filter(|id| !self.repush_tracker.is_due(id, now))
+            .filter(|id| {
+                !presence.get(id).copied().unwrap_or(false) && !self.repush_tracker.is_due(id, now)
+            })
             .copied()
             .collect();
         for tx_id in &outcome.to_submit {
