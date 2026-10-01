@@ -417,8 +417,34 @@ mod mempool_rejection_classification_tests {
                 MempoolConflictError::TooManyReplacements,
             )),
             MempoolError::Validity(TxValidationError::AddedDuringIBD),
+            MempoolError::Validity(TxValidationError::ChainstateError(
+                chainstate::ChainstateError::IoError("boom".to_string()),
+            )),
+            MempoolError::Validity(TxValidationError::SubsystemCallError(
+                subsystem::error::CallError::Submission(
+                    subsystem::error::SubmissionError::ChannelClosed,
+                ),
+            )),
             MempoolError::Validity(TxValidationError::TxValidation(
                 ConnectTransactionError::MissingOutputOrSpent(utxo_outpoint(1)),
+            )),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::NonceIsNotIncremental(
+                    common::chain::AccountType::Token(TokenId::new(H256::from_low_u64_be(1))),
+                    common::chain::AccountNonce::new(1),
+                    common::chain::AccountNonce::new(2),
+                ),
+            )),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::MissingTransactionNonce(
+                    common::chain::AccountType::Token(TokenId::new(H256::from_low_u64_be(1))),
+                ),
+            )),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::FailedToIncrementAccountNonce,
+            )),
+            MempoolError::Orphan(OrphanPoolError::Conflict(
+                MempoolConflictError::Irreplacable,
             )),
         ];
         for error in &indeterminate {
@@ -430,6 +456,21 @@ mod mempool_rejection_classification_tests {
                 "wire message must be indeterminate: {wire}"
             );
         }
+    }
+
+    #[test]
+    fn wire_prefixes_match_transport_wrappers() {
+        // The prefixes used by `classify_mempool_error_message` are the
+        // Display wrappers that actually carry mempool verdicts on the wire;
+        // tie the literals to them so that a wrapper change in the p2p or
+        // mempool crate breaks this test instead of silently reclassifying
+        // every mempool error as a delivery failure.
+        let mempool_wrapped =
+            p2p::error::P2pError::MempoolError(MempoolError::TipMoved).to_string();
+        assert!(mempool_wrapped.to_ascii_lowercase().starts_with("mempool error:"));
+
+        let orphan_wrapped = MempoolError::Orphan(OrphanPoolError::Full).to_string();
+        assert!(orphan_wrapped.to_ascii_lowercase().starts_with("orphan transaction error:"));
     }
 
     #[test]

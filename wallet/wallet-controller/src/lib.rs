@@ -1867,8 +1867,13 @@ where
             .expect("Sleep intervals cannot be this large");
         let min_gap = (now + Duration::from_secs(Self::MIN_PASS_GAP_SEC))
             .expect("Sleep intervals cannot be this large");
+        // Only honor wake times actually in the future: an elapsed
+        // next_attempt belongs to a transaction that was deferred, blocked or
+        // stuck this pass rather than backoff-scheduled, so it has no
+        // meaningful due time and must not shrink the pass interval to the
+        // minimum gap indefinitely.
         *rebroadcast_timer = match self.repush_tracker.next_wake() {
-            Some(due) if due < regular_wake => due.max(min_gap),
+            Some(due) if due > now && due < regular_wake => due.max(min_gap),
             _ => regular_wake,
         };
     }
@@ -2062,15 +2067,29 @@ where
         // order guarantees every parent is classified before its children.
         let pending_by_id: BTreeMap<Id<Transaction>, &rebroadcast::PendingTx> =
             pending.iter().map(|tx| (tx.id, tx)).collect();
-        let mut unsubmitted: BTreeSet<Id<Transaction>> = BTreeSet::new();
+        // Transactions that will not be submitted this pass — in backoff, or
+        // stuck (reconcile excludes stuck ones from `to_submit` entirely) —
+        // are seeded up front, so the parent checks below see them as not
+        // ready even though they never enter the submit loop.
+        let mut unsubmitted: BTreeSet<Id<Transaction>> = pending_by_id
+            .keys()
+            .filter(|id| !self.repush_tracker.is_due(id, now))
+            .copied()
+            .collect();
         for tx_id in &outcome.to_submit {
             if !self.repush_tracker.is_due(tx_id, now) {
-                unsubmitted.insert(*tx_id);
+                // Already seeded above; kept as a guard so a not-due
+                // transaction is never submitted.
                 log::debug!("Skipping transaction {tx_id:x}: not due yet");
                 continue;
             }
 
             let Some(pending_tx) = pending_by_id.get(tx_id) else {
+                // Defensive: `to_submit` is derived from the same `pending`
+                // vec, so this cannot happen — but if it did, the transaction
+                // must still be recorded as unsubmitted to keep the
+                // child-deferral invariant intact.
+                unsubmitted.insert(*tx_id);
                 continue;
             };
             // Not ready = a pending UTXO parent was not submitted this pass
@@ -2100,6 +2119,8 @@ where
             }
 
             let Some(tx) = txs_by_id.get(tx_id) else {
+                // Defensive: same invariant as above.
+                unsubmitted.insert(*tx_id);
                 continue;
             };
 
