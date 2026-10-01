@@ -38,7 +38,9 @@ use jsonrpsee::{
 
 use logging::log;
 
-pub use error::{ClientError, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result};
+pub use error::{
+    ClientError, ClientErrorExt, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result,
+};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
@@ -51,7 +53,11 @@ use utils::cookie::load_cookie;
 
 #[cfg(feature = "test-support")]
 pub mod test_support {
+    pub use jsonrpsee::RpcModule;
+    pub use jsonrpsee::core::RpcResult;
     pub use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+    pub use jsonrpsee::server::{Server, ServerHandle, SubscriptionSink};
+    pub use jsonrpsee::types::error::{CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE};
 }
 
 /// The RPC subsystem builder. Used to populate the RPC server with method handlers.
