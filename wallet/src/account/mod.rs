@@ -84,7 +84,7 @@ use wallet_types::{
 
 use crate::{
     SendRequest, WalletError, WalletResult,
-    account::utxo_selector::{OutputGroup, select_coins},
+    account::utxo_selector::{OutputGroup, select_coins_preferring_confirmed},
     destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains},
     send_request::{
@@ -112,7 +112,7 @@ pub use self::{
     utxo_selector::{CoinSelectionAlgo, UtxoSelectorError},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
     pub consolidate_fee_rate: FeeRate,
@@ -277,39 +277,58 @@ impl<K: AccountKeyChains> Account<K> {
                 Ok(())
             })?;
 
-        let (utxos, selection_algo) = if input_utxos.is_empty() {
+        let (utxos, confirmed_utxos, selection_algo) = if input_utxos.is_empty() {
+            let utxo_types = UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft;
+            let utxos = self.get_utxos(
+                utxo_types,
+                median_time,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
+            );
+            // Prefer confirmed utxos during selection: spending an unconfirmed utxo forms a
+            // mempool cluster, which is size limited, so building on top of confirmed utxos
+            // reduces the chance of producing a tx that the mempool would reject (see issue
+            // #2066). The confirmed-only set is tried first, with a fallback to the full set.
+            let confirmed_utxos = self.get_utxos(
+                utxo_types,
+                median_time,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            );
             (
-                self.get_utxos(
-                    UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-                    median_time,
-                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                    WithLocked::Unlocked,
-                ),
+                utxos,
+                Some(confirmed_utxos),
                 selection_algo.unwrap_or(CoinSelectionAlgo::Randomize),
             )
         } else {
             let selection_algo = selection_algo.unwrap_or(CoinSelectionAlgo::UsePreselected);
-            match input_utxos {
+            let utxos = match input_utxos {
                 SelectedInputs::Utxos(input_utxos) => {
                     let current_block_info = BlockInfo {
                         height: self.account_info.best_block_height(),
                         timestamp: median_time,
                     };
-                    (
-                        self.output_cache.find_utxos(current_block_info, input_utxos)?,
-                        selection_algo,
-                    )
+                    self.output_cache.find_utxos(current_block_info, input_utxos)?
                 }
-                SelectedInputs::Inputs(ref inputs) => (
-                    inputs.iter().map(|(outpoint, utxo)| (outpoint.clone(), utxo)).collect(),
-                    selection_algo,
-                ),
-            }
+                SelectedInputs::Inputs(ref inputs) => {
+                    inputs.iter().map(|(outpoint, utxo)| (outpoint.clone(), utxo)).collect()
+                }
+            };
+            (utxos, None, selection_algo)
         };
 
         let current_fee_rate = fee_rates.current_fee_rate;
         let mut utxos_by_currency =
             self.utxo_output_groups_by_currency(fee_rates, &pay_fee_with_currency, utxos)?;
+        let mut confirmed_utxos_by_currency = confirmed_utxos
+            .map(|confirmed_utxos| {
+                self.utxo_output_groups_by_currency(
+                    fee_rates,
+                    &pay_fee_with_currency,
+                    confirmed_utxos,
+                )
+            })
+            .transpose()?;
 
         let amount_to_be_paid_in_currency_with_fees =
             output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or(Amount::ZERO);
@@ -342,6 +361,9 @@ impl<K: AccountKeyChains> Account<K> {
             .iter()
             .map(|(currency, output_amount)| -> WalletResult<_> {
                 let utxos = utxos_by_currency.remove(currency).unwrap_or(vec![]);
+                let confirmed_utxos = confirmed_utxos_by_currency
+                    .as_mut()
+                    .map(|by_currency| by_currency.remove(currency).unwrap_or_default());
                 let preselected_amount = preselected_inputs
                     .amounts
                     .remove(currency)
@@ -354,7 +376,8 @@ impl<K: AccountKeyChains> Account<K> {
                     change_address.clone(),
                 )?;
 
-                let selection_result = select_coins(
+                let selection_result = select_coins_preferring_confirmed(
+                    confirmed_utxos,
                     utxos,
                     output_amount.sub(preselected_amount).unwrap_or(Amount::ZERO),
                     PayFee::DoNotPayFeeWithThisCurrency,
@@ -393,6 +416,9 @@ impl<K: AccountKeyChains> Account<K> {
             .try_collect()?;
 
         let utxos = utxos_by_currency.remove(&pay_fee_with_currency).unwrap_or(vec![]);
+        let confirmed_utxos = confirmed_utxos_by_currency
+            .as_mut()
+            .map(|by_currency| by_currency.remove(&pay_fee_with_currency).unwrap_or_default());
 
         let num_inputs = selected_inputs
             .values()
@@ -438,7 +464,8 @@ impl<K: AccountKeyChains> Account<K> {
             change_address.clone(),
         )?;
 
-        let selection_result = select_coins(
+        let selection_result = select_coins_preferring_confirmed(
+            confirmed_utxos,
             utxos,
             (amount_to_be_paid_in_currency_with_fees - preselected_amount).unwrap_or(Amount::ZERO),
             PayFee::PayFeeWithThisCurrency,
