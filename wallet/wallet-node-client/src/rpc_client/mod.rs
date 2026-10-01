@@ -143,6 +143,12 @@ pub(crate) fn is_deterministic_mempool_rejection(err: &mempool::error::Error) ->
 /// wrappers that can carry a mempool verdict. The positive prefix check avoids
 /// false positives from unrelated application errors that merely mention
 /// "mempool" or "orphan" somewhere in their text.
+///
+/// NOTE: text matching is inherently coupled to the Display strings of the
+/// mempool/chainstate crates. The variant-count test in this module forces a
+/// classifier review whenever a variant is added; the durable fix is a
+/// structured (machine-readable) mempool verdict on the RPC error object, to
+/// be done node-side.
 fn classify_mempool_error_message(message: &str) -> bool {
     // Substrings of the Display strings of the variants excluded by
     // `is_deterministic_mempool_rejection`.
@@ -470,6 +476,23 @@ mod mempool_rejection_classification_tests {
                 "wire message must be indeterminate: {wire}"
             );
         }
+    }
+
+    /// Pinning the variant counts: if one of these assertions fails, a
+    /// variant was added to (or removed from) an error enum that feeds the
+    /// mempool-rejection classification. Update
+    /// [`is_deterministic_mempool_rejection`], the `INDETERMINATE` term list
+    /// in `classify_mempool_error_message`, and the wire-mirror tests above
+    /// in the same change — otherwise a transient outcome can silently turn
+    /// into a pruning decision (or vice versa).
+    #[test]
+    fn classifier_covers_every_error_variant() {
+        use strum::EnumCount as _;
+        assert_eq!(MempoolError::COUNT, 9);
+        assert_eq!(TxValidationError::COUNT, 4);
+        assert_eq!(MempoolPolicyError::COUNT, 22);
+        assert_eq!(OrphanPoolError::COUNT, 7);
+        assert_eq!(ConnectTransactionError::COUNT, 40);
     }
 
     #[test]

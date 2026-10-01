@@ -51,7 +51,7 @@ pub enum TxCollectionError {
     MempoolStoreError(#[from] MempoolStoreError),
 }
 
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq, strum::EnumCount)]
 pub enum Error {
     #[error(transparent)]
     Validity(#[from] TxValidationError),
@@ -81,7 +81,7 @@ pub enum Error {
     ConfigError(#[from] ConfigError),
 }
 
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq, strum::EnumCount)]
 pub enum MempoolPolicyError {
     #[error(transparent)]
     Conflict(#[from] MempoolConflictError),
@@ -179,7 +179,7 @@ pub enum MempoolStoreError {
     TxEntryNotFound(Id<Transaction>),
 }
 
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq, strum::EnumCount)]
 pub enum TxValidationError {
     #[error("Chainstate error: {0}")]
     ChainstateError(#[from] ChainstateError),
@@ -194,7 +194,7 @@ pub enum TxValidationError {
     SubsystemCallError(#[from] subsystem::error::CallError),
 }
 
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, strum::EnumCount)]
 pub enum OrphanPoolError {
     #[error(transparent)]
     Conflict(#[from] MempoolConflictError),
