@@ -51,6 +51,15 @@ pub const MAX_PENDING_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// as deterministically rejected and pruned.
 pub const PRUNE_ABSENCE_THRESHOLD: u32 = 3;
 
+/// How long a recorded node rejection stays valid as prune evidence. A
+/// rejection older than this no longer supports pruning: the transaction is
+/// resubmitted instead, which either refreshes the evidence (another
+/// rejection) or clears it (an acceptance). This bounds how long a single
+/// historic rejection — e.g. a transient "server busy" reply — can contribute
+/// to a prune after the transaction's situation has changed (mempool churn,
+/// node restart, load-balancer rotation).
+pub const REJECTION_EVIDENCE_MAX_AGE: Duration = Duration::from_secs(60 * 60);
+
 /// A pending (unconfirmed) transaction with the information needed to plan its submission.
 #[derive(Debug, Clone)]
 pub struct PendingTx {
@@ -74,6 +83,11 @@ struct EntryState {
     /// Set when the node itself observed a submission (i.e. a submission
     /// failed with a node rejection response, not with a delivery failure).
     node_observed: bool,
+    /// When the last node rejection was recorded, if any. Prune evidence must
+    /// be recent (see [`REJECTION_EVIDENCE_MAX_AGE`]): a single historic
+    /// rejection must not support a prune after the transaction's situation
+    /// has changed.
+    last_rejection: Option<Time>,
 }
 
 /// Tracks submission attempts of pending transactions.
@@ -124,12 +138,18 @@ impl RepushTracker {
         self.absence_streaks.get(tx_id).copied().unwrap_or(0)
     }
 
-    /// Whether the node itself has observed at least one submission of this
-    /// transaction (a submission that failed with a node rejection response).
-    /// Delivery failures (transport errors, timeouts) do not count: the node
-    /// may never have seen the transaction at all.
-    pub fn node_observed(&self, tx_id: &Id<Transaction>) -> bool {
-        self.entries.get(tx_id).is_some_and(|state| state.node_observed)
+    /// Whether the node observed a submission of this transaction (a
+    /// submission that failed with a node rejection response; delivery
+    /// failures do not count — the node may never have seen the transaction)
+    /// *and* the recorded rejection is recent enough to count as prune
+    /// evidence (see [`REJECTION_EVIDENCE_MAX_AGE`]).
+    pub fn has_recent_rejection(&self, tx_id: &Id<Transaction>, now: Time) -> bool {
+        self.entries.get(tx_id).is_some_and(|state| {
+            state.node_observed
+                && state
+                    .last_rejection
+                    .is_some_and(|at| now.saturating_sub(at) <= REJECTION_EVIDENCE_MAX_AGE)
+        })
     }
 
     /// Drops state for transactions that are no longer pending, so that the
@@ -187,6 +207,7 @@ impl RepushTracker {
                 first_seen,
                 stuck: false,
                 node_observed: false,
+                last_rejection: None,
             },
         );
     }
@@ -200,10 +221,12 @@ impl RepushTracker {
             first_seen: now,
             stuck: false,
             node_observed: false,
+            last_rejection: None,
         });
 
         entry.attempts += 1;
         entry.node_observed = true;
+        entry.last_rejection = Some(now);
 
         if entry.attempts >= MAX_ATTEMPTS || now.saturating_sub(entry.first_seen) >= MAX_PENDING_AGE
         {
@@ -232,6 +255,7 @@ impl RepushTracker {
             first_seen: now,
             stuck: false,
             node_observed: false,
+            last_rejection: None,
         });
 
         if now.saturating_sub(entry.first_seen) >= MAX_PENDING_AGE {
@@ -351,7 +375,8 @@ pub struct ReconcileOutcome {
 /// - A transaction missing from the mempool while its parent is present there
 ///   is considered deterministically rejected, but it is only marked for
 ///   pruning if the node has actually observed a submission attempt of it
-///   ([`RepushTracker::node_observed`]) and the signature held for
+///   ([`RepushTracker::has_recent_rejection`] — the rejection must be recent,
+///   see [`REJECTION_EVIDENCE_MAX_AGE`]) and the signature held for
 ///   [`PRUNE_ABSENCE_THRESHOLD`] consecutive passes in which the transaction
 ///   was actually due. Once that evidence is established, the transaction
 ///   stays in `to_prune` — a failed wallet-side prune is retried on the next
@@ -405,7 +430,10 @@ pub fn reconcile(
         // deterministically rejected it, so it must never be resubmitted —
         // not even after its (dead) parent has already left the wallet after
         // a successful prune. A prune that previously failed is re-attempted.
-        if tracker.node_observed(&tx.id)
+        // The evidence must be recent: a rejection older than
+        // REJECTION_EVIDENCE_MAX_AGE no longer supports pruning, and the
+        // transaction is resubmitted for a fresh verdict instead.
+        if tracker.has_recent_rejection(&tx.id, now)
             && tracker.absence_streak(&tx.id) >= PRUNE_ABSENCE_THRESHOLD
         {
             outcome.to_prune.push(tx.id);
@@ -426,8 +454,10 @@ pub fn reconcile(
                 // observed a submission of this transaction, and only on
                 // passes in which the transaction was actually due (a
                 // transaction in backoff is not being retried, so its
-                // continued absence proves nothing new).
-                if tracker.node_observed(&tx.id) && tracker.is_due(&tx.id, now) {
+                // continued absence proves nothing new). A stale rejection
+                // does not count: the transaction is resubmitted instead,
+                // which refreshes the evidence.
+                if tracker.has_recent_rejection(&tx.id, now) && tracker.is_due(&tx.id, now) {
                     let streak = tracker.bump_absence(&tx.id);
                     if streak >= PRUNE_ABSENCE_THRESHOLD {
                         outcome.to_prune.push(tx.id);
@@ -581,7 +611,7 @@ mod tests {
         assert!(tracker.is_due(&id, t));
         assert!(!tracker.is_stuck(&id));
         // A successful submission invalidates earlier rejection evidence.
-        assert!(!tracker.node_observed(&id));
+        assert!(!tracker.has_recent_rejection(&id, t));
 
         // After a success the budget is fresh again
         for i in 0..(MAX_ATTEMPTS - 1) {
@@ -654,7 +684,7 @@ mod tests {
         // The tracker state of the pruned transactions is kept until the
         // wallet-side prune is confirmed: the evidence must survive so that a
         // failed prune can be retried on the next pass.
-        assert!(tracker.node_observed(&test_id(2)));
+        assert!(tracker.has_recent_rejection(&test_id(2), due_time()));
         assert!(tracker.absence_streak(&test_id(2)) >= PRUNE_ABSENCE_THRESHOLD);
     }
 
@@ -706,7 +736,7 @@ mod tests {
         // None of the delivery failures counted against the budget, so the first
         // rejection still has retries left instead of being stuck.
         assert!(!tracker.is_stuck(&id));
-        assert!(!tracker.node_observed(&id));
+        assert!(!tracker.has_recent_rejection(&id, t));
         assert!(matches!(
             tracker.on_rejected(&id, t),
             FailureVerdict::Retry(_)
@@ -785,6 +815,47 @@ mod tests {
         let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_prune, vec![test_id(2)]);
         assert!(outcome.to_submit.is_empty());
+    }
+
+    #[test]
+    fn reconcile_ignores_stale_rejection_evidence() {
+        // A single rejection recorded long ago must not support a prune: the
+        // transaction is resubmitted for a fresh verdict instead, which
+        // either refreshes the evidence or clears it.
+        let pending = vec![pt(1, vec![]), pt(2, vec![1])];
+        let presence: BTreeMap<_, _> = (1..=2).map(|i| (test_id(i), i == 1)).collect();
+        let mut tracker = RepushTracker::new();
+        let long_ago = Time::from_secs_since_epoch(1_000_000 - 2 * 60 * 60);
+        tracker.on_rejected(&test_id(2), long_ago);
+
+        // Due passes with only stale evidence: no streak, no prune.
+        for pass in 1..=PRUNE_ABSENCE_THRESHOLD {
+            let outcome = reconcile(&pending, &presence, &mut tracker, now());
+            assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
+            assert!(outcome.to_prune.is_empty(), "pass {pass}");
+        }
+        assert_eq!(tracker.absence_streak(&test_id(2)), 0);
+
+        // A fresh rejection restarts the evidence chain from zero. (Its
+        // backoff is doubled by the second rejection, so the due passes here
+        // wait past it; they are still well within the evidence-recency
+        // window.)
+        tracker.on_rejected(&test_id(2), now());
+        let fresh_due = now().saturating_duration_add(Duration::from_secs(120));
+        for pass in 1..PRUNE_ABSENCE_THRESHOLD {
+            let outcome = reconcile(&pending, &presence, &mut tracker, fresh_due);
+            assert_eq!(
+                outcome.to_submit,
+                vec![test_id(2)],
+                "pass {pass} after fresh rejection"
+            );
+            assert!(
+                outcome.to_prune.is_empty(),
+                "pass {pass} after fresh rejection"
+            );
+        }
+        let outcome = reconcile(&pending, &presence, &mut tracker, fresh_due);
+        assert_eq!(outcome.to_prune, vec![test_id(2)]);
     }
 
     #[test]
