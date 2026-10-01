@@ -2560,6 +2560,12 @@ impl<K: AccountKeyChains> Account<K> {
     /// mempool with its parent present, or otherwise deterministically rejected),
     /// together with its pending descendants. Unlike [`Self::abandon_transaction`],
     /// this tolerates a stale `InMempool` cache state.
+    ///
+    /// # Caller obligation
+    ///
+    /// See [`OutputCache::prune_dead_transaction`]: the caller must have
+    /// verified the transaction is dead; the verification is racy and a
+    /// too-late re-entry self-heals on confirmation or rescan.
     pub fn prune_dead_transaction(
         &mut self,
         tx_id: Id<Transaction>,

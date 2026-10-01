@@ -1841,19 +1841,36 @@ where
     /// Periodically reconcile the wallet's pending transactions against the
     /// node's mempool and (re)submit them in chain order (parents before
     /// children), with per-transaction backoff and a retry budget.
+    /// Concurrency bound for the per-pass mempool probes.
+    const PROBE_CONCURRENCY: usize = 8;
+    /// Minimum gap between reconcile passes when re-timed to an earlier due
+    /// time, so a due transaction can never trigger a hot loop.
+    const MIN_PASS_GAP_SEC: u64 = 5;
+
     async fn reconcile_and_rebroadcast(&mut self, rebroadcast_timer: &mut Time) {
         if get_time() < *rebroadcast_timer {
             return;
         }
 
-        // Random interval between 2 and 5 minutes
-        let sleep_interval_sec = make_pseudo_rng().random_range(120..=300);
-        *rebroadcast_timer = (get_time() + Duration::from_secs(sleep_interval_sec))
-            .expect("Sleep intervals cannot be this large");
-
         if let Err(error) = self.reconcile_and_repush().await {
             log::error!("Reconcile-and-rebroadcast pass failed: {error}");
         }
+
+        // Base pass interval: randomized between 2 and 5 minutes. If some
+        // tracked transaction becomes due for its next attempt earlier than
+        // that (the first backoff tiers are 30s-2min), time the next pass to
+        // the earliest due time so the documented backoff schedule is
+        // honored instead of being clamped to the pass cadence.
+        let now = get_time();
+        let sleep_interval_sec = make_pseudo_rng().random_range(120..=300);
+        let regular_wake = (now + Duration::from_secs(sleep_interval_sec))
+            .expect("Sleep intervals cannot be this large");
+        let min_gap = (now + Duration::from_secs(Self::MIN_PASS_GAP_SEC))
+            .expect("Sleep intervals cannot be this large");
+        *rebroadcast_timer = match self.repush_tracker.next_wake() {
+            Some(due) if due < regular_wake => due.max(min_gap),
+            _ => regular_wake,
+        };
     }
 
     /// One reconciliation pass:
@@ -1880,6 +1897,11 @@ where
         let mut pending = Vec::<rebroadcast::PendingTx>::new();
         let mut account_of: BTreeMap<Id<Transaction>, U31> = BTreeMap::new();
         let mut txs_by_id: BTreeMap<Id<Transaction>, &SignedTransaction> = BTreeMap::new();
+        // Account-nonce transactions by (account, nonce): consecutive nonces
+        // must reach the mempool in order, so a transaction with nonce n
+        // depends on the pending transaction with nonce n-1 of the same
+        // account even though there is no UTXO parent edge.
+        let mut nonce_of: BTreeMap<(U31, u64), Id<Transaction>> = BTreeMap::new();
 
         for (account_index, txs) in &per_account {
             for tx in txs {
@@ -1914,6 +1936,9 @@ where
 
                 account_of.insert(id, *account_index);
                 txs_by_id.insert(id, tx);
+                if let Some(account_nonce) = nonce {
+                    nonce_of.insert((*account_index, account_nonce), id);
+                }
                 pending.push(rebroadcast::PendingTx {
                     id,
                     pending_parents,
@@ -1930,19 +1955,30 @@ where
         // Probe the mempool for each pending transaction. A probe that fails
         // with a transport error only excludes that transaction from this
         // pass (its evidence streak is left untouched); the pass itself
-        // continues so one blip cannot stall the others.
+        // continues so one blip cannot stall the others. Probes run with
+        // bounded concurrency: a long pending chain must not turn the pass
+        // into one serial round-trip per transaction.
+        let rpc_client = &self.rpc_client;
+        let probe_results: Vec<(Id<Transaction>, Result<Option<_>, _>)> = futures::stream::iter(
+            pending
+                .iter()
+                .map(|tx| async move { (tx.id, rpc_client.mempool_get_transaction(tx.id).await) }),
+        )
+        .buffer_unordered(Self::PROBE_CONCURRENCY)
+        .collect()
+        .await;
         let mut presence = BTreeMap::new();
         let mut probed = std::collections::BTreeSet::new();
-        for tx in &pending {
-            match self.rpc_client.mempool_get_transaction(tx.id).await {
+        for (tx_id, result) in probe_results {
+            match result {
                 Ok(found) => {
-                    presence.insert(tx.id, found.is_some());
-                    probed.insert(tx.id);
+                    presence.insert(tx_id, found.is_some());
+                    probed.insert(tx_id);
                 }
                 Err(error) => {
                     log::warn!(
                         "Mempool probe for transaction {:x} failed: {error}; skipping it this pass",
-                        tx.id
+                        tx_id
                     );
                 }
             }
@@ -1989,7 +2025,9 @@ where
         // map to cover exactly the transactions it is given.
         presence.retain(|id, _| !skipped.contains(id));
 
-        let outcome = rebroadcast::reconcile(&pending, &presence, &mut self.repush_tracker);
+        let pass_now = get_time();
+        let outcome =
+            rebroadcast::reconcile(&pending, &presence, &mut self.repush_tracker, pass_now);
 
         for tx_id in &outcome.to_prune {
             let Some(account_index) = account_of.get(tx_id) else {
@@ -2035,7 +2073,27 @@ where
             let Some(pending_tx) = pending_by_id.get(tx_id) else {
                 continue;
             };
-            if pending_tx.pending_parents.iter().any(|parent| unsubmitted.contains(parent)) {
+            // Not ready = a pending UTXO parent was not submitted this pass
+            // (or was skipped entirely), or the account-nonce predecessor is
+            // missing. Submitting in either case is a guaranteed rejection
+            // that burns this transaction's retry budget and can feed the
+            // prune-evidence streak. For nonce chains, the predecessor is the
+            // same-account pending transaction with nonce n-1; nonces must
+            // reach the mempool consecutively.
+            let parent_not_ready =
+                pending_tx.pending_parents.iter().any(|parent| unsubmitted.contains(parent))
+                    || match (account_of.get(tx_id), pending_tx.nonce) {
+                        (Some(account_index), Some(nonce)) if nonce > 0 => {
+                            nonce_of.get(&(*account_index, nonce - 1)).is_some_and(|predecessor| {
+                                // A predecessor missing from `pending_by_id` was
+                                // skipped this pass (e.g. its probe failed).
+                                !pending_by_id.contains_key(predecessor)
+                                    || unsubmitted.contains(predecessor)
+                            })
+                        }
+                        _ => false,
+                    };
+            if parent_not_ready {
                 unsubmitted.insert(*tx_id);
                 log::debug!("Skipping transaction {tx_id:x}: a parent is not ready this pass");
                 continue;

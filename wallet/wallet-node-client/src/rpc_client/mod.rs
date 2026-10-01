@@ -25,6 +25,11 @@ use rpc::{ClientError, ClientErrorExt as _, RpcAuthData, RpcWsClient, new_ws_cli
 
 use crate::node_traits::{NodeInterface, NodeInterfaceError};
 
+/// jsonrpsee's `CALL_EXECUTION_FAILED_CODE` (-32000): the code the mintlayer
+/// RPC server reports for every application-level error (see
+/// `rpc::handle_result` in the rpc crate).
+const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
+
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
     #[error("Initialization error: {0}")]
@@ -65,11 +70,36 @@ pub(crate) fn is_deterministic_mempool_rejection(err: &mempool::error::Error) ->
             | TxValidationError::AddedDuringIBD => false,
             // Output-spent and account-nonce checks race with mempool
             // evictions and with the submission of this transaction's own
-            // parents.
+            // parents; the rest of this arm's variants are internal
+            // chainstate/storage/accounting failures, not verdicts on the
+            // transaction — a retry on a healthy node may succeed.
             TxValidationError::TxValidation(connect_error) => !matches!(
                 connect_error,
                 ConnectTransactionError::MissingOutputOrSpent(_)
                     | ConnectTransactionError::NonceIsNotIncremental(..)
+                    | ConnectTransactionError::MissingTransactionNonce(_)
+                    | ConnectTransactionError::FailedToIncrementAccountNonce
+                    | ConnectTransactionError::StorageError(_)
+                    | ConnectTransactionError::UtxoError(_)
+                    | ConnectTransactionError::UtxoBlockUndoError(_)
+                    | ConnectTransactionError::AccountingBlockUndoError(_)
+                    | ConnectTransactionError::BlockIndexCouldNotBeLoaded(_)
+                    | ConnectTransactionError::MissingTxUndo(_)
+                    | ConnectTransactionError::MissingBlockUndo(_)
+                    | ConnectTransactionError::MissingBlockRewardUndo(_)
+                    | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(..)
+                    | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
+                    | ConnectTransactionError::RewardAdditionError(_)
+                    | ConnectTransactionError::TransactionVerifierError(_)
+                    | ConnectTransactionError::TxVerifierStorage
+                    | ConnectTransactionError::UndoFetchFailure
+                    | ConnectTransactionError::PoSAccountingError(_)
+                    | ConnectTransactionError::TokensError(_)
+                    | ConnectTransactionError::TokensAccountingError(_)
+                    | ConnectTransactionError::OrdersAccountingError(_)
+                    | ConnectTransactionError::StakerBalanceNotFound(_)
+                    | ConnectTransactionError::RewardDistributionError(_)
+                    | ConnectTransactionError::ConstrainedValueAccumulatorError(..)
             ),
         },
         // Fee, size, RBF and expiry policy rejections are deterministic for
@@ -103,11 +133,16 @@ pub(crate) fn is_deterministic_mempool_rejection(err: &mempool::error::Error) ->
 ///
 /// This is the string-level mirror of [`is_deterministic_mempool_rejection`]
 /// for the JSON-RPC transport, which only sees the message text; keep the two
-/// in sync (pinned by tests). On the wire, every mintlayer application error
-/// carries jsonrpsee's CALL_EXECUTION_FAILED code (-32000, see
-/// `rpc::handle_result`) and the error's Display as the message, so the
-/// positive "mempool"/"orphan" keywords separate mempool-submission errors
-/// from all other application errors ("server busy", etc.).
+/// in sync (the tests derive the wire strings from typed errors on both sides
+/// so that a Display change in the mempool crate breaks the build instead of
+/// silently flipping a pruning decision).
+///
+/// Only wrapper-prefixed messages are mempool-submission outcomes: on the
+/// wire, `p2p::error::P2pError::MempoolError` ("Mempool error: {0}") and
+/// `mempool::error::Error::Orphan` ("Orphan transaction error: {0}") are the
+/// wrappers that can carry a mempool verdict. The positive prefix check avoids
+/// false positives from unrelated application errors that merely mention
+/// "mempool" or "orphan" somewhere in their text.
 fn classify_mempool_error_message(message: &str) -> bool {
     // Substrings of the Display strings of the variants excluded by
     // `is_deterministic_mempool_rejection`.
@@ -124,13 +159,27 @@ fn classify_mempool_error_message(message: &str) -> bool {
         "local orphan capacity",
         "account nonces too distant",
         "nonce is not incremental",
+        "nonce is not found",
+        "failed to increment account nonce",
         "output is not found in the cache or database",
         "irreplaceable",
         "spends an unconfirmed input",
         "too many replacements",
+        "blockchain storage error",
+        "utxo error",
+        "block undo error",
+        "verifier storage error",
+        "fetching undo data failed",
+        "staker balance of pool",
+        "reward distribution error",
+        "constrained value accumulator error",
+        "pos accounting error",
+        "tokens error",
+        "tokens accounting error",
+        "orders accounting error",
     ];
-    !INDETERMINATE.iter().any(|term| message.contains(term))
-        && (message.contains("mempool") || message.contains("orphan"))
+    (message.starts_with("mempool error:") || message.starts_with("orphan transaction error:"))
+        && !INDETERMINATE.iter().any(|term| message.contains(term))
 }
 
 impl NodeInterfaceError for NodeRpcError {
@@ -153,18 +202,18 @@ impl NodeInterfaceError for NodeRpcError {
 
     fn is_node_rejection(&self) -> bool {
         // Mintlayer's RPC server reports every application-level error with
-        // jsonrpsee's CALL_EXECUTION_FAILED code (-32000) and the error's
-        // Display as the message (`rpc::handle_result`), so the code range
-        // only says that the node answered; the message classification
-        // decides whether the answer was a deterministic transaction
-        // rejection. Everything else — protocol errors (-326xx, e.g. internal
-        // errors, where the transaction was never evaluated), transport
-        // failures, and transient mempool outcomes (tip moved, mempool full,
-        // store races, IBD, ...) — stays a delivery failure, so the
+        // jsonrpsee's CALL_EXECUTION_FAILED code and the error's Display as
+        // the message (`rpc::handle_result`), so only that exact code can
+        // carry a mempool verdict; the message classification decides whether
+        // it was a deterministic transaction rejection. Everything else —
+        // other server codes (e.g. proxies reporting their own failures in
+        // the reserved range), protocol errors (-326xx, e.g. internal errors,
+        // where the transaction was never evaluated), transport failures,
+        // and transient mempool outcomes — stays a delivery failure, so the
         // transaction is retried instead of pruned.
         match self {
             NodeRpcError::ResponseError(rpc::ClientError::Call(err)) => {
-                (-32099..=-32000).contains(&err.code())
+                err.code() == CALL_EXECUTION_FAILED_CODE
                     && classify_mempool_error_message(&err.message().to_ascii_lowercase())
             }
             _ => false,
@@ -256,6 +305,7 @@ mod mempool_rejection_classification_tests {
     use chainstate::tx_verifier::error::ConnectTransactionError;
     use common::chain::OutPointSourceId;
     use common::chain::Transaction;
+    use common::chain::tokens::TokenId;
     use common::primitives::{H256, Id};
     use mempool::error::{
         Error as MempoolError, MempoolConflictError, MempoolPolicyError, MempoolStoreError,
@@ -378,6 +428,59 @@ mod mempool_rejection_classification_tests {
             assert!(
                 !classify_mempool_error_message(&wire),
                 "wire message must be indeterminate: {wire}"
+            );
+        }
+    }
+
+    #[test]
+    fn internal_chainstate_failures_are_not_rejections() {
+        // Internal chainstate/storage/accounting failures are not verdicts on
+        // the transaction; a retry on a healthy node may succeed.
+        let internal = [
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::NonceIsNotIncremental(
+                    common::chain::AccountType::Token(TokenId::new(H256::from_low_u64_be(1))),
+                    common::chain::AccountNonce::new(1),
+                    common::chain::AccountNonce::new(2),
+                ),
+            )),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::MissingTransactionNonce(
+                    common::chain::AccountType::Token(TokenId::new(H256::from_low_u64_be(1))),
+                ),
+            )),
+        ];
+        for error in &internal {
+            assert!(
+                !is_deterministic_mempool_rejection(error),
+                "internal/state failure must be indeterminate: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn wire_message_mirror_matches_typed_deterministic_classification() {
+        // The deterministic direction of the wire mirror, derived from typed
+        // errors so that a Display change in the mempool crate breaks this
+        // test instead of silently flipping a pruning decision.
+        let deterministic = [
+            MempoolError::Policy(MempoolPolicyError::NoInputs),
+            MempoolError::Policy(MempoolPolicyError::TxSizeExceedsMaxBlockSize),
+            MempoolError::Policy(MempoolPolicyError::DescendantOfExpiredTransaction),
+            MempoolError::Orphan(OrphanPoolError::TooLarge(1, 2)),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::AttemptToSpendBurnedAmount,
+            )),
+            MempoolError::Validity(TxValidationError::TxValidation(
+                ConnectTransactionError::TotalFeeRequiredOverflow,
+            )),
+        ];
+        for error in &deterministic {
+            assert!(is_deterministic_mempool_rejection(error));
+            let wire = format!("Mempool error: {error}").to_ascii_lowercase();
+            assert!(
+                classify_mempool_error_message(&wire),
+                "wire message must be a rejection: {wire}"
             );
         }
     }

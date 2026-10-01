@@ -152,6 +152,17 @@ impl RepushTracker {
         self.absence_streaks.retain(|id, _| stuck.contains(id));
     }
 
+    /// The earliest time any tracked transaction becomes due again, if any.
+    /// Used to time the reconcile pass so that backoff delays shorter than the
+    /// regular pass interval are honored.
+    pub fn next_wake(&self) -> Option<Time> {
+        self.entries
+            .iter()
+            .filter(|(_, state)| !state.stuck)
+            .map(|(_, state)| state.next_attempt)
+            .min()
+    }
+
     /// Whether the transaction should be (re)submitted now. Transactions that
     /// were never attempted are always due.
     pub fn is_due(&self, tx_id: &Id<Transaction>, now: Time) -> bool {
@@ -350,10 +361,15 @@ pub struct ReconcileOutcome {
 /// it does not (e.g. duplicate ids in the input data), the affected
 /// transactions are skipped and a default (empty) outcome is returned for the
 /// malformed part of the input instead of panicking.
+/// `now` is the pass time, used to decide whether a transaction is actually
+/// due (in backoff) this pass: the rejection-evidence streak only advances on
+/// passes in which a retry was actually possible, so a transaction in a long
+/// backoff is never pruned before its retry budget had a chance to run.
 pub fn reconcile(
     pending: &[PendingTx],
     presence: &BTreeMap<Id<Transaction>, bool>,
     tracker: &mut RepushTracker,
+    now: Time,
 ) -> ReconcileOutcome {
     if pending.len() != presence.len() {
         logging::log::error!(
@@ -390,11 +406,11 @@ pub fn reconcile(
 
             if all_parents_present {
                 // Only accumulate evidence while the node has actually
-                // observed a submission of this transaction: passes before
-                // that prove nothing about rejection, and letting the streak
-                // pre-build would let a single later ambiguous rejection
-                // instantly satisfy the threshold.
-                if tracker.node_observed(&tx.id) {
+                // observed a submission of this transaction, and only on
+                // passes in which the transaction was actually due (a
+                // transaction in backoff is not being retried, so its
+                // continued absence proves nothing new).
+                if tracker.node_observed(&tx.id) && tracker.is_due(&tx.id, now) {
                     let streak = tracker.bump_absence(&tx.id);
                     if streak >= PRUNE_ABSENCE_THRESHOLD {
                         outcome.to_prune.push(tx.id);
@@ -481,6 +497,12 @@ mod tests {
 
     fn now() -> Time {
         Time::from_secs_since_epoch(1_000_000)
+    }
+
+    /// A pass time at which a transaction rejected at `now()` is due again
+    /// (its backoff has elapsed).
+    fn due_time() -> Time {
+        now().saturating_duration_add(INITIAL_BACKOFF)
     }
 
     #[test]
@@ -584,7 +606,7 @@ mod tests {
         let presence: BTreeMap<_, _> = (1..=3).map(|i| (test_id(i), false)).collect();
         let mut tracker = RepushTracker::new();
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_prune, Vec::<Id<Transaction>>::new());
         // 1 and 3 are ready immediately; 2 becomes ready after 1
         assert_eq!(outcome.to_submit, vec![test_id(1), test_id(3), test_id(2)]);
@@ -604,11 +626,11 @@ mod tests {
         // The signature must hold for PRUNE_ABSENCE_THRESHOLD consecutive
         // passes before pruning; build up the streak first.
         for _ in 0..(PRUNE_ABSENCE_THRESHOLD - 1) {
-            let outcome = reconcile(&pending, &presence, &mut tracker);
+            let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
             assert!(outcome.to_prune.is_empty(), "premature prune");
         }
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_prune, vec![test_id(2), test_id(3)]);
         assert_eq!(outcome.to_submit, vec![test_id(4)]);
 
@@ -628,7 +650,7 @@ mod tests {
         let presence: BTreeMap<_, _> = (1..=3).map(|i| (test_id(i), i == 1)).collect();
         let mut tracker = RepushTracker::new();
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_submit, vec![test_id(2), test_id(3)]);
         assert!(outcome.to_prune.is_empty());
     }
@@ -645,7 +667,7 @@ mod tests {
         tracker.on_rejected(&test_id(2), now());
         tracker.on_success(&test_id(2), now());
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_submit, vec![test_id(2)]);
         assert!(outcome.to_prune.is_empty());
     }
@@ -685,7 +707,7 @@ mod tests {
         let mut tracker = RepushTracker::new();
         tracker.on_delivery_failure(&test_id(2), now());
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_submit, vec![test_id(2)]);
         assert!(outcome.to_prune.is_empty());
     }
@@ -701,7 +723,7 @@ mod tests {
         tracker.on_rejected(&test_id(2), now()); // e.g. a server-busy rejection
 
         for pass in 1..=PRUNE_ABSENCE_THRESHOLD {
-            let outcome = reconcile(&pending, &presence, &mut tracker);
+            let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
             if pass < PRUNE_ABSENCE_THRESHOLD {
                 assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
                 assert!(outcome.to_prune.is_empty(), "pass {pass}");
@@ -724,7 +746,7 @@ mod tests {
         tracker.on_delivery_failure(&test_id(2), now());
 
         for pass in 1..=PRUNE_ABSENCE_THRESHOLD {
-            let outcome = reconcile(&pending, &presence, &mut tracker);
+            let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
             assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
             assert!(outcome.to_prune.is_empty(), "pass {pass}");
         }
@@ -733,7 +755,7 @@ mod tests {
         // One rejection starts the evidence chain from zero.
         tracker.on_rejected(&test_id(2), now());
         for pass in 1..PRUNE_ABSENCE_THRESHOLD {
-            let outcome = reconcile(&pending, &presence, &mut tracker);
+            let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
             assert_eq!(
                 outcome.to_submit,
                 vec![test_id(2)],
@@ -743,9 +765,40 @@ mod tests {
         }
 
         // Only the pass that completes the streak *after* observation prunes.
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert_eq!(outcome.to_prune, vec![test_id(2)]);
         assert!(outcome.to_submit.is_empty());
+    }
+
+    #[test]
+    fn reconcile_does_not_advance_streak_while_in_backoff() {
+        // A rejection starts a backoff; passes that happen before the backoff
+        // expires (the transaction is not being retried) must not advance the
+        // evidence streak, so the prune cannot happen before the remaining
+        // retry attempts were actually made.
+        let pending = vec![pt(1, vec![]), pt(2, vec![1])];
+        let presence: BTreeMap<_, _> = (1..=2).map(|i| (test_id(i), i == 1)).collect();
+        let mut tracker = RepushTracker::new();
+        tracker.on_rejected(&test_id(2), now()); // backoff until now() + INITIAL_BACKOFF
+
+        // Passes while the transaction is in backoff: the signature holds,
+        // but the streak must stay at zero.
+        for pass in 1..=PRUNE_ABSENCE_THRESHOLD {
+            let before_due = now().saturating_duration_add(Duration::from_secs(pass as u64));
+            let outcome = reconcile(&pending, &presence, &mut tracker, before_due);
+            assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
+            assert!(outcome.to_prune.is_empty(), "pass {pass}");
+        }
+        assert_eq!(tracker.absence_streak(&test_id(2)), 0);
+
+        // From the first due pass on, the streak builds normally.
+        for pass in 1..PRUNE_ABSENCE_THRESHOLD {
+            let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
+            assert_eq!(outcome.to_submit, vec![test_id(2)], "due pass {pass}");
+            assert!(outcome.to_prune.is_empty(), "due pass {pass}");
+        }
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
+        assert_eq!(outcome.to_prune, vec![test_id(2)]);
     }
 
     #[test]
@@ -768,34 +821,54 @@ mod tests {
 
         // Build the streak up to threshold - 1...
         for pass in 1..PRUNE_ABSENCE_THRESHOLD {
-            let outcome = reconcile(&pending, &presence_signature(false), &mut tracker);
+            let outcome = reconcile(
+                &pending,
+                &presence_signature(false),
+                &mut tracker,
+                due_time(),
+            );
             assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
             assert!(outcome.to_prune.is_empty(), "pass {pass}");
         }
 
         // ...the transaction reappears in the mempool: the evidence chain
         // resets, so it is not pruned even though it goes missing again.
-        let outcome = reconcile(&pending, &presence_signature(true), &mut tracker);
+        let outcome = reconcile(
+            &pending,
+            &presence_signature(true),
+            &mut tracker,
+            due_time(),
+        );
         assert!(outcome.to_submit.is_empty());
         assert!(outcome.to_prune.is_empty());
         assert_eq!(tracker.absence_streak(&test_id(2)), 0);
 
         // Both the parent and the child vanish: the signature is broken, the
         // streak resets, and both are simply resubmitted.
-        let outcome = reconcile(&pending, &presence_gone, &mut tracker);
+        let outcome = reconcile(&pending, &presence_gone, &mut tracker, due_time());
         assert_eq!(outcome.to_submit, vec![test_id(1), test_id(2)]);
         assert_eq!(tracker.absence_streak(&test_id(2)), 0);
 
         // The streak restarts from zero: threshold - 1 further signature
         // passes still do not prune.
         for pass in 1..PRUNE_ABSENCE_THRESHOLD {
-            let outcome = reconcile(&pending, &presence_signature(false), &mut tracker);
+            let outcome = reconcile(
+                &pending,
+                &presence_signature(false),
+                &mut tracker,
+                due_time(),
+            );
             assert_eq!(outcome.to_submit, vec![test_id(2)], "pass {pass}");
             assert!(outcome.to_prune.is_empty(), "pass {pass}");
         }
 
         // Only the pass that completes the streak prunes.
-        let outcome = reconcile(&pending, &presence_signature(false), &mut tracker);
+        let outcome = reconcile(
+            &pending,
+            &presence_signature(false),
+            &mut tracker,
+            due_time(),
+        );
         assert_eq!(outcome.to_prune, vec![test_id(2)]);
     }
 
@@ -811,7 +884,7 @@ mod tests {
             tracker.on_rejected(&id, t);
         }
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert!(outcome.to_submit.is_empty());
         assert!(outcome.to_prune.is_empty());
     }
@@ -822,7 +895,7 @@ mod tests {
         let presence: BTreeMap<_, _> = (1..=2).map(|i| (test_id(i), true)).collect();
         let mut tracker = RepushTracker::new();
 
-        let outcome = reconcile(&pending, &presence, &mut tracker);
+        let outcome = reconcile(&pending, &presence, &mut tracker, due_time());
         assert!(outcome.to_submit.is_empty());
         assert!(outcome.to_prune.is_empty());
     }

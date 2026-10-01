@@ -1811,6 +1811,17 @@ impl OutputCache {
     /// Same as [`Self::abandon_transaction`], but also tolerates a stale
     /// `InMempool` state. Used when pruning transactions that are known to be
     /// dead (probed missing from the mempool) but are still cached as in-mempool.
+    ///
+    /// # Caller obligation
+    ///
+    /// The caller must have verified the transaction is dead — probed missing
+    /// from the mempool with its parent present and a node-observed rejection,
+    /// as in `rebroadcast::reconcile` — before calling this. Tolerating a
+    /// *live* in-mempool transaction corrupts balance accounting until the
+    /// next rescan. Note the verification is inherently racy (the transaction
+    /// could re-enter the mempool between probe and prune); such a race is
+    /// self-healing — when the transaction confirms, the block scan re-adds it
+    /// as a wallet transaction — but the wallet state in between is wrong.
     pub fn prune_dead_transaction(
         &mut self,
         chain_config: &ChainConfig,

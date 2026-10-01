@@ -1544,6 +1544,14 @@ where
 
     /// Prune a transaction that is known to be dead (see
     /// [`Account::prune_dead_transaction`]) together with its pending descendants.
+    ///
+    /// # Caller obligation
+    ///
+    /// The caller must have verified the transaction is dead via the
+    /// reconcile evidence (mempool probe with parent present and a
+    /// node-observed rejection over several consecutive passes); the
+    /// verification is racy and a too-late re-entry self-heals on
+    /// confirmation or rescan. See [`Account::prune_dead_transaction`].
     pub fn prune_dead_transaction(
         &mut self,
         account_index: U31,
