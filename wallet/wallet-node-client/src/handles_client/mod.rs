@@ -34,8 +34,8 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{
-    FeeRate, MempoolConfig, MempoolHandle, event::MempoolEvent, tx_accumulator::PackingStrategy,
-    tx_options::TxOptionsOverrides,
+    FeeRate, MempoolConfig, MempoolHandle, error::Error as MempoolError, event::MempoolEvent,
+    tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides,
 };
 use p2p::{
     P2pHandle,
@@ -108,6 +108,21 @@ impl WalletHandlesClient {
 }
 
 impl NodeInterfaceError for WalletHandlesClientError {
+    fn is_node_rejection(&self) -> bool {
+        // The handles client talks to an in-process node; `submit_transaction`
+        // goes through the P2P handle, so a mempool rejection surfaces as
+        // `P2p(P2pError::MempoolError(_))`. Building the message through the
+        // real `#[error]` Display ("Mempool error: {0}") means this cannot
+        // drift from what the JSON-RPC transport actually puts on the wire,
+        // which retires the TODO(test) about format coupling.
+        let mempool_error = |err: &MempoolError| crate::rpc_client::mempool_rejection_message(err);
+        match self {
+            WalletHandlesClientError::MempoolError(err) => mempool_error(err),
+            WalletHandlesClientError::P2p(P2pError::MempoolError(err)) => mempool_error(err),
+            _ => false,
+        }
+    }
+
     fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
         match self {
             WalletHandlesClientError::BlockProduction(err) => match err {

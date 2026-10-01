@@ -38,7 +38,7 @@ use common::{
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
     },
     primitives::{
-        Amount, BlockHeight, H256, Id,
+        Amount, BlockHeight, H256, Id, Idable,
         id::{WithId, hash_encoded},
     },
     size_estimation::SizeEstimationError,
@@ -1540,6 +1540,51 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.abandon_transaction(tx_id, db_tx)
         })
+    }
+
+    /// Prune a transaction that is known to be dead (see
+    /// [`Account::prune_dead_transaction`]) together with its pending descendants.
+    pub fn prune_dead_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.prune_dead_transaction(tx_id, db_tx)
+        })
+    }
+
+    /// Returns the pending (unconfirmed) user transactions per account: the
+    /// transactions the wallet may still have to (re)broadcast. Transactions
+    /// the output cache already knows are confirmed, conflicted or abandoned
+    /// are filtered out; a transaction with no known state is kept (absence of
+    /// evidence is not evidence of death).
+    pub fn get_unconfirmed_transactions_per_account(
+        &self,
+    ) -> WalletResult<BTreeMap<U31, Vec<SignedTransaction>>> {
+        let db_tx = self.db.transaction_ro()?;
+        let mut result = BTreeMap::new();
+
+        for (account_index, account) in &self.accounts {
+            let txs = db_tx
+                .get_user_transactions_for_account(&account.get_account_id())?
+                .into_iter()
+                .filter(|tx| {
+                    match account.get_transaction(tx.transaction().get_id()) {
+                        Ok(tx_data) => matches!(
+                            tx_data.state(),
+                            TxState::InMempool(_) | TxState::Inactive(_)
+                        ),
+                        // No wallet tx entry: keep it and let the mempool
+                        // probe decide.
+                        Err(_) => true,
+                    }
+                })
+                .collect();
+            result.insert(*account_index, txs);
+        }
+
+        Ok(result)
     }
 
     pub fn get_pools(

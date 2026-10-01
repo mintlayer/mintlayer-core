@@ -644,6 +644,32 @@ where
         }
     }
 
+    pub fn prune_dead_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        match self {
+            RuntimeWallet::Software(w) => w.prune_dead_transaction(account_index, tx_id),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.prune_dead_transaction(account_index, tx_id),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.prune_dead_transaction(account_index, tx_id),
+        }
+    }
+
+    pub fn get_unconfirmed_transactions_per_account(
+        &self,
+    ) -> WalletResult<BTreeMap<U31, Vec<SignedTransaction>>> {
+        match self {
+            RuntimeWallet::Software(w) => w.get_unconfirmed_transactions_per_account(),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.get_unconfirmed_transactions_per_account(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_unconfirmed_transactions_per_account(),
+        }
+    }
+
     pub fn standalone_address_label_rename(
         &mut self,
         account_index: U31,

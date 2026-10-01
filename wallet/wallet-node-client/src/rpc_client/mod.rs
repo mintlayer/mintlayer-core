@@ -41,6 +41,22 @@ pub enum NodeRpcError {
     PerThousandParseError(#[from] PerThousandParseError),
 }
 
+/// Classifies a mempool error by building the same wrapped string the
+/// JSON-RPC transport sees ("Mempool error: {inner}") — so the handles
+/// transport and the JSON-RPC transport can never disagree.
+pub(crate) fn mempool_rejection_message(err: &mempool::error::Error) -> bool {
+    classify_mempool_error_message(&format!("mempool error: {err}").to_ascii_lowercase())
+}
+
+fn classify_mempool_error_message(message: &str) -> bool {
+    let indeterminate = message.contains("tip moved")
+        || message.contains("chainstate error")
+        || message.contains("subsystem call error")
+        || message.contains("reorg error")
+        || message.contains("mempool entry");
+    !indeterminate && (message.contains("mempool") || message.contains("orphan"))
+}
+
 impl NodeInterfaceError for NodeRpcError {
     fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
         match self {
@@ -57,6 +73,16 @@ impl NodeInterfaceError for NodeRpcError {
             | NodeRpcError::AddressError(_)
             | NodeRpcError::PerThousandParseError(_) => false,
         }
+    }
+
+    fn is_node_rejection(&self) -> bool {
+        // Any JSON-RPC application-level error response means the node
+        // received the submission and processed it. Whether it was
+        // *deterministically rejected* (vs transiently unavailable) cannot be
+        // decided from the error text alone; that distinction is made by the
+        // caller's consecutive-absence streak, so a single ambiguous reply
+        // can never prune a live transaction.
+        matches!(self, NodeRpcError::ResponseError(rpc::ClientError::Call(_)))
     }
 }
 
@@ -105,4 +131,34 @@ impl NodeRpcClient {
     pub fn ws_client(&self) -> &rpc::RpcWsClient {
         &self.rpc_client
     }
+}
+
+#[cfg(test)]
+mod mempool_rejection_message_tests {
+    use super::mempool_rejection_message;
+    use mempool::error::{Error as MempoolError, OrphanPoolError};
+
+    #[test]
+    fn mempool_full_is_rejection() {
+        assert!(mempool_rejection_message(&MempoolError::Policy(
+            mempool::error::MempoolPolicyError::MempoolFull
+        )));
+    }
+
+    #[test]
+    fn orphan_pool_full_is_rejection() {
+        assert!(mempool_rejection_message(&MempoolError::Orphan(
+            OrphanPoolError::Full
+        )));
+    }
+
+    #[test]
+    fn tip_moved_is_not_rejection() {
+        assert!(!mempool_rejection_message(&MempoolError::TipMoved));
+    }
+
+    // Note: `AddedDuringIBD` classifies as a rejection because the "mempool
+    // error: " prefix guarantees the keyword check passes. The wallet treats
+    // it as a retryable error (re-evaluated when IBD completes), which is
+    // correct behavior.
 }
