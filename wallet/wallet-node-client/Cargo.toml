@@ -41,6 +41,7 @@ tower.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
+rpc = { path = "../../rpc", features = ["test-support"] }
 
 [build-dependencies]
 build_utils = { path = "../../utils/build_utils" }

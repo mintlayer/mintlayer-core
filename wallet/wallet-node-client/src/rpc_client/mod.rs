@@ -21,7 +21,7 @@ use std::sync::Arc;
 use common::{
     address::AddressError, chain::ChainConfig, primitives::per_thousand::PerThousandParseError,
 };
-use rpc::{ClientError, RpcAuthData, RpcWsClient, new_ws_client};
+use rpc::{ClientError, ClientErrorExt as _, RpcAuthData, RpcWsClient, new_ws_client};
 
 use crate::node_traits::{NodeInterface, NodeInterfaceError};
 
@@ -54,6 +54,35 @@ impl NodeInterfaceError for NodeRpcError {
             NodeRpcError::InitializationError(_)
             | NodeRpcError::DecodingError(_)
             | NodeRpcError::ClientCreationError(_)
+            | NodeRpcError::AddressError(_)
+            | NodeRpcError::PerThousandParseError(_) => false,
+        }
+    }
+}
+
+impl NodeRpcError {
+    /// Returns `true` if the error is caused by a connection-level problem between this client
+    /// and the node, i.e. the connection is broken or cannot be established, as opposed to an
+    /// application-level error reported by the node.
+    ///
+    /// Such errors are recoverable by dropping the client and establishing a new connection.
+    ///
+    /// Caution: connection-level does not mean that the failed request was not processed. A
+    /// timeout or a lost response in particular leaves the outcome of the request unknown, so
+    /// callers retrying non-idempotent node calls must account for that instead of blindly
+    /// resending. (The scanner's sync and the mempool subscription are both idempotent: they
+    /// resume from local state.)
+    pub fn is_connection_error(&self) -> bool {
+        match self {
+            // The client could not be created or the call did not reach the node (or its
+            // response was lost) because of a broken connection.
+            NodeRpcError::ClientCreationError(err) | NodeRpcError::ResponseError(err) => {
+                err.is_connection_error()
+            }
+            // The initial connection check failed; the cause is either a connection problem or
+            // an application-level error, both classified by the wrapped error.
+            NodeRpcError::InitializationError(err) => err.is_connection_error(),
+            NodeRpcError::DecodingError(_)
             | NodeRpcError::AddressError(_)
             | NodeRpcError::PerThousandParseError(_) => false,
         }
@@ -104,5 +133,63 @@ impl NodeRpcClient {
     /// Direct access to the underlying WebSocket RPC client, e.g. for subscriptions.
     pub fn ws_client(&self) -> &rpc::RpcWsClient {
         &self.rpc_client
+    }
+}
+
+#[cfg(test)]
+mod connection_error_tests {
+    use super::*;
+    use rpc::test_support::CALL_EXECUTION_FAILED_CODE;
+
+    /// The "background task closed ...; restart required" error reported by a WS client whose
+    /// connection was closed by the node; this is the error seen by the scanner in production
+    /// when the node drops the WebSocket connection.
+    fn background_task_closed_error() -> ClientError {
+        ClientError::RestartNeeded(Arc::new(ClientError::Transport(
+            "Connection was closed".into(),
+        )))
+    }
+
+    #[test]
+    fn broken_connection_is_a_connection_error() {
+        assert!(NodeRpcError::ResponseError(background_task_closed_error()).is_connection_error());
+        assert!(
+            NodeRpcError::ResponseError(ClientError::Transport("connection reset by peer".into()))
+                .is_connection_error()
+        );
+        assert!(NodeRpcError::ResponseError(ClientError::RequestTimeout).is_connection_error());
+
+        // A client that cannot be created at all (e.g. the node is simply down) is also a
+        // connection-level failure.
+        assert!(
+            NodeRpcError::ClientCreationError(ClientError::Transport("Connection refused".into()))
+                .is_connection_error()
+        );
+
+        // The initial connection check wraps the cause; the classification is inherited.
+        assert!(
+            NodeRpcError::InitializationError(Box::new(NodeRpcError::ResponseError(
+                background_task_closed_error()
+            )))
+            .is_connection_error()
+        );
+    }
+
+    #[test]
+    fn node_reported_errors_are_not_connection_errors() {
+        // A definitive application-level answer from the node must not trigger a reconnection.
+        let call_error = ClientError::Call(rpc::Error::owned(
+            CALL_EXECUTION_FAILED_CODE,
+            "No such block",
+            None::<serde_json::Value>,
+        ));
+        assert!(!NodeRpcError::ResponseError(call_error).is_connection_error());
+
+        assert!(
+            !NodeRpcError::DecodingError(serialization::hex::HexError::ScaleDecodeError(
+                "decoding failed".into()
+            ))
+            .is_connection_error()
+        );
     }
 }

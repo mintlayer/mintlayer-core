@@ -26,8 +26,17 @@ const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SyncError {
-    #[error("Unexpected remote node error: {0}")]
-    RemoteNode(String),
+    #[error("Unexpected remote node error: {message}")]
+    RemoteNode {
+        message: String,
+        /// The original error, kept for diagnosis (e.g. to distinguish a definitive
+        /// application-level answer from a timeout through `e.source()`).
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+        /// Whether the underlying failure is a connection-level one (a broken or unusable
+        /// connection between the scanner and the node), recoverable by re-connecting.
+        is_connection_error: bool,
+    },
     #[error("Unexpected local node error: {0}")]
     LocalNode(String),
     #[error("No new blocks found")]
@@ -38,6 +47,20 @@ pub enum SyncError {
     NotEnoughBlockHeight,
     #[error("Best block retrieval error {0}")]
     BestBlockRetrievalError(String),
+}
+
+impl SyncError {
+    /// Returns `true` if the error indicates a connection-level failure between the scanner and
+    /// the node; such errors are recoverable by dropping the RPC client and reconnecting.
+    pub fn is_connection_error(&self) -> bool {
+        matches!(
+            self,
+            SyncError::RemoteNode {
+                is_connection_error: true,
+                ..
+            }
+        )
+    }
 }
 
 struct NextBlockInfo {
@@ -52,16 +75,17 @@ struct FetchedBlocks {
 
 /// Sync the local node to the current block height of the remote node.
 /// This should be run periodically.
-pub async fn sync_once(
+pub async fn sync_once<R, L>(
     chain_config: &ChainConfig,
-    rpc_client: &impl RemoteNode,
-    local_state: &mut impl LocalBlockchainState,
-) -> Result<(), SyncError> {
+    rpc_client: &R,
+    local_state: &mut L,
+) -> Result<(), SyncError>
+where
+    R: RemoteNode,
+    L: LocalBlockchainState,
+{
     loop {
-        let chain_info = rpc_client
-            .chainstate()
-            .await
-            .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
+        let chain_info = rpc_client.chainstate().await.map_err(|e| remote_node_error::<R>(e))?;
 
         let (best_block_height, best_block_id) = local_state
             .best_block()
@@ -78,7 +102,7 @@ pub async fn sync_once(
             best_block_id
         );
 
-        fetch_and_sync(
+        fetch_and_sync::<R>(
             chain_info.clone(),
             best_block_id,
             best_block_height,
@@ -90,12 +114,23 @@ pub async fn sync_once(
     }
 }
 
-async fn fetch_and_sync(
+/// Map a remote node error into a [`SyncError`], preserving the connection-level
+/// classification provided by [`RemoteNode::is_connection_error`] and the original error (as
+/// the [`std::error::Error::source`] of the returned error) for diagnosis.
+fn remote_node_error<R: RemoteNode>(error: R::Error) -> SyncError {
+    SyncError::RemoteNode {
+        message: error.to_string(),
+        is_connection_error: R::is_connection_error(&error),
+        source: Box::new(error),
+    }
+}
+
+async fn fetch_and_sync<R: RemoteNode>(
     chain_info: chainstate::ChainInfo,
     best_block_id: Id<GenBlock>,
     best_block_height: BlockHeight,
     chain_config: &ChainConfig,
-    rpc_client: &impl RemoteNode,
+    rpc_client: &R,
     local_node: &mut impl LocalBlockchainState,
 ) -> Result<(), SyncError> {
     // TODO: use chain trust instead of height
@@ -122,9 +157,9 @@ async fn fetch_and_sync(
         .map_err(|e| SyncError::LocalNode(e.to_string()))
 }
 
-async fn fetch_new_blocks(
+async fn fetch_new_blocks<R: RemoteNode>(
     chain_config: &ChainConfig,
-    rpc_client: &impl RemoteNode,
+    rpc_client: &R,
     chain_info: chainstate::ChainInfo,
     best_block_id: Id<GenBlock>,
     best_block_height: BlockHeight,
@@ -144,7 +179,7 @@ async fn fetch_new_blocks(
     let blocks = rpc_client
         .mainchain_blocks(common_block_height.next_height(), MAX_FETCH_BLOCK_COUNT)
         .await
-        .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
+        .map_err(|e| remote_node_error::<R>(e))?;
     match blocks.first() {
         Some(block) => utils::ensure!(
             *block.header().prev_block_id() == common_block_id,
@@ -159,9 +194,9 @@ async fn fetch_new_blocks(
     })
 }
 
-async fn get_common_block_info(
+async fn get_common_block_info<R: RemoteNode>(
     chain_config: &ChainConfig,
-    rpc_client: &impl RemoteNode,
+    rpc_client: &R,
     chain_info: chainstate::ChainInfo,
     best_block_id: Id<GenBlock>,
     best_block_height: BlockHeight,
@@ -172,7 +207,7 @@ async fn get_common_block_info(
     let common_block_opt = rpc_client
         .last_common_ancestor(best_block_id, chain_info.best_block_id)
         .await
-        .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
+        .map_err(|e| remote_node_error::<R>(e))?;
 
     let (common_block_id, common_block_height) = match common_block_opt {
         // Common branch is found
