@@ -1583,6 +1583,14 @@ where
             for tx in db_tx.get_user_transactions_for_account(&account.get_account_id())? {
                 match account.get_transaction(tx.transaction().get_id()) {
                     Ok(tx_data) => {
+                        // `Inactive` = the transaction left the mempool (e.g.
+                        // evicted, or reset by a reorg) without being
+                        // confirmed or conflicted, so it is exactly the case
+                        // that needs a (re)broadcast; it is distinct from
+                        // `Abandoned`, which the user requested and which is
+                        // excluded. Rebroadcast attempts are capped
+                        // downstream by the controller's tracker (stuck
+                        // after its attempt/age budget).
                         if matches!(
                             tx_data.state(),
                             TxState::InMempool(_) | TxState::Inactive(_)

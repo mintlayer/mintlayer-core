@@ -115,6 +115,7 @@ use wallet::{
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
+    wallet_tx::TxState,
 };
 
 #[cfg(any(feature = "trezor", feature = "ledger"))]
@@ -2044,6 +2045,12 @@ where
                     log::warn!(
                         "Pruned dead transaction {tx_id:x} (and its pending descendants, if any)"
                     );
+                }
+                // Already abandoned as part of a previously pruned subtree:
+                // the wallet-side prune of the root covers its descendants,
+                // so there is nothing left to do for this id.
+                Err(WalletError::CannotChangeTransactionState(TxState::Abandoned, _)) => {
+                    self.repush_tracker.forget(tx_id);
                 }
                 Err(error) => {
                     // Keep the tracker entry: the evidence streak (already at
