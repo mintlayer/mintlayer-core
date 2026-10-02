@@ -425,9 +425,11 @@ where
             .get_multisig_utxos_with_states(
                 account_index,
                 (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
-                // An omitted or empty filter means "all states", matching
-                // the standalone_multisig_utxos RPC's server-side default.
-                (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
+                // Parity with the standalone_multisig_utxos RPC, whose
+                // server-side default for an omitted/empty filter is
+                // Confirmed-only (unlike account_utxos, which defaults to
+                // all states).
+                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
                 with_locked,
             )
             .await
