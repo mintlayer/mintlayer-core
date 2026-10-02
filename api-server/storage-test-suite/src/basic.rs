@@ -2412,7 +2412,10 @@ where
 
     // cursor pagination over the coin holders
     let page = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
-    assert_eq!(sorted_by_amount(page.clone()).len(), 2);
+    assert_eq!(
+        sorted_by_amount(page.clone()),
+        expect(&[(&addr2, Amount::from_atoms(300)), (&addr3, Amount::from_atoms(200))])
+    );
     let (last_address, last_amount) = {
         let mut sorted = sorted_by_amount(page);
         let (address, amount) = sorted.pop().unwrap();
@@ -2427,7 +2430,7 @@ where
         )
         .await
         .unwrap();
-    assert_eq!(next_page.len(), 1);
+    assert_eq!(next_page, expect(&[(&addr1, Amount::from_atoms(100))]));
     let (last_address2, last_amount2) = next_page[0].clone();
 
     let end = db_tx

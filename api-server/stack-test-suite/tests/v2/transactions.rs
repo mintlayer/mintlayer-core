@@ -391,6 +391,9 @@ async fn cursor_pagination(#[case] seed: Seed) {
         arr.iter().map(|tx| tx["id"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
     assert!(!expected_txs.is_empty());
     let num_tx = expected_txs.len();
+    // the baseline is fetched with the server's maximum page size; a larger list
+    // would be silently truncated and the comparison below would be vacuous
+    assert!(num_tx < 100);
 
     // the same list, walked with the cursor
     let mut url = "/api/v2/transaction?items=1&cursor=".to_owned();

@@ -1921,6 +1921,14 @@ async fn holders_response<T: ApiServerStorage>(
                         ));
                     }
                 };
+                // the tie-break is an encoded address; reject garbage up front
+                let _validated =
+                    Address::<Destination>::from_string(&state.chain_config, &tie_break_id)
+                        .map_err(|_| {
+                            ApiServerWebServerError::ClientError(
+                                ApiServerWebServerClientError::InvalidCursor,
+                            )
+                        })?;
                 Some((amount, tie_break_id))
             }
             None => None,
@@ -2491,23 +2499,46 @@ fn price_to_decimal_string(
     base_decimals: u8,
     quote_decimals: u8,
 ) -> String {
-    let mantissa = 10u128
-        .checked_pow(u32::from(base_decimals))
-        .and_then(|base_scale| Uint256::from(numer).checked_mul(&Uint256::from(base_scale)))
+    let as_f64 = || {
+        let price = numer as f64 * 10f64.powi(base_decimals as i32)
+            / (denom as f64 * 10f64.powi(quote_decimals as i32));
+        price.to_string()
+    };
+
+    // mantissa = numer * 10^base_decimals / denom so that the price equals
+    // mantissa * 10^-quote_decimals; computed in a u256 because numer can be close
+    // to u128::MAX and is scaled by up to 10^38
+    let Some(base_scale) = 10u128.checked_pow(u32::from(base_decimals)) else {
+        return as_f64();
+    };
+    let Some(mut mantissa) = Uint256::from(numer)
+        .checked_mul(&Uint256::from(base_scale))
         .and_then(|scaled| scaled.checked_div(&Uint256::from(denom)))
-        .and_then(|mantissa| u128::try_from(mantissa).ok());
-    match mantissa {
-        Some(mantissa) => DecimalAmount::from_uint_decimal(mantissa, quote_decimals).to_string(),
-        None => {
-            let price = numer as f64 * 10f64.powi(base_decimals as i32)
-                / (denom as f64 * 10f64.powi(quote_decimals as i32));
-            price.to_string()
+    else {
+        return as_f64();
+    };
+    // shrink a mantissa that does not fit a u128 by dropping its least significant
+    // digits, each drop compensated by one fewer decimal place; this cannot exhaust
+    // the decimals for any real price, so the f64 tail is unreachable in practice
+    let mut decimals = quote_decimals;
+    let mantissa = loop {
+        if let Ok(mantissa) = u128::try_from(mantissa) {
+            break mantissa;
         }
-    }
+        if decimals == 0 {
+            return as_f64();
+        }
+        mantissa = mantissa.checked_div(&Uint256::from(10u128)).expect("ten is not zero");
+        decimals -= 1;
+    };
+    DecimalAmount::from_uint_decimal(mantissa, decimals).to_string()
 }
 
 fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
     let (mut numer, mut denom) = (*rational.numer(), *rational.denom());
+    if denom == 0 {
+        return rational;
+    }
     while denom != 0 {
         (numer, denom) = (denom, numer % denom);
     }

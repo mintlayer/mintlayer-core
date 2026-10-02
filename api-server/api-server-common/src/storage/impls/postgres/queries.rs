@@ -55,6 +55,11 @@ pub struct QueryFromConnection<'a, 'b> {
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
+    /// Safety bound for the order book aggregation: at most this many live orders
+    /// (the deepest ones first) contribute to a single request, capping the cost
+    /// of one book query regardless of how many orders a pair accumulates.
+    const ORDER_BOOK_MAX_ORDERS: i64 = 10_000;
+
     fn get_table_exists_query(table_name: &str) -> String {
         format!(
             "SELECT COALESCE( (
@@ -378,8 +383,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        // roll back the holders table rows of the disconnected blocks; the numeric
-        // amount is derived from the versioned balances, hence the row-by-row handling
+        // roll back the holders table rows of the disconnected blocks; set-based, in a
+        // constant number of round trips: delete the rolled-back rows, drop rows whose
+        // whole versioned history was orphaned, then re-derive and re-insert the rest
+        // in bulk (the numeric amount is decoded from the versioned balances)
         let deleted_holders_rows = self
             .tx
             .query(
@@ -389,55 +396,87 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        for row in deleted_holders_rows {
-            let address: String = row.get(0);
-            let coin_or_token_id: Vec<u8> = row.get(1);
+        if !deleted_holders_rows.is_empty() {
+            let addresses: Vec<String> =
+                deleted_holders_rows.iter().map(|row| row.get(0)).collect();
+            let coin_or_token_ids: Vec<Vec<u8>> =
+                deleted_holders_rows.iter().map(|row| row.get(1)).collect();
 
-            let latest_versioned = self
-                .tx
-                .query_opt(
-                    "SELECT block_height, amount FROM ml.address_balance WHERE address = $1 AND coin_or_token_id = $2 ORDER BY block_height DESC LIMIT 1;",
-                    &[&address, &coin_or_token_id],
+            // rows whose versioned history was fully orphaned leave the table
+            self.tx
+                .execute(
+                    r#"
+                        DELETE FROM ml.address_amount aa
+                        WHERE (aa.address, aa.coin_or_token_id) IN (
+                            SELECT address, coin_or_token_id
+                            FROM unnest($1::text[], $2::bytea[]) AS d(address, coin_or_token_id)
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM ml.address_balance ab
+                            WHERE ab.address = aa.address AND ab.coin_or_token_id = aa.coin_or_token_id
+                        );
+                    "#,
+                    &[&addresses, &coin_or_token_ids],
                 )
                 .await
                 .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-            match latest_versioned {
-                Some(latest) => {
-                    let block_height: i64 = latest.get(0);
-                    let amount: Vec<u8> = latest.get(1);
-                    let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Amount deserialization failed: {e}"
-                        ))
-                    })?;
-                    let amount_str = amount.into_atoms().to_string();
+            // the latest remaining versioned balance of every affected pair
+            let latest_versioned = self
+                .tx
+                .query(
+                    r#"
+                        SELECT DISTINCT ON (a.address, a.coin_or_token_id)
+                            a.address, a.coin_or_token_id, a.block_height, a.amount
+                        FROM ml.address_balance a
+                        JOIN unnest($1::text[], $2::bytea[]) AS d(address, coin_or_token_id)
+                            ON a.address = d.address AND a.coin_or_token_id = d.coin_or_token_id
+                        ORDER BY a.address, a.coin_or_token_id, a.block_height DESC;
+                    "#,
+                    &[&addresses, &coin_or_token_ids],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-                    self.tx
-                        .execute(
-                            r#"
-                                INSERT INTO ml.address_amount (address, coin_or_token_id, block_height, amount)
-                                VALUES ($1, $2, $3, $4::text::numeric)
-                                ON CONFLICT (address, coin_or_token_id) DO UPDATE
-                                SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
-                                WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
-                            "#,
-                            &[&address, &coin_or_token_id, &block_height, &amount_str],
-                        )
-                        .await
-                        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-                }
-                None => {
-                    // the whole history of the address and the asset was orphaned
-                    self.tx
-                        .execute(
-                            "DELETE FROM ml.address_amount WHERE address = $1 AND coin_or_token_id = $2;",
-                            &[&address, &coin_or_token_id],
-                        )
-                        .await
-                        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-                }
+            let mut upsert_addresses: Vec<String> = Vec::with_capacity(latest_versioned.len());
+            let mut upsert_coin_or_token_ids: Vec<Vec<u8>> =
+                Vec::with_capacity(latest_versioned.len());
+            let mut upsert_block_heights: Vec<i64> = Vec::with_capacity(latest_versioned.len());
+            let mut upsert_amounts: Vec<String> = Vec::with_capacity(latest_versioned.len());
+
+            for row in latest_versioned {
+                let amount: Vec<u8> = row.get(3);
+                let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Amount deserialization failed: {e}"
+                    ))
+                })?;
+                upsert_addresses.push(row.get(0));
+                upsert_coin_or_token_ids.push(row.get(1));
+                upsert_block_heights.push(row.get::<_, i64>(2));
+                upsert_amounts.push(amount.into_atoms().to_string());
             }
+
+            self.tx
+                .execute(
+                    r#"
+                        INSERT INTO ml.address_amount (address, coin_or_token_id, block_height, amount)
+                        SELECT address, coin_or_token_id, block_height, amount
+                        FROM unnest($1::text[], $2::bytea[], $3::bigint[], $4::text[]::numeric[])
+                            AS t(address, coin_or_token_id, block_height, amount)
+                        ON CONFLICT (address, coin_or_token_id) DO UPDATE
+                        SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
+                        WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
+                    "#,
+                    &[
+                        &upsert_addresses,
+                        &upsert_coin_or_token_ids,
+                        &upsert_block_heights,
+                        &upsert_amounts,
+                    ],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
         }
 
         Ok(())
@@ -3460,9 +3499,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     FROM ml.latest_orders_cache
                     WHERE ask_currency = $1 AND give_currency = $2
                         AND frozen = FALSE
-                        AND ask_balance != 0 AND give_balance != 0;
+                        AND ask_balance != 0 AND give_balance != 0
+                    ORDER BY ask_balance DESC
+                    LIMIT $3;
                 "#,
-                &[&ask_currency, &give_currency],
+                &[&ask_currency, &give_currency, &Self::ORDER_BOOK_MAX_ORDERS],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
