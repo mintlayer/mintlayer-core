@@ -81,6 +81,10 @@ pub trait WalletStorageReadLocked {
         account_id: &AccountId,
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
+    fn get_user_transactions_for_account(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Vec<SignedTransaction>>;
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
     -> Result<Option<AccountVrfKeys>>;

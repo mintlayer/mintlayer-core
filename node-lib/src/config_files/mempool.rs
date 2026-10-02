@@ -33,6 +33,12 @@ pub struct MempoolConfigFile {
 
     /// Maximum total size of transactions that is allowed in a single cluster.
     pub max_cluster_size_bytes: Option<usize>,
+
+    /// Whether to park local-origin transactions with unknown inputs in the orphan pool.
+    pub allow_local_orphans: Option<bool>,
+
+    /// Capacity for local-origin orphans within the orphan pool.
+    pub local_orphan_pool_capacity: Option<usize>,
 }
 
 impl MempoolConfigFile {
@@ -45,6 +51,8 @@ impl MempoolConfigFile {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
         } = config;
 
         let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
@@ -52,11 +60,15 @@ impl MempoolConfigFile {
             max_cluster_tx_count.or(options.mempool_max_cluster_transaction_count);
         let max_cluster_size_bytes =
             max_cluster_size_bytes.or(options.mempool_max_cluster_size_bytes);
+        // Note: `allow_local_orphans` and `local_orphan_pool_capacity` are intentionally not
+        // exposed as CLI options; they can only be set through the mempool config file.
 
         MempoolConfigFile {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
         }
     }
 }
@@ -67,6 +79,8 @@ impl From<MempoolConfigFile> for MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
         } = config_file;
 
         Self {
@@ -75,6 +89,8 @@ impl From<MempoolConfigFile> for MempoolConfig {
                 .into(),
             max_cluster_tx_count: max_cluster_tx_count.into(),
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
+            allow_local_orphans: allow_local_orphans.into(),
+            local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
         }
     }
 }

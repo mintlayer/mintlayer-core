@@ -278,3 +278,5 @@ pub fn frame_event_name(frame: &str) -> Option<&str> {
 pub fn frame_data(frame: &str) -> Option<&str> {
     frame.lines().find_map(|line| line.strip_prefix("data: "))
 }
+
+pub mod proxy;
