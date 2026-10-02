@@ -449,6 +449,12 @@ async fn pools_cursor_pagination(#[case] seed: Seed) {
         let mut url = "/api/v2/pool?items=1&cursor=".to_owned();
         let mut paged_order = vec![];
         loop {
+            // bounded by the known pool count so a self-referencing cursor fails
+            // instead of hanging
+            assert!(
+                paged_order.len() < expected_order.len(),
+                "cursor walk exceeded the expected pool count"
+            );
             let (status, body) = get_json(url.clone()).await;
             assert_eq!(status, 200);
             let body: serde_json::Value = serde_json::from_str(&body).unwrap();

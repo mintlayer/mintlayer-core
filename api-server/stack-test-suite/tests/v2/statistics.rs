@@ -535,11 +535,31 @@ async fn coin_holders(#[case] seed: Seed) {
     let alice_atoms = amount_to_json(Amount::from_atoms(100), coin_decimals);
     let bob_atoms = amount_to_json(Amount::from_atoms(50), coin_decimals);
 
+    // the holder count is known from an unpaged request; the walk below is
+    // bounded by it so a self-referencing cursor fails instead of hanging
+    let response = reqwest::get(format!(
+        "http://{}:{}/api/v2/statistics/coin/holders?items=100",
+        addr.ip(),
+        addr.port()
+    ))
+    .await
+    .unwrap();
+    assert_eq!(response.status(), 200);
+    let body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    let num_holders = body["items"].as_array().unwrap().len();
+    assert!(num_holders >= 2);
+
     // walk the whole holders list, one item per request
     let mut url = "/api/v2/statistics/coin/holders?items=1".to_owned();
     let mut holders = BTreeMap::<String, serde_json::Value>::new();
     let mut prev_amount: Option<String> = None;
     loop {
+        // bounded by the known holder count so a self-referencing cursor fails
+        // instead of hanging
+        assert!(
+            holders.len() < num_holders,
+            "the holders cursor walk exceeded the expected number of holders"
+        );
         let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
@@ -573,6 +593,7 @@ async fn coin_holders(#[case] seed: Seed) {
         }
     }
 
+    assert_eq!(holders.len(), num_holders);
     assert_eq!(holders.get(alice_address.as_str()), Some(&alice_atoms));
     assert_eq!(holders.get(bob_address.as_str()), Some(&bob_atoms));
 

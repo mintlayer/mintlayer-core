@@ -2426,6 +2426,12 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     // aggregate the remaining balances into price levels
     let mut levels = BTreeMap::<Rational<u128>, u128>::new();
     for (ask_balance, give_balance) in entries {
+        // defensive: the storage layer filters these out, but a zero balance would
+        // yield a zero-denominator price whose `Ord` compares equal to every other
+        // key and silently corrupts the level map, so skip it here as well
+        if ask_balance == Amount::ZERO || give_balance == Amount::ZERO {
+            continue;
+        }
         let (price, base_amount) = if base_is_ask {
             (
                 Rational::new(give_balance.into_atoms(), ask_balance.into_atoms()),

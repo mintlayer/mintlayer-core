@@ -577,7 +577,7 @@ impl ApiServerInMemoryStorage {
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
     ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
-        let mut entries: Vec<_> = self
+        let entries: Vec<_> = self
             .orders_table
             .iter()
             .filter_map(|(order_id, by_height)| Some((order_id, by_height.values().last()?)))
@@ -591,23 +591,28 @@ impl ApiServerInMemoryStorage {
             .collect();
 
         // deepest orders first, ties broken by the encoded order id (byte order) and
-        // capped exactly like the postgres query; has_more reports the truncation
-        entries.sort_by(|(order_id_a, order_a), (order_id_b, order_b)| {
-            order_b
-                .ask_balance
-                .into_atoms()
-                .cmp(&order_a.ask_balance.into_atoms())
-                .then_with(|| {
-                    self.order_id_sort_key(order_id_b).cmp(&self.order_id_sort_key(order_id_a))
-                })
+        // capped exactly like the postgres query; has_more reports the truncation.
+        // the sort key is encoded once per entry, not once per comparison
+        let mut decorated: Vec<(String, Amount, Amount)> = entries
+            .into_iter()
+            .map(|(order_id, order)| {
+                (
+                    self.order_id_sort_key(order_id),
+                    order.ask_balance,
+                    order.give_balance,
+                )
+            })
+            .collect();
+        decorated.sort_by_key(|(key, ask_balance, _give_balance)| {
+            (Reverse(ask_balance.into_atoms()), Reverse(key.clone()))
         });
-        let has_more = entries.len() > ORDER_BOOK_MAX_ORDERS;
-        entries.truncate(ORDER_BOOK_MAX_ORDERS);
+        let has_more = decorated.len() > ORDER_BOOK_MAX_ORDERS;
+        decorated.truncate(ORDER_BOOK_MAX_ORDERS);
 
         Ok((
-            entries
+            decorated
                 .into_iter()
-                .map(|(_order_id, order)| (order.ask_balance, order.give_balance))
+                .map(|(_key, ask_balance, give_balance)| (ask_balance, give_balance))
                 .collect(),
             has_more,
         ))
@@ -620,31 +625,34 @@ impl ApiServerInMemoryStorage {
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
-        let mut pool_data: Vec<_> = self
+        // newest first, ties broken by the encoded pool address (byte order), exactly
+        // like the postgres listing; the sort key is encoded once per entry
+        let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
             .map(|(pool_id, by_height)| {
-                let created_height = by_height.keys().next().expect("not empty");
-                let latest_data = by_height.values().last().expect("not empty");
-                (pool_id, (created_height, latest_data))
+                let created_height = *by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty").clone();
+                (
+                    created_height,
+                    self.pool_id_sort_key(pool_id),
+                    *pool_id,
+                    latest_data,
+                )
             })
-            .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
+            .filter(|(_height, _key, _pool_id, data)| {
+                data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
+            })
             .collect();
-
-        // newest first, ties broken by the encoded pool address (byte order), exactly
-        // like the postgres listing
-        pool_data.sort_by(|(pool_id_a, (height_a, _)), (pool_id_b, (height_b, _))| {
-            height_b.cmp(height_a).then_with(|| {
-                self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
-            })
-        });
-        if offset >= pool_data.len() {
+        decorated
+            .sort_by_key(|(height, key, _pool_id, _data)| (Reverse(*height), Reverse(key.clone())));
+        if offset >= decorated.len() {
             return Ok(vec![]);
         }
 
-        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+        let latest_pools = decorated[offset..std::cmp::min(offset + len, decorated.len())]
             .iter()
-            .map(|(pool_id, data)| (**pool_id, (data.1).clone()))
+            .map(|(_height, _key, pool_id, data)| (*pool_id, data.clone()))
             .collect();
 
         Ok(latest_pools)
@@ -656,40 +664,42 @@ impl ApiServerInMemoryStorage {
         cursor: Option<(BlockHeight, PoolId)>,
     ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        let mut pool_data: Vec<_> = self
+        // newest first, ties broken by the encoded pool address (byte order) so the
+        // keyset cursor is deterministic and backend-independent; the sort key is
+        // encoded once per entry
+        let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
             .map(|(pool_id, by_height)| {
-                let created_height = by_height.keys().next().expect("not empty");
-                let latest_data = by_height.values().last().expect("not empty");
-                (pool_id, (*created_height, latest_data))
+                let created_height = *by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty").clone();
+                (
+                    created_height,
+                    self.pool_id_sort_key(pool_id),
+                    *pool_id,
+                    latest_data,
+                )
             })
-            .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
+            .filter(|(_height, _key, _pool_id, data)| {
+                data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
+            })
             .collect();
-
-        // newest first, ties broken by the encoded pool address (byte order) so the
-        // keyset cursor is deterministic and backend-independent
-        pool_data.sort_by(|(pool_id_a, (height_a, _)), (pool_id_b, (height_b, _))| {
-            height_b.cmp(height_a).then_with(|| {
-                self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
-            })
-        });
+        decorated
+            .sort_by_key(|(height, key, _pool_id, _data)| (Reverse(*height), Reverse(key.clone())));
         let cursor_key = cursor.map(|(cursor_height, cursor_pool_id)| {
             (cursor_height, self.pool_id_sort_key(&cursor_pool_id))
         });
-        pool_data.retain(|(pool_id, (height, _data))| match &cursor_key {
+        decorated.retain(|(height, key, _pool_id, _data)| match &cursor_key {
             Some((cursor_height, cursor_pool_key)) => {
-                *height < *cursor_height
-                    || (*height == *cursor_height
-                        && self.pool_id_sort_key(pool_id) < *cursor_pool_key)
+                *height < *cursor_height || (*height == *cursor_height && *key < *cursor_pool_key)
             }
             None => true,
         });
 
-        let latest_pools = pool_data
+        let latest_pools = decorated
             .iter()
             .take(len)
-            .map(|(pool_id, (height, data))| (*height, **pool_id, (*data).clone()))
+            .map(|(height, _key, pool_id, data)| (*height, *pool_id, data.clone()))
             .collect();
 
         Ok(latest_pools)
@@ -702,31 +712,33 @@ impl ApiServerInMemoryStorage {
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let offset = offset as usize;
-        let mut pool_data: Vec<_> = self
+        // deepest pledge first, ties broken by the encoded pool address (byte order),
+        // exactly like the postgres listing; the balance and the sort key are decoded
+        // once per entry, and an unparseable/overflowed balance is treated as absent
+        let mut decorated: Vec<(Amount, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
-            .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
-            .filter(|data| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
+            .filter_map(|(pool_id, by_height)| {
+                let data = by_height.values().last()?.clone();
+                let balance = data.staker_balance().ok()?;
+                (balance != Amount::ZERO).then_some((
+                    balance,
+                    self.pool_id_sort_key(pool_id),
+                    *pool_id,
+                    data,
+                ))
+            })
             .collect();
-
-        // deepest pledge first, ties broken by the encoded pool address (byte order),
-        // exactly like the postgres listing
-        pool_data.sort_by(|(pool_id_a, data_a), (pool_id_b, data_b)| {
-            data_b
-                .staker_balance()
-                .expect("no overflow")
-                .cmp(&data_a.staker_balance().expect("no overflow"))
-                .then_with(|| {
-                    self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
-                })
+        decorated.sort_by_key(|(balance, key, _pool_id, _data)| {
+            (Reverse(balance.into_atoms()), Reverse(key.clone()))
         });
-        if offset >= pool_data.len() {
+        if offset >= decorated.len() {
             return Ok(vec![]);
         }
 
-        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+        let latest_pools = decorated[offset..std::cmp::min(offset + len, decorated.len())]
             .iter()
-            .map(|(pool_id, data)| (**pool_id, (*data).clone()))
+            .map(|(_balance, _key, pool_id, data)| (*pool_id, data.clone()))
             .collect();
 
         Ok(latest_pools)
