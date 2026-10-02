@@ -404,7 +404,9 @@ where
         self.wallet_rpc
             .get_balance(
                 account_index,
-                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                // An omitted or empty filter means "all states", matching
+                // the account_balance RPC's server-side default.
+                (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
                 with_locked,
             )
             .await
@@ -423,7 +425,9 @@ where
             .get_multisig_utxos_with_states(
                 account_index,
                 (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
-                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                // An omitted or empty filter means "all states", matching
+                // the standalone_multisig_utxos RPC's server-side default.
+                (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
                 with_locked,
             )
             .await
@@ -460,7 +464,10 @@ where
             .get_utxos_with_states(
                 account_index,
                 (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
-                // Matches the server-side default of account_utxos (all states).
+                // An omitted or empty filter means "all states", matching
+                // the account_utxos RPC's server-side default. (Before the
+                // utxo_states parameter existed here, an empty filter fell
+                // back to Confirmed-only — inconsistent with the RPC docs.)
                 (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
                 with_locked,
             )
