@@ -325,6 +325,30 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
         )
     }));
 
+    // PoS block rewards are tracked as block data (see the RewardAdded event
+    // above), not as utxos, so `account_utxos` never lists a
+    // LockThenTransfer utxo in this wallet. Pin that design boundary: if the
+    // wallet ever starts listing them, the Transfer-only coin-sum invariant
+    // asserted above must be extended to include them.
+    let lock_then_transfer_utxos: JsonValue = wallet_rpc
+        .request(
+            "account_utxos",
+            (
+                ACCOUNT0_ARG,
+                vec![RpcUtxoType::LockThenTransfer],
+                vec![RpcUtxoState::Confirmed],
+                Some(WithLocked::Any),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        lock_then_transfer_utxos.as_array().unwrap().len(),
+        0,
+        "LockThenTransfer utxos are not tracked by this wallet; extend the \
+         balance-invariant test above if that changes"
+    );
+
     std::mem::drop(wallet_rpc);
     tf.stop().await;
 }
