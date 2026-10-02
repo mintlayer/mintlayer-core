@@ -620,7 +620,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
-    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError> {
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
         self.transaction.get_order_book_entries(ask_currency, give_currency)
     }
 }

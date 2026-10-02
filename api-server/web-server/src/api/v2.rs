@@ -1479,17 +1479,27 @@ pub async fn pools<T: ApiServerStorage>(
         let has_next_page = pools.len() > offset_and_items.items as usize;
         let pools = pools.into_iter().take(offset_and_items.items as usize).collect::<Vec<_>>();
 
-        let next_cursor = has_next_page.then(|| {
+        let next_cursor = if has_next_page {
             let (creation_height, pool_id, _pool_data) =
                 pools.last().expect("a next page implies a last item");
-            Cursor::new(
+            // the pool id comes from the storage, so encoding cannot fail; map the
+            // error anyway instead of risking a panic inside a request handler
+            let pool_id_str = Address::new(&state.chain_config, *pool_id)
+                .map_err(|e| {
+                    logging::log::error!("internal error: pool id encoding failed: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .as_str()
+                .to_owned();
+            Some(Cursor::new(
                 vec![creation_height.into_int().to_string()],
-                Address::new(&state.chain_config, *pool_id)
-                    .expect("no error in encoding")
-                    .as_str()
-                    .to_owned(),
-            )
-        });
+                pool_id_str,
+            ))
+        } else {
+            None
+        };
 
         let items = pools
             .into_iter()
@@ -2407,10 +2417,11 @@ pub async fn order_pair_book<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let entries = db_tx.get_order_book_entries(ask_currency, give_currency).await.map_err(|e| {
-        logging::log::error!("internal error: {e}");
-        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-    })?;
+    let (entries, has_more_orders) =
+        db_tx.get_order_book_entries(ask_currency, give_currency).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
 
     // aggregate the remaining balances into price levels
     let mut levels = BTreeMap::<Rational<u128>, u128>::new();
@@ -2487,7 +2498,18 @@ pub async fn order_pair_book<T: ApiServerStorage>(
         })
         .collect();
 
-    Ok(Json(cursor::paged_response(items, next_cursor)))
+    // the hard cap on aggregated live orders may have truncated the book; surface
+    // that to the client as an additive field so a partial book is never presented
+    // as complete
+    let response = if has_more_orders {
+        let mut response = cursor::paged_response(items, next_cursor);
+        response["truncated"] = json!(true);
+        response
+    } else {
+        cursor::paged_response(items, next_cursor)
+    };
+
+    Ok(Json(response))
 }
 
 /// The exact decimal representation of a price given as `numer/denom` quote atoms per

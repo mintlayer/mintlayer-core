@@ -37,8 +37,9 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        FungibleTokenData, LockedUtxo, NftWithOwner, ORDER_BOOK_MAX_ORDERS, Order, PoolBlockStats,
+        PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+        UtxoWithExtraInfo,
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
@@ -55,11 +56,6 @@ pub struct QueryFromConnection<'a, 'b> {
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
-    /// Safety bound for the order book aggregation: at most this many live orders
-    /// (the deepest ones first) contribute to a single request, capping the cost
-    /// of one book query regardless of how many orders a pair accumulates.
-    const ORDER_BOOK_MAX_ORDERS: i64 = 10_000;
-
     fn get_table_exists_query(table_name: &str) -> String {
         format!(
             "SELECT COALESCE( (
@@ -209,7 +205,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                             FROM ml.address_amount
                             WHERE coin_or_token_id = $1 AND amount != 0
                                 AND (amount, address) < ($2::text::numeric, $3)
-                            ORDER BY amount DESC, address DESC
+                            ORDER BY amount DESC, address COLLATE "C" DESC
                             LIMIT $4;
                         "#,
                         &[&coin_or_token_id, &amount_str, &address, &len],
@@ -224,7 +220,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                             SELECT address, amount::text
                             FROM ml.address_amount
                             WHERE coin_or_token_id = $1 AND amount != 0
-                            ORDER BY amount DESC, address DESC
+                            ORDER BY amount DESC, address COLLATE "C" DESC
                             LIMIT $2;
                         "#,
                     &[&coin_or_token_id, &len],
@@ -1302,7 +1298,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // the full versioned history.
         self.just_execute(
             "CREATE TABLE ml.latest_orders_cache (
-                    order_id TEXT NOT NULL,
+                    order_id TEXT COLLATE \"C\" NOT NULL,
                     block_height bigint NOT NULL,
                     creation_block_height bigint NOT NULL,
                     ask_currency bytea NOT NULL,
@@ -2170,7 +2166,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT pool_id, data
                 FROM ml.latest_pool_data_cache
                 WHERE staker_balance != 0
-                ORDER BY staker_balance DESC
+                ORDER BY staker_balance DESC, pool_id DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
@@ -3480,16 +3476,19 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    /// Remaining balances of all the live (not concluded, not frozen) orders of a
-    /// trading pair, as (ask_balance, give_balance) pairs; the price of each order is
-    /// derived from these in the web layer.
+    /// Remaining balances of the live (not concluded, not frozen) orders of a trading
+    /// pair, as (ask_balance, give_balance) pairs, ordered by ask balance (descending,
+    /// ties broken by the order id in descending byte order); capped at
+    /// [`ORDER_BOOK_MAX_ORDERS`] entries, `has_more` reports truncation.
     pub async fn get_order_book_entries(
         &self,
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
-    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError> {
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
         let ask_currency = ask_currency.encode();
         let give_currency = give_currency.encode();
+        // one extra row detects truncation
+        let cap = ORDER_BOOK_MAX_ORDERS as i64 + 1;
 
         let rows = self
             .tx
@@ -3500,15 +3499,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     WHERE ask_currency = $1 AND give_currency = $2
                         AND frozen = FALSE
                         AND ask_balance != 0 AND give_balance != 0
-                    ORDER BY ask_balance DESC
+                    ORDER BY ask_balance DESC, order_id DESC
                     LIMIT $3;
                 "#,
-                &[&ask_currency, &give_currency, &Self::ORDER_BOOK_MAX_ORDERS],
+                &[&ask_currency, &give_currency, &cap],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        let has_more = rows.len() > ORDER_BOOK_MAX_ORDERS;
+
         rows.into_iter()
+            .take(ORDER_BOOK_MAX_ORDERS)
             .map(|row| -> Result<(Amount, Amount), ApiServerStorageError> {
                 let ask_str: String = row.get(0);
                 let give_str: String = row.get(1);
@@ -3526,7 +3528,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
                 Ok((Amount::from_atoms(ask), Amount::from_atoms(give)))
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()
+            .map(|entries| (entries, has_more))
     }
 
     pub async fn get_orders_by_height(

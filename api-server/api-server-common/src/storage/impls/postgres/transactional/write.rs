@@ -872,7 +872,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
-    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError> {
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.get_order_book_entries(ask_currency, give_currency).await
     }

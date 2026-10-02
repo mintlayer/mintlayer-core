@@ -2380,12 +2380,8 @@ where
         .await
         .unwrap();
 
-    let sorted_by_amount = |mut holders: Vec<(String, Amount)>| {
-        holders.sort_by(|(address_l, amount_l), (address_r, amount_r)| {
-            (amount_r, address_r.as_str()).cmp(&(amount_l, address_l.as_str()))
-        });
-        holders
-    };
+    // NOTE: no re-sorting before the asserts — the ordering (balance descending, the
+    // encoded address descending as tie-break) is exactly what the contract requires
     let expect = |expected: &[(&Address<Destination>, Amount)]| {
         expected
             .iter()
@@ -2395,7 +2391,7 @@ where
 
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
-        sorted_by_amount(all),
+        all,
         expect(&[
             (&addr2, Amount::from_atoms(300)),
             (&addr3, Amount::from_atoms(200)),
@@ -2413,14 +2409,10 @@ where
     // cursor pagination over the coin holders
     let page = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
     assert_eq!(
-        sorted_by_amount(page.clone()),
+        page,
         expect(&[(&addr2, Amount::from_atoms(300)), (&addr3, Amount::from_atoms(200))])
     );
-    let (last_address, last_amount) = {
-        let mut sorted = sorted_by_amount(page);
-        let (address, amount) = sorted.pop().unwrap();
-        (address, amount)
-    };
+    let (last_address, last_amount) = page[1].clone();
 
     let next_page = db_tx
         .get_top_address_amounts(
@@ -2451,7 +2443,7 @@ where
         .unwrap();
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
-        sorted_by_amount(all),
+        all,
         expect(&[
             (&addr1, Amount::from_atoms(400)),
             (&addr2, Amount::from_atoms(300)),
@@ -2463,7 +2455,7 @@ where
     db_tx.del_address_balance_above_height(h1).await.unwrap();
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
-        sorted_by_amount(all),
+        all,
         expect(&[
             (&addr2, Amount::from_atoms(300)),
             (&addr3, Amount::from_atoms(200)),
@@ -2543,18 +2535,22 @@ where
         (order3.ask_balance, order3.give_balance),
     ]);
 
-    let entries = db_tx
+    let (entries, has_more) = db_tx
         .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
         .await
         .unwrap();
-    assert_eq!(sort_entries(entries), expected_pair);
+    // the entries come back with the deepest orders first (the ordering contract)
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
 
     // the reverse pair is empty
-    let entries = db_tx
+    let (entries, has_more) = db_tx
         .get_order_book_entries(CoinOrTokenId::TokenId(token1), CoinOrTokenId::Coin)
         .await
         .unwrap();
     assert!(entries.is_empty());
+    assert!(!has_more);
 
     // a fully filled (concluded) order is no longer part of the book
     let block_height = BlockHeight::new(100);
@@ -2564,7 +2560,7 @@ where
         .set_order_at_height(order1_id, &order1_concluded, block_height.next_height())
         .await
         .unwrap();
-    let entries = db_tx
+    let (entries, has_more) = db_tx
         .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
         .await
         .unwrap();
@@ -2575,6 +2571,7 @@ where
             (order3.ask_balance, order3.give_balance),
         ])
     );
+    assert!(!has_more);
 
     // a frozen order is not part of the book either
     let order2_frozen = order2.clone().freeze();
@@ -2582,7 +2579,7 @@ where
         .set_order_at_height(order2_id, &order2_frozen, block_height.next_height())
         .await
         .unwrap();
-    let entries = db_tx
+    let (entries, has_more) = db_tx
         .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
         .await
         .unwrap();
@@ -2590,14 +2587,17 @@ where
         sort_entries(entries),
         vec![(order3.ask_balance, order3.give_balance)]
     );
+    assert!(!has_more);
 
     // the rollback restores the original book
     db_tx.del_orders_above_height(block_height).await.unwrap();
-    let entries = db_tx
+    let (entries, has_more) = db_tx
         .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
         .await
         .unwrap();
-    assert_eq!(sort_entries(entries), expected_pair);
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
 
     db_tx.commit().await.unwrap();
     Ok(())

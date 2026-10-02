@@ -40,6 +40,11 @@ use serialization::{Decode, Encode};
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
+/// Hard cap on the number of live orders a single order-book query may consume;
+/// both backends return at most this many entries, deepest (largest ask balance)
+/// first, with `has_more` signaling a truncated result.
+pub const ORDER_BOOK_MAX_ORDERS: usize = 10_000;
+
 pub mod block_aux_data;
 
 #[allow(dead_code)]
@@ -608,9 +613,9 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
     /// Returns up to `len` holders of the asset with the largest balances, ordered by
-    /// the balance (descending, ties broken by the address descending); keyset (cursor)
-    /// pagination, the cursor is the (amount, address) of the last returned holder,
-    /// exclusive. Addresses with a zero balance are excluded.
+    /// the balance (descending, ties broken by the address in descending BYTE order);
+    /// keyset (cursor) pagination, the cursor is the (amount, address) of the last
+    /// returned holder, exclusive. Addresses with a zero balance are excluded.
     async fn get_top_address_amounts(
         &self,
         coin_or_token_id: CoinOrTokenId,
@@ -827,14 +832,17 @@ pub trait ApiServerStorageRead: Sync {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
 
-    /// Remaining balances of all the live (not concluded, not frozen) orders of a
-    /// trading pair, as (ask_balance, give_balance) pairs; the price of each order is
-    /// derived from these in the web layer.
+    /// Remaining balances of the live (not concluded, not frozen) orders of a trading
+    /// pair, as (ask_balance, give_balance) pairs; the price of each order is derived
+    /// from these in the web layer. At most [`ORDER_BOOK_MAX_ORDERS`] entries
+    /// are returned, ordered by ask balance (descending, ties broken by the order id
+    /// in descending byte order); `has_more` reports whether the cap truncated the
+    /// book (the entries are the deepest orders, the remainder is omitted).
     async fn get_order_book_entries(
         &self,
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
-    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError>;
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError>;
 
     /// Read the stream events with an id greater than `last_seen_id`, in ascending id order.
     ///

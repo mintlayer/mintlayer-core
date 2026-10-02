@@ -37,8 +37,9 @@ use common::{
 
 use crate::storage::storage_api::{
     AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    FungibleTokenData, LockedUtxo, NftWithOwner, ORDER_BOOK_MAX_ORDERS, Order, PoolBlockStats,
+    PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+    UtxoLock, UtxoWithExtraInfo,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
 
@@ -85,6 +86,9 @@ struct ApiServerInMemoryStorage {
     genesis_block: Arc<WithId<Genesis>>,
     number_of_coin_decimals: u8,
     storage_version: u32,
+    // kept so that order/pool identifiers can be encoded exactly like the postgres
+    // backend does (bech32 address strings), keeping tie-break orders identical
+    chain_config: ChainConfig,
 }
 
 impl ApiServerInMemoryStorage {
@@ -112,7 +116,25 @@ impl ApiServerInMemoryStorage {
             genesis_block: chain_config.genesis_block().clone(),
             number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: CURRENT_STORAGE_VERSION,
+            chain_config: chain_config.clone(),
         }
+    }
+
+    /// Encoded (bech32) form of a pool id — the exact string the postgres backend
+    /// stores and orders by, keeping tie-break orders identical across backends.
+    fn pool_id_sort_key(&self, pool_id: &PoolId) -> String {
+        Address::new(&self.chain_config, *pool_id)
+            .expect("encoding of a pool id stored in the in-memory storage cannot fail")
+            .as_str()
+            .to_owned()
+    }
+
+    /// Encoded (bech32) form of an order id — see `pool_id_sort_key`.
+    fn order_id_sort_key(&self, order_id: &OrderId) -> String {
+        Address::new(&self.chain_config, *order_id)
+            .expect("encoding of an order id stored in the in-memory storage cannot fail")
+            .as_str()
+            .to_owned()
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
@@ -554,22 +576,41 @@ impl ApiServerInMemoryStorage {
         &self,
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
-    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError> {
-        let entries = self
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        let mut entries: Vec<_> = self
             .orders_table
-            .values()
-            .filter_map(|by_height| by_height.values().last())
-            .filter(|order| {
+            .iter()
+            .filter_map(|(order_id, by_height)| Some((order_id, by_height.values().last()?)))
+            .filter(|(_order_id, order)| {
                 order.ask_currency == ask_currency
                     && order.give_currency == give_currency
                     && !order.is_frozen
                     && order.ask_balance != Amount::ZERO
                     && order.give_balance != Amount::ZERO
             })
-            .map(|order| (order.ask_balance, order.give_balance))
             .collect();
 
-        Ok(entries)
+        // deepest orders first, ties broken by the encoded order id (byte order) and
+        // capped exactly like the postgres query; has_more reports the truncation
+        entries.sort_by(|(order_id_a, order_a), (order_id_b, order_b)| {
+            order_b
+                .ask_balance
+                .into_atoms()
+                .cmp(&order_a.ask_balance.into_atoms())
+                .then_with(|| {
+                    self.order_id_sort_key(order_id_b).cmp(&self.order_id_sort_key(order_id_a))
+                })
+        });
+        let has_more = entries.len() > ORDER_BOOK_MAX_ORDERS;
+        entries.truncate(ORDER_BOOK_MAX_ORDERS);
+
+        Ok((
+            entries
+                .into_iter()
+                .map(|(_order_id, order)| (order.ask_balance, order.give_balance))
+                .collect(),
+            has_more,
+        ))
     }
 
     fn get_latest_pool_ids(
@@ -590,7 +631,13 @@ impl ApiServerInMemoryStorage {
             .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
-        pool_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
+        // newest first, ties broken by the encoded pool address (byte order), exactly
+        // like the postgres listing
+        pool_data.sort_by(|(pool_id_a, (height_a, _)), (pool_id_b, (height_b, _))| {
+            height_b.cmp(height_a).then_with(|| {
+                self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
+            })
+        });
         if offset >= pool_data.len() {
             return Ok(vec![]);
         }
@@ -620,11 +667,21 @@ impl ApiServerInMemoryStorage {
             .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
-        // newest first, ties broken by pool id so the keyset cursor is deterministic
-        pool_data.sort_by_key(|(pool_id, (height, _data))| Reverse((*height, **pool_id)));
-        pool_data.retain(|(pool_id, (height, _data))| match cursor {
-            Some((cursor_height, cursor_pool_id)) => {
-                *height < cursor_height || (*height == cursor_height && **pool_id < cursor_pool_id)
+        // newest first, ties broken by the encoded pool address (byte order) so the
+        // keyset cursor is deterministic and backend-independent
+        pool_data.sort_by(|(pool_id_a, (height_a, _)), (pool_id_b, (height_b, _))| {
+            height_b.cmp(height_a).then_with(|| {
+                self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
+            })
+        });
+        let cursor_key = cursor.map(|(cursor_height, cursor_pool_id)| {
+            (cursor_height, self.pool_id_sort_key(&cursor_pool_id))
+        });
+        pool_data.retain(|(pool_id, (height, _data))| match &cursor_key {
+            Some((cursor_height, cursor_pool_key)) => {
+                *height < *cursor_height
+                    || (*height == *cursor_height
+                        && self.pool_id_sort_key(pool_id) < *cursor_pool_key)
             }
             None => true,
         });
@@ -652,7 +709,17 @@ impl ApiServerInMemoryStorage {
             .filter(|data| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
-        pool_data.sort_by_key(|(_, data)| Reverse(data.staker_balance().expect("no overflow")));
+        // deepest pledge first, ties broken by the encoded pool address (byte order),
+        // exactly like the postgres listing
+        pool_data.sort_by(|(pool_id_a, data_a), (pool_id_b, data_b)| {
+            data_b
+                .staker_balance()
+                .expect("no overflow")
+                .cmp(&data_a.staker_balance().expect("no overflow"))
+                .then_with(|| {
+                    self.pool_id_sort_key(pool_id_b).cmp(&self.pool_id_sort_key(pool_id_a))
+                })
+        });
         if offset >= pool_data.len() {
             return Ok(vec![]);
         }
