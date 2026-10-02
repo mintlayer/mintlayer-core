@@ -31,20 +31,20 @@ impl backend::ReadOps for StorageMaps {
         Ok(self.0[map_id].get(key).map(|p| p.into()))
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        prefix: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a>> {
         Ok(MapPrefixIter::new(&self.0[map_id], prefix).map(|(k, v)| (k.clone(), v.clone())))
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        Ok(self.0[map_id].range(key..).map(|(k, v)| (k.clone(), v.clone())))
+        key: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a>> {
+        Ok(self.0[map_id].range(key.to_vec()..).map(|(k, v)| (k.clone(), v.clone())))
     }
 }
 
