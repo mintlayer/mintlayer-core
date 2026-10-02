@@ -204,7 +204,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                             SELECT address, amount::text
                             FROM ml.address_amount
                             WHERE coin_or_token_id = $1 AND amount != 0
-                                AND (amount, address) < ($2::text::numeric, $3)
+                                AND (amount < $2::text::numeric
+                                    OR (amount = $2::text::numeric
+                                        AND address COLLATE "C" < $3))
                             ORDER BY amount DESC, address COLLATE "C" DESC
                             LIMIT $4;
                         "#,
@@ -1311,10 +1313,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
-        // index for the order book pair lookups
+        // index for the order book pair lookups; the trailing columns cover the
+        // book read's ordering (deepest ask first, encoded order id as tie-break) so
+        // no separate sort of the pair's live orders is needed
         self.just_execute(
             "CREATE INDEX latest_orders_currencies_index
-                ON ml.latest_orders_cache (ask_currency, give_currency);",
+                ON ml.latest_orders_cache (ask_currency, give_currency, ask_balance DESC, order_id DESC);",
         )
         .await?;
 
@@ -2073,7 +2077,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT pool_id, data
                 FROM ml.latest_pool_data_cache
                 WHERE staker_balance != 0
-                ORDER BY creation_block_height DESC, pool_id DESC
+                ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
@@ -2105,8 +2109,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         SELECT creation_block_height, pool_id, data
                         FROM ml.latest_pool_data_cache
                         WHERE staker_balance != 0
-                            AND (creation_block_height, pool_id) < ($1, $2)
-                        ORDER BY creation_block_height DESC, pool_id DESC
+                            AND (creation_block_height < $1
+                                OR (creation_block_height = $1
+                                    AND pool_id COLLATE "C" < $2))
+                        ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
                         LIMIT $3;
                     "#,
                         &[&creation_height, &pool_id.as_str(), &len],
@@ -2166,7 +2172,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT pool_id, data
                 FROM ml.latest_pool_data_cache
                 WHERE staker_balance != 0
-                ORDER BY staker_balance DESC, pool_id DESC
+                ORDER BY staker_balance DESC, pool_id COLLATE "C" DESC
                 OFFSET $1
                 LIMIT $2;
             "#,

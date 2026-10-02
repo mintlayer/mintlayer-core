@@ -2356,12 +2356,13 @@ where
     };
     db_tx.set_fungible_token_issuance(token_id, h1, token_data).await.unwrap();
 
-    // coin holders: addr2 (300), addr3 (200), addr1 (100); addr4 has a zero balance
+    // coin holders: addr2 (300), addr3 and addr4 (200 each, so the encoded-address
+    // tie-break is exercised), addr1 (100)
     let coin_holders: Vec<(Address<Destination>, Amount)> = vec![
         (addr1.clone(), Amount::from_atoms(100)),
         (addr2.clone(), Amount::from_atoms(300)),
         (addr3.clone(), Amount::from_atoms(200)),
-        (addr4.clone(), Amount::ZERO),
+        (addr4.clone(), Amount::from_atoms(200)),
     ];
     for (address, amount) in &coin_holders {
         db_tx
@@ -2389,14 +2390,19 @@ where
             .collect::<Vec<_>>()
     };
 
+    // equal balances tie-break by the encoded address, descending byte order
+    let mut tie = [addr3.as_str(), addr4.as_str()];
+    tie.sort_unstable();
+    let (tie_low, tie_high) = (tie[0], tie[1]);
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
         all,
-        expect(&[
-            (&addr2, Amount::from_atoms(300)),
-            (&addr3, Amount::from_atoms(200)),
-            (&addr1, Amount::from_atoms(100))
-        ])
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
     );
 
     // the token holders are independent of the coin ones
@@ -2410,7 +2416,10 @@ where
     let page = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
     assert_eq!(
         page,
-        expect(&[(&addr2, Amount::from_atoms(300)), (&addr3, Amount::from_atoms(200))])
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+        ]
     );
     let (last_address, last_amount) = page[1].clone();
 
@@ -2422,8 +2431,14 @@ where
         )
         .await
         .unwrap();
-    assert_eq!(next_page, expect(&[(&addr1, Amount::from_atoms(100))]));
-    let (last_address2, last_amount2) = next_page[0].clone();
+    assert_eq!(
+        next_page,
+        vec![
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+    let (last_address2, last_amount2) = next_page[1].clone();
 
     let end = db_tx
         .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_amount2, last_address2)))
@@ -2444,11 +2459,12 @@ where
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
         all,
-        expect(&[
-            (&addr1, Amount::from_atoms(400)),
-            (&addr2, Amount::from_atoms(300)),
-            (&addr3, Amount::from_atoms(200))
-        ])
+        vec![
+            (addr1.as_str().to_owned(), Amount::from_atoms(400)),
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+        ]
     );
 
     // the rollback restores the previous balances
@@ -2456,11 +2472,12 @@ where
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(
         all,
-        expect(&[
-            (&addr2, Amount::from_atoms(300)),
-            (&addr3, Amount::from_atoms(200)),
-            (&addr1, Amount::from_atoms(100))
-        ])
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
     );
 
     db_tx.commit().await.unwrap();

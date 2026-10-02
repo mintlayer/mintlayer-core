@@ -49,9 +49,7 @@ use common::{
         make_token_id,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
-    primitives::{
-        Amount, BlockHeight, CoinOrTokenId, DecimalAmount, H256, Id, Idable, rational::Rational,
-    },
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, rational::Rational},
 };
 use hex::ToHex;
 use serde::Deserialize;
@@ -2486,23 +2484,25 @@ pub async fn order_pair_book<T: ApiServerStorage>(
 
     let items = levels
         .into_iter()
-        .map(|(price, level_amount)| {
-            let (numer, denom) = (*price.numer(), *price.denom());
-            // the price in atoms is the quote amount per one base atom; to express it
-            // in the currency units, scale the numerator by the base currency's
-            // decimals (and represent the result with the quote currency's decimals)
-            let price_decimal =
-                price_to_decimal_string(numer, denom, base_decimals, quote_decimals);
+        .map(
+            |(price, level_amount)| -> Result<serde_json::Value, ApiServerWebServerError> {
+                let (numer, denom) = (*price.numer(), *price.denom());
+                // the price in atoms is the quote amount per one base atom; to express it
+                // in the currency units, scale the numerator by the base currency's
+                // decimals (and represent the result with the quote currency's decimals)
+                let price_decimal =
+                    price_to_decimal_string(numer, denom, base_decimals, quote_decimals)?;
 
-            json!({
-                "price": {
-                    "decimal": price_decimal,
-                    "atoms": format!("{numer}/{denom}"),
-                },
-                "amount": amount_to_json(Amount::from_atoms(level_amount), base_decimals),
-            })
-        })
-        .collect();
+                Ok(json!({
+                    "price": {
+                        "decimal": price_decimal,
+                        "atoms": format!("{numer}/{denom}"),
+                    },
+                    "amount": amount_to_json(Amount::from_atoms(level_amount), base_decimals),
+                }))
+            },
+        )
+        .collect::<Result<Vec<_>, ApiServerWebServerError>>()?;
 
     // the hard cap on aggregated live orders may have truncated the book; surface
     // that to the client as an additive field so a partial book is never presented
@@ -2526,40 +2526,48 @@ fn price_to_decimal_string(
     denom: u128,
     base_decimals: u8,
     quote_decimals: u8,
-) -> String {
-    let as_f64 = || {
-        let price = numer as f64 * 10f64.powi(base_decimals as i32)
-            / (denom as f64 * 10f64.powi(quote_decimals as i32));
-        price.to_string()
-    };
+) -> Result<String, ApiServerWebServerError> {
+    // the price equals (numer * 10^base_decimals / denom) * 10^-quote_decimals; the
+    // digits are computed exactly in u256 arithmetic (the scaled numerator fits a
+    // u256 for any realistic decimal count and is checked anyway), because a
+    // financial price must not silently lose precision through floating point
+    let ten = Uint256::from_u64(10);
+    let mut scaled = Uint256::from(numer);
+    for _ in 0..base_decimals {
+        scaled = scaled.checked_mul(&ten).ok_or_else(|| {
+            logging::log::error!("order book price scaling overflow");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+    }
+    let scaled = scaled.checked_div(&Uint256::from(denom)).expect("denominator is not zero");
 
-    // mantissa = numer * 10^base_decimals / denom so that the price equals
-    // mantissa * 10^-quote_decimals; computed in a u256 because numer can be close
-    // to u128::MAX and is scaled by up to 10^38
-    let Some(base_scale) = 10u128.checked_pow(u32::from(base_decimals)) else {
-        return as_f64();
+    // the decimal digits of the scaled price, least significant last, by repeated
+    // division by ten
+    let mut digits = Vec::new();
+    let mut value = scaled;
+    while value != Uint256::ZERO {
+        let rem = value.checked_rem(&ten).expect("ten is not zero");
+        let rem = u128::try_from(rem).expect("a digit fits a u128");
+        digits.push(u8::try_from(rem).expect("a digit fits a u8") + b'0');
+        value = value.checked_div(&ten).expect("ten is not zero");
+    }
+    if digits.is_empty() {
+        digits.push(b'0');
+    }
+    digits.reverse();
+    let digits = String::from_utf8(digits).expect("digits are ascii");
+
+    // place the decimal point `quote_decimals` digits from the right
+    let point = usize::from(quote_decimals);
+    let price = if point == 0 {
+        digits
+    } else if digits.len() > point {
+        let (int_part, frac_part) = digits.split_at(digits.len() - point);
+        format!("{int_part}.{frac_part}")
+    } else {
+        format!("0.{}{digits}", "0".repeat(point - digits.len()))
     };
-    let Some(mut mantissa) = Uint256::from(numer)
-        .checked_mul(&Uint256::from(base_scale))
-        .and_then(|scaled| scaled.checked_div(&Uint256::from(denom)))
-    else {
-        return as_f64();
-    };
-    // shrink a mantissa that does not fit a u128 by dropping its least significant
-    // digits, each drop compensated by one fewer decimal place; this cannot exhaust
-    // the decimals for any real price, so the f64 tail is unreachable in practice
-    let mut decimals = quote_decimals;
-    let mantissa = loop {
-        if let Ok(mantissa) = u128::try_from(mantissa) {
-            break mantissa;
-        }
-        if decimals == 0 {
-            return as_f64();
-        }
-        mantissa = mantissa.checked_div(&Uint256::from(10u128)).expect("ten is not zero");
-        decimals -= 1;
-    };
-    DecimalAmount::from_uint_decimal(mantissa, decimals).to_string()
+    Ok(price)
 }
 
 fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
