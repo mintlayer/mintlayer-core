@@ -114,45 +114,59 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         )),
     );
 
-    let rpc_client = {
-        let rpc_auth = match (
-            args.node_rpc_cookie_file,
-            args.node_rpc_username,
-            args.node_rpc_password,
-        ) {
-            (None, None, None) => {
-                let cookie_file_path =
-                    default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-                RpcAuthData::Cookie { cookie_file_path }
-            }
-            (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
-                cookie_file_path: cookie_file_path.into(),
-            },
-            (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
-            _ => {
-                return Err(ApiServerWebServerInitError::InvalidConfig(
-                    "Invalid RPC cookie/username/password combination".to_owned(),
-                ));
-            }
-        };
-        let default_rpc_bind_address =
-            || default_rpc_config(&chain_config).bind_address.expect("Can't fail").into();
-
-        let rpc_address = args.node_rpc_address.unwrap_or_else(default_rpc_bind_address);
-
-        make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth)
-            .await
-            .map_err(ApiServerWebServerInitError::RpcError)?
+    // The RPC connection parameters of the web server, shared by the REST client (created once,
+    // below) and by the mempool bridge (which keeps them and establishes its own dedicated
+    // connection, re-creating it after connection loss).
+    let rpc_auth = match (
+        args.node_rpc_cookie_file,
+        args.node_rpc_username,
+        args.node_rpc_password,
+    ) {
+        (None, None, None) => {
+            let cookie_file_path =
+                default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+            RpcAuthData::Cookie { cookie_file_path }
+        }
+        (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
+            cookie_file_path: cookie_file_path.into(),
+        },
+        (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
+        _ => {
+            return Err(ApiServerWebServerInitError::InvalidConfig(
+                "Invalid RPC cookie/username/password combination".to_owned(),
+            ));
+        }
     };
+    let default_rpc_bind_address =
+        || default_rpc_config(&chain_config).bind_address.expect("Can't fail").into();
+    let rpc_address = args.node_rpc_address.unwrap_or_else(default_rpc_bind_address);
+
+    // The mempool bridge gets its own dedicated connection to the node, isolated from the
+    // connection used by the REST endpoints: a lost subscription (or a lost connection in
+    // general) is re-established by the bridge without affecting the REST traffic; the
+    // connection parameters are kept so that the bridge can re-create its client, which is the
+    // only way to recover a jsonrpsee WS client after its connection has been closed. Note that
+    // the REST client is not re-created: after a node outage the REST endpoints return errors
+    // until the web server is restarted (the client is baked into the server state).
+    let mempool_bridge_connection = streaming::MempoolBridgeConnection::new(
+        Arc::clone(&chain_config),
+        rpc_address.to_string(),
+        rpc_auth.clone(),
+    );
+
+    let rpc_client = make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth)
+        .await
+        .map_err(ApiServerWebServerInitError::RpcError)?;
 
     let rpc_client = Arc::new(rpc_client);
 
-    // Note: the mempool events arrive over the node's WebSocket connection and are bridged into
-    // the stream event channel; the subscription is re-established after connection loss.
+    // Note: the mempool events arrive over the bridge's own WebSocket connection (see
+    // `MempoolBridgeConnection`) and are bridged into the stream event channel; the connection
+    // is re-established after connection loss.
     supervise(
         "mempool bridge",
         tokio::spawn(streaming::run_mempool_bridge(
-            Arc::clone(&rpc_client),
+            mempool_bridge_connection,
             stream_events.clone(),
         )),
     );

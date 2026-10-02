@@ -12,6 +12,7 @@ common = { path = "../../common" }
 logging = { path = "../../logging" }
 node-comm = { path = "../../wallet/wallet-node-client", default-features = false }
 node-lib = { path = "../../node-lib" }
+randomness = { path = "../../randomness" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
@@ -20,6 +21,9 @@ clap = { workspace = true, features = ["derive"] }
 ctor.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
 
 [build-dependencies]
 build_utils = { path = "../../utils/build_utils" }
