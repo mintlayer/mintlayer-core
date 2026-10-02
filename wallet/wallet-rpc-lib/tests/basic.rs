@@ -28,9 +28,10 @@ use wallet_rpc_lib::{
     TxState,
     types::{
         AddressInfo, Balances, BlockInfo, NewAccountInfo, NewSubmittedTransaction, RpcAmountIn,
-        RpcUtxoState, TransactionOptions,
+        RpcUtxoState, RpcUtxoType, TransactionOptions,
     },
 };
+use wallet_types::with_locked::WithLocked;
 
 use rstest::*;
 use tokio::time::{Duration, timeout};
@@ -142,6 +143,94 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let utxos = utxos.as_array().unwrap();
     assert_eq!(utxos.len(), 2);
 
+    // Every utxo carries the state of its creating transaction (both are confirmed here)
+    for utxo in utxos {
+        assert_eq!(
+            utxo["state"].as_str().unwrap(),
+            "Confirmed",
+            "unexpected utxo state: {utxo}"
+        );
+    }
+
+    // Filtering by state must return the same set, and the coin sum must equal
+    // the balance reported for the same filter (the documented invariant).
+    let confirmed_utxos: JsonValue = wallet_rpc
+        .request(
+            "account_utxos",
+            (
+                ACCOUNT0_ARG,
+                Vec::<RpcUtxoType>::new(),
+                vec![RpcUtxoState::Confirmed],
+                Option::<WithLocked>::None,
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        confirmed_utxos.as_array().unwrap().len(),
+        utxos.len(),
+        "confirmed-filtered utxo set must match the unfiltered set here"
+    );
+    for utxo in confirmed_utxos.as_array().unwrap() {
+        assert_eq!(utxo["state"].as_str().unwrap(), "Confirmed");
+    }
+
+    // The documented invariant: the coin sum of the filtered utxo set equals
+    // `account_balance` for the same filter.
+    let confirmed_balances: Balances = wallet_rpc
+        .request("account_balance", (ACCOUNT0_ARG, vec!["Confirmed"]))
+        .await
+        .unwrap();
+    // Only coin outputs count towards the coin balance (e.g. the stake this
+    // test creates is a CreateStakePool utxo with a different shape).
+    let confirmed_coin_sum: u128 = confirmed_utxos
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|utxo| utxo["output"]["type"].as_str() == Some("Transfer"))
+        .map(|utxo| {
+            let atoms = utxo["output"]["content"]["value"]["content"]["amount"]["atoms"]
+                .as_str()
+                .unwrap_or_else(|| panic!("unexpected transfer utxo shape: {utxo}"));
+            atoms.parse::<u128>().expect("valid atoms amount")
+        })
+        .sum();
+    assert_eq!(
+        confirmed_coin_sum,
+        confirmed_balances.coins().amount().into_atoms(),
+        "documented invariant violated: filtered utxo coin sum != account_balance"
+    );
+
+    // Filtering by a state with no utxos returns an empty set
+    let in_mempool_utxos: JsonValue = wallet_rpc
+        .request(
+            "account_utxos",
+            (
+                ACCOUNT0_ARG,
+                Vec::<RpcUtxoType>::new(),
+                vec![RpcUtxoState::InMempool],
+                Option::<WithLocked>::None,
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(in_mempool_utxos.as_array().unwrap().len(), 0);
+
+    // An empty state filter behaves like the default (all states)
+    let empty_filter: JsonValue = wallet_rpc
+        .request(
+            "account_utxos",
+            (
+                ACCOUNT0_ARG,
+                Vec::<RpcUtxoType>::new(),
+                Vec::<RpcUtxoState>::new(),
+                Option::<WithLocked>::None,
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(empty_filter.as_array().unwrap().len(), utxos.len());
+
     // Extract amount from the genesis UTXO
     let (utxo_amount, _outpoint0) = {
         let utxo0 = utxos[0].as_object().unwrap();
@@ -235,6 +324,30 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
                    matches!(state, TxState::Confirmed { .. })
         )
     }));
+
+    // PoS block rewards are tracked as block data (see the RewardAdded event
+    // above), not as utxos, so `account_utxos` never lists a
+    // LockThenTransfer utxo in this wallet. Pin that design boundary: if the
+    // wallet ever starts listing them, the Transfer-only coin-sum invariant
+    // asserted above must be extended to include them.
+    let lock_then_transfer_utxos: JsonValue = wallet_rpc
+        .request(
+            "account_utxos",
+            (
+                ACCOUNT0_ARG,
+                vec![RpcUtxoType::LockThenTransfer],
+                vec![RpcUtxoState::Confirmed],
+                Some(WithLocked::Any),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        lock_then_transfer_utxos.as_array().unwrap().len(),
+        0,
+        "LockThenTransfer utxos are not tracked by this wallet; extend the \
+         balance-invariant test above if that changes"
+    );
 
     std::mem::drop(wallet_rpc);
     tf.stop().await;

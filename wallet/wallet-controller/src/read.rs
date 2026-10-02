@@ -43,7 +43,7 @@ use wallet::{
 use wallet_types::{
     KeyPurpose, KeychainUsageState,
     account_info::StandaloneAddresses,
-    utxo_types::{UtxoStates, UtxoTypes},
+    utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
 };
@@ -142,6 +142,37 @@ where
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
         self.wallet
             .get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub fn get_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, ControllerError<T>> {
+        self.wallet
+            .get_utxos_with_states(self.account_index, utxo_types, utxo_states, with_locked)
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub fn get_multisig_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, ControllerError<T>> {
+        self.wallet
+            .get_multisig_utxos_with_states(
+                self.account_index,
+                utxo_types,
+                utxo_states,
+                with_locked,
+            )
             .map_err(ControllerError::WalletError)
     }
 
