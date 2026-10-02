@@ -133,6 +133,38 @@ impl ApiServerInMemoryStorage {
             )
     }
 
+    fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(Amount, String)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        let mut holders = self
+            .address_balance_table
+            .iter()
+            .filter_map(|(address, by_coin_or_token)| {
+                by_coin_or_token
+                    .get(&coin_or_token_id)
+                    .and_then(|by_height| by_height.values().last())
+                    .filter(|amount| **amount != Amount::ZERO)
+                    .map(|amount| (address.clone(), *amount))
+            })
+            .collect::<Vec<_>>();
+
+        holders.sort_by(|(l_address, l_amount), (r_address, r_amount)| {
+            (r_amount, r_address.as_str()).cmp(&(l_amount, l_address.as_str()))
+        });
+
+        if let Some((cursor_amount, cursor_address)) = cursor {
+            holders.retain(|(address, amount)| {
+                *amount < cursor_amount
+                    || (*amount == cursor_amount && address.as_str() < cursor_address.as_str())
+            });
+        }
+
+        Ok(holders.into_iter().take(len as usize).collect::<Vec<_>>())
+    }
+
     fn get_address_balances(
         &self,
         address: &str,
@@ -518,6 +550,28 @@ impl ApiServerInMemoryStorage {
         Ok(latest_orders)
     }
 
+    fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError> {
+        let entries = self
+            .orders_table
+            .values()
+            .filter_map(|by_height| by_height.values().last())
+            .filter(|order| {
+                order.ask_currency == ask_currency
+                    && order.give_currency == give_currency
+                    && !order.is_frozen
+                    && order.ask_balance != Amount::ZERO
+                    && order.give_balance != Amount::ZERO
+            })
+            .map(|order| (order.ask_balance, order.give_balance))
+            .collect();
+
+        Ok(entries)
+    }
+
     fn get_latest_pool_ids(
         &self,
         len: u32,
@@ -544,6 +598,41 @@ impl ApiServerInMemoryStorage {
         let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
             .iter()
             .map(|(pool_id, data)| (**pool_id, (data.1).clone()))
+            .collect();
+
+        Ok(latest_pools)
+    }
+
+    fn get_latest_pool_ids_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        let len = len as usize;
+        let mut pool_data: Vec<_> = self
+            .pool_data_table
+            .iter()
+            .map(|(pool_id, by_height)| {
+                let created_height = by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty");
+                (pool_id, (*created_height, latest_data))
+            })
+            .filter(|(_pool_id, data)| !data.1.is_decommissioned())
+            .collect();
+
+        // newest first, ties broken by pool id so the keyset cursor is deterministic
+        pool_data.sort_by_key(|(pool_id, (height, _data))| Reverse((*height, **pool_id)));
+        pool_data.retain(|(pool_id, (height, _data))| match cursor {
+            Some((cursor_height, cursor_pool_id)) => {
+                *height < cursor_height || (*height == cursor_height && **pool_id < cursor_pool_id)
+            }
+            None => true,
+        });
+
+        let latest_pools = pool_data
+            .iter()
+            .take(len)
+            .map(|(pool_id, (height, data))| (*height, **pool_id, (*data).clone()))
             .collect();
 
         Ok(latest_pools)

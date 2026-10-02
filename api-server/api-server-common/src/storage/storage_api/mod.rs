@@ -83,6 +83,11 @@ pub enum CoinOrTokenStatistic {
     Preminted,
 }
 
+impl CoinOrTokenStatistic {
+    pub const VARIANTS: [Self; 4] =
+        [Self::CirculatingSupply, Self::Staked, Self::Burned, Self::Preminted];
+}
+
 impl FromStr for CoinOrTokenStatistic {
     type Err = ApiServerStorageError;
 
@@ -602,6 +607,17 @@ pub trait ApiServerStorageRead: Sync {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    /// Returns up to `len` holders of the asset with the largest balances, ordered by
+    /// the balance (descending, ties broken by the address descending); keyset (cursor)
+    /// pagination, the cursor is the (amount, address) of the last returned holder,
+    /// exclusive. Addresses with a zero balance are excluded.
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(Amount, String)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError>;
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -685,6 +701,15 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
+
+    /// Keyset (cursor) pagination of the pool listing by creation height (descending);
+    /// the cursor is the (creation height, pool id) of the last returned pool, exclusive.
+    /// Returns the creation height of each pool alongside its id and data.
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_pool_data_with_largest_staker_balance(
         &self,
@@ -801,6 +826,15 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    /// Remaining balances of all the live (not concluded, not frozen) orders of a
+    /// trading pair, as (ask_balance, give_balance) pairs; the price of each order is
+    /// derived from these in the web layer.
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<Vec<(Amount, Amount)>, ApiServerStorageError>;
 
     /// Read the stream events with an id greater than `last_seen_id`, in ascending id order.
     ///

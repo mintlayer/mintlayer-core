@@ -15,9 +15,12 @@
 
 use crate::{
     MempoolQueryClient, TxSubmitClient,
-    api::json_helpers::{
-        self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
-        to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+    api::{
+        cursor::{self, Cursor},
+        json_helpers::{
+            self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
+            to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+        },
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -45,7 +48,7 @@ use common::{
         make_token_id,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, rational::Rational},
 };
 use hex::ToHex;
 use serde::Deserialize;
@@ -137,7 +140,9 @@ pub fn routes<
 
     let router = router
         .route("/statistics/coin", get(coin_statistics))
-        .route("/statistics/token/:id", get(token_statistics));
+        .route("/statistics/coin/holders", get(coin_holders))
+        .route("/statistics/token/:id", get(token_statistics))
+        .route("/statistics/token/:id/holders", get(token_holders));
 
     let router = router
         .route("/token", get(token_ids))
@@ -150,6 +155,7 @@ pub fn routes<
         .route("/order", get(orders))
         .route("/order/:id", get(order))
         .route("/order/pair/:pair", get(order_pair))
+        .route("/order/pair/:pair/book", get(order_pair_book))
         // Note: the real-time event stream is exposed together with the v2 endpoints, since the
         // events reference data that is served by them.
         .route("/stream", get(super::stream::stream_events))
@@ -741,11 +747,22 @@ pub async fn transactions<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     const OFFSET_MODE: &str = "offset_mode";
+    const CURSOR: &str = "cursor";
     let offset_mode = params
         .get(OFFSET_MODE)
         .map(|mode| OffsetMode::from_str(mode))
         .transpose()?
         .unwrap_or(OffsetMode::Legacy);
+
+    let cursor_param = params.get(CURSOR);
+    if cursor_param.is_some() && params.contains_key(OFFSET_MODE) {
+        // the cursor walks the global index of the transactions, the offset modes are
+        // the legacy ways of walking the listing
+        return Err(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::BadRequest,
+        ));
+    }
+
     let offset_and_items = get_offset_and_items(&params)?;
 
     let db_tx = state.db.transaction_ro().await.map_err(|e| {
@@ -753,25 +770,82 @@ pub async fn transactions<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let txs = match offset_mode {
-        OffsetMode::Absolute => {
-            db_tx
-                .get_transactions_with_block_info_before_tx_global_index(
-                    offset_and_items.items,
-                    offset_and_items.offset,
+    let fetch_len = offset_and_items.items.saturating_add(1);
+
+    let (txs, next_cursor) = if let Some(cursor_str) = cursor_param {
+        let txs = match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, _tie_break_id) = cursor.into_parts();
+                let tx_global_index = keys.first().map(|index| index.to_owned()).ok_or(
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    ),
+                )?;
+                let tx_global_index = u64::from_str(&tx_global_index).map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    )
+                })?;
+
+                db_tx
+                    .get_transactions_with_block_info_before_tx_global_index(
+                        fetch_len,
+                        tx_global_index,
+                    )
+                    .await
+                    .map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?
+            }
+            // an empty cursor starts the listing from the beginning
+            None => db_tx.get_transactions_with_block_info(fetch_len, 0).await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
                 )
-                .await
+            })?,
+        };
+
+        let has_next_page = txs.len() > offset_and_items.items as usize;
+        let next_cursor = has_next_page.then(|| {
+            let last_returned = &txs[offset_and_items.items as usize - 1];
+            Cursor::new(
+                vec![last_returned.tx_global_index.to_string()],
+                last_returned.tx_info.tx.transaction().get_id().to_hash().encode_hex::<String>(),
+            )
+        });
+        let txs = txs.into_iter().take(offset_and_items.items as usize).collect();
+
+        (txs, next_cursor)
+    } else {
+        let txs = match offset_mode {
+            OffsetMode::Absolute => {
+                db_tx
+                    .get_transactions_with_block_info_before_tx_global_index(
+                        offset_and_items.items,
+                        offset_and_items.offset,
+                    )
+                    .await
+            }
+            OffsetMode::Legacy => {
+                db_tx
+                    .get_transactions_with_block_info(
+                        offset_and_items.items,
+                        offset_and_items.offset,
+                    )
+                    .await
+            }
         }
-        OffsetMode::Legacy => {
-            db_tx
-                .get_transactions_with_block_info(offset_and_items.items, offset_and_items.offset)
-                .await
-        }
-    }
-    .map_err(|e| {
-        logging::log::error!("internal error: {e}");
-        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-    })?;
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+        (txs, None)
+    };
 
     let tip_height = best_block(&state).await?.block_height();
     let txs = txs
@@ -787,7 +861,11 @@ pub async fn transactions<T: ApiServerStorage>(
         })
         .collect();
 
-    Ok(Json(serde_json::Value::Array(txs)))
+    Ok(Json(match next_cursor {
+        Some(next_cursor) => cursor::paged_response(txs, Some(next_cursor)),
+        None if cursor_param.is_some() => cursor::paged_response(txs, None),
+        None => serde_json::Value::Array(txs),
+    }))
 }
 
 pub async fn transaction<
@@ -1330,12 +1408,21 @@ pub async fn pools<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     const SORT: &str = "sort";
+    const CURSOR: &str = "cursor";
 
     let sort = params
         .get(SORT)
         .map(|sort| PoolSorting::from_str(sort))
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
+
+    let cursor_param = params.get(CURSOR);
+    if cursor_param.is_some() && !matches!(sort, PoolSorting::ByHeight) {
+        // the cursor orders pools by creation height, the only ordering it supports
+        return Err(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::BadRequest,
+        ));
+    }
 
     let offset_and_items = get_offset_and_items(&params)?;
 
@@ -1344,35 +1431,104 @@ pub async fn pools<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let pools = match sort {
-        PoolSorting::ByHeight => db_tx
-            .get_latest_pool_data(offset_and_items.items, offset_and_items.offset)
-            .await
-            .map_err(|e| {
+    let pools_json = if let Some(cursor_str) = cursor_param {
+        let cursor = match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, id) = cursor.into_parts();
+
+                match keys.first() {
+                    Some(creation_height) if !id.is_empty() => {
+                        let creation_height = u64::from_str(creation_height).map_err(|_| {
+                            ApiServerWebServerError::ClientError(
+                                ApiServerWebServerClientError::InvalidCursor,
+                            )
+                        })?;
+                        let pool_id = Address::from_string(&state.chain_config, &id)
+                            .map_err(|_| {
+                                ApiServerWebServerError::ClientError(
+                                    ApiServerWebServerClientError::InvalidCursor,
+                                )
+                            })?
+                            .into_object();
+                        Some((BlockHeight::new(creation_height), pool_id))
+                    }
+                    _ => {
+                        return Err(ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ));
+                    }
+                }
+            }
+            // an empty cursor starts the listing from the beginning
+            None => None,
+        };
+
+        // an extra item tells whether the result set continues past the page
+        let items_to_fetch = offset_and_items.items.saturating_add(1);
+        let pools =
+            db_tx.get_latest_pool_data_before(items_to_fetch, cursor).await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
                     ApiServerWebServerServerError::InternalServerError,
                 )
-            })?,
-        PoolSorting::ByPledge => db_tx
-            .get_pool_data_with_largest_staker_balance(
-                offset_and_items.items,
-                offset_and_items.offset,
+            })?;
+
+        let has_next_page = pools.len() > offset_and_items.items as usize;
+        let pools = pools.into_iter().take(offset_and_items.items as usize).collect::<Vec<_>>();
+
+        let next_cursor = has_next_page.then(|| {
+            let (creation_height, pool_id, _pool_data) =
+                pools.last().expect("a next page implies a last item");
+            Cursor::new(
+                vec![creation_height.into_int().to_string()],
+                Address::new(&state.chain_config, *pool_id)
+                    .expect("no error in encoding")
+                    .as_str()
+                    .to_owned(),
             )
-            .await
-            .map_err(|e| {
-                logging::log::error!("internal error: {e}");
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
+        });
+
+        let items = pools
+            .into_iter()
+            .map(|(_creation_height, pool_id, pool_data)| {
+                pool_data_to_json(&state.chain_config, pool_data, pool_id)
+            })
+            .collect();
+
+        cursor::paged_response(items, next_cursor)
+    } else {
+        let pools = match sort {
+            PoolSorting::ByHeight => db_tx
+                .get_latest_pool_data(offset_and_items.items, offset_and_items.offset)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?,
+            PoolSorting::ByPledge => db_tx
+                .get_pool_data_with_largest_staker_balance(
+                    offset_and_items.items,
+                    offset_and_items.offset,
                 )
-            })?,
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?,
+        };
+
+        let pools = pools
+            .into_iter()
+            .map(|(pool_id, pool_data)| pool_data_to_json(&state.chain_config, pool_data, pool_id));
+
+        serde_json::Value::Array(pools.collect())
     };
 
-    let pools = pools
-        .into_iter()
-        .map(|(pool_id, pool_data)| pool_data_to_json(&state.chain_config, pool_data, pool_id));
-
-    Ok(Json(pools.collect::<Vec<_>>()))
+    Ok(Json(pools_json))
 }
 
 pub async fn pool<T: ApiServerStorage>(
@@ -1734,6 +1890,133 @@ pub async fn token_statistics<T: ApiServerStorage>(
     })))
 }
 
+/// Shared implementation of the holders endpoints: the top holders of an asset,
+/// ordered by the balance, with optional keyset (cursor) pagination.
+async fn holders_response<T: ApiServerStorage>(
+    params: &BTreeMap<String, String>,
+    state: &ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>,
+    coin_or_token_id: CoinOrTokenId,
+    number_of_decimals: u8,
+) -> Result<serde_json::Value, ApiServerWebServerError> {
+    const CURSOR: &str = "cursor";
+
+    let offset_and_items = get_offset_and_items(params)?;
+
+    let cursor = match params.get(CURSOR) {
+        Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, tie_break_id) = cursor.into_parts();
+                let amount = match keys.first() {
+                    Some(atoms) => u128::from_str(atoms).map(Amount::from_atoms).map_err(|_| {
+                        ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        )
+                    })?,
+                    None => {
+                        return Err(ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ));
+                    }
+                };
+                Some((amount, tie_break_id))
+            }
+            None => None,
+        },
+        None => None,
+    };
+
+    // an extra item is requested to detect the presence of the next page
+    let fetch_len = offset_and_items.items.saturating_add(1);
+
+    let mut holders = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_top_address_amounts(coin_or_token_id, fetch_len, cursor)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let has_next_page = holders.len() > offset_and_items.items as usize;
+    holders.truncate(offset_and_items.items as usize);
+
+    let next_cursor = has_next_page.then(|| {
+        let (address, amount) = holders.last().expect("at least one item");
+        Cursor::new(vec![amount.into_atoms().to_string()], address.clone())
+    });
+
+    let items = holders
+        .into_iter()
+        .map(|(address, amount)| {
+            json!({
+                "address": address,
+                "amount": amount_to_json(amount, number_of_decimals),
+            })
+        })
+        .collect();
+
+    Ok(cursor::paged_response(items, next_cursor))
+}
+
+pub async fn coin_holders<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let response = holders_response(
+        &params,
+        &state,
+        CoinOrTokenId::Coin,
+        state.chain_config.coin_decimals(),
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
+pub async fn token_holders<T: ApiServerStorage>(
+    Path(token_id): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_string(&state.chain_config, token_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?
+        .into_object();
+
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let token_decimals = tx
+        .get_token_num_decimals(token_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    let response = holders_response(
+        &params,
+        &state,
+        CoinOrTokenId::TokenId(token_id),
+        token_decimals,
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
 pub async fn token_ids<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -2022,6 +2305,215 @@ pub async fn order_pair<T: ApiServerStorage>(
     });
 
     Ok(Json(orders.collect::<Vec<_>>()))
+}
+
+/// The order book of a trading pair: the live orders of the pair aggregated into price
+/// levels. `side` selects the side of the book: `ask` lists the orders asking for the
+/// base currency (first in the pair) while giving the quote currency, `bid` the reverse.
+/// The price of a level is the remaining quote amount per remaining base unit (a
+/// rational number, in atoms); `amount` is the remaining base amount at the level. The
+/// ask book is ordered by the ascending price, the bid book by the descending price;
+/// keyset (cursor) pagination over the levels.
+pub async fn order_pair_book<T: ApiServerStorage>(
+    Path(pair): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const SIDE: &str = "side";
+    const CURSOR: &str = "cursor";
+    const SIDE_ASK: &str = "ask";
+    const SIDE_BID: &str = "bid";
+
+    let parse_currency = |s: &str| -> Result<CoinOrTokenId, ApiServerWebServerError> {
+        if s.to_uppercase() == state.chain_config.coin_ticker() {
+            Ok(CoinOrTokenId::Coin)
+        } else {
+            let token_id = Address::from_string(&state.chain_config, s)
+                .map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidTokenId,
+                    )
+                })?
+                .into_object();
+            Ok(CoinOrTokenId::TokenId(token_id))
+        }
+    };
+
+    let parts: Vec<_> = pair.split("_").collect();
+    ensure!(
+        parts.len() == 2,
+        ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::InvalidOrderTradingPair
+        )
+    );
+    let base = parse_currency(parts[0])?;
+    let quote = parse_currency(parts[1])?;
+
+    // an ask of the (base, quote) pair is an order asking for the base and giving the
+    // quote; a bid is the reverse. In both cases the price is expressed in the quote
+    // currency per one base unit.
+    let (ask_currency, give_currency, base_is_ask) = match params.get(SIDE).map(String::as_str) {
+        Some(SIDE_ASK) => (base, quote, true),
+        Some(SIDE_BID) => (quote, base, false),
+        _ => {
+            return Err(ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::BadRequest,
+            ));
+        }
+    };
+
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    // the cursor is the (numerator, denominator) of the last returned level price
+    let cursor_price = match params.get(CURSOR) {
+        Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, _tie_break_id) = cursor.into_parts();
+                let parse_key = |key: Option<&String>| {
+                    key.and_then(|key| u128::from_str(key).ok()).ok_or(
+                        ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ),
+                    )
+                };
+                let numer = parse_key(keys.first())?;
+                let denom = parse_key(keys.get(1))?;
+                ensure!(
+                    denom != 0,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
+                Some(Rational::new(numer, denom))
+            }
+            None => None,
+        },
+        None => None,
+    };
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let entries = db_tx.get_order_book_entries(ask_currency, give_currency).await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    // aggregate the remaining balances into price levels
+    let mut levels = BTreeMap::<Rational<u128>, u128>::new();
+    for (ask_balance, give_balance) in entries {
+        let (price, base_amount) = if base_is_ask {
+            (
+                Rational::new(give_balance.into_atoms(), ask_balance.into_atoms()),
+                ask_balance.into_atoms(),
+            )
+        } else {
+            (
+                Rational::new(ask_balance.into_atoms(), give_balance.into_atoms()),
+                give_balance.into_atoms(),
+            )
+        };
+        // reduce the fraction so equal prices always map to the same level
+        let price = reduce_rational(price);
+
+        let level = levels.entry(price).or_insert(0);
+        *level = level.checked_add(base_amount).ok_or_else(|| {
+            logging::log::error!("order book level amount overflow");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+    }
+
+    // the ask book is ordered by the ascending price, the bid book by the descending one
+    let mut levels: Vec<_> = levels.into_iter().collect();
+    if !base_is_ask {
+        levels.reverse();
+    }
+
+    if let Some(cursor_price) = cursor_price {
+        levels.retain(|(price, _amount)| {
+            if base_is_ask {
+                *price > cursor_price
+            } else {
+                *price < cursor_price
+            }
+        });
+    }
+
+    let has_next_page = levels.len() > offset_and_items.items as usize;
+    levels.truncate(offset_and_items.items as usize);
+
+    let next_cursor = has_next_page.then(|| {
+        let (price, _amount) = levels.last().expect("at least one level");
+        Cursor::new(
+            vec![price.numer().to_string(), price.denom().to_string()],
+            String::new(),
+        )
+    });
+
+    let decimals = currency_decimals_for_pair(&db_tx, &base, &quote, &state.chain_config).await?;
+    let base_decimals = decimals[&base];
+    let quote_decimals = decimals[&quote];
+
+    let items = levels
+        .into_iter()
+        .map(|(price, level_amount)| {
+            let (numer, denom) = (*price.numer(), *price.denom());
+            // the price in atoms is the quote amount per one base atom; to express it
+            // in the currency units, scale both sides by the other currency's decimals
+            let price_decimal = numer as f64 * 10f64.powi(base_decimals as i32)
+                / (denom as f64 * 10f64.powi(quote_decimals as i32));
+
+            json!({
+                "price": {
+                    "decimal": price_decimal.to_string(),
+                    "atoms": format!("{numer}/{denom}"),
+                },
+                "amount": amount_to_json(Amount::from_atoms(level_amount), base_decimals),
+            })
+        })
+        .collect();
+
+    Ok(Json(cursor::paged_response(items, next_cursor)))
+}
+
+fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
+    let (mut numer, mut denom) = (*rational.numer(), *rational.denom());
+    while denom != 0 {
+        (numer, denom) = (denom, numer % denom);
+    }
+    Rational::new(*rational.numer() / numer, *rational.denom() / numer)
+}
+
+async fn currency_decimals_for_pair(
+    db_tx: &impl ApiServerStorageRead,
+    base: &CoinOrTokenId,
+    quote: &CoinOrTokenId,
+    chain_config: &ChainConfig,
+) -> Result<BTreeMap<CoinOrTokenId, u8>, ApiServerWebServerError> {
+    let mut decimals = BTreeMap::new();
+    decimals.insert(CoinOrTokenId::Coin, chain_config.coin_decimals());
+
+    for currency in [base, quote] {
+        if let CoinOrTokenId::TokenId(token_id) = currency {
+            let token_decimals = db_tx
+                .get_token_num_decimals(*token_id)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .ok_or(ApiServerWebServerError::NotFound(
+                    ApiServerWebServerNotFoundError::TokenNotFound,
+                ))?;
+            decimals.insert(*currency, token_decimals);
+        }
+    }
+
+    Ok(decimals)
 }
 
 struct OffsetAndItems {

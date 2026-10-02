@@ -308,3 +308,126 @@ fn compare_body(body: &Value, expected_transaction: &Value) {
         &expected_transaction["tx_global_index"]
     );
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn cursor_pagination(#[case] seed: Seed) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let n_blocks = 10;
+
+            let chain_config = create_unit_test_config();
+
+            let chainstate_blocks = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                let chainstate_block_ids = tf
+                    .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
+                    .unwrap();
+
+                _ = tx.send(());
+
+                chainstate_block_ids
+                    .iter()
+                    .map(|id| tf.block(tf.to_chain_block_id(id)))
+                    .collect::<Vec<_>>()
+            };
+
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let chain_config = Arc::new(chain_config);
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+                stream_events: Default::default(),
+            }
+        };
+
+        web_server(listener, web_server_state, true).await.expect("web server failed")
+    });
+
+    let () = rx.await.unwrap();
+
+    let get_json = |url: String| async move {
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
+        (response.status(), response.text().await.unwrap())
+    };
+
+    // the whole list, unpaged
+    let (status, body) = get_json("/api/v2/transaction?offset=0&items=100".to_owned()).await;
+    assert_eq!(status, 200);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let arr = body.as_array().unwrap();
+    let expected_txs =
+        arr.iter().map(|tx| tx["id"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
+    assert!(!expected_txs.is_empty());
+    let num_tx = expected_txs.len();
+
+    // the same list, walked with the cursor
+    let mut url = "/api/v2/transaction?items=1&cursor=".to_owned();
+    let mut paged_txs = vec![];
+    loop {
+        let (status, body) = get_json(url.clone()).await;
+        assert_eq!(status, 200);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        paged_txs.push(items[0]["id"].as_str().unwrap().to_owned());
+
+        match body["next_cursor"].as_str() {
+            Some(cursor) => url = format!("/api/v2/transaction?items=1&cursor={cursor}"),
+            None => break,
+        }
+    }
+    assert_eq!(paged_txs.len(), num_tx);
+    assert_eq!(paged_txs, expected_txs);
+
+    // an offset mode cannot be combined with a cursor
+    {
+        let (status, body) =
+            get_json("/api/v2/transaction?offset_mode=legacy&cursor=xyz".to_owned()).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Bad request");
+    }
+
+    // an invalid cursor is rejected
+    {
+        let (status, body) = get_json("/api/v2/transaction?cursor=garbage".to_owned()).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Invalid cursor");
+    }
+
+    shutdown_task(task).await;
+}
