@@ -38,7 +38,7 @@ use common::{
         tokens::{IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance},
     },
     primitives::{
-        Amount, BlockHeight, H256, Id,
+        Amount, BlockHeight, H256, Id, Idable,
         id::{WithId, hash_encoded},
     },
     size_estimation::SizeEstimationError,
@@ -1540,6 +1540,72 @@ where
         self.for_account_rw(account_index, |account, db_tx| {
             account.abandon_transaction(tx_id, db_tx)
         })
+    }
+
+    /// Prune a transaction that is known to be dead (see
+    /// [`Account::prune_dead_transaction`]) together with its pending descendants.
+    ///
+    /// # Caller obligation
+    ///
+    /// The caller must have verified the transaction is dead via the
+    /// reconcile evidence (mempool probe with parent present and a
+    /// node-observed rejection over several consecutive passes); the
+    /// verification is racy and a too-late re-entry self-heals on
+    /// confirmation or rescan. See [`Account::prune_dead_transaction`].
+    pub fn prune_dead_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.prune_dead_transaction(tx_id, db_tx)
+        })
+    }
+
+    /// Returns the pending (unconfirmed) user transactions per account: the
+    /// transactions the wallet may still have to (re)broadcast. Transactions
+    /// the output cache already knows are confirmed, conflicted or abandoned
+    /// are filtered out; a transaction with no known state is kept (absence of
+    /// evidence is not evidence of death).
+    pub fn get_unconfirmed_transactions_per_account(
+        &self,
+    ) -> WalletResult<BTreeMap<U31, Vec<SignedTransaction>>> {
+        let db_tx = self.db.transaction_ro()?;
+        let mut result = BTreeMap::new();
+
+        for (account_index, account) in &self.accounts {
+            // Only transactions that may still need a (re)broadcast: skip the
+            // ones the output cache already knows are confirmed, conflicted or
+            // abandoned. A transaction with no wallet tx entry at all is kept
+            // (absence of evidence is not evidence of death); any other
+            // lookup error is a real storage failure and propagates.
+            let mut txs = Vec::new();
+            for tx in db_tx.get_user_transactions_for_account(&account.get_account_id())? {
+                match account.get_transaction(tx.transaction().get_id()) {
+                    Ok(tx_data) => {
+                        // `Inactive` = the transaction left the mempool (e.g.
+                        // evicted, or reset by a reorg) without being
+                        // confirmed or conflicted, so it is exactly the case
+                        // that needs a (re)broadcast; it is distinct from
+                        // `Abandoned`, which the user requested and which is
+                        // excluded. Rebroadcast attempts are capped
+                        // downstream by the controller's tracker (stuck
+                        // after its attempt/age budget).
+                        if matches!(
+                            tx_data.state(),
+                            TxState::InMempool(_) | TxState::Inactive(_)
+                        ) {
+                            txs.push(tx);
+                        }
+                    }
+                    Err(WalletError::NoTransactionFound(_)) => txs.push(tx),
+                    Err(error) => return Err(error),
+                }
+            }
+            result.insert(*account_index, txs);
+        }
+
+        Ok(result)
     }
 
     pub fn get_pools(

@@ -108,6 +108,24 @@ impl WalletHandlesClient {
 }
 
 impl NodeInterfaceError for WalletHandlesClientError {
+    fn is_node_rejection(&self) -> bool {
+        // The handles client talks to an in-process node; `submit_transaction`
+        // goes through the P2P handle, so a mempool rejection surfaces as
+        // `P2p(P2pError::MempoolError(_))`. Classification is by error
+        // variants, so it cannot drift from the mempool crate's error type;
+        // the JSON-RPC transport mirrors the same decision on the wire
+        // message (see `classify_mempool_error_message`).
+        match self {
+            WalletHandlesClientError::MempoolError(err) => {
+                crate::rpc_client::is_deterministic_mempool_rejection(err)
+            }
+            WalletHandlesClientError::P2p(P2pError::MempoolError(err)) => {
+                crate::rpc_client::is_deterministic_mempool_rejection(err)
+            }
+            _ => false,
+        }
+    }
+
     fn is_recoverable_mempool_error_during_block_production(&self) -> bool {
         match self {
             WalletHandlesClientError::BlockProduction(err) => match err {
