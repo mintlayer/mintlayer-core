@@ -485,5 +485,13 @@ async fn pools_cursor_pagination(#[case] seed: Seed) {
         assert_eq!(body["error"].as_str().unwrap(), "Invalid cursor");
     }
 
+    // a zero page size is rejected
+    {
+        let (status, body) = get_json("/api/v2/pool?items=0".to_owned()).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
+    }
+
     shutdown_task(task).await;
 }

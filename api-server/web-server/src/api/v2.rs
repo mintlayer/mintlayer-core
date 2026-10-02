@@ -40,6 +40,7 @@ use axum::{
     routing::{get, post},
 };
 use common::{
+    Uint256,
     address::Address,
     chain::{
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
@@ -48,7 +49,9 @@ use common::{
         make_token_id,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, rational::Rational},
+    primitives::{
+        Amount, BlockHeight, CoinOrTokenId, DecimalAmount, H256, Id, Idable, rational::Rational,
+    },
 };
 use hex::ToHex;
 use serde::Deserialize;
@@ -2461,13 +2464,14 @@ pub async fn order_pair_book<T: ApiServerStorage>(
         .map(|(price, level_amount)| {
             let (numer, denom) = (*price.numer(), *price.denom());
             // the price in atoms is the quote amount per one base atom; to express it
-            // in the currency units, scale both sides by the other currency's decimals
-            let price_decimal = numer as f64 * 10f64.powi(base_decimals as i32)
-                / (denom as f64 * 10f64.powi(quote_decimals as i32));
+            // in the currency units, scale the numerator by the base currency's
+            // decimals (and represent the result with the quote currency's decimals)
+            let price_decimal =
+                price_to_decimal_string(numer, denom, base_decimals, quote_decimals);
 
             json!({
                 "price": {
-                    "decimal": price_decimal.to_string(),
+                    "decimal": price_decimal,
                     "atoms": format!("{numer}/{denom}"),
                 },
                 "amount": amount_to_json(Amount::from_atoms(level_amount), base_decimals),
@@ -2476,6 +2480,30 @@ pub async fn order_pair_book<T: ApiServerStorage>(
         .collect();
 
     Ok(Json(cursor::paged_response(items, next_cursor)))
+}
+
+/// The exact decimal representation of a price given as `numer/denom` quote atoms per
+/// base atom: `numer * 10^base_decimals / denom`, displayed with `quote_decimals`
+/// fractional digits. Falls back to an f64 only if the exact mantissa exceeds u128.
+fn price_to_decimal_string(
+    numer: u128,
+    denom: u128,
+    base_decimals: u8,
+    quote_decimals: u8,
+) -> String {
+    let mantissa = 10u128
+        .checked_pow(u32::from(base_decimals))
+        .and_then(|base_scale| Uint256::from(numer).checked_mul(&Uint256::from(base_scale)))
+        .and_then(|scaled| scaled.checked_div(&Uint256::from(denom)))
+        .and_then(|mantissa| u128::try_from(mantissa).ok());
+    match mantissa {
+        Some(mantissa) => DecimalAmount::from_uint_decimal(mantissa, quote_decimals).to_string(),
+        None => {
+            let price = numer as f64 * 10f64.powi(base_decimals as i32)
+                / (denom as f64 * 10f64.powi(quote_decimals as i32));
+            price.to_string()
+        }
+    }
 }
 
 fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
@@ -2546,6 +2574,10 @@ fn get_offset_and_items(
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
         .unwrap_or(DEFAULT_NUM_ITEMS);
+    ensure!(
+        items > 0,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
     ensure!(
         items <= MAX_NUM_ITEMS,
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)

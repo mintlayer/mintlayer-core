@@ -1200,7 +1200,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // the full versioned history (which is touched at every PoS block).
         self.just_execute(
             "CREATE TABLE ml.latest_pool_data_cache (
-                    pool_id TEXT NOT NULL,
+                    pool_id TEXT COLLATE \"C\" NOT NULL,
                     block_height bigint NOT NULL,
                     creation_block_height bigint NOT NULL,
                     staker_balance NUMERIC NOT NULL,
@@ -1236,7 +1236,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // listing can be served by an index scan instead of decoding every balance.
         self.just_execute(
             "CREATE TABLE ml.address_amount (
-                    address TEXT NOT NULL,
+                    address TEXT COLLATE \"C\" NOT NULL,
                     coin_or_token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     amount NUMERIC NOT NULL,

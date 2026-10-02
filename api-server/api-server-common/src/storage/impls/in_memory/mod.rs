@@ -587,7 +587,7 @@ impl ApiServerInMemoryStorage {
                 let latest_data = by_height.values().last().expect("not empty");
                 (pool_id, (created_height, latest_data))
             })
-            .filter(|(_pool_id, data)| !data.1.is_decommissioned())
+            .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
         pool_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
@@ -617,7 +617,7 @@ impl ApiServerInMemoryStorage {
                 let latest_data = by_height.values().last().expect("not empty");
                 (pool_id, (*created_height, latest_data))
             })
-            .filter(|(_pool_id, data)| !data.1.is_decommissioned())
+            .filter(|(_pool_id, data)| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
         // newest first, ties broken by pool id so the keyset cursor is deterministic
@@ -649,7 +649,7 @@ impl ApiServerInMemoryStorage {
             .pool_data_table
             .iter()
             .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
-            .filter(|(_pool_id, data)| !data.is_decommissioned())
+            .filter(|data| data.1.staker_balance().is_ok_and(|b| b != Amount::ZERO))
             .collect();
 
         pool_data.sort_by_key(|(_, data)| Reverse(data.staker_balance().expect("no overflow")));
