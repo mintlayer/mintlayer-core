@@ -265,10 +265,14 @@ pub struct RunOptions {
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
     /// Storage backend to use.
+    ///
+    /// Possible values: `lmdb`, `inmemory`. Defaults to `lmdb`.
     #[clap(long)]
     pub storage_backend: Option<StorageBackendConfigFile>,
 
     /// The node type.
+    ///
+    /// Possible values: `full-node`, `blocks-only-node`. Defaults to `full-node`.
     #[clap(long)]
     pub node_type: Option<NodeTypeConfigFile>,
 
@@ -402,10 +406,14 @@ pub struct RunOptions {
     pub max_tip_age: Option<u64>,
 
     /// Address to bind RPC to.
+    ///
+    /// Defaults to `127.0.0.1` with the chain's default RPC port.
     #[clap(long, value_name = "ADDR")]
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
+    ///
+    /// Defaults to `true`.
     #[clap(long, value_name = "VAL")]
     pub rpc_enabled: Option<bool>,
 
