@@ -71,7 +71,7 @@ use wallet_types::{
     },
     seed_phrase::SerializableSeedPhrase,
     signature_status::SignatureStatus,
-    utxo_types::{UtxoStates, UtxoTypes},
+    utxo_types::{UtxoState, UtxoStates, UtxoTypes},
     wallet_tx::{TxData, TxState},
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
@@ -1443,15 +1443,8 @@ where
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
-        let account = self.get_account(account_index)?;
-        let utxos = account.get_multisig_utxos(
-            utxo_types,
-            self.latest_median_time,
-            utxo_states,
-            with_locked,
-        );
-        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
-        Ok(utxos)
+        self.get_multisig_utxos_with_states(account_index, utxo_types, utxo_states, with_locked)
+            .map(|utxos| utxos.into_iter().map(|(outpoint, txo, _state)| (outpoint, txo)).collect())
     }
 
     pub fn get_utxos(
@@ -1461,15 +1454,56 @@ where
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
+        self.get_utxos_with_states(account_index, utxo_types, utxo_states, with_locked)
+            .map(|utxos| utxos.into_iter().map(|(outpoint, txo, _state)| (outpoint, txo)).collect())
+    }
+
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub fn get_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, UtxoState)>> {
+        self.account_utxos_with_states(account_index, |account, median_time| {
+            account.get_utxos_with_states(utxo_types, median_time, utxo_states, with_locked)
+        })
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub fn get_multisig_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, UtxoState)>> {
+        self.account_utxos_with_states(account_index, |account, median_time| {
+            account.get_multisig_utxos_with_states(
+                utxo_types,
+                median_time,
+                utxo_states,
+                with_locked,
+            )
+        })
+    }
+
+    fn account_utxos_with_states(
+        &self,
+        account_index: U31,
+        query: impl FnOnce(
+            &Account<<P as SignerProvider>::K>,
+            BlockTimestamp,
+        ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)>,
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, UtxoState)>> {
         let account = self.get_account(account_index)?;
-        let utxos = account.get_utxos(
-            utxo_types,
-            self.latest_median_time,
-            utxo_states,
-            with_locked,
-        );
-        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
-        Ok(utxos)
+        Ok(query(account, self.latest_median_time)
+            .into_iter()
+            .map(|(outpoint, txo, state)| (outpoint, txo.clone(), state))
+            .collect())
     }
 
     pub fn find_account_destination(&self, acc_outpoint: &AccountOutPoint) -> Option<Destination> {

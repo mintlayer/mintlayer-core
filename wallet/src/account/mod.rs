@@ -2155,14 +2155,30 @@ impl<K: AccountKeyChains> Account<K> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Vec<(UtxoOutPoint, &TxOutput)> {
+        self.get_multisig_utxos_with_states(utxo_types, median_time, utxo_states, with_locked)
+            .into_iter()
+            .map(|(outpoint, output, _state)| (outpoint, output))
+            .collect()
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub fn get_multisig_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
-            self.is_watched_multisig_output(txo)
-                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        })
+        self.output_cache
+            .utxos_with_states(current_block_info, utxo_states, with_locked, |txo| {
+                self.is_watched_multisig_output(txo)
+                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            })
     }
 
     pub fn get_utxos(
@@ -2172,13 +2188,29 @@ impl<K: AccountKeyChains> Account<K> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Vec<(UtxoOutPoint, &TxOutput)> {
+        self.get_utxos_with_states(utxo_types, median_time, utxo_states, with_locked)
+            .into_iter()
+            .map(|(outpoint, output, _state)| (outpoint, output))
+            .collect()
+    }
+
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub fn get_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
-            self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        })
+        self.output_cache
+            .utxos_with_states(current_block_info, utxo_states, with_locked, |txo| {
+                self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            })
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {

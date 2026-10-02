@@ -764,6 +764,9 @@ where
             .await?
     }
 
+    /// Returns the utxos without the state of their creating transaction; used
+    /// where the state is not needed (e.g. the CLI's list-utxos printing). See
+    /// also [`Self::get_utxos_with_states`].
     pub async fn get_utxos(
         &self,
         account_index: U31,
@@ -775,6 +778,46 @@ where
             .call(move |w| {
                 w.readonly_controller(account_index)
                     .get_utxos(utxo_types, utxo_states, with_locked)
+            })
+            .await?
+    }
+
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub async fn get_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, N> {
+        self.wallet
+            .call(move |w| {
+                w.readonly_controller(account_index).get_utxos_with_states(
+                    utxo_types,
+                    utxo_states,
+                    with_locked,
+                )
+            })
+            .await?
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub async fn get_multisig_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, N> {
+        self.wallet
+            .call(move |w| {
+                w.readonly_controller(account_index).get_multisig_utxos_with_states(
+                    utxo_types,
+                    utxo_states,
+                    with_locked,
+                )
             })
             .await?
     }

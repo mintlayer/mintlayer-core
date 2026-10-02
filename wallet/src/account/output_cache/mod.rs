@@ -1543,12 +1543,29 @@ impl OutputCache {
         locked_state: WithLocked,
         output_filter: F,
     ) -> Vec<(UtxoOutPoint, &TxOutput)> {
+        self.utxos_with_states(current_block_info, utxo_states, locked_state, output_filter)
+            .into_iter()
+            .map(|(outpoint, output, _state)| (outpoint, output))
+            .collect()
+    }
+
+    /// The shared UTXO scan pipeline behind every UTXO consumer (balances,
+    /// coin selection, the RPC listings): returns the [`UtxoState`] of the
+    /// transaction that created each output alongside the output itself.
+    pub fn utxos_with_states<F: Fn(&TxOutput) -> bool>(
+        &self,
+        current_block_info: BlockInfo,
+        utxo_states: UtxoStates,
+        locked_state: WithLocked,
+        output_filter: F,
+    ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)> {
         let output_filter = &output_filter;
         self.txs
             .values()
             .filter(|tx| is_in_state(tx, utxo_states))
             .flat_map(|tx| {
                 let tx_block_info = get_block_info(tx);
+                let utxo_state = get_utxo_state(&tx.state());
 
                 tx.outputs()
                     .iter()
@@ -1566,7 +1583,7 @@ impl OutputCache {
                             && !is_v0_token_output(output)
                             && output_filter(output)
                     })
-                    .map(|(output, outpoint)| (outpoint, output))
+                    .map(move |(output, outpoint)| (outpoint, output, utxo_state))
             })
             .collect()
     }
