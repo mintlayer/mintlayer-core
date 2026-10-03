@@ -248,11 +248,12 @@ impl NodeRpcError {
     ///
     /// Such errors are recoverable by dropping the client and establishing a new connection.
     ///
-    /// Caution: connection-level does not mean that the failed request was not processed. A
-    /// timeout or a lost response in particular leaves the outcome of the request unknown, so
-    /// callers retrying non-idempotent node calls must account for that instead of blindly
-    /// resending. (The scanner's sync and the mempool subscription are both idempotent: they
-    /// resume from local state.)
+    /// Caution: connection-level does not imply that a failed request always went unprocessed
+    /// (a request lost to a terminated background task may have reached the node); callers
+    /// retrying non-idempotent node calls must account for that instead of blindly resending.
+    /// (The scanner's sync and the mempool subscription are both idempotent: they resume from
+    /// local state.) Request timeouts are application-level errors: the connection may still
+    /// work, but the outcome of the timed-out call is unknown, with the same caveat.
     pub fn is_connection_error(&self) -> bool {
         match self {
             // The client could not be created or the call did not reach the node (or its
@@ -671,8 +672,6 @@ mod connection_error_tests {
             NodeRpcError::ResponseError(ClientError::Transport("connection reset by peer".into()))
                 .is_connection_error()
         );
-        assert!(NodeRpcError::ResponseError(ClientError::RequestTimeout).is_connection_error());
-
         // A client that cannot be created at all (e.g. the node is simply down) is also a
         // connection-level failure.
         assert!(
@@ -698,6 +697,11 @@ mod connection_error_tests {
             None::<serde_json::Value>,
         ));
         assert!(!NodeRpcError::ResponseError(call_error).is_connection_error());
+
+        // A timeout means the connection may still be usable: it is application-level, so the
+        // client is kept (a genuinely dead connection is detected by the WS ping and surfaces
+        // as `RestartNeeded`).
+        assert!(!NodeRpcError::ResponseError(ClientError::RequestTimeout).is_connection_error());
 
         assert!(
             !NodeRpcError::DecodingError(serialization::hex::HexError::ScaleDecodeError(
