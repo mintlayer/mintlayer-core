@@ -40,6 +40,11 @@ use serialization::{Decode, Encode};
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
+/// Hard cap on the number of live orders a single order-book query may consume;
+/// both backends return at most this many entries, deepest (largest ask balance)
+/// first, with `has_more` signaling a truncated result.
+pub const ORDER_BOOK_MAX_ORDERS: usize = 10_000;
+
 pub mod block_aux_data;
 
 #[allow(dead_code)]
@@ -81,6 +86,17 @@ pub enum CoinOrTokenStatistic {
     Staked,
     Burned,
     Preminted,
+}
+
+impl CoinOrTokenStatistic {
+    pub const VARIANTS: [Self; 4] = {
+        // compile-time exhaustiveness guard: adding a variant without updating the
+        // array below fails to compile here because this match has no wildcard
+        match Self::CirculatingSupply {
+            Self::CirculatingSupply | Self::Staked | Self::Burned | Self::Preminted => {}
+        }
+        [Self::CirculatingSupply, Self::Staked, Self::Burned, Self::Preminted]
+    };
 }
 
 impl FromStr for CoinOrTokenStatistic {
@@ -602,6 +618,17 @@ pub trait ApiServerStorageRead: Sync {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    /// Returns up to `len` holders of the asset with the largest balances, ordered by
+    /// the balance (descending, ties broken by the address in descending BYTE order);
+    /// keyset (cursor) pagination, the cursor is the (amount, address) of the last
+    /// returned holder, exclusive. Addresses with a zero balance are excluded.
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(Amount, String)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError>;
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -685,6 +712,15 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
+
+    /// Keyset (cursor) pagination of the pool listing by creation height (descending);
+    /// the cursor is the (creation height, pool id) of the last returned pool, exclusive.
+    /// Returns the creation height of each pool alongside its id and data.
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_pool_data_with_largest_staker_balance(
         &self,
@@ -801,6 +837,18 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    /// Remaining balances of the live (not concluded, not frozen) orders of a trading
+    /// pair, as (ask_balance, give_balance) pairs; the price of each order is derived
+    /// from these in the web layer. At most [`ORDER_BOOK_MAX_ORDERS`] entries
+    /// are returned, ordered by ask balance (descending, ties broken by the order id
+    /// in descending byte order); `has_more` reports whether the cap truncated the
+    /// book (the entries are the deepest orders, the remainder is omitted).
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError>;
 
     /// Read the stream events with an id greater than `last_seen_id`, in ascending id order.
     ///

@@ -2198,6 +2198,457 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(rng: &mut impl CryptoRng, stor
     );
 }
 
+/// Keyset (cursor) pagination of the pool listing over the latest pool data.
+async fn pool_data_keyset<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    // three pools created at heights 10, 20, 30
+    let (pool1_id, pool2_id, pool3_id) = (
+        PoolId::random_using(&mut rng),
+        PoolId::random_using(&mut rng),
+        PoolId::random_using(&mut rng),
+    );
+    let (pool1_data, pool2_data, pool3_data) = (
+        make_pool_data(&mut rng, Amount::from_atoms(100)),
+        make_pool_data(&mut rng, Amount::from_atoms(200)),
+        make_pool_data(&mut rng, Amount::from_atoms(300)),
+    );
+    let (h10, h20, h30) = (
+        BlockHeight::new(10),
+        BlockHeight::new(20),
+        BlockHeight::new(30),
+    );
+    db_tx.set_pool_data_at_height(pool1_id, &pool1_data, h10).await.unwrap();
+    db_tx.set_pool_data_at_height(pool2_id, &pool2_data, h20).await.unwrap();
+    db_tx.set_pool_data_at_height(pool3_id, &pool3_data, h30).await.unwrap();
+
+    // the creation height is the height of the first insert
+    let expect = |expected: &[(BlockHeight, PoolId, &PoolDataWithExtraInfo)]| {
+        expected
+            .iter()
+            .map(|(height, pool_id, data)| (*height, *pool_id, (*data).clone()))
+            .collect::<Vec<_>>()
+    };
+
+    // ordered by the creation height (descending)
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h20, pool2_id, &pool2_data),
+            (h10, pool1_id, &pool1_data)
+        ])
+    );
+
+    // a later update does not change the creation height
+    let pool1_updated = make_pool_data(&mut rng, Amount::from_atoms(111));
+    db_tx
+        .set_pool_data_at_height(pool1_id, &pool1_updated, h30.next_height())
+        .await
+        .unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h20, pool2_id, &pool2_data),
+            (h10, pool1_id, &pool1_updated),
+        ])
+    );
+
+    // cursor pagination
+    let page1 = db_tx.get_latest_pool_data_before(2, None).await.unwrap();
+    assert_eq!(
+        page1,
+        expect(&[(h30, pool3_id, &pool3_data), (h20, pool2_id, &pool2_data)])
+    );
+
+    let page2 = db_tx.get_latest_pool_data_before(2, Some((h20, pool2_id))).await.unwrap();
+    assert_eq!(page2, expect(&[(h10, pool1_id, &pool1_updated)]));
+
+    let end = db_tx.get_latest_pool_data_before(2, Some((h10, pool1_id))).await.unwrap();
+    assert!(end.is_empty());
+
+    // pools with a zero staker balance (decommissioned) are not listed
+    let pool3_decommissioned = make_pool_data(&mut rng, Amount::ZERO);
+    db_tx
+        .set_pool_data_at_height(pool3_id, &pool3_decommissioned, h30.next_height())
+        .await
+        .unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[(h20, pool2_id, &pool2_data), (h10, pool1_id, &pool1_updated)])
+    );
+
+    // the rollback restores the latest data below the deleted height, keeping the
+    // original creation height
+    db_tx.del_pools_above_height(h30).await.unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h20, pool2_id, &pool2_data),
+            (h10, pool1_id, &pool1_data)
+        ])
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+/// Holders of an asset: the top address amounts with keyset (cursor) pagination.
+async fn top_address_amounts<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let (addr1, addr2, addr3, addr4) = (
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+    );
+
+    let token_id = TokenId::random_using(&mut rng);
+    let h1 = BlockHeight::new(1);
+
+    // register the token (the scanner stores the issuance, including the decimals, before
+    // any balances)
+    let token_data = FungibleTokenData {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: 18,
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        circulating_supply: Amount::ZERO,
+        total_supply: TokenTotalSupply::Unlimited,
+        is_locked: false,
+        frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+        authority: Destination::PublicKeyHash(PublicKeyHash::from(
+            &PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
+        )),
+        next_nonce: AccountNonce::new(0),
+    };
+    db_tx.set_fungible_token_issuance(token_id, h1, token_data).await.unwrap();
+
+    // coin holders: addr2 (300), addr3 and addr4 (200 each, so the encoded-address
+    // tie-break is exercised), addr1 (100)
+    let coin_holders: Vec<(Address<Destination>, Amount)> = vec![
+        (addr1.clone(), Amount::from_atoms(100)),
+        (addr2.clone(), Amount::from_atoms(300)),
+        (addr3.clone(), Amount::from_atoms(200)),
+        (addr4.clone(), Amount::from_atoms(200)),
+    ];
+    for (address, amount) in &coin_holders {
+        db_tx
+            .set_address_balance_at_height(address, *amount, CoinOrTokenId::Coin, h1)
+            .await
+            .unwrap();
+    }
+    // a token holder
+    db_tx
+        .set_address_balance_at_height(
+            &addr1,
+            Amount::from_atoms(50),
+            CoinOrTokenId::TokenId(token_id),
+            h1,
+        )
+        .await
+        .unwrap();
+
+    // NOTE: no re-sorting before the asserts — the ordering (balance descending, the
+    // encoded address descending as tie-break) is exactly what the contract requires
+    let expect = |expected: &[(&Address<Destination>, Amount)]| {
+        expected
+            .iter()
+            .map(|(address, amount)| (address.as_str().to_owned(), *amount))
+            .collect::<Vec<_>>()
+    };
+
+    // equal balances tie-break by the encoded address, descending byte order
+    let mut tie = [addr3.as_str(), addr4.as_str()];
+    tie.sort_unstable();
+    let (tie_low, tie_high) = (tie[0], tie[1]);
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+
+    // the token holders are independent of the coin ones
+    let token_holders = db_tx
+        .get_top_address_amounts(CoinOrTokenId::TokenId(token_id), 10, None)
+        .await
+        .unwrap();
+    assert_eq!(token_holders, expect(&[(&addr1, Amount::from_atoms(50))]));
+
+    // cursor pagination over the coin holders
+    let page = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
+    assert_eq!(
+        page,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+        ]
+    );
+    let (last_address, last_amount) = page[1].clone();
+
+    let next_page = db_tx
+        .get_top_address_amounts(
+            CoinOrTokenId::Coin,
+            2,
+            Some((last_amount, last_address.clone())),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        next_page,
+        vec![
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+    let (last_address2, last_amount2) = next_page[1].clone();
+
+    let end = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_amount2, last_address2)))
+        .await
+        .unwrap();
+    assert!(end.is_empty());
+
+    // a balance update changes the ranking
+    db_tx
+        .set_address_balance_at_height(
+            &addr1,
+            Amount::from_atoms(400),
+            CoinOrTokenId::Coin,
+            h1.next_height(),
+        )
+        .await
+        .unwrap();
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr1.as_str().to_owned(), Amount::from_atoms(400)),
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+        ]
+    );
+
+    // the rollback restores the previous balances
+    db_tx.del_address_balance_above_height(h1).await.unwrap();
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+/// The order book entries of a trading pair: only the live (not concluded, not frozen)
+/// orders with non-zero remaining balances are returned.
+async fn order_book_entries<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = common::chain::config::create_regtest();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let token1 = TokenId::random_using(&mut rng);
+    let token2 = TokenId::random_using(&mut rng);
+
+    // three live orders of the (Coin, token1) pair and one of another pair
+    let (order1_id, order1) = random_order(
+        &mut rng,
+        BlockHeight::new(1),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order2_id, order2) = random_order(
+        &mut rng,
+        BlockHeight::new(2),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order3_id, order3) = random_order(
+        &mut rng,
+        BlockHeight::new(3),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order4_id, order4) = random_order(
+        &mut rng,
+        BlockHeight::new(4),
+        CoinOrTokenId::TokenId(token1),
+        CoinOrTokenId::TokenId(token2),
+    );
+    for (order_id, order) in [
+        (&order1_id, &order1),
+        (&order2_id, &order2),
+        (&order3_id, &order3),
+        (&order4_id, &order4),
+    ] {
+        db_tx
+            .set_order_at_height(*order_id, order, order.creation_block_height)
+            .await
+            .unwrap();
+    }
+
+    let sort_entries = |mut entries: Vec<(Amount, Amount)>| {
+        entries.sort_by_key(|(ask_balance, give_balance)| (*ask_balance, *give_balance));
+        entries
+    };
+    let expected_pair = sort_entries(vec![
+        (order1.ask_balance, order1.give_balance),
+        (order2.ask_balance, order2.give_balance),
+        (order3.ask_balance, order3.give_balance),
+    ]);
+
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    // the entries come back with the deepest orders first (the ordering contract)
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
+
+    // the reverse pair is empty
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::TokenId(token1), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    assert!(entries.is_empty());
+    assert!(!has_more);
+
+    // a fully filled (concluded) order is no longer part of the book
+    let block_height = BlockHeight::new(100);
+    let order1_concluded =
+        order1.clone().fill(&chain_config, block_height, order1.ask_balance).conclude();
+    db_tx
+        .set_order_at_height(order1_id, &order1_concluded, block_height.next_height())
+        .await
+        .unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(
+        sort_entries(entries),
+        sort_entries(vec![
+            (order2.ask_balance, order2.give_balance),
+            (order3.ask_balance, order3.give_balance),
+        ])
+    );
+    assert!(!has_more);
+
+    // a frozen order is not part of the book either
+    let order2_frozen = order2.clone().freeze();
+    db_tx
+        .set_order_at_height(order2_id, &order2_frozen, block_height.next_height())
+        .await
+        .unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(
+        sort_entries(entries),
+        vec![(order3.ask_balance, order3.give_balance)]
+    );
+    assert!(!has_more);
+
+    // the rollback restores the original book
+    db_tx.del_orders_above_height(block_height).await.unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+fn make_pool_data(rng: &mut impl CryptoRng, staker_balance: Amount) -> PoolDataWithExtraInfo {
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+    let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let pool_data = PoolData::new(
+        Destination::PublicKey(pk),
+        staker_balance,
+        Amount::ZERO,
+        vrf_pk,
+        PerThousand::new(500).unwrap(),
+        Amount::from_atoms(100),
+    );
+    PoolDataWithExtraInfo {
+        pool_data,
+        delegations_balance: Amount::ZERO,
+    }
+}
+
+fn make_address(
+    chain_config: &common::chain::ChainConfig,
+    rng: &mut impl CryptoRng,
+) -> Address<Destination> {
+    let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Address::new(
+        chain_config,
+        Destination::PublicKeyHash(PublicKeyHash::from(&pk)),
+    )
+    .unwrap()
+}
+
 fn random_order(
     rng: &mut impl CryptoRng,
     creation_height: BlockHeight,
@@ -2234,6 +2685,9 @@ where
     vec![
         make_test!(initialization, storage_maker.clone()),
         make_test!(set_get, storage_maker.clone()),
+        make_test!(pool_data_keyset, storage_maker.clone()),
+        make_test!(top_address_amounts, storage_maker.clone()),
+        make_test!(order_book_entries, storage_maker.clone()),
         make_test!(stream_events_append_and_read, storage_maker),
     ]
     .into_iter()
