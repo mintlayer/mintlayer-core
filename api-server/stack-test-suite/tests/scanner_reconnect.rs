@@ -189,8 +189,11 @@ async fn scanner_reconnects_after_node_disconnection() {
     }
 
     // Note: one seeded RNG drives the whole test (the framework builder and both phases of
-    // block creation), so that a CI failure is locally reproducible with a fixed seed.
-    let mut rng = make_seedable_rng(Seed::from_entropy());
+    // block creation); `from_entropy_and_print` logs the seed, so a CI failure is locally
+    // reproducible.
+    let mut rng = make_seedable_rng(Seed::from_entropy_and_print(
+        "scanner_reconnects_after_node_disconnection",
+    ));
     let tf = TestFramework::builder(&mut rng).build();
     let chain_config = tf.chain_config().clone();
 
