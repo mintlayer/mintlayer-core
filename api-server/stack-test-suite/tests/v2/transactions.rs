@@ -445,5 +445,18 @@ async fn cursor_pagination(#[case] seed: Seed) {
         assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
     }
 
+    // a cursor minted by another endpoint is rejected instead of silently misread
+    {
+        let (status, tx_body) = get_json("/api/v2/transaction?items=1&cursor=".to_owned()).await;
+        assert_eq!(status, 200);
+        let tx_body: serde_json::Value = serde_json::from_str(&tx_body).unwrap();
+        let foreign_cursor = tx_body["next_cursor"].as_str().unwrap();
+        let (status, body) =
+            get_json(format!("/api/v2/pool?items=1&cursor={foreign_cursor}")).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Invalid cursor");
+    }
+
     shutdown_task(task).await;
 }

@@ -776,7 +776,7 @@ pub async fn transactions<T: ApiServerStorage>(
     let (txs, next_cursor) = if let Some(cursor_str) = cursor_param {
         let txs = match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, _tie_break_id) = cursor.into_parts();
+                let (keys, _tie_break_id) = cursor.into_parts("transactions")?;
                 let tx_global_index = keys.first().map(|index| index.to_owned()).ok_or(
                     ApiServerWebServerError::ClientError(
                         ApiServerWebServerClientError::InvalidCursor,
@@ -821,6 +821,7 @@ pub async fn transactions<T: ApiServerStorage>(
         let next_cursor = has_next_page.then(|| {
             let last_returned = &txs[offset_and_items.items as usize - 1];
             Cursor::new(
+                "transactions",
                 vec![last_returned.tx_global_index.to_string()],
                 last_returned.tx_info.tx.transaction().get_id().to_hash().encode_hex::<String>(),
             )
@@ -1442,7 +1443,7 @@ pub async fn pools<T: ApiServerStorage>(
     let pools_json = if let Some(cursor_str) = cursor_param {
         let cursor = match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, id) = cursor.into_parts();
+                let (keys, id) = cursor.into_parts("pools")?;
 
                 match keys.first() {
                     Some(creation_height) if !id.is_empty() => {
@@ -1499,6 +1500,7 @@ pub async fn pools<T: ApiServerStorage>(
                 .as_str()
                 .to_owned();
             Some(Cursor::new(
+                "pools",
                 vec![creation_height.into_int().to_string()],
                 pool_id_str,
             ))
@@ -1923,7 +1925,7 @@ async fn holders_response<T: ApiServerStorage>(
     let cursor = match params.get(CURSOR) {
         Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, tie_break_id) = cursor.into_parts();
+                let (keys, tie_break_id) = cursor.into_parts("holders")?;
                 let amount = match keys.first() {
                     Some(atoms) => u128::from_str(atoms).map(Amount::from_atoms).map_err(|_| {
                         ApiServerWebServerError::ClientError(
@@ -1974,7 +1976,11 @@ async fn holders_response<T: ApiServerStorage>(
 
     let next_cursor = has_next_page.then(|| {
         let (address, amount) = holders.last().expect("at least one item");
-        Cursor::new(vec![amount.into_atoms().to_string()], address.clone())
+        Cursor::new(
+            "holders",
+            vec![amount.into_atoms().to_string()],
+            address.clone(),
+        )
     });
 
     let items = holders
@@ -2400,7 +2406,7 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     let cursor_price = match params.get(CURSOR) {
         Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, _tie_break_id) = cursor.into_parts();
+                let (keys, _tie_break_id) = cursor.into_parts("book")?;
                 let parse_key = |key: Option<&String>| {
                     key.and_then(|key| u128::from_str(key).ok()).ok_or(
                         ApiServerWebServerError::ClientError(
@@ -2486,6 +2492,7 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     let next_cursor = has_next_page.then(|| {
         let (price, _amount) = levels.last().expect("at least one level");
         Cursor::new(
+            "book",
             vec![price.numer().to_string(), price.denom().to_string()],
             String::new(),
         )
@@ -2533,7 +2540,7 @@ pub async fn order_pair_book<T: ApiServerStorage>(
 
 /// The exact decimal representation of a price given as `numer/denom` quote atoms per
 /// base atom: `numer * 10^base_decimals / denom`, displayed with `quote_decimals`
-/// fractional digits. Falls back to an f64 only if the exact mantissa exceeds u128.
+/// fractional digits, computed in exact u256 arithmetic (no floating point).
 fn price_to_decimal_string(
     numer: u128,
     denom: u128,
@@ -2585,6 +2592,11 @@ fn price_to_decimal_string(
 
 fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
     let (mut numer, mut denom) = (*rational.numer(), *rational.denom());
+    // the caller skips zero-balance entries, so a zero denominator (a price that
+    // would compare equal to every other level and corrupt the ordering) must
+    // never reach this function; the debug assertion keeps the two invariants
+    // tied together
+    debug_assert_ne!(denom, 0);
     if denom == 0 {
         return rational;
     }

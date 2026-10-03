@@ -28,7 +28,11 @@ use serde::{Deserialize, Serialize};
 use crate::error::ApiServerWebServerClientError;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Cursor {
+    /// Identifier of the endpoint (and sort schema) the cursor belongs to; a cursor
+    /// minted by another endpoint is rejected instead of silently misread.
+    tag: String,
     /// Sort keys of the item the cursor points to.
     keys: Vec<String>,
     /// Unique tie-break id of the item.
@@ -36,12 +40,23 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(keys: Vec<String>, id: String) -> Self {
-        Self { keys, id }
+    pub fn new(tag: &str, keys: Vec<String>, id: String) -> Self {
+        Self {
+            tag: tag.to_owned(),
+            keys,
+            id,
+        }
     }
 
-    pub fn into_parts(self) -> (Vec<String>, String) {
-        (self.keys, self.id)
+    /// Checks the endpoint tag and returns the sort keys and the tie-break id.
+    pub fn into_parts(
+        self,
+        tag: &str,
+    ) -> Result<(Vec<String>, String), ApiServerWebServerClientError> {
+        if self.tag != tag {
+            return Err(ApiServerWebServerClientError::InvalidCursor);
+        }
+        Ok((self.keys, self.id))
     }
 
     pub fn encode(&self) -> String {

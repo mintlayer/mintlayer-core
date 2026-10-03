@@ -98,6 +98,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::TxGlobalIndexTooHigh(tx_global_index))
     }
 
+    /// Whether the schema exists and carries a storage version. Note that a `true`
+    /// result does NOT mean the stored version is current: the caller must compare
+    /// [`Self::get_storage_version`] with the current version and reinitialize when
+    /// they differ (the scanner daemon does exactly that).
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
         let query_str = Self::get_table_exists_query("misc_data");
         let row_count = self
