@@ -3468,9 +3468,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         o.ask_balance::numeric, o.give_currency, o.give_balance::numeric, o.frozen
                     FROM deleted_cache_rows d
                     CROSS JOIN LATERAL (
-                        SELECT * FROM ml.orders
-                        WHERE order_id = d.order_id
-                        ORDER BY block_height DESC
+                        SELECT
+                            o.order_id, o.block_height, o.creation_block_height,
+                            o.ask_currency, o.ask_balance, o.give_currency,
+                            o.give_balance, o.frozen
+                        FROM ml.orders o
+                        WHERE o.order_id = d.order_id
+                        ORDER BY o.block_height DESC
                         LIMIT 1
                     ) o;
                 "#,

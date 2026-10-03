@@ -787,6 +787,13 @@ pub async fn transactions<T: ApiServerStorage>(
                         ApiServerWebServerClientError::InvalidCursor,
                     )
                 })?;
+                // reject out-of-range indices as a client error before they reach the
+                // storage layer, which maps the overflow to an internal server error
+                if i64::try_from(tx_global_index).is_err() {
+                    return Err(ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    ));
+                }
 
                 db_tx
                     .get_transactions_with_block_info_before_tx_global_index(
@@ -2333,6 +2340,12 @@ pub async fn order_pair<T: ApiServerStorage>(
 /// rational number, in atoms); `amount` is the remaining base amount at the level. The
 /// ask book is ordered by the ascending price, the bid book by the descending price;
 /// keyset (cursor) pagination over the levels.
+///
+/// The levels are computed from a fresh storage snapshot on every request, so a
+/// paginated walk is not a consistent snapshot of a moving book: a level whose
+/// remaining balance changes after a cursor was issued can be skipped or duplicated
+/// on the next page. Clients needing a consistent view should re-fetch from the
+/// start (an empty cursor).
 pub async fn order_pair_book<T: ApiServerStorage>(
     Path(pair): Path<String>,
     Query(params): Query<BTreeMap<String, String>>,

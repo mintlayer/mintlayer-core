@@ -548,6 +548,9 @@ async fn coin_holders(#[case] seed: Seed) {
     let body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
     let num_holders = body["items"].as_array().unwrap().len();
     assert!(num_holders >= 2);
+    // the baseline is fetched with the server's maximum page size; a larger list
+    // would be silently truncated and the bound below would be wrong
+    assert!(num_holders < 100);
 
     // walk the whole holders list, one item per request
     let mut url = "/api/v2/statistics/coin/holders?items=1".to_owned();

@@ -89,8 +89,14 @@ pub enum CoinOrTokenStatistic {
 }
 
 impl CoinOrTokenStatistic {
-    pub const VARIANTS: [Self; 4] =
-        [Self::CirculatingSupply, Self::Staked, Self::Burned, Self::Preminted];
+    pub const VARIANTS: [Self; 4] = {
+        // compile-time exhaustiveness guard: adding a variant without updating the
+        // array below fails to compile here because this match has no wildcard
+        match Self::CirculatingSupply {
+            Self::CirculatingSupply | Self::Staked | Self::Burned | Self::Preminted => {}
+        }
+        [Self::CirculatingSupply, Self::Staked, Self::Burned, Self::Preminted]
+    };
 }
 
 impl FromStr for CoinOrTokenStatistic {
