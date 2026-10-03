@@ -122,19 +122,17 @@ impl ApiServerInMemoryStorage {
 
     /// Encoded (bech32) form of a pool id — the exact string the postgres backend
     /// stores and orders by, keeping tie-break orders identical across backends.
-    fn pool_id_sort_key(&self, pool_id: &PoolId) -> String {
+    fn pool_id_sort_key(&self, pool_id: &PoolId) -> Result<String, ApiServerStorageError> {
         Address::new(&self.chain_config, *pool_id)
-            .expect("encoding of a pool id stored in the in-memory storage cannot fail")
-            .as_str()
-            .to_owned()
+            .map_err(|_| ApiServerStorageError::AddressableError)
+            .map(|address| address.as_str().to_owned())
     }
 
     /// Encoded (bech32) form of an order id — see `pool_id_sort_key`.
-    fn order_id_sort_key(&self, order_id: &OrderId) -> String {
+    fn order_id_sort_key(&self, order_id: &OrderId) -> Result<String, ApiServerStorageError> {
         Address::new(&self.chain_config, *order_id)
-            .expect("encoding of an order id stored in the in-memory storage cannot fail")
-            .as_str()
-            .to_owned()
+            .map_err(|_| ApiServerStorageError::AddressableError)
+            .map(|address| address.as_str().to_owned())
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
@@ -596,15 +594,17 @@ impl ApiServerInMemoryStorage {
         let mut decorated: Vec<(String, Amount, Amount)> = entries
             .into_iter()
             .map(|(order_id, order)| {
-                (
-                    self.order_id_sort_key(order_id),
+                Ok((
+                    self.order_id_sort_key(order_id)?,
                     order.ask_balance,
                     order.give_balance,
-                )
+                ))
             })
-            .collect();
-        decorated.sort_by_key(|(key, ask_balance, _give_balance)| {
-            (Reverse(ask_balance.into_atoms()), Reverse(key.clone()))
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(key_a, ask_a, _), (key_b, ask_b, _)| {
+            (Reverse(ask_a.into_atoms()), Reverse(&**key_a))
+                .cmp(&(Reverse(ask_b.into_atoms()), Reverse(&**key_b)))
         });
         let has_more = decorated.len() > ORDER_BOOK_MAX_ORDERS;
         decorated.truncate(ORDER_BOOK_MAX_ORDERS);
@@ -633,19 +633,21 @@ impl ApiServerInMemoryStorage {
             .map(|(pool_id, by_height)| {
                 let created_height = *by_height.keys().next().expect("not empty");
                 let latest_data = by_height.values().last().expect("not empty").clone();
-                (
+                Ok((
                     created_height,
-                    self.pool_id_sort_key(pool_id),
+                    self.pool_id_sort_key(pool_id)?,
                     *pool_id,
                     latest_data,
-                )
+                ))
             })
-            .filter(|(_height, _key, _pool_id, data)| {
-                data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
-            })
-            .collect();
-        decorated
-            .sort_by_key(|(height, key, _pool_id, _data)| (Reverse(*height), Reverse(key.clone())));
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        decorated.retain(|(_height, _key, _pool_id, data)| {
+            data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
+        });
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
+            (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))
+        });
         if offset >= decorated.len() {
             return Ok(vec![]);
         }
@@ -673,22 +675,27 @@ impl ApiServerInMemoryStorage {
             .map(|(pool_id, by_height)| {
                 let created_height = *by_height.keys().next().expect("not empty");
                 let latest_data = by_height.values().last().expect("not empty").clone();
-                (
+                Ok((
                     created_height,
-                    self.pool_id_sort_key(pool_id),
+                    self.pool_id_sort_key(pool_id)?,
                     *pool_id,
                     latest_data,
-                )
+                ))
             })
-            .filter(|(_height, _key, _pool_id, data)| {
-                data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
-            })
-            .collect();
-        decorated
-            .sort_by_key(|(height, key, _pool_id, _data)| (Reverse(*height), Reverse(key.clone())));
-        let cursor_key = cursor.map(|(cursor_height, cursor_pool_id)| {
-            (cursor_height, self.pool_id_sort_key(&cursor_pool_id))
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        decorated.retain(|(_height, _key, _pool_id, data)| {
+            data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
         });
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
+            (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))
+        });
+        let cursor_key = match cursor {
+            Some((cursor_height, cursor_pool_id)) => {
+                Some((cursor_height, self.pool_id_sort_key(&cursor_pool_id)?))
+            }
+            None => None,
+        };
         decorated.retain(|(height, key, _pool_id, _data)| match &cursor_key {
             Some((cursor_height, cursor_pool_key)) => {
                 *height < *cursor_height || (*height == *cursor_height && *key < *cursor_pool_key)
@@ -721,16 +728,14 @@ impl ApiServerInMemoryStorage {
             .filter_map(|(pool_id, by_height)| {
                 let data = by_height.values().last()?.clone();
                 let balance = data.staker_balance().ok()?;
-                (balance != Amount::ZERO).then_some((
-                    balance,
-                    self.pool_id_sort_key(pool_id),
-                    *pool_id,
-                    data,
-                ))
+                (balance != Amount::ZERO)
+                    .then(|| Ok((balance, self.pool_id_sort_key(pool_id)?, *pool_id, data)))
             })
-            .collect();
-        decorated.sort_by_key(|(balance, key, _pool_id, _data)| {
-            (Reverse(balance.into_atoms()), Reverse(key.clone()))
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(balance_a, key_a, _, _), (balance_b, key_b, _, _)| {
+            (Reverse(balance_a.into_atoms()), Reverse(&**key_a))
+                .cmp(&(Reverse(balance_b.into_atoms()), Reverse(&**key_b)))
         });
         if offset >= decorated.len() {
             return Ok(vec![]);

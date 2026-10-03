@@ -1452,6 +1452,13 @@ pub async fn pools<T: ApiServerStorage>(
                                 ApiServerWebServerClientError::InvalidCursor,
                             )
                         })?;
+                        // reject out-of-range heights as a client error before they
+                        // reach the storage layer, which maps the overflow to a panic
+                        if i64::try_from(creation_height).is_err() {
+                            return Err(ApiServerWebServerError::ClientError(
+                                ApiServerWebServerClientError::InvalidCursor,
+                            ));
+                        }
                         let pool_id = Address::from_string(&state.chain_config, &id)
                             .map_err(|_| {
                                 ApiServerWebServerError::ClientError(
