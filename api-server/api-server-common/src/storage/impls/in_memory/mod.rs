@@ -131,7 +131,11 @@ impl ApiServerInMemoryStorage {
     /// stores and orders by, keeping tie-break orders identical across backends.
     fn pool_id_sort_key(&self, pool_id: &PoolId) -> Result<String, ApiServerStorageError> {
         Address::new(&self.chain_config, *pool_id)
-            .map_err(|_| ApiServerStorageError::AddressableError)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid pool id {pool_id}: {e}"
+                ))
+            })
             .map(|address| address.as_str().to_owned())
     }
 

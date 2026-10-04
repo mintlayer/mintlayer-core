@@ -781,6 +781,14 @@ pub async fn transactions<T: ApiServerStorage>(
                 // already a total order (the pools and holders endpoints need the
                 // tie-break because their amounts can repeat)
                 let (keys, _tie_break_id) = cursor.into_parts("transactions")?;
+                // the transactions cursor carries exactly one key; reject anything
+                // else instead of silently ignoring extra entries
+                ensure!(
+                    keys.len() == 1,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
                 let tx_global_index = keys.first().map(|index| index.to_owned()).ok_or(
                     ApiServerWebServerError::ClientError(
                         ApiServerWebServerClientError::InvalidCursor,
@@ -1474,13 +1482,27 @@ pub async fn pools<T: ApiServerStorage>(
                                 ApiServerWebServerClientError::InvalidCursor,
                             ));
                         }
-                        let pool_id = Address::from_string(&state.chain_config, &id)
-                            .map_err(|_| {
+                        // re-encode through Address::new so the id used as the
+                        // keyset boundary is the canonical lowercase form: bech32
+                        // accepts all-uppercase strings and `from_string` keeps the
+                        // input verbatim, so an all-uppercase cursor id would
+                        // validate but silently break the byte-wise comparison
+                        // against the canonical strings in storage
+                        let pool_address =
+                            Address::from_string(&state.chain_config, &id).map_err(|_| {
                                 ApiServerWebServerError::ClientError(
                                     ApiServerWebServerClientError::InvalidCursor,
                                 )
-                            })?
-                            .into_object();
+                            })?;
+                        let pool_address =
+                            Address::new(&state.chain_config, pool_address.into_object()).map_err(
+                                |_| {
+                                    ApiServerWebServerError::ClientError(
+                                        ApiServerWebServerClientError::InvalidCursor,
+                                    )
+                                },
+                            )?;
+                        let pool_id = pool_address.into_object();
                         Some((BlockHeight::new(creation_height), pool_id))
                     }
                     _ => {
