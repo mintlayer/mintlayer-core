@@ -41,8 +41,9 @@ use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
 
 /// Hard cap on the number of live orders a single order-book query may consume;
-/// both backends return at most this many entries, deepest (largest ask balance)
-/// first, with `has_more` signaling a truncated result.
+/// both backends return at most this many entries, largest ask balance first, and
+/// when the cap truncates the book, the smallest-balance orders are omitted;
+/// `has_more` signals a truncated result.
 pub const ORDER_BOOK_MAX_ORDERS: usize = 10_000;
 
 pub mod block_aux_data;
@@ -843,7 +844,8 @@ pub trait ApiServerStorageRead: Sync {
     /// from these in the web layer. At most [`ORDER_BOOK_MAX_ORDERS`] entries
     /// are returned, ordered by ask balance (descending, ties broken by the order id
     /// in descending byte order); `has_more` reports whether the cap truncated the
-    /// book (the entries are the deepest orders, the remainder is omitted).
+    /// book (the entries with the largest ask balance are returned; when the cap
+    /// truncates the book, the smallest-balance orders are omitted).
     async fn get_order_book_entries(
         &self,
         ask_currency: CoinOrTokenId,

@@ -702,12 +702,14 @@ impl ApiServerInMemoryStorage {
     ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
         let mut decorated = self.sorted_live_pools()?;
-        let cursor_key = match cursor {
-            Some((cursor_height, cursor_pool_id)) => {
-                Some((cursor_height, self.pool_id_sort_key(&cursor_pool_id)?))
-            }
-            None => None,
-        };
+        let cursor_key = cursor
+            .map(|(cursor_height, cursor_pool_id)| {
+                Ok::<_, ApiServerStorageError>((
+                    cursor_height,
+                    self.pool_id_sort_key(&cursor_pool_id)?,
+                ))
+            })
+            .transpose()?;
         decorated.retain(|(height, key, _pool_id, _data)| match &cursor_key {
             Some((cursor_height, cursor_pool_key)) => {
                 *height < *cursor_height || (*height == *cursor_height && *key < *cursor_pool_key)
