@@ -199,21 +199,27 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
         let coin_or_token_id = coin_or_token_id.encode();
         let len = len as i64;
+        // the cursor and no-cursor variants share one query text: the cursor
+        // predicate is appended from a constant, so the ordering and the cursor
+        // comparison cannot drift apart between the two branches (all query parts
+        // are compile-time constants; only bound parameters carry runtime values)
+        const QUERY_HEAD: &str = r#"
+            SELECT address, amount::text
+            FROM ml.address_amount
+            WHERE coin_or_token_id = $1 AND amount != 0"#;
+        const CURSOR_PREDICATE: &str = r#"
+                AND (amount < $2::text::numeric
+                    OR (amount = $2::text::numeric
+                        AND address COLLATE "C" < $3))"#;
+        const QUERY_TAIL: &str = r#"
+            ORDER BY amount DESC, address COLLATE "C" DESC
+            LIMIT "#;
         let rows = match cursor {
             Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
                 self.tx
                     .query(
-                        r#"
-                            SELECT address, amount::text
-                            FROM ml.address_amount
-                            WHERE coin_or_token_id = $1 AND amount != 0
-                                AND (amount < $2::text::numeric
-                                    OR (amount = $2::text::numeric
-                                        AND address COLLATE "C" < $3))
-                            ORDER BY amount DESC, address COLLATE "C" DESC
-                            LIMIT $4;
-                        "#,
+                        &format!("{QUERY_HEAD}{CURSOR_PREDICATE}{QUERY_TAIL}$4;"),
                         &[&coin_or_token_id, &amount_str, &address, &len],
                     )
                     .await
@@ -222,13 +228,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => self
                 .tx
                 .query(
-                    r#"
-                            SELECT address, amount::text
-                            FROM ml.address_amount
-                            WHERE coin_or_token_id = $1 AND amount != 0
-                            ORDER BY amount DESC, address COLLATE "C" DESC
-                            LIMIT $2;
-                        "#,
+                    &format!("{QUERY_HEAD}{QUERY_TAIL}$2;"),
                     &[&coin_or_token_id, &len],
                 )
                 .await
@@ -1624,8 +1624,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let pool_id: String = data.get(0);
-        let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-            .map_err(|_| ApiServerStorageError::AddressableError)?
+        let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid pool id {pool_id}: {e}"
+                ))
+            })?
             .into_object();
         let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
@@ -1685,12 +1689,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|row| {
                 let delegation_id: String = row.get(0);
                 let delegation_id =
-                    Address::<DelegationId>::from_string(chain_config, delegation_id)
-                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                    Address::<DelegationId>::from_string(chain_config, &delegation_id)
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "invalid delegation id {delegation_id}: {e}"
+                            ))
+                        })?
                         .into_object();
                 let pool_id: String = row.get(1);
-                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "invalid pool id {pool_id}: {e}"
+                        ))
+                    })?
                     .into_object();
                 let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
@@ -1987,7 +1999,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id_str: String = row.get(0);
                 let delegation_id =
                     Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
-                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "invalid delegation id {delegation_id_str}: {e}"
+                            ))
+                        })?
                         .into_object();
                 let balance: String = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
@@ -2073,8 +2089,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(
                 |row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                     let pool_id: String = row.get(0);
-                    let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                    let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "invalid pool id {pool_id}: {e}"
+                            ))
+                        })?
                         .into_object();
                     let pool_data: Vec<u8> = row.get(1);
                     let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
@@ -2175,8 +2195,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 })?;
                 let creation_block_height = BlockHeight::new(creation_block_height);
                 let pool_id: String = row.get(1);
-                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "invalid pool id {pool_id}: {e}"
+                        ))
+                    })?
                     .into_object();
                 let pool_data: Vec<u8> = row.get(2);
                 let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
@@ -3849,8 +3873,12 @@ fn decode_order_from_row(
     let creation_block_height: i64 = data.get("creation_block_height");
     let is_frozen: bool = data.get("frozen");
 
-    let order_id = Address::<OrderId>::from_string(chain_config, order_id)
-        .map_err(|_| ApiServerStorageError::AddressableError)?
+    let order_id = Address::<OrderId>::from_string(chain_config, &order_id)
+        .map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "invalid addressable id {order_id}: {e}"
+            ))
+        })?
         .into_object();
 
     let initially_asked = Amount::from_fixedpoint_str(&initially_asked, 0).ok_or_else(|| {

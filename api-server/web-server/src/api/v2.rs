@@ -812,7 +812,11 @@ pub async fn transactions<T: ApiServerStorage>(
                         )
                     })?
             }
-            // an empty cursor starts the listing from the beginning
+            // an empty cursor starts the listing from the beginning; the cursor and
+            // offset variants of the listing must agree on the (newest-first,
+            // ascending global index) order for the cursor boundary to stay
+            // consistent — the backends derive both orderings from the same scanned
+            // main-chain state, so they cannot diverge without a storage bug
             None => db_tx.get_transactions_with_block_info(fetch_len, 0).await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(

@@ -490,15 +490,10 @@ async fn coin_holders(#[case] seed: Seed) {
 
                 let alice_address = Address::new(&chain_config, alice_destination).unwrap();
                 let bob_address = Address::new(&chain_config, bob_destination).unwrap();
-                _ = tx.send((
-                    alice_address.clone(),
-                    bob_address.clone(),
-                    chain_config.coin_decimals(),
-                ));
+                _ = tx.send((alice_address, bob_address, chain_config.coin_decimals()));
 
-                (alice_address, bob_address, vec![block])
+                vec![block]
             };
-            let (_, _, chainstate_blocks) = chainstate_blocks;
 
             let storage = {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);

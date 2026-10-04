@@ -642,15 +642,17 @@ impl ApiServerInMemoryStorage {
                 // of panicking in a read path, and the cheap zero-balance filter runs
                 // before the (allocating) sort-key encoding, so decommissioned pools
                 // skip the bech32 work entirely
-                if by_height.is_empty() {
+                let (Some(created_height), Some(latest_data)) =
+                    (by_height.keys().next(), by_height.values().last())
+                else {
                     return None;
-                }
-                let created_height = *by_height.keys().next().expect("a pool has versioned rows");
-                let latest_data = by_height.values().last().expect("a pool has versioned rows");
+                };
+                let created_height = *created_height;
+                let latest_data = latest_data.clone();
                 latest_data.staker_balance().is_ok_and(|b| b != Amount::ZERO).then_some((
                     *pool_id,
                     created_height,
-                    latest_data.clone(),
+                    latest_data,
                 ))
             })
             .map(|(pool_id, created_height, latest_data)| {
