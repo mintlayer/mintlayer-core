@@ -416,7 +416,7 @@ async fn pools_cursor_pagination(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let created_pools = rx.await.unwrap();
