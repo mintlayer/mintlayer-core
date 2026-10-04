@@ -393,7 +393,10 @@ async fn cursor_pagination(#[case] seed: Seed) {
     let num_tx = expected_txs.len();
     // the baseline is fetched with the server's maximum page size; a larger list
     // would be silently truncated and the comparison below would be vacuous
-    assert!(num_tx < 100);
+    assert!(
+        num_tx < 100,
+        "the baseline fetch was truncated by the server page cap (MAX_NUM_ITEMS)"
+    );
 
     // the same list, walked with the cursor; the walk is bounded by the known
     // baseline length so a self-referencing cursor fails instead of hanging

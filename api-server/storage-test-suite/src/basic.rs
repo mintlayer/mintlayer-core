@@ -2270,17 +2270,34 @@ where
         ])
     );
 
+    // a late lower-height write corrects the creation height to the true minimum: the
+    // backends agree on min-height semantics (matching the `MIN(block_height)`
+    // re-derivation of the rollback path), which keeps a mid-history re-seed from
+    // silently mis-ordering the listing. The latest data is still the highest height's.
+    let pool2_early = make_pool_data(&mut rng, Amount::from_atoms(222));
+    let h5 = BlockHeight::new(5);
+    db_tx.set_pool_data_at_height(pool2_id, &pool2_early, h5).await.unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h10, pool1_id, &pool1_updated),
+            (h5, pool2_id, &pool2_data),
+        ])
+    );
+
     // cursor pagination
     let page1 = db_tx.get_latest_pool_data_before(2, None).await.unwrap();
     assert_eq!(
         page1,
-        expect(&[(h30, pool3_id, &pool3_data), (h20, pool2_id, &pool2_data)])
+        expect(&[(h30, pool3_id, &pool3_data), (h10, pool1_id, &pool1_updated)])
     );
 
-    let page2 = db_tx.get_latest_pool_data_before(2, Some((h20, pool2_id))).await.unwrap();
-    assert_eq!(page2, expect(&[(h10, pool1_id, &pool1_updated)]));
+    let page2 = db_tx.get_latest_pool_data_before(2, Some((h10, pool1_id))).await.unwrap();
+    assert_eq!(page2, expect(&[(h5, pool2_id, &pool2_data)]));
 
-    let end = db_tx.get_latest_pool_data_before(2, Some((h10, pool1_id))).await.unwrap();
+    let end = db_tx.get_latest_pool_data_before(2, Some((h5, pool2_id))).await.unwrap();
     assert!(end.is_empty());
 
     // pools with a zero staker balance (decommissioned) are not listed
@@ -2292,19 +2309,19 @@ where
     let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
     assert_eq!(
         all,
-        expect(&[(h20, pool2_id, &pool2_data), (h10, pool1_id, &pool1_updated)])
+        expect(&[(h10, pool1_id, &pool1_updated), (h5, pool2_id, &pool2_data)])
     );
 
     // the rollback restores the latest data below the deleted height, keeping the
-    // original creation height
+    // original (minimum) creation height; the late h5 write of pool2 survives
     db_tx.del_pools_above_height(h30).await.unwrap();
     let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
     assert_eq!(
         all,
         expect(&[
             (h30, pool3_id, &pool3_data),
-            (h20, pool2_id, &pool2_data),
-            (h10, pool1_id, &pool1_data)
+            (h10, pool1_id, &pool1_data),
+            (h5, pool2_id, &pool2_data),
         ])
     );
 
@@ -2467,7 +2484,10 @@ where
         ]
     );
 
-    // the rollback restores the previous balances
+    // the rollback restores the previous balances; this also guards the ordering
+    // coupling in `del_address_balance_above_height`: the holders cache
+    // re-derivation is only correct because the versioned balances above the height
+    // are deleted first, within the same call
     db_tx.del_address_balance_above_height(h1).await.unwrap();
     let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
     assert_eq!(

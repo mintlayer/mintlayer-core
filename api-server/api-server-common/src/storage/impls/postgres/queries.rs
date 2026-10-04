@@ -388,7 +388,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // roll back the holders table rows of the disconnected blocks; set-based, in a
         // constant number of round trips: delete the rolled-back rows, drop rows whose
         // whole versioned history was orphaned, then re-derive and re-insert the rest
-        // in bulk (the numeric amount is decoded from the versioned balances)
+        // in bulk (the numeric amount is decoded from the versioned balances).
+        // NOTE: this re-derivation is only correct because the versioned
+        // `ml.address_balance` rows above the height were deleted by the statement
+        // above, within this same call; the ordering of the two statements is
+        // load-bearing. `top_address_amounts` in the storage test suite guards this by
+        // rolling back through this function and asserting the re-derived listing.
         let deleted_holders_rows = self
             .tx
             .query(
@@ -2213,24 +2218,30 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        // maintain the latest-state cache used by the pool listings; the creation height
-        // is the height of the first write of the pool (the scanner writes pools from
-        // genesis, so the first write is the creation) and is not modified on conflict.
-        //
-        // The `<=` (not `<`) guard intentionally lets a same-height write win, which a
-        // same-height reorg needs to replace the cached row. This relies on the scanner
-        // writing each pool's state for a given height exactly once per reorg state, so
-        // an equal-height conflict can only ever be that replacement.
+        // maintain the latest-state cache used by the pool listings as the envelope of
+        // the versioned table: the creation height is the lowest height the pool was
+        // ever written at, the latest state is the highest one (in the normal
+        // genesis-ascending scan that is simply the first and the last write). The
+        // update is monotone — the same-height write of a reorg replaces the cached
+        // state (the `>=` CASE branches), a late lower-height write only corrects the
+        // creation height — so a pool first seen mid-history (a re-seed that started at
+        // a higher height) gets its creation height corrected when the lower rows
+        // arrive, matching the `MIN(block_height)` re-derivation of the rollback path
+        // and the in-memory backend.
         self.tx
             .execute(
                 r#"
                     INSERT INTO ml.latest_pool_data_cache (pool_id, block_height, creation_block_height, staker_balance, data)
                     VALUES ($1, $2, $2, $3::text::numeric, $4)
                     ON CONFLICT (pool_id) DO UPDATE
-                    SET block_height = EXCLUDED.block_height,
-                        staker_balance = EXCLUDED.staker_balance,
-                        data = EXCLUDED.data
-                    WHERE ml.latest_pool_data_cache.block_height <= EXCLUDED.block_height;
+                    SET block_height = GREATEST(ml.latest_pool_data_cache.block_height, EXCLUDED.block_height),
+                        creation_block_height = LEAST(ml.latest_pool_data_cache.creation_block_height, EXCLUDED.creation_block_height),
+                        staker_balance = CASE
+                            WHEN EXCLUDED.block_height >= ml.latest_pool_data_cache.block_height THEN EXCLUDED.staker_balance
+                            ELSE ml.latest_pool_data_cache.staker_balance END,
+                        data = CASE
+                            WHEN EXCLUDED.block_height >= ml.latest_pool_data_cache.block_height THEN EXCLUDED.data
+                            ELSE ml.latest_pool_data_cache.data END;
                 "#,
                 &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
             )

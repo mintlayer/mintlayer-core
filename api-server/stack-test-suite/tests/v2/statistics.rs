@@ -550,7 +550,10 @@ async fn coin_holders(#[case] seed: Seed) {
     assert!(num_holders >= 2);
     // the baseline is fetched with the server's maximum page size; a larger list
     // would be silently truncated and the bound below would be wrong
-    assert!(num_holders < 100);
+    assert!(
+        num_holders < 100,
+        "the baseline fetch was truncated by the server page cap (MAX_NUM_ITEMS)"
+    );
 
     // walk the whole holders list, one item per request
     let mut url = "/api/v2/statistics/coin/holders?items=1".to_owned();
@@ -580,9 +583,11 @@ async fn coin_holders(#[case] seed: Seed) {
 
         // the amounts are ordered, from the biggest to the smallest
         if let Some(prev) = prev_amount.replace(amount.clone()) {
+            // the amounts are encoded as integer atom strings by `amount_to_json`; a
+            // parse failure means that serialization contract changed
             let (prev, amount) = (
-                prev.parse::<u128>().unwrap(),
-                amount.parse::<u128>().unwrap(),
+                prev.parse::<u128>().expect("atoms is an integer string"),
+                amount.parse::<u128>().expect("atoms is an integer string"),
             );
             assert!(prev >= amount);
         }

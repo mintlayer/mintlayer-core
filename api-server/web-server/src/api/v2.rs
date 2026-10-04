@@ -776,6 +776,10 @@ pub async fn transactions<T: ApiServerStorage>(
     let (txs, next_cursor) = if let Some(cursor_str) = cursor_param {
         let txs = match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
+                // the tie-break id of the cursor is ignored for this tag: the global
+                // transaction index is unique per transaction, so the index key alone is
+                // already a total order (the pools and holders endpoints need the
+                // tie-break because their amounts can repeat)
                 let (keys, _tie_break_id) = cursor.into_parts("transactions")?;
                 let tx_global_index = keys.first().map(|index| index.to_owned()).ok_or(
                     ApiServerWebServerError::ClientError(
@@ -1492,9 +1496,12 @@ pub async fn pools<T: ApiServerStorage>(
         let has_next_page = pools.len() > offset_and_items.items as usize;
         let pools = pools.into_iter().take(offset_and_items.items as usize).collect::<Vec<_>>();
 
-        let next_cursor = if has_next_page {
+        // a next page implies a non-empty page, unless `items` was zero; the shared
+        // validator rejects that, but degrade to "no cursor" instead of panicking
+        // should a future caller ever bypass it
+        let next_cursor = if has_next_page && !pools.is_empty() {
             let (creation_height, pool_id, _pool_data) =
-                pools.last().expect("a next page implies a last item");
+                pools.last().expect("the page is not empty");
             // the pool id comes from the storage, so encoding cannot fail; map the
             // error anyway instead of risking a panic inside a request handler
             let pool_id_str = Address::new(&state.chain_config, *pool_id)
@@ -2003,8 +2010,11 @@ async fn holders_response<T: ApiServerStorage>(
     let has_next_page = holders.len() > offset_and_items.items as usize;
     holders.truncate(offset_and_items.items as usize);
 
-    let next_cursor = has_next_page.then(|| {
-        let (address, amount) = holders.last().expect("at least one item");
+    // a next page implies a non-empty page, unless `items` was zero; the shared
+    // validator rejects that, but degrade to "no cursor" instead of panicking should a
+    // future caller ever bypass it
+    let next_cursor = (has_next_page && !holders.is_empty()).then(|| {
+        let (address, amount) = holders.last().expect("the page is not empty");
         // re-encode so the cursor id is canonical and guaranteed to round-trip through
         // the decode-side validation; fall back to the stored string (canonical in
         // practice) rather than failing the listing on a storage anomaly
@@ -2387,6 +2397,10 @@ pub async fn order_pair<T: ApiServerStorage>(
 /// (the additive `truncated` flag reports when that cap was hit). The flag is
 /// informational: levels beyond the cap cannot be reached by continuing the cursor
 /// walk.
+///
+/// The `price.decimal` field is truncated (floored) toward zero; the exact price is
+/// available in the `price.atoms` field. Cursors are side-specific: one minted for
+/// `side=ask` is rejected with `invalid cursor` on `side=bid` and vice versa.
 pub async fn order_pair_book<T: ApiServerStorage>(
     Path(pair): Path<String>,
     Query(params): Query<BTreeMap<String, String>>,
@@ -2435,13 +2449,17 @@ pub async fn order_pair_book<T: ApiServerStorage>(
         }
     };
 
+    // the cursor tag is side-specific: the same price walks in opposite directions on
+    // the two sides, so a cursor minted for one side must be rejected on the other
+    let cursor_tag = if base_is_ask { "book-ask" } else { "book-bid" };
+
     let offset_and_items = get_offset_and_items(&params)?;
 
     // the cursor is the (numerator, denominator) of the last returned level price
     let cursor_price = match params.get(CURSOR) {
         Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, _tie_break_id) = cursor.into_parts("book")?;
+                let (keys, _tie_break_id) = cursor.into_parts(cursor_tag)?;
                 let parse_key = |key: Option<&String>| {
                     key.and_then(|key| u128::from_str(key).ok()).ok_or(
                         ApiServerWebServerError::ClientError(
@@ -2524,10 +2542,13 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     let has_next_page = levels.len() > offset_and_items.items as usize;
     levels.truncate(offset_and_items.items as usize);
 
-    let next_cursor = has_next_page.then(|| {
-        let (price, _amount) = levels.last().expect("at least one level");
+    // a next page implies a non-empty page, unless `items` was zero; the shared
+    // validator rejects that, but degrade to "no cursor" instead of panicking should a
+    // future caller ever bypass it
+    let next_cursor = (has_next_page && !levels.is_empty()).then(|| {
+        let (price, _amount) = levels.last().expect("the page is not empty");
         Cursor::new(
-            "book",
+            cursor_tag,
             vec![price.numer().to_string(), price.denom().to_string()],
             String::new(),
         )
@@ -2576,6 +2597,9 @@ pub async fn order_pair_book<T: ApiServerStorage>(
 /// The exact decimal representation of a price given as `numer/denom` quote atoms per
 /// base atom: `numer * 10^base_decimals / denom`, displayed with `quote_decimals`
 /// fractional digits, computed in exact u256 arithmetic (no floating point).
+///
+/// The result is truncated (floored) toward zero, so it can be slightly lower than the
+/// exact level price; the exact value is available alongside in the `atoms` field.
 fn price_to_decimal_string(
     numer: u128,
     denom: u128,
@@ -2633,6 +2657,9 @@ fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
     // tied together
     debug_assert_ne!(denom, 0);
     if denom == 0 {
+        // the caller skips zero-balance entries, so reaching this branch means that
+        // invariant was broken elsewhere; log it instead of silently degrading
+        logging::log::error!("order book price with a zero denominator reached reduction");
         return rational;
     }
     while denom != 0 {
