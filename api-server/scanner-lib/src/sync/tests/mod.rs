@@ -1039,12 +1039,17 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 }
 
 // `get_all_statistic` omits the statistics that were never written; the unwritten ones
-// are treated as zero here
+// are treated as zero here, but the callers assert on keys that MUST be present after
+// a burn and its rollback (Burned, CirculatingSupply), so absence is a failure, not a
+// zero
 fn statistic_value(
     stats: &BTreeMap<CoinOrTokenStatistic, Amount>,
     statistic: CoinOrTokenStatistic,
 ) -> Amount {
-    stats.get(&statistic).copied().unwrap_or(Amount::ZERO)
+    stats
+        .get(&statistic)
+        .copied()
+        .unwrap_or_else(|| panic!("{statistic} is missing from the storage statistics"))
 }
 
 #[rstest]
