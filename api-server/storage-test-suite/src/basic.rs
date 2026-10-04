@@ -2579,6 +2579,9 @@ where
     // the entries come back with the deepest orders first (the ordering contract)
     assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
     assert!(!has_more);
+    // TODO: cover has_more == true (ORDER_BOOK_MAX_ORDERS truncation), e.g. via a
+    // test-injectable cap; the constant is not injectable today and seeding 10k
+    // orders is impractical, so the truncation path stays unexercised
     assert_eq!(sort_entries(entries.clone()), expected_pair);
 
     // the reverse pair is empty

@@ -217,22 +217,29 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = match cursor {
             Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); 4] =
+                    [&coin_or_token_id, &amount_str, &address, &len];
+                // the largest placeholder in the assembled query text must match the
+                // number of bound parameters, so a future edit that reorders the
+                // constants or the array cannot silently misbind the placeholders
+                debug_assert_eq!(params.len(), 4);
                 self.tx
                     .query(
                         &format!("{QUERY_HEAD}{CURSOR_PREDICATE}{QUERY_TAIL}$4;"),
-                        &[&coin_or_token_id, &amount_str, &address, &len],
+                        &params,
                     )
                     .await
                     .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             }
-            None => self
-                .tx
-                .query(
-                    &format!("{QUERY_HEAD}{QUERY_TAIL}$2;"),
-                    &[&coin_or_token_id, &len],
-                )
-                .await
-                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?,
+            None => {
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+                    [&coin_or_token_id, &len];
+                debug_assert_eq!(params.len(), 2);
+                self.tx
+                    .query(&format!("{QUERY_HEAD}{QUERY_TAIL}$2;"), &params)
+                    .await
+                    .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            }
         };
 
         rows.into_iter()
@@ -3527,7 +3534,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // roll back the latest-orders cache rows of the disconnected blocks; the cache is
         // a mirror of the latest versioned state (concluded orders included, filtered by
         // the order book reads), so the surviving versioned history of every order with a
-        // deleted cache row fully determines its restored state
+        // deleted cache row fully determines its restored state.
+        //
+        // No ON CONFLICT clause is needed: `order_id` is the primary key of the cache
+        // table and the deleting CTE returns each affected order exactly once, so the
+        // lateral join inserts at most one row per order. The lateral join can also
+        // produce NO row for a deleted cache row only if that order has no surviving
+        // versioned history at all — impossible in practice, because every cache row is
+        // written from a versioned row (the upsert's `WHERE block_height <=
+        // EXCLUDED.block_height` guard keeps one cache row per order), and rollback
+        // heights only ever move to heights where the versioned rows already exist.
         self.tx
             .execute(
                 r#"
