@@ -178,7 +178,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let (block1_id, tx1_id, block2_id, tx2_id, block3_id, tx3_id) = rx.await.unwrap();
@@ -349,7 +349,7 @@ async fn order_pair_book(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let (ml, tkn, coin_decimals) =
@@ -529,7 +529,7 @@ async fn order_pairs(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let (order_id, ml, tkn) = rx.await.unwrap();

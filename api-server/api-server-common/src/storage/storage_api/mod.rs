@@ -620,7 +620,7 @@ pub trait ApiServerStorageRead: Sync {
 
     /// Returns up to `len` holders of the asset with the largest balances, ordered by
     /// the balance (descending, ties broken by the address in descending BYTE order);
-    /// keyset (cursor) pagination, the cursor is the (amount, address) of the last
+    /// keyset (cursor) pagination, the cursor is the (address, amount) of the last
     /// returned holder, exclusive. Addresses with a zero balance are excluded.
     async fn get_top_address_amounts(
         &self,
