@@ -26,6 +26,7 @@ use itertools::Itertools as _;
 
 use common::{
     address::Address,
+    address::traits::Addressable,
     chain::{
         Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
         UtxoOutPoint,
@@ -127,27 +128,27 @@ impl ApiServerInMemoryStorage {
         }
     }
 
-    /// Encoded (bech32) form of a pool id — the exact string the postgres backend
-    /// stores and orders by, keeping tie-break orders identical across backends.
-    fn pool_id_sort_key(&self, pool_id: &PoolId) -> Result<String, ApiServerStorageError> {
-        Address::new(&self.chain_config, *pool_id)
+    /// Encoded (bech32) form of an addressable object id — the exact string the
+    /// postgres backend stores and orders by, keeping tie-break orders identical
+    /// across backends. Shared by the pool-id and order-id sort keys.
+    fn id_sort_key<T: Addressable + Copy + std::fmt::Display>(
+        &self,
+        id: T,
+        label: &str,
+    ) -> Result<String, ApiServerStorageError> {
+        Address::new(&self.chain_config, id)
             .map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "invalid pool id {pool_id}: {e}"
-                ))
+                ApiServerStorageError::DeserializationError(format!("invalid {label} {id}: {e}"))
             })
             .map(|address| address.as_str().to_owned())
     }
 
-    /// Encoded (bech32) form of an order id — see `pool_id_sort_key`.
+    fn pool_id_sort_key(&self, pool_id: &PoolId) -> Result<String, ApiServerStorageError> {
+        self.id_sort_key(*pool_id, "pool id")
+    }
+
     fn order_id_sort_key(&self, order_id: &OrderId) -> Result<String, ApiServerStorageError> {
-        Address::new(&self.chain_config, *order_id)
-            .map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "invalid order id {order_id}: {e}"
-                ))
-            })
-            .map(|address| address.as_str().to_owned())
+        self.id_sort_key(*order_id, "order id")
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {

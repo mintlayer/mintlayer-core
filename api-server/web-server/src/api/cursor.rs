@@ -32,6 +32,13 @@ use crate::error::ApiServerWebServerClientError;
 /// before the base64 decode.
 const MAX_CURSOR_LEN: usize = 1024;
 
+/// The largest number of sort keys accepted in a decoded cursor. Every endpoint
+/// validates its own key count after decoding; this bound additionally rejects
+/// payloads carrying arbitrary numbers of keys for ANY tag at decode time, so a
+/// fabricated cursor cannot smuggle an unbounded key vector past the shared
+/// entry point.
+const MAX_CURSOR_KEYS: usize = 16;
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cursor {
@@ -78,7 +85,18 @@ impl Cursor {
         let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(encoded)
             .map_err(|_| ApiServerWebServerClientError::InvalidCursor)?;
-        serde_json::from_slice(&decoded).map_err(|_| ApiServerWebServerClientError::InvalidCursor)
+        serde_json::from_slice::<Cursor>(&decoded)
+            .map_err(|_| ApiServerWebServerClientError::InvalidCursor)?
+            .validate_keys()
+    }
+
+    /// Rejects cursors with an implausibly large key vector before any endpoint
+    /// logic inspects the keys; each endpoint then still checks its exact count.
+    fn validate_keys(self) -> Result<Self, ApiServerWebServerClientError> {
+        if self.keys.len() > MAX_CURSOR_KEYS {
+            return Err(ApiServerWebServerClientError::InvalidCursor);
+        }
+        Ok(self)
     }
 
     /// Decodes a cursor request parameter. An empty value starts the listing from the
