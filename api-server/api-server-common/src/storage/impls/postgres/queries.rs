@@ -242,8 +242,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
-        let coin_or_token_id = coin_or_token_id.encode();
-        let len = len as i64;
         // the cursor and no-cursor variants share one query text: the cursor
         // predicate is appended from a constant, so the ordering and the cursor
         // comparison cannot drift apart between the two branches (all query parts
@@ -266,6 +264,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         const CURSOR_PARAM_COUNT: usize =
             placeholder_count(QUERY_HEAD, CURSOR_PREDICATE, QUERY_TAIL, "$4;");
         const NO_CURSOR_PARAM_COUNT: usize = placeholder_count(QUERY_HEAD, QUERY_TAIL, "$2;", "");
+        let coin_or_token_id = coin_or_token_id.encode();
+        let len = len as i64;
         let rows = match cursor {
             Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
