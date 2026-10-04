@@ -833,7 +833,15 @@ pub async fn transactions<T: ApiServerStorage>(
             })?,
         };
 
+        // the shared validator guarantees items > 0 and the fetch above requests
+        // one extra row, so the indexing below stays in bounds; keep those
+        // cross-function invariants locally asserted
+        debug_assert!(offset_and_items.items > 0);
         let has_next_page = txs.len() > offset_and_items.items as usize;
+        debug_assert!(
+            !has_next_page || txs.len() > offset_and_items.items as usize,
+            "the extra fetched row is present when a next page exists"
+        );
         let next_cursor = has_next_page.then(|| {
             let last_returned = &txs[offset_and_items.items as usize - 1];
             Cursor::new(
@@ -1467,6 +1475,14 @@ pub async fn pools<T: ApiServerStorage>(
         let cursor = match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
                 let (keys, id) = cursor.into_parts("pools")?;
+                // the pools cursor carries exactly one key; reject anything else
+                // instead of silently ignoring extra entries
+                ensure!(
+                    keys.len() == 1,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
 
                 match keys.first() {
                     Some(creation_height) if !id.is_empty() => {
@@ -1985,12 +2001,17 @@ async fn holders_response<T: ApiServerStorage>(
         Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
                 let (keys, tie_break_id) = cursor.into_parts("holders")?;
+                // `Amount::from_atoms` does not range-check, so reject atoms above
+                // the representable maximum up front: a fabricated boundary amount
+                // would otherwise be handed to the storage layer unchecked
                 let amount = match keys.first() {
-                    Some(atoms) => u128::from_str(atoms).map(Amount::from_atoms).map_err(|_| {
-                        ApiServerWebServerError::ClientError(
+                    Some(atoms) => u128::from_str(atoms)
+                        .ok()
+                        .filter(|atoms| *atoms <= Amount::MAX.into_atoms())
+                        .map(Amount::from_atoms)
+                        .ok_or(ApiServerWebServerError::ClientError(
                             ApiServerWebServerClientError::InvalidCursor,
-                        )
-                    })?,
+                        ))?,
                     None => {
                         return Err(ApiServerWebServerError::ClientError(
                             ApiServerWebServerClientError::InvalidCursor,
@@ -2553,8 +2574,13 @@ pub async fn order_pair_book<T: ApiServerStorage>(
                 give_balance.into_atoms(),
             )
         };
-        // reduce the fraction so equal prices always map to the same level
-        let price = reduce_rational(price);
+        // reduce the fraction so equal prices always map to the same level; a zero
+        // denominator would corrupt the level ordering, so it maps to an internal
+        // server error instead of degrading silently
+        let price = reduce_rational(price).ok_or_else(|| {
+            logging::log::error!("order book price with a zero denominator reached reduction");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
 
         let level = levels.entry(price).or_insert(0);
         *level = level.checked_add(base_amount).ok_or_else(|| {
@@ -2700,29 +2726,29 @@ fn price_to_decimal_string(
     Ok(price)
 }
 
-fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
+fn reduce_rational(rational: Rational<u128>) -> Option<Rational<u128>> {
     let (mut numer, mut denom) = (*rational.numer(), *rational.denom());
     // the caller skips zero-balance entries, so a zero denominator (a price that
     // would compare equal to every other level and corrupt the ordering) must
     // never reach this function; the debug assertion keeps the two invariants
-    // tied together
+    // tied together, and the None return lets the caller surface the broken
+    // invariant instead of silently degrading in release builds
     debug_assert_ne!(denom, 0);
     if denom == 0 {
-        // the caller skips zero-balance entries, so reaching this branch means that
-        // invariant was broken elsewhere; log it instead of silently degrading
-        logging::log::error!("order book price with a zero denominator reached reduction");
-        return rational;
+        return None;
     }
     while denom != 0 {
         (numer, denom) = (denom, numer % denom);
     }
     if numer == 0 {
         // gcd(0, 0) == 0; only reachable when both the numerator and the denominator
-        // are zero, i.e. the same bypassed caller invariant as above — return the
-        // input instead of dividing by zero
-        return rational;
+        // are zero, i.e. the same bypassed caller invariant as above
+        return None;
     }
-    Rational::new(*rational.numer() / numer, *rational.denom() / numer)
+    Some(Rational::new(
+        *rational.numer() / numer,
+        *rational.denom() / numer,
+    ))
 }
 
 async fn currency_decimals_for_pair(
