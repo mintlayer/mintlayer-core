@@ -895,6 +895,10 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    /// Stores the balance under the string encoding carried by the given address:
+    /// scanning constructs addresses via `Address::new`, so the stored encoding is
+    /// the canonical one, which the byte-ordered tie-break comparison of the
+    /// top-addresses listing relies on.
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,

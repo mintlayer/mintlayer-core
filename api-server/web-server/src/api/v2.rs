@@ -1416,6 +1416,13 @@ impl FromStr for PoolSorting {
     }
 }
 
+/// List pools, newest creation height first (or deepest pledge first with
+/// `sort=by_pledge`).
+///
+/// Note: pages are only stable once the scanner is fully caught up. A late
+/// lower-height write (reorg catch-up) adjusts a pool's creation height in the
+/// backing cache, so a keyset walk performed concurrently with such a write may
+/// skip or repeat that pool.
 pub async fn pools<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,

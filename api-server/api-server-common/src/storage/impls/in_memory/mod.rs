@@ -727,13 +727,22 @@ impl ApiServerInMemoryStorage {
         let offset = offset as usize;
         // deepest pledge first, ties broken by the encoded pool address (byte order),
         // exactly like the postgres listing; the balance and the sort key are decoded
-        // once per entry, and an unparseable/overflowed balance is treated as absent
+        // once per entry, and a pool whose stored balance fails to decode is surfaced
+        // as a storage error instead of silently shrinking the listing (the
+        // empty-history skip below stays silent because no write path produces one)
         let mut decorated: Vec<(Amount, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
             .filter_map(|(pool_id, by_height)| {
                 let data = by_height.values().last()?.clone();
-                let balance = data.staker_balance().ok()?;
+                let balance = match data.staker_balance() {
+                    Ok(balance) => balance,
+                    Err(e) => {
+                        return Some(Err(ApiServerStorageError::DeserializationError(format!(
+                            "pool {pool_id} has an invalid staker balance: {e}"
+                        ))));
+                    }
+                };
                 (balance != Amount::ZERO)
                     .then(|| Ok((balance, self.pool_id_sort_key(pool_id)?, *pool_id, data)))
             })

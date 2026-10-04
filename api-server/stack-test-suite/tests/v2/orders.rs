@@ -352,7 +352,8 @@ async fn order_pair_book(#[case] seed: Seed) {
         web_server(listener, web_server_state, true).await
     });
 
-    let (ml, tkn, coin_decimals) = rx.await.unwrap();
+    let (ml, tkn, coin_decimals) =
+        rx.await.expect("the web server task sends the decimals parameters");
 
     let get_json = |url: String| async move {
         let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))

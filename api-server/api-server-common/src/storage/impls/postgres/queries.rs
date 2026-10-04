@@ -241,7 +241,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let amount_str: String = row.get(1);
                 let atoms = amount_str.parse::<u128>().map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
-                        "invalid amount {amount_str}: {e}"
+                        "invalid amount {amount_str} for address {address}: {e}"
                     ))
                 })?;
                 Ok((address, Amount::from_atoms(atoms)))
@@ -338,15 +338,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
-        self.tx
-            .execute(
-                "DELETE FROM ml.address_balance WHERE block_height > $1;",
-                &[&height],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        // the versioned-history delete and the holders re-derivation form one
+        // dependency unit (the re-derivation is only correct immediately after
+        // the delete); keeping the two in a single helper makes that coupling
+        // structural instead of comment-enforced
+        self.del_address_balance_and_rederive_holders(height).await?;
 
-        // delete and update the address balance from the cache table
+        // roll back the latest-address-balance cache of the disconnected
+        // blocks; this is only correct because the versioned delete inside the
+        // helper above already ran within this same rollback call
         self.tx
             .execute(
                 r#"
@@ -380,6 +380,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ld.number_of_decimals
                 FROM latest_address_balances_for_deleted ld;
                 "#,
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Delete the versioned address-balance rows above the height and re-derive
+    /// the holders (`ml.address_amount`) rows from what remains; set-based, in a
+    /// constant number of round trips, so the two steps cannot drift apart.
+    async fn del_address_balance_and_rederive_holders(
+        &mut self,
+        height: i64,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "DELETE FROM ml.address_balance WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -2150,7 +2168,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         rows.into_iter()
             .map(|row| -> Result<(BlockHeight, PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
                 let creation_block_height: i64 = row.get(0);
-                let creation_block_height = BlockHeight::new(creation_block_height as u64);
+                let creation_block_height = u64::try_from(creation_block_height).map_err(|_| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "invalid negative creation block height: {creation_block_height}"
+                    ))
+                })?;
+                let creation_block_height = BlockHeight::new(creation_block_height);
                 let pool_id: String = row.get(1);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
@@ -3087,6 +3110,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
+                // DISTINCT ON picks the highest row per requested statistic; a
+                // statistic with no rows at all is silently omitted from the result
+                // (the endpoints treat a missing statistic as absent rather than
+                // zero) — keep the endpoint defaults in sync with this behavior
                 r#"
                 SELECT statistic, amount
                 FROM (
@@ -3526,7 +3553,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .tx
             .query(
                 r#"
-                    SELECT ask_balance::text, give_balance::text
+                    SELECT ask_balance::text, give_balance::text, order_id
                     FROM ml.latest_orders_cache
                     WHERE ask_currency = $1 AND give_currency = $2
                         AND frozen = FALSE
@@ -3546,15 +3573,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|row| -> Result<(Amount, Amount), ApiServerStorageError> {
                 let ask_str: String = row.get(0);
                 let give_str: String = row.get(1);
+                let order_id: String = row.get(2);
 
                 let ask = ask_str.parse::<u128>().map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
-                        "invalid ask balance {ask_str}: {e}"
+                        "invalid ask balance {ask_str} for order {order_id}: {e}"
                     ))
                 })?;
                 let give = give_str.parse::<u128>().map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
-                        "invalid give balance {give_str}: {e}"
+                        "invalid give balance {give_str} for order {order_id}: {e}"
                     ))
                 })?;
 
