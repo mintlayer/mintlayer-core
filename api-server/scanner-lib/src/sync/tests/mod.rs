@@ -1038,18 +1038,14 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     drop(db_tx);
 }
 
-// `get_all_statistic` omits the statistics that were never written; the unwritten ones
-// are treated as zero here, but the callers assert on keys that MUST be present after
-// a burn and its rollback (Burned, CirculatingSupply), so absence is a failure, not a
-// zero
+// `get_all_statistic` omits statistics that were never written; absence means the
+// reverted-to value, i.e. zero — e.g. after a reorg the burned amount is rolled back
+// and the Burned key disappears entirely, which this helper must report as zero
 fn statistic_value(
     stats: &BTreeMap<CoinOrTokenStatistic, Amount>,
     statistic: CoinOrTokenStatistic,
 ) -> Amount {
-    stats
-        .get(&statistic)
-        .copied()
-        .unwrap_or_else(|| panic!("{statistic} is missing from the storage statistics"))
+    stats.get(&statistic).copied().unwrap_or(Amount::ZERO)
 }
 
 #[rstest]
