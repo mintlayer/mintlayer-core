@@ -61,6 +61,13 @@ impl Ord for TokenTransactionOrderedByTxId {
 }
 
 #[derive(Debug, Clone)]
+/// An in-memory api-server storage, meant for tests.
+///
+/// The listing reads (pool listings, top holders, order book) scan and sort their full
+/// tables on every call instead of maintaining the incrementally-updated caches the
+/// postgres backend has (`ml.latest_pool_data_cache`, `ml.address_amount`,
+/// `ml.latest_orders_cache`); the contracts (ordering, filters, caps) are identical,
+/// only the asymptotics differ, which is acceptable for test-sized data.
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
@@ -618,15 +625,14 @@ impl ApiServerInMemoryStorage {
         ))
     }
 
-    fn get_latest_pool_ids(
+    /// The live pools (non-zero pledge), newest creation height first, ties broken by
+    /// the encoded pool address (byte order), exactly like the postgres listing; the
+    /// sort key is encoded once per entry. Shared by the offset and the keyset
+    /// (cursor) listings so their ordering cannot diverge.
+    fn sorted_live_pools(
         &self,
-        len: u32,
-        offset: u64,
-    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
-        let len = len as usize;
-        let offset = offset as usize;
-        // newest first, ties broken by the encoded pool address (byte order), exactly
-        // like the postgres listing; the sort key is encoded once per entry
+    ) -> Result<Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>
+    {
         let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
@@ -648,6 +654,17 @@ impl ApiServerInMemoryStorage {
         decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
             (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))
         });
+        Ok(decorated)
+    }
+
+    fn get_latest_pool_ids(
+        &self,
+        len: u32,
+        offset: u64,
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+        let decorated = self.sorted_live_pools()?;
         if offset >= decorated.len() {
             return Ok(vec![]);
         }
@@ -666,30 +683,7 @@ impl ApiServerInMemoryStorage {
         cursor: Option<(BlockHeight, PoolId)>,
     ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        // newest first, ties broken by the encoded pool address (byte order) so the
-        // keyset cursor is deterministic and backend-independent; the sort key is
-        // encoded once per entry
-        let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
-            .pool_data_table
-            .iter()
-            .map(|(pool_id, by_height)| {
-                let created_height = *by_height.keys().next().expect("not empty");
-                let latest_data = by_height.values().last().expect("not empty").clone();
-                Ok((
-                    created_height,
-                    self.pool_id_sort_key(pool_id)?,
-                    *pool_id,
-                    latest_data,
-                ))
-            })
-            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
-        decorated.retain(|(_height, _key, _pool_id, data)| {
-            data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
-        });
-        // comparing references avoids re-allocating sort keys
-        decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
-            (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))
-        });
+        let mut decorated = self.sorted_live_pools()?;
         let cursor_key = match cursor {
             Some((cursor_height, cursor_pool_id)) => {
                 Some((cursor_height, self.pool_id_sort_key(&cursor_pool_id)?))

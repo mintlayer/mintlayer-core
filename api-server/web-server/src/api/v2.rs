@@ -1917,6 +1917,18 @@ pub async fn token_statistics<T: ApiServerStorage>(
     })))
 }
 
+/// Re-encode an address string in its canonical bech32 form. `Address::from_string`
+/// keeps the input verbatim, so an all-uppercase encoding would validate fine yet break
+/// the byte-order keyset comparison against the canonical lowercase strings in storage;
+/// re-encoding (as the pools listing does for pool ids) removes that. Returns `None` if
+/// the string is not a valid address.
+fn canonical_address_string(chain_config: &ChainConfig, address: &str) -> Option<String> {
+    let parsed = Address::<Destination>::from_string(chain_config, address).ok()?;
+    Address::new(chain_config, parsed.into_object())
+        .ok()
+        .map(|address| address.into_string())
+}
+
 /// Shared implementation of the holders endpoints: the top holders of an asset,
 /// ordered by the balance, with optional keyset (cursor) pagination.
 async fn holders_response<T: ApiServerStorage>(
@@ -1945,14 +1957,24 @@ async fn holders_response<T: ApiServerStorage>(
                         ));
                     }
                 };
-                // the tie-break is an encoded address; reject garbage up front
-                let _validated =
+                // the tie-break is an encoded address; reject garbage up front and
+                // canonicalize the encoding: `from_string` keeps the input verbatim, so
+                // an all-uppercase cursor would otherwise be compared byte-wise against
+                // the canonical lowercase strings in storage and mis-order the keyset
+                let validated =
                     Address::<Destination>::from_string(&state.chain_config, &tie_break_id)
                         .map_err(|_| {
                             ApiServerWebServerError::ClientError(
                                 ApiServerWebServerClientError::InvalidCursor,
                             )
                         })?;
+                let tie_break_id = Address::new(&state.chain_config, validated.into_object())
+                    .map_err(|_| {
+                        ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        )
+                    })?
+                    .into_string();
                 Some((amount, tie_break_id))
             }
             None => None,
@@ -1983,11 +2005,12 @@ async fn holders_response<T: ApiServerStorage>(
 
     let next_cursor = has_next_page.then(|| {
         let (address, amount) = holders.last().expect("at least one item");
-        Cursor::new(
-            "holders",
-            vec![amount.into_atoms().to_string()],
-            address.clone(),
-        )
+        // re-encode so the cursor id is canonical and guaranteed to round-trip through
+        // the decode-side validation; fall back to the stored string (canonical in
+        // practice) rather than failing the listing on a storage anomaly
+        let address = canonical_address_string(&state.chain_config, address)
+            .unwrap_or_else(|| address.clone());
+        Cursor::new("holders", vec![amount.into_atoms().to_string()], address)
     });
 
     let items = holders
@@ -2359,6 +2382,11 @@ pub async fn order_pair<T: ApiServerStorage>(
 /// remaining balance changes after a cursor was issued can be skipped or duplicated
 /// on the next page. Clients needing a consistent view should re-fetch from the
 /// start (an empty cursor).
+///
+/// The levels are aggregated from at most `ORDER_BOOK_MAX_ORDERS` orders per request
+/// (the additive `truncated` flag reports when that cap was hit). The flag is
+/// informational: levels beyond the cap cannot be reached by continuing the cursor
+/// walk.
 pub async fn order_pair_book<T: ApiServerStorage>(
     Path(pair): Path<String>,
     Query(params): Query<BTreeMap<String, String>>,

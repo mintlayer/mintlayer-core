@@ -2216,6 +2216,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // maintain the latest-state cache used by the pool listings; the creation height
         // is the height of the first write of the pool (the scanner writes pools from
         // genesis, so the first write is the creation) and is not modified on conflict.
+        //
+        // The `<=` (not `<`) guard intentionally lets a same-height write win, which a
+        // same-height reorg needs to replace the cached row. This relies on the scanner
+        // writing each pool's state for a given height exactly once per reorg state, so
+        // an equal-height conflict can only ever be that replacement.
         self.tx
             .execute(
                 r#"
