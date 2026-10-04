@@ -836,8 +836,8 @@ pub async fn transactions<T: ApiServerStorage>(
         debug_assert!(offset_and_items.items > 0);
         let has_next_page = txs.len() > offset_and_items.items as usize;
         debug_assert!(
-            !has_next_page || txs.len() > offset_and_items.items as usize,
-            "the extra fetched row is present when a next page exists"
+            txs.len() <= offset_and_items.items as usize + 1,
+            "the storage returned at most the requested page plus the extra row"
         );
         let next_cursor = has_next_page.then(|| {
             let last_returned = &txs[offset_and_items.items as usize - 1];
@@ -2517,7 +2517,15 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     let cursor_price = match params.get(CURSOR) {
         Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
             Some(cursor) => {
-                let (keys, _tie_break_id) = cursor.into_parts(cursor_tag)?;
+                let (keys, tie_break_id) = cursor.into_parts(cursor_tag)?;
+                // the book cursor keys are exactly (numerator, denominator) and the
+                // tie-break id is always empty; reject anything else up front
+                ensure!(
+                    tie_break_id.is_empty(),
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
                 let parse_key = |key: Option<&String>| {
                     key.and_then(|key| u128::from_str(key).ok()).ok_or(
                         ApiServerWebServerError::ClientError(
@@ -2611,8 +2619,10 @@ pub async fn order_pair_book<T: ApiServerStorage>(
 
     // a next page implies a non-empty page, unless `items` was zero; the shared
     // validator rejects that, but degrade to "no cursor" instead of panicking should a
-    // future caller ever bypass it
-    let next_cursor = (has_next_page && !levels.is_empty()).then(|| {
+    // future caller ever bypass it. When the storage cap truncated the book
+    // (`has_more_orders`), no cursor is minted: the levels in hand are an incomplete
+    // aggregation, and walking them would present a partial book as authoritative.
+    let next_cursor = (has_next_page && !levels.is_empty() && !has_more_orders).then(|| {
         let (price, _amount) = levels.last().expect("the page is not empty");
         Cursor::new(
             cursor_tag,
