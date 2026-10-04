@@ -55,22 +55,49 @@ pub struct QueryFromConnection<'a, 'b> {
     tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
 }
 
-/// Number of `$n`-style placeholders in a query text (const-evaluable); used to
-/// tie bound-parameter array lengths to the assembled query text at compile time.
+/// Largest `$n` placeholder index across up to four query-text fragments
+/// (const-evaluable); used to tie bound-parameter array lengths to the assembled
+/// query text at compile time.
 #[allow(dead_code)]
-const fn placeholder_count(text: &str) -> usize {
+const fn placeholder_count(a: &str, b: &str, c: &str, d: &str) -> usize {
+    let mut largest = placeholder_count_1(a);
+    let candidate = placeholder_count_1(b);
+    if candidate > largest {
+        largest = candidate;
+    }
+    let candidate = placeholder_count_1(c);
+    if candidate > largest {
+        largest = candidate;
+    }
+    let candidate = placeholder_count_1(d);
+    if candidate > largest {
+        largest = candidate;
+    }
+    largest
+}
+
+/// `placeholder_count` for a single fragment; counts DISTINCT placeholder indices
+/// (`$n` with the largest n), not occurrences, because a placeholder index is
+/// bound exactly once regardless of how often the query text references it.
+#[allow(dead_code)]
+const fn placeholder_count_1(text: &str) -> usize {
     let bytes = text.as_bytes();
-    let mut count = 0;
+    let mut largest = 0usize;
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
-            count += 1;
+            // single-digit placeholder indices only; the largest bound parameter
+            // in these queries is single-digit by construction
+            let digit = (bytes[i + 1] - b'0') as usize;
+            if digit > largest {
+                largest = digit;
+            }
             i += 2;
         } else {
             i += 1;
         }
     }
-    count
+    largest
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
@@ -232,26 +259,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         const QUERY_TAIL: &str = r#"
             ORDER BY amount DESC, address COLLATE "C" DESC
             LIMIT "#;
-        // the number of bound parameters of each query variant, checked at compile
-        // time (const-evaluated): a future edit that reorders the constants or
-        // changes the parameter arrays cannot silently misbind the placeholders,
-        // including in release builds
-        const CURSOR_PARAM_COUNT: usize = 4;
-        const NO_CURSOR_PARAM_COUNT: usize = 2;
-        // (compile-time cross-check that the counter counts placeholders correctly;
-        // the unit type is the const block's value)
-        const _PLACEHOLDER_COUNT_SANITY: () = {
-            assert!(
-                NO_CURSOR_PARAM_COUNT
-                    == placeholder_count(
-                        "SELECT address, amount::text\nFROM ml.address_amount\nWHERE coin_or_token_id = $1 AND amount != 0\nORDER BY amount DESC, address COLLATE \"C\" DESC\nLIMIT $2;",
-                    ),
-                "placeholder counter drifted"
-            );
-            // const blocks must evaluate to the annotated type; the check itself is
-            // the point of the constant
-            let _: () = ();
-        };
+        // the largest placeholder of each query variant, derived from the ACTUAL
+        // constants above at compile time (const-concatenation): editing a constant
+        // without adjusting the matching parameter array fails to compile, including
+        // in release builds
+        const CURSOR_PARAM_COUNT: usize =
+            placeholder_count(QUERY_HEAD, CURSOR_PREDICATE, QUERY_TAIL, "$4;");
+        const NO_CURSOR_PARAM_COUNT: usize = placeholder_count(QUERY_HEAD, QUERY_TAIL, "$2;", "");
         let rows = match cursor {
             Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
@@ -534,12 +548,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         ON CONFLICT (address, coin_or_token_id) DO UPDATE
                         SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
                         WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
-                    -- unlike the pool cache there is no LEAST/GREATEST envelope here:
-                    -- the holders listing orders by `amount DESC`, which the rollback
-                    -- does not touch, so a stale cache row can only be wrong in value
-                    -- and any next write of the same (address, coin) from the versioned
-                    -- table replaces it (`<=` includes same-height reorg rewrites);
-                    -- the ordering cache invariant the pools needed does not apply
+                    -- unlike the pool cache there is no LEAST/GREATEST envelope here,
+                    -- by design: the holders listing orders by `amount DESC`, which
+                    -- rollback does not touch, so a stale cache row can only be wrong
+                    -- in VALUE, never out of order. The height guard `<=` lets any
+                    -- write at the same or newer height than the cached row replace
+                    -- it (including same-height reorg rewrites); cache rows older
+                    -- than the incoming versioned row are exactly the rows this
+                    -- write corrects. A cache row NEWER than the versioned table can
+                    -- only exist if a rollback was interrupted after truncating the
+                    -- versioned history but before rolling the cache back — the
+                    -- rollback helper (del_address_balance_and_rederive_holders)
+                    -- always runs both steps in one transaction, so that state is
+                    -- unreachable outside a crash mid-transaction, which postgres
+                    -- atomicity also rules out.
                     "#,
                     &[
                         &upsert_addresses,
@@ -581,6 +603,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
+        // the versioned insert and the holders-cache upsert below both run on every
+        // balance write: the cache row is rewritten even when the amount is unchanged
+        // (the height guard still updates it), which is intentional — re-parsing the
+        // listing from the versioned table per read would cost more than the
+        // redundant upsert (the listing is served from this cache alone)
         self.tx
             .execute(
                 r#"

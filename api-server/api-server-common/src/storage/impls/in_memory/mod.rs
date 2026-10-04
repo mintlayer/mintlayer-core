@@ -142,7 +142,11 @@ impl ApiServerInMemoryStorage {
     /// Encoded (bech32) form of an order id — see `pool_id_sort_key`.
     fn order_id_sort_key(&self, order_id: &OrderId) -> Result<String, ApiServerStorageError> {
         Address::new(&self.chain_config, *order_id)
-            .map_err(|_| ApiServerStorageError::AddressableError)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid order id {order_id}: {e}"
+                ))
+            })
             .map(|address| address.as_str().to_owned())
     }
 
@@ -193,7 +197,7 @@ impl ApiServerInMemoryStorage {
             });
         }
 
-        Ok(holders.into_iter().take(len as usize).collect::<Vec<_>>())
+        Ok(holders.into_iter().take(len as usize).collect())
     }
 
     fn get_address_balances(
@@ -629,10 +633,11 @@ impl ApiServerInMemoryStorage {
         ))
     }
 
-    /// The live pools (non-zero pledge), newest creation height first, ties broken by
-    /// the encoded pool address (byte order), exactly like the postgres listing; the
-    /// sort key is encoded once per entry. Shared by the offset and the keyset
-    /// (cursor) listings so their ordering cannot diverge.
+    /// The live pools (non-zero pledge), newest creation height first, ties broken
+    /// by the encoded pool address in DESCENDING byte order (`Reverse`, matching
+    /// the postgres listing's `pool_id COLLATE "C" DESC` tie-break); the sort key
+    /// is encoded once per entry. Shared by the offset and the keyset (cursor)
+    /// listings so their ordering cannot diverge.
     fn sorted_live_pools(
         &self,
     ) -> Result<Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>
