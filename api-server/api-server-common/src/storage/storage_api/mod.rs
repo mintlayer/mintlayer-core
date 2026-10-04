@@ -90,6 +90,9 @@ pub enum CoinOrTokenStatistic {
 }
 
 impl CoinOrTokenStatistic {
+    /// Order matters: the array is serialized into the `ANY($1)` statistics filter
+    /// as text (via `to_string`), so it must stay in sync with the enum variants
+    /// AND their string spellings.
     pub const VARIANTS: [Self; 4] = {
         // compile-time exhaustiveness guard: adding a variant without updating the
         // array below fails to compile here because this match has no wildcard
@@ -622,7 +625,9 @@ pub trait ApiServerStorageRead: Sync {
     /// Returns up to `len` holders of the asset with the largest balances, ordered by
     /// the balance (descending, ties broken by the address in descending BYTE order);
     /// keyset (cursor) pagination, the cursor is the (address, amount) of the last
-    /// returned holder, exclusive. Addresses with a zero balance are excluded.
+    /// returned holder, exclusive, with the amount encoded as a plain atom-count
+    /// string (`into_atoms().to_string()`) — not a decimal/fixed-point form.
+    /// Addresses with a zero balance are excluded.
     async fn get_top_address_amounts(
         &self,
         coin_or_token_id: CoinOrTokenId,

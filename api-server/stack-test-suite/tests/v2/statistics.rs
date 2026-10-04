@@ -523,7 +523,7 @@ async fn coin_holders(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, false).await
+        web_server(listener, web_server_state, false).await.expect("web server failed");
     });
 
     let (alice_address, bob_address, coin_decimals) = rx.await.unwrap();

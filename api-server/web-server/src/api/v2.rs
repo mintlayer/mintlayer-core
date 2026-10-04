@@ -789,12 +789,9 @@ pub async fn transactions<T: ApiServerStorage>(
                         ApiServerWebServerClientError::InvalidCursor
                     )
                 );
-                let tx_global_index = keys.first().map(|index| index.to_owned()).ok_or(
-                    ApiServerWebServerError::ClientError(
-                        ApiServerWebServerClientError::InvalidCursor,
-                    ),
-                )?;
-                let tx_global_index = u64::from_str(&tx_global_index).map_err(|_| {
+                let tx_global_index =
+                    keys.first().expect("the cursor carries exactly one key, checked above");
+                let tx_global_index = u64::from_str(tx_global_index).map_err(|_| {
                     ApiServerWebServerError::ClientError(
                         ApiServerWebServerClientError::InvalidCursor,
                     )
@@ -2554,7 +2551,11 @@ pub async fn order_pair_book<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
-    // aggregate the remaining balances into price levels
+    // aggregate the remaining balances into price levels; the storage layer caps
+    // the input at ORDER_BOOK_MAX_ORDERS entries, so each request (regardless of
+    // the requested page size) pays one O(ORDER_BOOK_MAX_ORDERS) scan+aggregate —
+    // acceptable for the capped input, but worth knowing before adding pages to
+    // the walk
     let mut levels = BTreeMap::<Rational<u128>, u128>::new();
     for (ask_balance, give_balance) in entries {
         // defensive: the storage layer filters these out, but a zero balance would
