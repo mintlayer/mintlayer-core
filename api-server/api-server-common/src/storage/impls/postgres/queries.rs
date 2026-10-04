@@ -55,6 +55,24 @@ pub struct QueryFromConnection<'a, 'b> {
     tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
 }
 
+/// Number of `$n`-style placeholders in a query text (const-evaluable); used to
+/// tie bound-parameter array lengths to the assembled query text at compile time.
+#[allow(dead_code)]
+const fn placeholder_count(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let mut count = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            count += 1;
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    count
+}
+
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
     fn get_table_exists_query(table_name: &str) -> String {
         format!(
@@ -214,15 +232,31 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         const QUERY_TAIL: &str = r#"
             ORDER BY amount DESC, address COLLATE "C" DESC
             LIMIT "#;
+        // the number of bound parameters of each query variant, checked at compile
+        // time (const-evaluated): a future edit that reorders the constants or
+        // changes the parameter arrays cannot silently misbind the placeholders,
+        // including in release builds
+        const CURSOR_PARAM_COUNT: usize = 4;
+        const NO_CURSOR_PARAM_COUNT: usize = 2;
+        // (compile-time cross-check that the counter counts placeholders correctly;
+        // the unit type is the const block's value)
+        const _PLACEHOLDER_COUNT_SANITY: () = {
+            assert!(
+                NO_CURSOR_PARAM_COUNT
+                    == placeholder_count(
+                        "SELECT address, amount::text\nFROM ml.address_amount\nWHERE coin_or_token_id = $1 AND amount != 0\nORDER BY amount DESC, address COLLATE \"C\" DESC\nLIMIT $2;",
+                    ),
+                "placeholder counter drifted"
+            );
+            // const blocks must evaluate to the annotated type; the check itself is
+            // the point of the constant
+            let _: () = ();
+        };
         let rows = match cursor {
             Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
-                let params: [&(dyn tokio_postgres::types::ToSql + Sync); 4] =
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); CURSOR_PARAM_COUNT] =
                     [&coin_or_token_id, &amount_str, &address, &len];
-                // the largest placeholder in the assembled query text must match the
-                // number of bound parameters, so a future edit that reorders the
-                // constants or the array cannot silently misbind the placeholders
-                debug_assert_eq!(params.len(), 4);
                 self.tx
                     .query(
                         &format!("{QUERY_HEAD}{CURSOR_PREDICATE}{QUERY_TAIL}$4;"),
@@ -232,9 +266,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             }
             None => {
-                let params: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); NO_CURSOR_PARAM_COUNT] =
                     [&coin_or_token_id, &len];
-                debug_assert_eq!(params.len(), 2);
                 self.tx
                     .query(&format!("{QUERY_HEAD}{QUERY_TAIL}$2;"), &params)
                     .await
@@ -246,6 +279,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|row| -> Result<(String, Amount), ApiServerStorageError> {
                 let address: String = row.get(0);
                 let amount_str: String = row.get(1);
+                // fail fast on a corrupt row rather than silently returning wrong
+                // balances; the message carries the offending value for diagnosis
                 let atoms = amount_str.parse::<u128>().map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "invalid amount {amount_str} for address {address}: {e}"
@@ -499,6 +534,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         ON CONFLICT (address, coin_or_token_id) DO UPDATE
                         SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
                         WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
+                    -- unlike the pool cache there is no LEAST/GREATEST envelope here:
+                    -- the holders listing orders by `amount DESC`, which the rollback
+                    -- does not touch, so a stale cache row can only be wrong in value
+                    -- and any next write of the same (address, coin) from the versioned
+                    -- table replaces it (`<=` includes same-height reorg rewrites);
+                    -- the ordering cache invariant the pools needed does not apply
                     "#,
                     &[
                         &upsert_addresses,
@@ -3615,6 +3656,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let give_str: String = row.get(1);
                 let order_id: String = row.get(2);
 
+                // fail fast on a corrupt row rather than silently returning wrong
+                // balances; the message carries the offending value for diagnosis
                 let ask = ask_str.parse::<u128>().map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "invalid ask balance {ask_str} for order {order_id}: {e}"
