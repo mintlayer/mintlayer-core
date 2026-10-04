@@ -335,7 +335,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         &self,
         coin_or_token_id: CoinOrTokenId,
         len: u32,
-        cursor: Option<(Amount, String)>,
+        cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
         self.transaction.get_top_address_amounts(coin_or_token_id, len, cursor)
     }

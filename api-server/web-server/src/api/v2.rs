@@ -1968,21 +1968,11 @@ async fn holders_response<T: ApiServerStorage>(
                 // canonicalize the encoding: `from_string` keeps the input verbatim, so
                 // an all-uppercase cursor would otherwise be compared byte-wise against
                 // the canonical lowercase strings in storage and mis-order the keyset
-                let validated =
-                    Address::<Destination>::from_string(&state.chain_config, &tie_break_id)
-                        .map_err(|_| {
-                            ApiServerWebServerError::ClientError(
-                                ApiServerWebServerClientError::InvalidCursor,
-                            )
-                        })?;
-                let tie_break_id = Address::new(&state.chain_config, validated.into_object())
-                    .map_err(|_| {
-                        ApiServerWebServerError::ClientError(
-                            ApiServerWebServerClientError::InvalidCursor,
-                        )
-                    })?
-                    .into_string();
-                Some((amount, tie_break_id))
+                let tie_break_id = canonical_address_string(&state.chain_config, &tie_break_id)
+                    .ok_or(ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    ))?;
+                Some((tie_break_id, amount))
             }
             None => None,
         },
@@ -2352,7 +2342,7 @@ pub async fn order_pair<T: ApiServerStorage>(
         |s: &str| -> Result<(CoinOrTokenId, CoinOrTokenId), ApiServerWebServerError> {
             let parts: Vec<_> = s.split("_").collect();
             ensure!(
-                parts.len() == 2,
+                parts.len() == 2 && parts.iter().all(|part| !part.is_empty()),
                 ApiServerWebServerError::ClientError(
                     ApiServerWebServerClientError::InvalidOrderTradingPair
                 )
@@ -2445,7 +2435,7 @@ pub async fn order_pair_book<T: ApiServerStorage>(
 
     let parts: Vec<_> = pair.split("_").collect();
     ensure!(
-        parts.len() == 2,
+        parts.len() == 2 && parts.iter().all(|part| !part.is_empty()),
         ApiServerWebServerError::ClientError(
             ApiServerWebServerClientError::InvalidOrderTradingPair
         )
@@ -2692,6 +2682,12 @@ fn reduce_rational(rational: Rational<u128>) -> Rational<u128> {
     }
     while denom != 0 {
         (numer, denom) = (denom, numer % denom);
+    }
+    if numer == 0 {
+        // gcd(0, 0) == 0; only reachable when both the numerator and the denominator
+        // are zero, i.e. the same bypassed caller invariant as above — return the
+        // input instead of dividing by zero
+        return rational;
     }
     Rational::new(*rational.numer() / numer, *rational.denom() / numer)
 }

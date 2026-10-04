@@ -164,7 +164,7 @@ impl ApiServerInMemoryStorage {
         &self,
         coin_or_token_id: CoinOrTokenId,
         len: u32,
-        cursor: Option<(Amount, String)>,
+        cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
         let mut holders = self
             .address_balance_table
@@ -182,7 +182,7 @@ impl ApiServerInMemoryStorage {
             (r_amount, r_address.as_str()).cmp(&(l_amount, l_address.as_str()))
         });
 
-        if let Some((cursor_amount, cursor_address)) = cursor {
+        if let Some((cursor_address, cursor_amount)) = cursor {
             holders.retain(|(address, amount)| {
                 *amount < cursor_amount
                     || (*amount == cursor_amount && address.as_str() < cursor_address.as_str())
@@ -637,9 +637,14 @@ impl ApiServerInMemoryStorage {
             .pool_data_table
             .iter()
             .filter_map(|(pool_id, by_height)| {
-                // a pool in the table always carries at least one versioned row; the
-                // cheap zero-balance filter runs before the (allocating) sort-key
-                // encoding, so decommissioned pools skip the bech32 work entirely
+                // a pool in the table always carries at least one versioned row; empty
+                // maps (never produced by the current write paths) are skipped instead
+                // of panicking in a read path, and the cheap zero-balance filter runs
+                // before the (allocating) sort-key encoding, so decommissioned pools
+                // skip the bech32 work entirely
+                if by_height.is_empty() {
+                    return None;
+                }
                 let created_height = *by_height.keys().next().expect("a pool has versioned rows");
                 let latest_data = by_height.values().last().expect("a pool has versioned rows");
                 latest_data.staker_balance().is_ok_and(|b| b != Amount::ZERO).then_some((

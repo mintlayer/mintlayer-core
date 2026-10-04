@@ -2444,7 +2444,7 @@ where
         .get_top_address_amounts(
             CoinOrTokenId::Coin,
             2,
-            Some((last_amount, last_address.clone())),
+            Some((last_address.clone(), last_amount)),
         )
         .await
         .unwrap();
@@ -2458,7 +2458,7 @@ where
     let (last_address2, last_amount2) = next_page[1].clone();
 
     let end = db_tx
-        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_amount2, last_address2)))
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_address2, last_amount2)))
         .await
         .unwrap();
     assert!(end.is_empty());

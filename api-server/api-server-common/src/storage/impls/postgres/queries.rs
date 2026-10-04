@@ -195,12 +195,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         coin_or_token_id: CoinOrTokenId,
         len: u32,
-        cursor: Option<(Amount, String)>,
+        cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
         let coin_or_token_id = coin_or_token_id.encode();
         let len = len as i64;
         let rows = match cursor {
-            Some((amount, address)) => {
+            Some((address, amount)) => {
                 let amount_str = amount.into_atoms().to_string();
                 self.tx
                     .query(
@@ -1263,10 +1263,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
-        // index for the pool listing sorted by pledge
+        // index for the pool listing sorted by pledge; includes the tie-break column
+        // so the listing's ORDER BY is index-satisfiable (matching
+        // latest_pool_data_created_index)
         self.just_execute(
             "CREATE INDEX latest_pool_data_staker_balance_index
-                ON ml.latest_pool_data_cache (staker_balance DESC);",
+                ON ml.latest_pool_data_cache (staker_balance DESC, pool_id DESC);",
         )
         .await?;
 

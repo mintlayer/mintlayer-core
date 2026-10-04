@@ -498,7 +498,7 @@ async fn coin_holders(#[case] seed: Seed) {
 
                 (alice_address, bob_address, vec![block])
             };
-            let (_alice_address, _bob_address, chainstate_blocks) = chainstate_blocks;
+            let (_, _, chainstate_blocks) = chainstate_blocks;
 
             let storage = {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);

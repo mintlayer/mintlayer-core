@@ -68,7 +68,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         coin_or_token_id: CoinOrTokenId,
         len: u32,
-        cursor: Option<(Amount, String)>,
+        cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.get_top_address_amounts(coin_or_token_id, len, cursor).await
