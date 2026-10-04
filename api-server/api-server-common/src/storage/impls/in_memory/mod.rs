@@ -636,20 +636,27 @@ impl ApiServerInMemoryStorage {
         let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
-            .map(|(pool_id, by_height)| {
-                let created_height = *by_height.keys().next().expect("not empty");
-                let latest_data = by_height.values().last().expect("not empty").clone();
+            .filter_map(|(pool_id, by_height)| {
+                // a pool in the table always carries at least one versioned row; the
+                // cheap zero-balance filter runs before the (allocating) sort-key
+                // encoding, so decommissioned pools skip the bech32 work entirely
+                let created_height = *by_height.keys().next().expect("a pool has versioned rows");
+                let latest_data = by_height.values().last().expect("a pool has versioned rows");
+                latest_data.staker_balance().is_ok_and(|b| b != Amount::ZERO).then_some((
+                    *pool_id,
+                    created_height,
+                    latest_data.clone(),
+                ))
+            })
+            .map(|(pool_id, created_height, latest_data)| {
                 Ok((
                     created_height,
-                    self.pool_id_sort_key(pool_id)?,
-                    *pool_id,
+                    self.pool_id_sort_key(&pool_id)?,
+                    pool_id,
                     latest_data,
                 ))
             })
             .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
-        decorated.retain(|(_height, _key, _pool_id, data)| {
-            data.staker_balance().is_ok_and(|b| b != Amount::ZERO)
-        });
         // comparing references avoids re-allocating sort keys
         decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
             (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))

@@ -2013,15 +2013,29 @@ async fn holders_response<T: ApiServerStorage>(
     // a next page implies a non-empty page, unless `items` was zero; the shared
     // validator rejects that, but degrade to "no cursor" instead of panicking should a
     // future caller ever bypass it
-    let next_cursor = (has_next_page && !holders.is_empty()).then(|| {
+    let next_cursor = if has_next_page && !holders.is_empty() {
         let (address, amount) = holders.last().expect("the page is not empty");
         // re-encode so the cursor id is canonical and guaranteed to round-trip through
-        // the decode-side validation; fall back to the stored string (canonical in
-        // practice) rather than failing the listing on a storage anomaly
-        let address = canonical_address_string(&state.chain_config, address)
-            .unwrap_or_else(|| address.clone());
-        Cursor::new("holders", vec![amount.into_atoms().to_string()], address)
-    });
+        // the decode-side validation; a stored address that fails to re-encode is a
+        // storage anomaly, surfaced as a server error instead of a cursor the client
+        // could not consume on the next page
+        let address = match canonical_address_string(&state.chain_config, address) {
+            Some(address) => address,
+            None => {
+                logging::log::error!("non-canonical address in the holders listing: {address}");
+                return Err(ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                ));
+            }
+        };
+        Some(Cursor::new(
+            "holders",
+            vec![amount.into_atoms().to_string()],
+            address,
+        ))
+    } else {
+        None
+    };
 
     let items = holders
         .into_iter()
@@ -2412,6 +2426,9 @@ pub async fn order_pair_book<T: ApiServerStorage>(
     const SIDE_BID: &str = "bid";
 
     let parse_currency = |s: &str| -> Result<CoinOrTokenId, ApiServerWebServerError> {
+        // the coin ticker is matched case-insensitively for client convenience, while
+        // token ids are exact bech32 strings (bech32 decoding is case-sensitive by
+        // design) — an accepted asymmetry, not an oversight
         if s.to_uppercase() == state.chain_config.coin_ticker() {
             Ok(CoinOrTokenId::Coin)
         } else {
@@ -2610,14 +2627,25 @@ fn price_to_decimal_string(
     // digits are computed exactly in u256 arithmetic (the scaled numerator fits a
     // u256 for any realistic decimal count and is checked anyway), because a
     // financial price must not silently lose precision through floating point
+    // 10^base_decimals by exponentiation-by-squaring (`Uint256` has no pow); at most
+    // eight squarings for the maximum 255 decimals a token can declare
+    let overflow = || {
+        logging::log::error!("order book price scaling overflow");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    };
     let ten = Uint256::from_u64(10);
-    let mut scaled = Uint256::from(numer);
-    for _ in 0..base_decimals {
-        scaled = scaled.checked_mul(&ten).ok_or_else(|| {
-            logging::log::error!("order book price scaling overflow");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
+    let (mut scale, mut base, mut exp) = (Uint256::from_u64(1), ten, u32::from(base_decimals));
+    loop {
+        if exp & 1 == 1 {
+            scale = scale.checked_mul(&base).ok_or_else(overflow)?;
+        }
+        exp >>= 1;
+        if exp == 0 {
+            break;
+        }
+        base = base.checked_mul(&base).ok_or_else(overflow)?;
     }
+    let scaled = Uint256::from(numer).checked_mul(&scale).ok_or_else(overflow)?;
     let scaled = scaled.checked_div(&Uint256::from(denom)).expect("denominator is not zero");
 
     // the decimal digits of the scaled price, least significant last, by repeated
@@ -2728,6 +2756,9 @@ fn get_offset_and_items(
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
         .unwrap_or(DEFAULT_NUM_ITEMS);
+    // `items=0` is rejected here for every endpoint using this parser, including the
+    // legacy offset-mode listings which used to return an empty page; the behavior
+    // change is noted in the CHANGELOG
     ensure!(
         items > 0,
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)

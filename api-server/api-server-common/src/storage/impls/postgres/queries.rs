@@ -2136,7 +2136,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         SELECT creation_block_height, pool_id, data
                         FROM ml.latest_pool_data_cache
                         WHERE staker_balance != 0
-                        ORDER BY creation_block_height DESC, pool_id DESC
+                        ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
                         LIMIT $1;
                     "#,
                     &[&len],

@@ -27,6 +27,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ApiServerWebServerClientError;
 
+/// The largest accepted encoded cursor length. Legitimate cursors carry a handful of
+/// short keys (well under this bound); the cap rejects oversized unauthenticated input
+/// before the base64 decode.
+const MAX_CURSOR_LEN: usize = 1024;
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cursor {
@@ -65,6 +70,11 @@ impl Cursor {
     }
 
     pub fn decode(encoded: &str) -> Result<Self, ApiServerWebServerClientError> {
+        // a cursor carries a handful of short keys; reject oversized payloads before
+        // the base64 decode as a cheap guard against unauthenticated input bloat
+        if encoded.len() > MAX_CURSOR_LEN {
+            return Err(ApiServerWebServerClientError::InvalidCursor);
+        }
         let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(encoded)
             .map_err(|_| ApiServerWebServerClientError::InvalidCursor)?;
