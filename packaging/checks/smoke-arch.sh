@@ -138,10 +138,11 @@ echo "foreign-architecture package ($PKG_ARCH on $(uname -m)): smoke-testing in 
 mkdir -p "$CHROOT_DIR"
 rootfs_tar=/tmp/alarm.tar.gz
 rc=1
-for url in "$(alarm_rootfs_urls)"; do
+while IFS= read -r url; do
+    [ -n "$url" ] || continue
     echo "downloading ARM rootfs from $url"
     if curl --proto '=https' --tlsv1.2 -sSfL -o "$rootfs_tar" "$url"; then rc=0; break; fi
-done
+done < <(alarm_rootfs_urls)
 [ "$rc" -eq 0 ] || { echo "ERROR: could not download the Arch Linux ARM rootfs" >&2; exit 1; }
 # The rootfs ships device nodes we cannot recreate inside an unprivileged
 # container; skip them. Remaining tar warnings are non-fatal.
