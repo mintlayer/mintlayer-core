@@ -29,7 +29,8 @@ use tokio::sync::mpsc;
 use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::{
-        ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw, Transactional,
+        ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw, CoinOrTokenStatistic,
+        Transactional,
     },
 };
 use chainstate::{BlockSource, ChainInfo};
@@ -1035,6 +1036,143 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     let utxos = db_tx.get_address_available_utxos(address.as_str()).await.unwrap();
     assert_eq!(utxos.len(), already_unlocked_utxos);
     drop(db_tx);
+}
+
+// `get_all_statistic` omits statistics that were never written; absence means the
+// reverted-to value, i.e. zero — e.g. after a reorg the burned amount is rolled back
+// and the Burned key disappears entirely, which this helper must report as zero
+fn statistic_value(
+    stats: &BTreeMap<CoinOrTokenStatistic, Amount>,
+    statistic: CoinOrTokenStatistic,
+) -> Amount {
+    stats.get(&statistic).copied().unwrap_or(Amount::ZERO)
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn reorg_statistics(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+
+    let genesis_stats = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    let genesis_burned = statistic_value(&genesis_stats, CoinOrTokenStatistic::Burned);
+    let genesis_circulating_supply =
+        statistic_value(&genesis_stats, CoinOrTokenStatistic::CirculatingSupply);
+
+    // a block with a coin burn, which increases the burned supply and decreases the
+    // circulating supply
+    let burned_amount = Amount::from_atoms(5);
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                0,
+            ),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Burn(OutputValue::Coin(burned_amount)))
+        .build();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(chain_config.genesis_block_id())
+        .with_transactions(vec![transaction])
+        .build(&mut rng);
+
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_best_block()
+        .await
+        .unwrap()
+        .block_height();
+    local_state.scan_blocks(block_height, vec![block.clone()]).await.unwrap();
+
+    let post_burn_stats = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    assert_eq!(
+        statistic_value(&post_burn_stats, CoinOrTokenStatistic::Burned),
+        (genesis_burned + burned_amount).expect("no overflow in test amounts")
+    );
+    assert_eq!(
+        statistic_value(&post_burn_stats, CoinOrTokenStatistic::CirculatingSupply),
+        (genesis_circulating_supply - burned_amount).expect("no underflow in test amounts")
+    );
+
+    // reorg away the block; the statistics must return to the genesis values
+    local_state.scan_blocks(block_height, vec![]).await.unwrap();
+
+    let rolled_back_stats = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    assert_eq!(
+        statistic_value(&rolled_back_stats, CoinOrTokenStatistic::Burned),
+        genesis_burned
+    );
+    assert_eq!(
+        statistic_value(&rolled_back_stats, CoinOrTokenStatistic::CirculatingSupply),
+        genesis_circulating_supply
+    );
+
+    // scan the block again; the statistics must be restored
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    let restored_stats = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    assert_eq!(
+        statistic_value(&restored_stats, CoinOrTokenStatistic::Burned),
+        statistic_value(&post_burn_stats, CoinOrTokenStatistic::Burned)
+    );
+    assert_eq!(
+        statistic_value(&restored_stats, CoinOrTokenStatistic::CirculatingSupply),
+        statistic_value(&post_burn_stats, CoinOrTokenStatistic::CirculatingSupply)
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
