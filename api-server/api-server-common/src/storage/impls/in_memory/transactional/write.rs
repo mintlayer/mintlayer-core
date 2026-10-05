@@ -331,6 +331,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        self.transaction.get_top_address_amounts(coin_or_token_id, len, cursor)
+    }
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -467,6 +476,14 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
 
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        self.transaction.get_latest_pool_ids_before(len, cursor)
+    }
+
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
@@ -597,5 +614,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_for_trading_pair(pair, len, offset)
+    }
+
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        self.transaction.get_order_book_entries(ask_currency, give_currency)
     }
 }

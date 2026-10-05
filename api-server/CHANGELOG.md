@@ -16,6 +16,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   Transactions seen in the node's mempool are bridged into `tx_seen` events by the web server.
 
 ### Changed
+- The `items` query parameter is now validated the same way on every paginated `v2` endpoint: `items=0` is rejected with `400 invalid num items` instead of returning an empty page. Previously the offset-based endpoints returned an empty listing for `items=0`; the new keyset-paginated endpoints (pools, transactions, holders, order book) reject it from the start.
 - The api-server storage version was bumped from 25 to 26 (new `ml.emitted_events` table); the scanner re-initializes the database when it finds a different version, as before. Full resync is required.
 - The stream event retention pruning no longer deletes events that the event pump has not consumed yet: the pump records its progress in the database and the pruning never overtakes it (with a hard limit of 100k retained events before the first progress record or during a pump outage, logged as an error when it kicks in).
 - A terminated streaming background task (the event pump or the mempool bridge) now brings the web server process down instead of leaving the event stream silently dead while the REST endpoints keep working.

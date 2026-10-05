@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cursor;
 pub mod json_helpers;
 pub mod stream;
 pub mod v2;
