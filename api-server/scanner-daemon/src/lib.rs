@@ -55,6 +55,10 @@ const SYNC_ERROR_DELAY: Duration = Duration::from_secs(1);
 /// bridge/scanner must never depend on the library's default timeouts for its no-wedge
 /// guarantees.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long the scanner waits after a successful sync (when it is already at the node's tip)
+/// before polling the node again. Bounds the tip latency for the explorer while keeping the
+/// polling cadence gentle on the node.
+const SYNC_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The state of an ongoing outage of the connection to the node: counts the failed
 /// connection/sync attempts since the last successful sync and remembers when the current
@@ -228,9 +232,11 @@ async fn supervise_sync<S: ApiServerStorage>(
     // so that a node that is down at startup does not abort the daemon.
     //
     // Note: every RPC call made by `sync_once` is bounded by the WS client's request timeout
-    // (jsonrpsee's default of 60 seconds), so a node that hangs without closing the connection
-    // surfaces as a request timeout, which is classified as a connection-level failure and
-    // recovered below, rather than wedging the loop indefinitely.
+    // (pinned to 60 seconds in `new_ws_client`), so a node that hangs without closing the
+    // connection surfaces as a request timeout: a non-connection error that is retried with the
+    // escalating delay below (re-connecting cannot fix a slow node). A genuinely dead
+    // connection is detected by the WS ping and surfaces as `RestartNeeded`, i.e. a
+    // connection-level failure that triggers the reconnection path.
     let mut state = ConnectionState::Reconnecting;
     let mut outage = Outage::new();
 
@@ -323,6 +329,10 @@ async fn supervise_sync<S: ApiServerStorage>(
                 backoff.reset();
                 sync_error_backoff.reset();
                 outage = Outage::new();
+                // Note: avoid a hot spin when already at the node's tip: without this wait the
+                // loop would poll the node's `chainstate` RPC thousands of times per second.
+                // The wait bounds the explorer's tip latency to this interval.
+                tokio::time::sleep(SYNC_IDLE_POLL_INTERVAL).await;
             }
             Err(err) if err.is_connection_error() => {
                 // The client is permanently broken (e.g. the node has closed the WebSocket
