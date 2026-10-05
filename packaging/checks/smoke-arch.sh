@@ -161,9 +161,14 @@ cp /proc/self/mounts "$CHROOT_DIR/etc/mtab"
 # process substitution (/dev/fd), which requires a mounted /proc the chroot
 # does not have. The host container's pacman-key can act on the chroot's
 # keyring via --gpgdir once the archlinuxarm keyring is visible to it.
-cp "$CHROOT_DIR/usr/share/pacman/keyrings/archlinuxarm.gpg" /usr/share/pacman/keyrings/
+# The -trusted/-revoked companions are required alongside the keyring:
+# --populate applies ownertrust only from <keyring>-trusted; without it
+# every imported key lands at unknown trust and pacman refuses packages.
+for f in archlinuxarm.gpg archlinuxarm-trusted archlinuxarm-revoked; do
+    cp "$CHROOT_DIR/usr/share/pacman/keyrings/$f" /usr/share/pacman/keyrings/
+done
 pacman-key --gpgdir "$CHROOT_DIR/etc/pacman.d/gnupg" --init >/dev/null
-pacman-key --gpgdir "$CHROOT_DIR/etc/pacman.d/gnupg" --populate archlinuxarm >/dev/null
+pacman-key --gpgdir "$CHROOT_DIR/etc/pacman.d/gnupg" --populate archlinuxarm
 
 # /work is not visible inside the chroot: copy the script, its lib.sh and the
 # package in.
