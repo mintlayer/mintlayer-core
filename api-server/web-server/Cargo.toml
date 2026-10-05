@@ -20,6 +20,7 @@ mempool = { path = "../../mempool" }
 
 axum.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 ctor.workspace = true
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true, default-features = false }
