@@ -64,6 +64,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.get_top_address_amounts(coin_or_token_id, len, cursor).await
+    }
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -262,6 +272,17 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_latest_pool_data_before(len, cursor, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
     async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
@@ -448,6 +469,15 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
 
         Ok(res)
+    }
+
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.get_order_book_entries(ask_currency, give_currency).await
     }
 
     async fn read_stream_events_after(

@@ -369,6 +369,7 @@ dependencies = [
  "api-server-common",
  "async-trait",
  "axum 0.7.9",
+ "base64 0.22.1",
  "build_utils",
  "chainstate-test-framework",
  "clap",

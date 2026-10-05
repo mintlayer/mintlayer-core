@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::amount_to_json;
 use common::chain::{
     AccountCommand, AccountNonce, ChainstateUpgradeBuilder, OrderAccountCommand, OrderData,
     OrdersVersion, make_order_id,
@@ -177,7 +178,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let (block1_id, tx1_id, block2_id, tx2_id, block3_id, tx3_id) = rx.await.unwrap();
@@ -196,6 +197,250 @@ async fn create_fill_conclude_order(#[case] seed: Seed, #[case] version: OrdersV
     check_url(format!("/api/v2/transaction/{tx1_id}")).await;
     check_url(format!("/api/v2/transaction/{tx2_id}")).await;
     check_url(format!("/api/v2/transaction/{tx3_id}")).await;
+
+    shutdown_task(task).await;
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn order_pair_book(#[case] seed: Seed) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let chain_config = create_unit_test_config();
+
+            let chainstate_blocks = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                // Issue and mint some tokens to create orders of both sides of the
+                // coin/token pair
+                let tokens_amount = Amount::from_atoms(1000);
+                let issue_and_mint_result =
+                    helpers::issue_and_mint_tokens_from_genesis(tokens_amount, &mut rng, &mut tf);
+                let token_id = issue_and_mint_result.token_id;
+                let minted = issue_and_mint_result.minted_tokens;
+
+                let ask_coin = Amount::from_atoms(10);
+
+                // asks 10 coins for 10 tokens (a price of 1 token per coin)
+                let tx_1 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+                        Destination::AnyoneCanSpend,
+                        OutputValue::Coin(ask_coin),
+                        OutputValue::TokenV1(token_id, ask_coin),
+                    ))))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, (minted - ask_coin).unwrap()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+                let block1 = tf.make_block_builder().add_transaction(tx_1.clone()).build(&mut rng);
+                tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+
+                // asks 10 coins for 30 tokens (a price of 3 tokens per coin)
+                let tx_2 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(
+                            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                            1,
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+                        Destination::AnyoneCanSpend,
+                        OutputValue::Coin(ask_coin),
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(30)),
+                    ))))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(
+                            token_id,
+                            ((minted - ask_coin).unwrap() - Amount::from_atoms(30)).unwrap(),
+                        ),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+                let block2 = tf.make_block_builder().add_transaction(tx_2).build(&mut rng);
+                tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+
+                // a bid of the coin/token pair: asks 5 tokens for 5 coins
+                let tx_3 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(issue_and_mint_result.change_outpoint.clone()),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::CreateOrder(Box::new(OrderData::new(
+                        Destination::AnyoneCanSpend,
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(5)),
+                        OutputValue::Coin(Amount::from_atoms(5)),
+                    ))))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(
+                            (chainstate_test_framework::get_output_value(
+                                tf.chainstate
+                                    .utxo(&issue_and_mint_result.change_outpoint)
+                                    .unwrap()
+                                    .unwrap()
+                                    .output(),
+                            )
+                            .unwrap()
+                            .coin_amount()
+                            .unwrap()
+                                - Amount::from_atoms(5))
+                            .unwrap(),
+                        ),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build();
+                let block3 = tf.make_block_builder().add_transaction(tx_3).build(&mut rng);
+                tf.process_block(block3.clone(), BlockSource::Local).unwrap();
+
+                _ = tx.send((
+                    chain_config.coin_ticker().to_owned(),
+                    Address::new(&chain_config, token_id).unwrap().into_string(),
+                    chain_config.coin_decimals(),
+                ));
+
+                vec![
+                    issue_and_mint_result.issue_block,
+                    issue_and_mint_result.mint_block,
+                    block1,
+                    block2,
+                    block3,
+                ]
+            };
+
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let chain_config = Arc::new(chain_config);
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+                stream_events: Default::default(),
+            }
+        };
+
+        web_server(listener, web_server_state, true).await.expect("web server failed");
+    });
+
+    let (ml, tkn, coin_decimals) =
+        rx.await.expect("the web server task sends the decimals parameters");
+
+    let get_json = |url: String| async move {
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
+        (response.status(), response.text().await.unwrap())
+    };
+
+    // the ask book of ML_TKN, paginated by one level per request
+    {
+        let url = format!("/api/v2/order/pair/{ml}_{tkn}/book?side=ask&items=1");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 200);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        assert!(body["next_cursor"].as_str().is_some());
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["price"]["atoms"], "1/1");
+        assert_eq!(
+            items[0]["amount"],
+            amount_to_json(Amount::from_atoms(10), coin_decimals)
+        );
+
+        // the next page
+        let cursor = body["next_cursor"].as_str().unwrap();
+        let url = format!("/api/v2/order/pair/{ml}_{tkn}/book?side=ask&items=1&cursor={cursor}");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 200);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        assert!(body["next_cursor"].as_str().is_none());
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["price"]["atoms"], "3/1");
+        assert_eq!(
+            items[0]["amount"],
+            amount_to_json(Amount::from_atoms(10), coin_decimals)
+        );
+    }
+
+    // the bid book of ML_TKN has the single reversed order
+    {
+        let url = format!("/api/v2/order/pair/{ml}_{tkn}/book?side=bid");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 200);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        assert!(body["next_cursor"].as_str().is_none());
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["price"]["atoms"], "1/1");
+        assert_eq!(
+            items[0]["amount"],
+            amount_to_json(Amount::from_atoms(5), coin_decimals)
+        );
+    }
+
+    // the reversed pair sees the bid order as its ask
+    {
+        let url = format!("/api/v2/order/pair/{tkn}_{ml}/book?side=ask");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 200);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["price"]["atoms"], "1/1");
+    }
+
+    // an invalid side is rejected
+    {
+        let url = format!("/api/v2/order/pair/{ml}_{tkn}/book?side=nonsense");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Bad request");
+    }
+
+    // an invalid cursor is rejected
+    {
+        let url = format!("/api/v2/order/pair/{ml}_{tkn}/book?side=ask&cursor=garbage");
+        let (status, body) = get_json(url).await;
+        assert_eq!(status, 400);
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["error"].as_str().unwrap(), "Invalid cursor");
+    }
 
     shutdown_task(task).await;
 }
@@ -284,7 +529,7 @@ async fn order_pairs(#[case] seed: Seed) {
             }
         };
 
-        web_server(listener, web_server_state, true).await
+        web_server(listener, web_server_state, true).await.expect("web server failed");
     });
 
     let (order_id, ml, tkn) = rx.await.unwrap();

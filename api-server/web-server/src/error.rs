@@ -117,6 +117,8 @@ pub enum ApiServerWebServerClientError {
     InvalidOrderId,
     #[error("Invalid order trading pair")]
     InvalidOrderTradingPair,
+    #[error("Invalid cursor")]
+    InvalidCursor,
 }
 
 #[allow(dead_code)]

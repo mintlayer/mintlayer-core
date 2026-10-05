@@ -15,9 +15,12 @@
 
 use crate::{
     MempoolQueryClient, TxSubmitClient,
-    api::json_helpers::{
-        self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
-        to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+    api::{
+        cursor::{self, Cursor},
+        json_helpers::{
+            self, TokenDecimals, amount_to_json, block_header_to_json, pool_data_to_json,
+            to_tx_json_with_block_info, tx_to_json, txoutput_to_json, utxo_outpoint_to_json,
+        },
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -37,6 +40,7 @@ use axum::{
     routing::{get, post},
 };
 use common::{
+    Uint256,
     address::Address,
     chain::{
         Block, ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction,
@@ -45,7 +49,7 @@ use common::{
         make_token_id,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, H256, Id, Idable, rational::Rational},
 };
 use hex::ToHex;
 use serde::Deserialize;
@@ -137,7 +141,9 @@ pub fn routes<
 
     let router = router
         .route("/statistics/coin", get(coin_statistics))
-        .route("/statistics/token/:id", get(token_statistics));
+        .route("/statistics/coin/holders", get(coin_holders))
+        .route("/statistics/token/:id", get(token_statistics))
+        .route("/statistics/token/:id/holders", get(token_holders));
 
     let router = router
         .route("/token", get(token_ids))
@@ -150,6 +156,7 @@ pub fn routes<
         .route("/order", get(orders))
         .route("/order/:id", get(order))
         .route("/order/pair/:pair", get(order_pair))
+        .route("/order/pair/:pair/book", get(order_pair_book))
         // Note: the real-time event stream is exposed together with the v2 endpoints, since the
         // events reference data that is served by them.
         .route("/stream", get(super::stream::stream_events))
@@ -741,11 +748,22 @@ pub async fn transactions<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     const OFFSET_MODE: &str = "offset_mode";
+    const CURSOR: &str = "cursor";
     let offset_mode = params
         .get(OFFSET_MODE)
         .map(|mode| OffsetMode::from_str(mode))
         .transpose()?
         .unwrap_or(OffsetMode::Legacy);
+
+    let cursor_param = params.get(CURSOR);
+    if cursor_param.is_some() && params.contains_key(OFFSET_MODE) {
+        // the cursor walks the global index of the transactions, the offset modes are
+        // the legacy ways of walking the listing
+        return Err(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::BadRequest,
+        ));
+    }
+
     let offset_and_items = get_offset_and_items(&params)?;
 
     let db_tx = state.db.transaction_ro().await.map_err(|e| {
@@ -753,25 +771,111 @@ pub async fn transactions<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let txs = match offset_mode {
-        OffsetMode::Absolute => {
-            db_tx
-                .get_transactions_with_block_info_before_tx_global_index(
-                    offset_and_items.items,
-                    offset_and_items.offset,
+    let fetch_len = offset_and_items.items.saturating_add(1);
+
+    let (txs, next_cursor) = if let Some(cursor_str) = cursor_param {
+        let txs = match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                // the tie-break id of the cursor is ignored for this tag: the global
+                // transaction index is unique per transaction, so the index key alone is
+                // already a total order (the pools and holders endpoints need the
+                // tie-break because their amounts can repeat)
+                let (keys, _tie_break_id) = cursor.into_parts("transactions")?;
+                // the transactions cursor carries exactly one key; reject anything
+                // else instead of silently ignoring extra entries
+                ensure!(
+                    keys.len() == 1,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
+                let tx_global_index =
+                    keys.first().expect("the cursor carries exactly one key, checked above");
+                let tx_global_index = u64::from_str(tx_global_index).map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    )
+                })?;
+                // reject out-of-range indices as a client error before they reach the
+                // storage layer, which maps the overflow to an internal server error
+                if i64::try_from(tx_global_index).is_err() {
+                    return Err(ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    ));
+                }
+
+                db_tx
+                    .get_transactions_with_block_info_before_tx_global_index(
+                        fetch_len,
+                        tx_global_index,
+                    )
+                    .await
+                    .map_err(|e| {
+                        logging::log::error!("internal error: {e}");
+                        ApiServerWebServerError::ServerError(
+                            ApiServerWebServerServerError::InternalServerError,
+                        )
+                    })?
+            }
+            // an empty cursor starts the listing from the beginning; the cursor and
+            // offset variants of the listing must agree on the (newest-first,
+            // ascending global index) order for the cursor boundary to stay
+            // consistent — the backends derive both orderings from the same scanned
+            // main-chain state, so they cannot diverge without a storage bug
+            None => db_tx.get_transactions_with_block_info(fetch_len, 0).await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
                 )
-                .await
+            })?,
+        };
+
+        // the shared validator guarantees items > 0 and the fetch above requests
+        // one extra row, so the indexing below stays in bounds; keep those
+        // cross-function invariants locally asserted
+        debug_assert!(offset_and_items.items > 0);
+        let has_next_page = txs.len() > offset_and_items.items as usize;
+        debug_assert!(
+            txs.len() <= offset_and_items.items as usize + 1,
+            "the storage returned at most the requested page plus the extra row"
+        );
+        let next_cursor = has_next_page.then(|| {
+            let last_returned = &txs[offset_and_items.items as usize - 1];
+            Cursor::new(
+                "transactions",
+                vec![last_returned.tx_global_index.to_string()],
+                last_returned.tx_info.tx.transaction().get_id().to_hash().encode_hex::<String>(),
+            )
+        });
+        let txs = txs.into_iter().take(offset_and_items.items as usize).collect();
+
+        (txs, next_cursor)
+    } else {
+        let txs = match offset_mode {
+            OffsetMode::Absolute => {
+                db_tx
+                    .get_transactions_with_block_info_before_tx_global_index(
+                        offset_and_items.items,
+                        offset_and_items.offset,
+                    )
+                    .await
+            }
+            OffsetMode::Legacy => {
+                db_tx
+                    .get_transactions_with_block_info(
+                        offset_and_items.items,
+                        offset_and_items.offset,
+                    )
+                    .await
+            }
         }
-        OffsetMode::Legacy => {
-            db_tx
-                .get_transactions_with_block_info(offset_and_items.items, offset_and_items.offset)
-                .await
-        }
-    }
-    .map_err(|e| {
-        logging::log::error!("internal error: {e}");
-        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-    })?;
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+        (txs, None)
+    };
 
     let tip_height = best_block(&state).await?.block_height();
     let txs = txs
@@ -787,7 +891,11 @@ pub async fn transactions<T: ApiServerStorage>(
         })
         .collect();
 
-    Ok(Json(serde_json::Value::Array(txs)))
+    Ok(Json(match next_cursor {
+        Some(next_cursor) => cursor::paged_response(txs, Some(next_cursor)),
+        None if cursor_param.is_some() => cursor::paged_response(txs, None),
+        None => serde_json::Value::Array(txs),
+    }))
 }
 
 pub async fn transaction<
@@ -1325,17 +1433,33 @@ impl FromStr for PoolSorting {
     }
 }
 
+/// List pools, newest creation height first (or deepest pledge first with
+/// `sort=by_pledge`).
+///
+/// Note: pages are only stable once the scanner is fully caught up. A late
+/// lower-height write (reorg catch-up) adjusts a pool's creation height in the
+/// backing cache, so a keyset walk performed concurrently with such a write may
+/// skip or repeat that pool.
 pub async fn pools<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     const SORT: &str = "sort";
+    const CURSOR: &str = "cursor";
 
     let sort = params
         .get(SORT)
         .map(|sort| PoolSorting::from_str(sort))
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
+
+    let cursor_param = params.get(CURSOR);
+    if cursor_param.is_some() && !matches!(sort, PoolSorting::ByHeight) {
+        // the cursor orders pools by creation height, the only ordering it supports
+        return Err(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::BadRequest,
+        ));
+    }
 
     let offset_and_items = get_offset_and_items(&params)?;
 
@@ -1344,35 +1468,147 @@ pub async fn pools<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let pools = match sort {
-        PoolSorting::ByHeight => db_tx
-            .get_latest_pool_data(offset_and_items.items, offset_and_items.offset)
-            .await
-            .map_err(|e| {
+    let pools_json = if let Some(cursor_str) = cursor_param {
+        let cursor = match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, id) = cursor.into_parts("pools")?;
+                // the pools cursor carries exactly one key; reject anything else
+                // instead of silently ignoring extra entries
+                ensure!(
+                    keys.len() == 1,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
+
+                match keys.first() {
+                    Some(creation_height) if !id.is_empty() => {
+                        let creation_height = u64::from_str(creation_height).map_err(|_| {
+                            ApiServerWebServerError::ClientError(
+                                ApiServerWebServerClientError::InvalidCursor,
+                            )
+                        })?;
+                        // reject out-of-range heights as a client error before they
+                        // reach the storage layer, which maps the overflow to a panic
+                        if i64::try_from(creation_height).is_err() {
+                            return Err(ApiServerWebServerError::ClientError(
+                                ApiServerWebServerClientError::InvalidCursor,
+                            ));
+                        }
+                        // re-encode through Address::new so the id used as the
+                        // keyset boundary is the canonical lowercase form: bech32
+                        // accepts all-uppercase strings and `from_string` keeps the
+                        // input verbatim, so an all-uppercase cursor id would
+                        // validate but silently break the byte-wise comparison
+                        // against the canonical strings in storage
+                        let pool_address =
+                            Address::from_string(&state.chain_config, &id).map_err(|_| {
+                                ApiServerWebServerError::ClientError(
+                                    ApiServerWebServerClientError::InvalidCursor,
+                                )
+                            })?;
+                        let pool_address =
+                            Address::new(&state.chain_config, pool_address.into_object()).map_err(
+                                |_| {
+                                    ApiServerWebServerError::ClientError(
+                                        ApiServerWebServerClientError::InvalidCursor,
+                                    )
+                                },
+                            )?;
+                        let pool_id = pool_address.into_object();
+                        Some((BlockHeight::new(creation_height), pool_id))
+                    }
+                    _ => {
+                        return Err(ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ));
+                    }
+                }
+            }
+            // an empty cursor starts the listing from the beginning
+            None => None,
+        };
+
+        // an extra item tells whether the result set continues past the page
+        let items_to_fetch = offset_and_items.items.saturating_add(1);
+        let pools =
+            db_tx.get_latest_pool_data_before(items_to_fetch, cursor).await.map_err(|e| {
                 logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
                     ApiServerWebServerServerError::InternalServerError,
                 )
-            })?,
-        PoolSorting::ByPledge => db_tx
-            .get_pool_data_with_largest_staker_balance(
-                offset_and_items.items,
-                offset_and_items.offset,
-            )
-            .await
-            .map_err(|e| {
-                logging::log::error!("internal error: {e}");
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
+            })?;
+
+        let has_next_page = pools.len() > offset_and_items.items as usize;
+        let pools = pools.into_iter().take(offset_and_items.items as usize).collect::<Vec<_>>();
+
+        // a next page implies a non-empty page, unless `items` was zero; the shared
+        // validator rejects that, but degrade to "no cursor" instead of panicking
+        // should a future caller ever bypass it
+        let next_cursor = if has_next_page && !pools.is_empty() {
+            let (creation_height, pool_id, _pool_data) =
+                pools.last().expect("the page is not empty");
+            // the pool id comes from the storage, so encoding cannot fail; map the
+            // error anyway instead of risking a panic inside a request handler
+            let pool_id_str = Address::new(&state.chain_config, *pool_id)
+                .map_err(|e| {
+                    logging::log::error!("internal error: pool id encoding failed: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .as_str()
+                .to_owned();
+            Some(Cursor::new(
+                "pools",
+                vec![creation_height.into_int().to_string()],
+                pool_id_str,
+            ))
+        } else {
+            None
+        };
+
+        let items = pools
+            .into_iter()
+            .map(|(_creation_height, pool_id, pool_data)| {
+                pool_data_to_json(&state.chain_config, pool_data, pool_id)
+            })
+            .collect();
+
+        cursor::paged_response(items, next_cursor)
+    } else {
+        let pools = match sort {
+            PoolSorting::ByHeight => db_tx
+                .get_latest_pool_data(offset_and_items.items, offset_and_items.offset)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?,
+            PoolSorting::ByPledge => db_tx
+                .get_pool_data_with_largest_staker_balance(
+                    offset_and_items.items,
+                    offset_and_items.offset,
                 )
-            })?,
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?,
+        };
+
+        let pools = pools
+            .into_iter()
+            .map(|(pool_id, pool_data)| pool_data_to_json(&state.chain_config, pool_data, pool_id));
+
+        serde_json::Value::Array(pools.collect())
     };
 
-    let pools = pools
-        .into_iter()
-        .map(|(pool_id, pool_data)| pool_data_to_json(&state.chain_config, pool_data, pool_id));
-
-    Ok(Json(pools.collect::<Vec<_>>()))
+    Ok(Json(pools_json))
 }
 
 pub async fn pool<T: ApiServerStorage>(
@@ -1734,6 +1970,180 @@ pub async fn token_statistics<T: ApiServerStorage>(
     })))
 }
 
+/// Re-encode an address string in its canonical bech32 form. `Address::from_string`
+/// keeps the input verbatim, so an all-uppercase encoding would validate fine yet break
+/// the byte-order keyset comparison against the canonical lowercase strings in storage;
+/// re-encoding (as the pools listing does for pool ids) removes that. Returns `None` if
+/// the string is not a valid address.
+fn canonical_address_string(chain_config: &ChainConfig, address: &str) -> Option<String> {
+    let parsed = Address::<Destination>::from_string(chain_config, address).ok()?;
+    Address::new(chain_config, parsed.into_object())
+        .ok()
+        .map(|address| address.into_string())
+}
+
+/// Shared implementation of the holders endpoints: the top holders of an asset,
+/// ordered by the balance, with optional keyset (cursor) pagination.
+async fn holders_response<T: ApiServerStorage>(
+    params: &BTreeMap<String, String>,
+    state: &ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>,
+    coin_or_token_id: CoinOrTokenId,
+    number_of_decimals: u8,
+) -> Result<serde_json::Value, ApiServerWebServerError> {
+    const CURSOR: &str = "cursor";
+
+    let offset_and_items = get_offset_and_items(params)?;
+
+    let cursor = match params.get(CURSOR) {
+        Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, tie_break_id) = cursor.into_parts("holders")?;
+                // `Amount::from_atoms` does not range-check, so reject atoms above
+                // the representable maximum up front: a fabricated boundary amount
+                // would otherwise be handed to the storage layer unchecked
+                let amount = match keys.first() {
+                    Some(atoms) => u128::from_str(atoms)
+                        .ok()
+                        .filter(|atoms| *atoms <= Amount::MAX.into_atoms())
+                        .map(Amount::from_atoms)
+                        .ok_or(ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ))?,
+                    None => {
+                        return Err(ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ));
+                    }
+                };
+                // the tie-break is an encoded address; reject garbage up front and
+                // canonicalize the encoding: `from_string` keeps the input verbatim, so
+                // an all-uppercase cursor would otherwise be compared byte-wise against
+                // the canonical lowercase strings in storage and mis-order the keyset
+                let tie_break_id = canonical_address_string(&state.chain_config, &tie_break_id)
+                    .ok_or(ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor,
+                    ))?;
+                Some((tie_break_id, amount))
+            }
+            None => None,
+        },
+        None => None,
+    };
+
+    // an extra item is requested to detect the presence of the next page
+    let fetch_len = offset_and_items.items.saturating_add(1);
+
+    let mut holders = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_top_address_amounts(coin_or_token_id, fetch_len, cursor)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let has_next_page = holders.len() > offset_and_items.items as usize;
+    holders.truncate(offset_and_items.items as usize);
+
+    // a next page implies a non-empty page, unless `items` was zero; the shared
+    // validator rejects that, but degrade to "no cursor" instead of panicking should a
+    // future caller ever bypass it
+    let next_cursor = if has_next_page && !holders.is_empty() {
+        let (address, amount) = holders.last().expect("the page is not empty");
+        // re-encode so the cursor id is canonical and guaranteed to round-trip through
+        // the decode-side validation; a stored address that fails to re-encode is a
+        // storage anomaly, surfaced as a server error instead of a cursor the client
+        // could not consume on the next page
+        let address = match canonical_address_string(&state.chain_config, address) {
+            Some(address) => address,
+            None => {
+                logging::log::error!("non-canonical address in the holders listing: {address}");
+                return Err(ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                ));
+            }
+        };
+        Some(Cursor::new(
+            "holders",
+            vec![amount.into_atoms().to_string()],
+            address,
+        ))
+    } else {
+        None
+    };
+
+    let items = holders
+        .into_iter()
+        .map(|(address, amount)| {
+            json!({
+                "address": address,
+                "amount": amount_to_json(amount, number_of_decimals),
+            })
+        })
+        .collect();
+
+    Ok(cursor::paged_response(items, next_cursor))
+}
+
+pub async fn coin_holders<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let response = holders_response(
+        &params,
+        &state,
+        CoinOrTokenId::Coin,
+        state.chain_config.coin_decimals(),
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
+pub async fn token_holders<T: ApiServerStorage>(
+    Path(token_id): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_string(&state.chain_config, token_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?
+        .into_object();
+
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let token_decimals = tx
+        .get_token_num_decimals(token_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    let response = holders_response(
+        &params,
+        &state,
+        CoinOrTokenId::TokenId(token_id),
+        token_decimals,
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
 pub async fn token_ids<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -1983,7 +2393,7 @@ pub async fn order_pair<T: ApiServerStorage>(
         |s: &str| -> Result<(CoinOrTokenId, CoinOrTokenId), ApiServerWebServerError> {
             let parts: Vec<_> = s.split("_").collect();
             ensure!(
-                parts.len() == 2,
+                parts.len() == 2 && parts.iter().all(|part| !part.is_empty()),
                 ApiServerWebServerError::ClientError(
                     ApiServerWebServerClientError::InvalidOrderTradingPair
                 )
@@ -2024,6 +2434,364 @@ pub async fn order_pair<T: ApiServerStorage>(
     Ok(Json(orders.collect::<Vec<_>>()))
 }
 
+/// The order book of a trading pair: the live orders of the pair aggregated into price
+/// levels. `side` selects the side of the book: `ask` lists the orders asking for the
+/// base currency (first in the pair) while giving the quote currency, `bid` the reverse.
+/// The price of a level is the remaining quote amount per remaining base unit (a
+/// rational number, in atoms); `amount` is the remaining base amount at the level. The
+/// ask book is ordered by the ascending price, the bid book by the descending price;
+/// keyset (cursor) pagination over the levels.
+///
+/// The levels are computed from a fresh storage snapshot on every request, so a
+/// paginated walk is not a consistent snapshot of a moving book: a level whose
+/// remaining balance changes after a cursor was issued can be skipped or duplicated
+/// on the next page. Clients needing a consistent view should re-fetch from the
+/// start (an empty cursor).
+///
+/// The levels are aggregated from at most `ORDER_BOOK_MAX_ORDERS` orders per request
+/// (the additive `truncated` flag reports when that cap was hit). The flag is
+/// informational: levels beyond the cap cannot be reached by continuing the cursor
+/// walk.
+///
+/// The `price.decimal` field is truncated (floored) toward zero; the exact price is
+/// available in the `price.atoms` field. Cursors are side-specific: one minted for
+/// `side=ask` is rejected with `invalid cursor` on `side=bid` and vice versa.
+pub async fn order_pair_book<T: ApiServerStorage>(
+    Path(pair): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const SIDE: &str = "side";
+    const CURSOR: &str = "cursor";
+    const SIDE_ASK: &str = "ask";
+    const SIDE_BID: &str = "bid";
+
+    let parse_currency = |s: &str| -> Result<CoinOrTokenId, ApiServerWebServerError> {
+        // the coin ticker is matched case-insensitively for client convenience, while
+        // token ids are exact bech32 strings (bech32 decoding is case-sensitive by
+        // design) — an accepted asymmetry, not an oversight
+        if s.to_uppercase() == state.chain_config.coin_ticker() {
+            Ok(CoinOrTokenId::Coin)
+        } else {
+            let token_id = Address::from_string(&state.chain_config, s)
+                .map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidTokenId,
+                    )
+                })?
+                .into_object();
+            Ok(CoinOrTokenId::TokenId(token_id))
+        }
+    };
+
+    let parts: Vec<_> = pair.split("_").collect();
+    ensure!(
+        parts.len() == 2 && parts.iter().all(|part| !part.is_empty()),
+        ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::InvalidOrderTradingPair
+        )
+    );
+    let base = parse_currency(parts[0])?;
+    let quote = parse_currency(parts[1])?;
+
+    // an ask of the (base, quote) pair is an order asking for the base and giving the
+    // quote; a bid is the reverse. In both cases the price is expressed in the quote
+    // currency per one base unit.
+    let (ask_currency, give_currency, base_is_ask) = match params.get(SIDE).map(String::as_str) {
+        Some(SIDE_ASK) => (base, quote, true),
+        Some(SIDE_BID) => (quote, base, false),
+        _ => {
+            return Err(ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::BadRequest,
+            ));
+        }
+    };
+
+    // the cursor tag is side-specific: the same price walks in opposite directions on
+    // the two sides, so a cursor minted for one side must be rejected on the other
+    let cursor_tag = if base_is_ask { "book-ask" } else { "book-bid" };
+
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    // the cursor is the (numerator, denominator) of the last returned level price
+    let cursor_price = match params.get(CURSOR) {
+        Some(cursor_str) => match Cursor::decode_start(cursor_str)? {
+            Some(cursor) => {
+                let (keys, tie_break_id) = cursor.into_parts(cursor_tag)?;
+                // the book cursor keys are exactly (numerator, denominator) and the
+                // tie-break id is always empty; reject anything else up front
+                ensure!(
+                    tie_break_id.is_empty(),
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
+                let parse_key = |key: Option<&String>| {
+                    key.and_then(|key| u128::from_str(key).ok()).ok_or(
+                        ApiServerWebServerError::ClientError(
+                            ApiServerWebServerClientError::InvalidCursor,
+                        ),
+                    )
+                };
+                let numer = parse_key(keys.first())?;
+                let denom = parse_key(keys.get(1))?;
+                ensure!(
+                    denom != 0,
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidCursor
+                    )
+                );
+                Some(Rational::new(numer, denom))
+            }
+            None => None,
+        },
+        None => None,
+    };
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let (entries, has_more_orders) =
+        db_tx.get_order_book_entries(ask_currency, give_currency).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    // aggregate the remaining balances into price levels; the storage layer caps
+    // the input at ORDER_BOOK_MAX_ORDERS entries, so each request (regardless of
+    // the requested page size) pays one O(ORDER_BOOK_MAX_ORDERS) scan+aggregate —
+    // acceptable for the capped input, but worth knowing before adding pages to
+    // the walk
+    let mut levels = BTreeMap::<Rational<u128>, u128>::new();
+    for (ask_balance, give_balance) in entries {
+        // defensive: the storage layer filters these out, but a zero balance would
+        // yield a zero-denominator price whose `Ord` compares equal to every other
+        // key and silently corrupts the level map, so skip it here as well
+        if ask_balance == Amount::ZERO || give_balance == Amount::ZERO {
+            continue;
+        }
+        let (price, base_amount) = if base_is_ask {
+            (
+                Rational::new(give_balance.into_atoms(), ask_balance.into_atoms()),
+                ask_balance.into_atoms(),
+            )
+        } else {
+            (
+                Rational::new(ask_balance.into_atoms(), give_balance.into_atoms()),
+                give_balance.into_atoms(),
+            )
+        };
+        // reduce the fraction so equal prices always map to the same level; a zero
+        // denominator would corrupt the level ordering, so it maps to an internal
+        // server error instead of degrading silently
+        let price = reduce_rational(price).ok_or_else(|| {
+            logging::log::error!("order book price with a zero denominator reached reduction");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+        let level = levels.entry(price).or_insert(0);
+        *level = level.checked_add(base_amount).ok_or_else(|| {
+            logging::log::error!("order book level amount overflow");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+    }
+
+    // the ask book is ordered by the ascending price, the bid book by the descending one
+    let mut levels: Vec<_> = levels.into_iter().collect();
+    if !base_is_ask {
+        levels.reverse();
+    }
+
+    if let Some(cursor_price) = cursor_price {
+        levels.retain(|(price, _amount)| {
+            if base_is_ask {
+                *price > cursor_price
+            } else {
+                *price < cursor_price
+            }
+        });
+    }
+
+    let has_next_page = levels.len() > offset_and_items.items as usize;
+    levels.truncate(offset_and_items.items as usize);
+
+    // a next page implies a non-empty page, unless `items` was zero; the shared
+    // validator rejects that, but degrade to "no cursor" instead of panicking should a
+    // future caller ever bypass it. When the storage cap truncated the book
+    // (`has_more_orders`), no cursor is minted: the levels in hand are an incomplete
+    // aggregation, and walking them would present a partial book as authoritative.
+    let next_cursor = (has_next_page && !levels.is_empty() && !has_more_orders).then(|| {
+        let (price, _amount) = levels.last().expect("the page is not empty");
+        Cursor::new(
+            cursor_tag,
+            vec![price.numer().to_string(), price.denom().to_string()],
+            String::new(),
+        )
+    });
+
+    let decimals = currency_decimals_for_pair(&db_tx, &base, &quote, &state.chain_config).await?;
+    let base_decimals = decimals[&base];
+    let quote_decimals = decimals[&quote];
+
+    let items = levels
+        .into_iter()
+        .map(
+            |(price, level_amount)| -> Result<serde_json::Value, ApiServerWebServerError> {
+                let (numer, denom) = (*price.numer(), *price.denom());
+                // the price in atoms is the quote amount per one base atom; to express it
+                // in the currency units, scale the numerator by the base currency's
+                // decimals (and represent the result with the quote currency's decimals)
+                let price_decimal =
+                    price_to_decimal_string(numer, denom, base_decimals, quote_decimals)?;
+
+                Ok(json!({
+                    "price": {
+                        "decimal": price_decimal,
+                        "atoms": format!("{numer}/{denom}"),
+                    },
+                    "amount": amount_to_json(Amount::from_atoms(level_amount), base_decimals),
+                }))
+            },
+        )
+        .collect::<Result<Vec<_>, ApiServerWebServerError>>()?;
+
+    // the hard cap on aggregated live orders may have truncated the book; surface
+    // that to the client as an additive field so a partial book is never presented
+    // as complete
+    let response = if has_more_orders {
+        let mut response = cursor::paged_response(items, next_cursor);
+        response["truncated"] = json!(true);
+        response
+    } else {
+        cursor::paged_response(items, next_cursor)
+    };
+
+    Ok(Json(response))
+}
+
+/// The exact decimal representation of a price given as `numer/denom` quote atoms per
+/// base atom: `numer * 10^base_decimals / denom`, displayed with `quote_decimals`
+/// fractional digits, computed in exact u256 arithmetic (no floating point).
+///
+/// The result is truncated (floored) toward zero, so it can be slightly lower than the
+/// exact level price; the exact value is available alongside in the `atoms` field.
+fn price_to_decimal_string(
+    numer: u128,
+    denom: u128,
+    base_decimals: u8,
+    quote_decimals: u8,
+) -> Result<String, ApiServerWebServerError> {
+    // the price equals (numer * 10^base_decimals / denom) * 10^-quote_decimals; the
+    // digits are computed exactly in u256 arithmetic (the scaled numerator fits a
+    // u256 for any realistic decimal count and is checked anyway), because a
+    // financial price must not silently lose precision through floating point
+    // 10^base_decimals by exponentiation-by-squaring (`Uint256` has no pow); at most
+    // eight squarings for the maximum 255 decimals a token can declare
+    let overflow = || {
+        logging::log::error!("order book price scaling overflow");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    };
+    let ten = Uint256::from_u64(10);
+    let (mut scale, mut base, mut exp) = (Uint256::from_u64(1), ten, u32::from(base_decimals));
+    loop {
+        if exp & 1 == 1 {
+            scale = scale.checked_mul(&base).ok_or_else(overflow)?;
+        }
+        exp >>= 1;
+        if exp == 0 {
+            break;
+        }
+        base = base.checked_mul(&base).ok_or_else(overflow)?;
+    }
+    let scaled = Uint256::from(numer).checked_mul(&scale).ok_or_else(overflow)?;
+    let scaled = scaled.checked_div(&Uint256::from(denom)).expect("denominator is not zero");
+
+    // the decimal digits of the scaled price, least significant last, by repeated
+    // division by ten
+    let mut digits = Vec::new();
+    let mut value = scaled;
+    while value != Uint256::ZERO {
+        let rem = value.checked_rem(&ten).expect("ten is not zero");
+        let rem = u128::try_from(rem).expect("a digit fits a u128");
+        digits.push(u8::try_from(rem).expect("a digit fits a u8") + b'0');
+        value = value.checked_div(&ten).expect("ten is not zero");
+    }
+    if digits.is_empty() {
+        digits.push(b'0');
+    }
+    digits.reverse();
+    let digits = String::from_utf8(digits).expect("digits are ascii");
+
+    // place the decimal point `quote_decimals` digits from the right
+    let point = usize::from(quote_decimals);
+    let price = if point == 0 {
+        digits
+    } else if digits.len() > point {
+        let (int_part, frac_part) = digits.split_at(digits.len() - point);
+        format!("{int_part}.{frac_part}")
+    } else {
+        format!("0.{}{digits}", "0".repeat(point - digits.len()))
+    };
+    Ok(price)
+}
+
+fn reduce_rational(rational: Rational<u128>) -> Option<Rational<u128>> {
+    let (mut numer, mut denom) = (*rational.numer(), *rational.denom());
+    // the caller skips zero-balance entries, so a zero denominator (a price that
+    // would compare equal to every other level and corrupt the ordering) must
+    // never reach this function; the debug assertion keeps the two invariants
+    // tied together, and the None return lets the caller surface the broken
+    // invariant instead of silently degrading in release builds
+    debug_assert_ne!(denom, 0);
+    if denom == 0 {
+        return None;
+    }
+    while denom != 0 {
+        (numer, denom) = (denom, numer % denom);
+    }
+    if numer == 0 {
+        // gcd(0, 0) == 0; only reachable when both the numerator and the denominator
+        // are zero, i.e. the same bypassed caller invariant as above
+        return None;
+    }
+    Some(Rational::new(
+        *rational.numer() / numer,
+        *rational.denom() / numer,
+    ))
+}
+
+async fn currency_decimals_for_pair(
+    db_tx: &impl ApiServerStorageRead,
+    base: &CoinOrTokenId,
+    quote: &CoinOrTokenId,
+    chain_config: &ChainConfig,
+) -> Result<BTreeMap<CoinOrTokenId, u8>, ApiServerWebServerError> {
+    let mut decimals = BTreeMap::new();
+    decimals.insert(CoinOrTokenId::Coin, chain_config.coin_decimals());
+
+    for currency in [base, quote] {
+        if let CoinOrTokenId::TokenId(token_id) = currency {
+            let token_decimals = db_tx
+                .get_token_num_decimals(*token_id)
+                .await
+                .map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+                .ok_or(ApiServerWebServerError::NotFound(
+                    ApiServerWebServerNotFoundError::TokenNotFound,
+                ))?;
+            decimals.insert(*currency, token_decimals);
+        }
+    }
+
+    Ok(decimals)
+}
+
 struct OffsetAndItems {
     offset: u64,
     items: u32,
@@ -2054,6 +2822,13 @@ fn get_offset_and_items(
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
         .unwrap_or(DEFAULT_NUM_ITEMS);
+    // `items=0` is rejected here for every endpoint using this parser, including the
+    // legacy offset-mode listings which used to return an empty page; the behavior
+    // change is noted in the CHANGELOG
+    ensure!(
+        items > 0,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
     ensure!(
         items <= MAX_NUM_ITEMS,
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
