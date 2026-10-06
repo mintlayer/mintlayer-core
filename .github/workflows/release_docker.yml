@@ -142,12 +142,10 @@ jobs:
           docker buildx imagetools create -t "$repo:$tag" "$repo:$tag-amd64" "$repo:$tag-arm64"
         }
 
-        # The two base images are only tagged "latest"; the app images carry
-        # the release tags plus "latest".
-        for repo in "mintlayer/mintlayer-builder" "mintlayer/mintlayer-runner-base"; do
-          assemble "$repo" latest
-        done
-
+        # Only the app images are maintained on Docker Hub (build.py's
+        # push_instances pushes these six); the builder/runner-base images
+        # stay local to the CI runner, so there is nothing to assemble for
+        # them.
         for repo in "$DOCKERHUB_USERNAME/node-daemon" \
                     "$DOCKERHUB_USERNAME/api-blockchain-scanner-daemon" \
                     "$DOCKERHUB_USERNAME/api-web-server" \
@@ -169,7 +167,3 @@ jobs:
           echo "=== $DOCKERHUB_USERNAME/$repo:v$VERSION ==="
           docker buildx imagetools inspect "$DOCKERHUB_USERNAME/$repo:v$VERSION" | grep -E '^Name:|Platform:' || true
         done
-        echo "=== mintlayer/mintlayer-builder:latest ==="
-        docker buildx imagetools inspect "mintlayer/mintlayer-builder:latest" | grep -E '^Name:|Platform:' || true
-        echo "=== mintlayer/mintlayer-runner-base:latest ==="
-        docker buildx imagetools inspect "mintlayer/mintlayer-runner-base:latest" | grep -E '^Name:|Platform:' || true
