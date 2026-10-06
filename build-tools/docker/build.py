@@ -172,7 +172,9 @@ def main():
     all_tags = args.local_tags + tags_to_push
 
     if args.build:
-        build_instances(apply_tag_suffix(all_tags, args.tag_suffix), args.docker_hub_user, args.num_jobs,
+        # Note: the suffix is applied inside build_docker_image, so it must NOT be
+        # pre-applied to these tags (that would produce doubled suffixes).
+        build_instances(all_tags, args.docker_hub_user, args.num_jobs,
                         args.platform, args.tag_suffix)
 
     # Only push the image if the --push flag is provided
