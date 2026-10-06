@@ -2,10 +2,33 @@ name: Build Docker
 
 on:
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for image tags, e.g. 1.4.1 (defaults to the short commit SHA when empty)'
+        required: false
+        default: ''
+      platform:
+        description: 'Target CPU architecture (amd64 or arm64)'
+        required: false
+        default: 'amd64'
+      tag_suffix:
+        description: 'Suffix appended to every image tag, e.g. arm64 (leave empty for the default arch)'
+        required: false
+        default: ''
+      runner:
+        description: 'Runner label, e.g. ubuntu-24.04-arm for a native arm64 build'
+        required: false
+        default: 'ubuntu-latest'
+      assemble_manifests:
+        description: "Skip image builds and only assemble multi-arch manifests from already-pushed '<tag>-amd64'/'<tag>-arm64' tags"
+        required: false
+        default: 'false'
 
 jobs:
   build-docker-images:
-    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_call' || inputs.assemble_manifests != 'true'
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -33,20 +56,28 @@ jobs:
 
     - name: Determine version
       id: version
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
+        validate() {
           # Validate the grammar up front (the version flows into docker build/push
-          # command lines inside build.py), so a non-semver tag fails here with a
+          # command lines inside build.py), so a bad version fails here with a
           # clear message. The leading 'v' is allowed here; build.py strips it.
-          if ! echo "$VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "derived version '$VERSION' is not [v]X.Y.Z[-suffix]; tag a semver release" >&2
+          if ! echo "$1" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "derived version '$1' is not [v]X.Y.Z[-suffix]; tag a semver release or pass a valid version input" >&2
             exit 1
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        }
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          validate "$VERSION"
+        elif [[ -n "$INPUT_VERSION" ]]; then
+          VERSION="$INPUT_VERSION"
+          validate "$VERSION"
         else
-          echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          VERSION=$(git rev-parse --short HEAD)
         fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
     # Note: the version (and the Docker Hub username) are passed through environment
     # variables instead of direct ${{ }} interpolation into the run block, so that a
@@ -55,9 +86,84 @@ jobs:
       env:
         VERSION: ${{ steps.version.outputs.VERSION }}
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        PLATFORM: ${{ inputs.platform || 'amd64' }}
+        TAG_SUFFIX: ${{ inputs.tag_suffix }}
       run: |
-        python build-tools/docker/build.py --push --docker-hub-user "$DOCKERHUB_USERNAME" \
-          --version "$VERSION" --latest
+        args=(--push --docker-hub-user "$DOCKERHUB_USERNAME" \
+              --version "$VERSION" --latest --platform "$PLATFORM")
+        if [[ -n "$TAG_SUFFIX" ]]; then
+          args+=(--tag_suffix "$TAG_SUFFIX")
+        fi
+        python build-tools/docker/build.py "${args[@]}"
 
     env:
       DOCKER_BUILDKIT: 1
+
+  # Registry-side assembly of multi-arch manifest lists from images that were
+  # pushed earlier by separate per-arch dispatches of the build job above
+  # ("--platform arm64 --tag_suffix arm64"). Nothing is rebuilt: "docker
+  # buildx imagetools create" only references already-pushed manifests. Runs
+  # from the default branch via "gh workflow run ... --ref <branch>": GitHub
+  # validates the workflow registration against the default branch but reads
+  # the file content from the dispatched ref.
+  assemble-manifests:
+    if: github.event_name == 'workflow_dispatch' && inputs.assemble_manifests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Assemble and push multi-arch manifests
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      run: |
+        set -euo pipefail
+
+        VERSION="${INPUT_VERSION#v}"
+        if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+          echo "invalid version '$INPUT_VERSION'; expected [v]X.Y.Z[-suffix]" >&2
+          exit 1
+        fi
+
+        assemble() {
+          local repo="$1" tag="$2"
+          # Snapshot the existing (historically amd64-only) manifest under an
+          # explicit arch tag, unless it's already there (idempotent re-runs).
+          if ! docker buildx imagetools inspect "$repo:$tag-amd64" >/dev/null 2>&1; then
+            docker buildx imagetools create -t "$repo:$tag-amd64" "$repo:$tag"
+          fi
+          docker buildx imagetools create -t "$repo:$tag" "$repo:$tag-amd64" "$repo:$tag-arm64"
+        }
+
+        # Only the app images are maintained on Docker Hub (build.py's
+        # push_instances pushes these six); the builder/runner-base images
+        # stay local to the CI runner, so there is nothing to assemble for
+        # them.
+        for repo in "$DOCKERHUB_USERNAME/node-daemon" \
+                    "$DOCKERHUB_USERNAME/api-blockchain-scanner-daemon" \
+                    "$DOCKERHUB_USERNAME/api-web-server" \
+                    "$DOCKERHUB_USERNAME/wallet-cli" \
+                    "$DOCKERHUB_USERNAME/wallet-rpc-daemon" \
+                    "$DOCKERHUB_USERNAME/dns-server"; do
+          for tag in "$VERSION" "v$VERSION" latest; do
+            assemble "$repo" "$tag"
+          done
+        done
+
+    - name: Verify manifests
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      run: |
+        VERSION="${INPUT_VERSION#v}"
+        for repo in node-daemon api-blockchain-scanner-daemon api-web-server wallet-cli wallet-rpc-daemon dns-server; do
+          echo "=== $DOCKERHUB_USERNAME/$repo:v$VERSION ==="
+          docker buildx imagetools inspect "$DOCKERHUB_USERNAME/$repo:v$VERSION" | grep -E '^Name:|Platform:' || true
+        done
