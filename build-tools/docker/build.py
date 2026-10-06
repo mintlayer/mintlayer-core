@@ -26,7 +26,18 @@ def get_cargo_version(cargo_toml_path):
     return version
 
 
-def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
+def apply_tag_suffix(tags, tag_suffix):
+    # Append the suffix (e.g. "arm64") to every tag, so that images built for a
+    # non-default architecture never overwrite the tags of the default-arch images.
+    if not tag_suffix:
+        return list(tags)
+    return [f"{tag}-{tag_suffix}" for tag in tags]
+
+
+def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platform="amd64", tag_suffix=None):
+    raw_tags = list(tags)
+    tags = apply_tag_suffix(raw_tags, tag_suffix)
+
     # Docker build command
     command = f"docker build"
 
@@ -40,8 +51,7 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
     if num_jobs:
         command += f" --build-arg NUM_JOBS={num_jobs}"
 
-    # Force the amd64 platform in case we're building on an arm-based one.
-    command += " --platform linux/amd64"
+    command += f" --platform linux/{platform}"
 
     # Note: "plain" output is more verbose, but it makes it easier to understand what went wrong
     # when a problem occurs.
@@ -55,6 +65,24 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None):
     except subprocess.CalledProcessError as error:
         print(f"Failed to build {image_name}: {error}")
         exit(1) # stop the build
+
+    if tag_suffix:
+        # The app images reference "mintlayer-builder:latest" / "mintlayer-runner-base"
+        # without a suffix in their FROM lines. When building for a non-default
+        # architecture, the suffixed base image exists locally but the unsuffixed tag
+        # would be resolved from the registry (where only the amd64 variant exists).
+        # Add a local unsuffixed alias pointing to the image we've just built, so the
+        # subsequent app image builds resolve it locally. These local aliases are never
+        # pushed (push_instances only pushes the suffixed tags), so they cannot
+        # overwrite the registry's default-arch tags.
+        local_alias = f"{image_name}:{raw_tags[0]}"
+        alias_command = f"docker tag {full_tags[0]} {local_alias}"
+        try:
+            subprocess.check_call(alias_command, shell=True)
+            print(f"Tagged {full_tags[0]} locally as {local_alias}.")
+        except subprocess.CalledProcessError as error:
+            print(f"Failed to tag {image_name}: {error}")
+            exit(1) # stop the build
 
 
 def push_docker_image(image_name, tags):
@@ -86,24 +114,24 @@ def delete_docker_image(image_name, version):
         # No need to fail the build here
 
 
-def build_instances(tags, docker_hub_user, num_jobs):
+def build_instances(tags, docker_hub_user, num_jobs, platform="amd64", tag_suffix=None):
     build_docker_image("build-tools/docker/Dockerfile.builder",
-                        "mintlayer-builder", ["latest"], num_jobs)
+                        "mintlayer-builder", ["latest"], num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.runner-base",
-                        "mintlayer-runner-base", ["latest"], num_jobs)
+                        "mintlayer-runner-base", ["latest"], num_jobs, platform, tag_suffix)
 
     build_docker_image("build-tools/docker/Dockerfile.node-daemon",
-                        f"{docker_hub_user}/node-daemon", tags)
+                        f"{docker_hub_user}/node-daemon", tags, num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.api-blockchain-scanner-daemon",
-                        f"{docker_hub_user}/api-blockchain-scanner-daemon", tags)
+                        f"{docker_hub_user}/api-blockchain-scanner-daemon", tags, num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.api-web-server",
-                        f"{docker_hub_user}/api-web-server", tags)
+                        f"{docker_hub_user}/api-web-server", tags, num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.wallet-cli",
-                        f"{docker_hub_user}/wallet-cli", tags)
+                        f"{docker_hub_user}/wallet-cli", tags, num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.wallet-rpc-daemon",
-                        f"{docker_hub_user}/wallet-rpc-daemon", tags)
+                        f"{docker_hub_user}/wallet-rpc-daemon", tags, num_jobs, platform, tag_suffix)
     build_docker_image("build-tools/docker/Dockerfile.dns-server",
-                        f"{docker_hub_user}/dns-server", tags)
+                        f"{docker_hub_user}/dns-server", tags, num_jobs, platform, tag_suffix)
 #    delete_docker_image("mintlayer-builder", "latest")
 
 
@@ -125,6 +153,10 @@ def main():
     parser.add_argument('--version', help='Override version number', default=None)
     parser.add_argument('--num_jobs', help='Number of parallel jobs', default=(os.cpu_count() or 1))
     parser.add_argument('--local_tags', nargs='*', help='Additional tags to apply (these won\'t be pushed)', default=[])
+    parser.add_argument('--platform', choices=['amd64', 'arm64'], default='amd64',
+                        help='Target CPU architecture for the images (the default keeps the historical behavior)')
+    parser.add_argument('--tag_suffix', help='Suffix appended to every built and pushed image tag (e.g. "arm64")',
+                        default=None)
     args = parser.parse_args()
 
     version = args.version if args.version else get_cargo_version(ROOT_CARGO_TOML)
@@ -140,11 +172,12 @@ def main():
     all_tags = args.local_tags + tags_to_push
 
     if args.build:
-        build_instances(all_tags, args.docker_hub_user, args.num_jobs)
+        build_instances(apply_tag_suffix(all_tags, args.tag_suffix), args.docker_hub_user, args.num_jobs,
+                        args.platform, args.tag_suffix)
 
     # Only push the image if the --push flag is provided
     if args.push:
-        push_instances(args.docker_hub_user, tags_to_push)
+        push_instances(args.docker_hub_user, apply_tag_suffix(tags_to_push, args.tag_suffix))
 
 
 if __name__ == "__main__":

@@ -2,10 +2,28 @@ name: Build Docker
 
 on:
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for image tags, e.g. 1.4.1 (defaults to the short commit SHA when empty)'
+        required: false
+        default: ''
+      platform:
+        description: 'Target CPU architecture (amd64 or arm64)'
+        required: false
+        default: 'amd64'
+      tag_suffix:
+        description: 'Suffix appended to every image tag, e.g. arm64 (leave empty for the default arch)'
+        required: false
+        default: ''
+      runner:
+        description: 'Runner label, e.g. ubuntu-24.04-arm for a native arm64 build'
+        required: false
+        default: 'ubuntu-latest'
 
 jobs:
   build-docker-images:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -33,20 +51,28 @@ jobs:
 
     - name: Determine version
       id: version
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
+        validate() {
           # Validate the grammar up front (the version flows into docker build/push
-          # command lines inside build.py), so a non-semver tag fails here with a
+          # command lines inside build.py), so a bad version fails here with a
           # clear message. The leading 'v' is allowed here; build.py strips it.
-          if ! echo "$VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "derived version '$VERSION' is not [v]X.Y.Z[-suffix]; tag a semver release" >&2
+          if ! echo "$1" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "derived version '$1' is not [v]X.Y.Z[-suffix]; tag a semver release or pass a valid version input" >&2
             exit 1
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        }
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          validate "$VERSION"
+        elif [[ -n "$INPUT_VERSION" ]]; then
+          VERSION="$INPUT_VERSION"
+          validate "$VERSION"
         else
-          echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          VERSION=$(git rev-parse --short HEAD)
         fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
     # Note: the version (and the Docker Hub username) are passed through environment
     # variables instead of direct ${{ }} interpolation into the run block, so that a
@@ -55,9 +81,15 @@ jobs:
       env:
         VERSION: ${{ steps.version.outputs.VERSION }}
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        PLATFORM: ${{ inputs.platform || 'amd64' }}
+        TAG_SUFFIX: ${{ inputs.tag_suffix }}
       run: |
-        python build-tools/docker/build.py --push --docker-hub-user "$DOCKERHUB_USERNAME" \
-          --version "$VERSION" --latest
+        args=(--push --docker-hub-user "$DOCKERHUB_USERNAME" \
+              --version "$VERSION" --latest --platform "$PLATFORM")
+        if [[ -n "$TAG_SUFFIX" ]]; then
+          args+=(--tag_suffix "$TAG_SUFFIX")
+        fi
+        python build-tools/docker/build.py "${args[@]}"
 
     env:
       DOCKER_BUILDKIT: 1
