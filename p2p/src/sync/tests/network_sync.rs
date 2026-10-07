@@ -61,8 +61,6 @@ async fn basic(#[case] seed: Seed) {
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 msg_header_count_limit: 10.into(),
                 max_request_blocks_count: 5.into(),
 
@@ -70,6 +68,7 @@ async fn basic(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -305,8 +304,6 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
                 max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
 
@@ -314,6 +311,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -741,8 +739,6 @@ async fn process_block_interference2(#[case] seed: Seed) {
             let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
 
             let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 // Only 1 block in a BlockListRequest is allowed.
                 max_request_blocks_count: 1.into(),
 
@@ -751,6 +747,7 @@ async fn process_block_interference2(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             }));
             let mut node = TestNode::builder(protocol_version)
                 .with_chain_config(chain_config)
@@ -916,8 +913,6 @@ async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed)
         let time_getter = mocked_time_getter_seconds(cur_time);
 
         let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
-            max_fork_downloads_per_peer: Default::default(),
-            fork_download_refill_interval: Default::default(),
             msg_header_count_limit: msg_header_count_limit.into(),
 
             max_request_blocks_count: Default::default(),
@@ -925,6 +920,7 @@ async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed)
             msg_max_locator_count: Default::default(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            ..Default::default()
         }));
 
         let common_blocks = make_new_blocks(

@@ -228,8 +228,6 @@ async fn locator_must_be_from_peers_known_best_block(#[case] seed: Seed) {
         log::debug!("common_blocks_count = {common_blocks_count}");
 
         let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
-            max_fork_downloads_per_peer: Default::default(),
-            fork_download_refill_interval: Default::default(),
             msg_header_count_limit: msg_header_count_limit.into(),
 
             max_request_blocks_count: Default::default(),
@@ -237,6 +235,7 @@ async fn locator_must_be_from_peers_known_best_block(#[case] seed: Seed) {
             msg_max_locator_count: Default::default(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            ..Default::default()
         }));
 
         let node_blocks = make_new_blocks(

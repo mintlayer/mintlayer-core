@@ -65,8 +65,6 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     let max_message_size = 1024;
     let max_message_size_for_peer = max_message_size * 2;
     let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
-        max_fork_downloads_per_peer: Default::default(),
-        fork_download_refill_interval: Default::default(),
         max_message_size: max_message_size.into(),
 
         msg_header_count_limit: Default::default(),
@@ -74,6 +72,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         max_addr_list_response_address_count: Default::default(),
         msg_max_locator_count: Default::default(),
         max_peer_tx_announcements: Default::default(),
+        ..Default::default()
     }));
 
     let mut test_node = TestNode::<Transport>::start(

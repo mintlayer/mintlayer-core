@@ -239,8 +239,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 max_peer_tx_announcements: 1.into(),
 
                 msg_header_count_limit: Default::default(),
@@ -248,6 +246,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
                 max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),

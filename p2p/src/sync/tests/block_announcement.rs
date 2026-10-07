@@ -525,8 +525,6 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
         let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 max_request_blocks_count: 1.into(),
 
                 msg_header_count_limit: Default::default(),
@@ -534,6 +532,7 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -630,8 +629,6 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
         let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 max_request_blocks_count: 1.into(),
 
                 msg_header_count_limit: Default::default(),
@@ -639,6 +636,7 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -732,8 +730,6 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
         let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_fork_downloads_per_peer: Default::default(),
-                fork_download_refill_interval: Default::default(),
                 max_request_blocks_count: 2.into(),
 
                 msg_header_count_limit: Default::default(),
@@ -741,6 +737,7 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
