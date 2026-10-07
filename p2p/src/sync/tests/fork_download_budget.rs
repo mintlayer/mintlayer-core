@@ -52,7 +52,10 @@ use crate::{
 
 /// A short refill interval makes the tests faster, since the retry timer is driven by the
 /// real tokio clock while the budget refill itself is driven by the mocked time getter.
-const REFILL_INTERVAL: Duration = Duration::from_secs(60);
+// Kept short so that the budget-retry timer (which runs on the real tokio clock, unlike
+// the mocked one driving the refills) can't stay pending long enough to interleave with
+// the sync loops under a heavily loaded test machine.
+const REFILL_INTERVAL: Duration = Duration::from_secs(2);
 
 fn make_p2p_config(max_fork_downloads_per_peer: usize) -> P2pConfig {
     test_p2p_config_with_protocol_config(ProtocolConfig {
