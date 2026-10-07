@@ -50,11 +50,10 @@ use crate::{
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
 };
 
-/// A short refill interval makes the tests faster, since the retry timer is driven by the
-/// real tokio clock while the budget refill itself is driven by the mocked time getter.
-// Kept short so that the budget-retry timer (which runs on the real tokio clock, unlike
-// the mocked one driving the refills) can't stay pending long enough to interleave with
-// the sync loops under a heavily loaded test machine.
+// The retry timer for deferred header lists runs on the real tokio clock and sleeps for
+// this interval, while the budget refill itself is driven by the mocked time getter.
+// Keeping the interval short bounds the real-time wait each exhaustion test incurs and
+// limits how far a firing timer can lag behind the mocked clock under load.
 const REFILL_INTERVAL: Duration = Duration::from_secs(2);
 
 fn make_p2p_config(max_fork_downloads_per_peer: usize) -> P2pConfig {
@@ -249,10 +248,15 @@ async fn tip_anchored_fork_variants_are_budget_limited(#[case] seed: Seed) {
         }
         nodes.exchange_block_sync_messages(&mut rng).await;
 
-        // Produce 5 valid forks that all start at the same parent (one block below the
-        // common tip of the nodes). Each fork consists of 2 blocks: a sibling of the
-        // current tip and its child, which outcompetes the current tip. Every such fork is
-        // announced to `node1` as a tip-anchored header list. All of them must be deferred.
+        // Produce 5 consecutive 2-block forks. `make_new_top_blocks_return_headers`
+        // anchors each call at node2's current best block minus one, and each fork's
+        // child outcompetes the previous tip, so fork i >= 2 extends the previous fork's
+        // first block, which `node1` hasn't accepted (its announcement was deferred).
+        // Only the first list is thus genuinely tip-anchored with respect to `node1`;
+        // the later ones would fail the anchor check if they ever reached it. They
+        // can't: the budget is charged before the anchoring check, so every list here
+        // is deferred (and nothing is punished), which is exactly the ordering this
+        // test pins down.
         let mut variant_ids = Vec::new();
         for _ in 0..5 {
             let headers = make_new_top_blocks_return_headers(
