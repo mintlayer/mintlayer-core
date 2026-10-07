@@ -96,18 +96,18 @@ fn make_chain(
     time_getter: &BasicTestTimeGetter,
     rng: &mut impl randomness::Rng,
 ) -> Vec<Block> {
-    let mut last_block = prev_blocks.last().cloned();
+    let mut last_block = prev_blocks.last();
     let mut new_blocks = Vec::with_capacity(count);
     for _ in 0..count {
         let block = make_new_block(
             chain_config,
-            last_block.as_ref(),
+            last_block,
             &time_getter.get_time_getter(),
             rng,
         );
         time_getter.advance_time(Duration::from_secs(60));
         new_blocks.push(block);
-        last_block = Some(new_blocks.last().unwrap().clone());
+        last_block = new_blocks.last();
     }
     new_blocks
 }
