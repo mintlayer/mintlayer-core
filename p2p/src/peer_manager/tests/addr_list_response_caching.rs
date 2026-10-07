@@ -238,6 +238,8 @@ async fn basic_test(#[case] seed: Seed) {
 fn make_p2p_config() -> P2pConfig {
     P2pConfig {
         protocol_config: ProtocolConfig {
+            max_fork_downloads_per_peer: Default::default(),
+            fork_download_refill_interval: Default::default(),
             // Note: with the default value we'd have to switch off the extra test checks
             // in address tables, because the test would take forever to complete.
             max_addr_list_response_address_count: 10.into(),

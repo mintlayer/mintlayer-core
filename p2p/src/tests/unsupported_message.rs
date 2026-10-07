@@ -65,6 +65,8 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
     let max_message_size = 1024;
     let max_message_size_for_peer = max_message_size * 2;
     let p2p_config = Arc::new(test_p2p_config_with_protocol_config(ProtocolConfig {
+        max_fork_downloads_per_peer: Default::default(),
+        fork_download_refill_interval: Default::default(),
         max_message_size: max_message_size.into(),
 
         msg_header_count_limit: Default::default(),
