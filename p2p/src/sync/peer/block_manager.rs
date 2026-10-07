@@ -63,6 +63,8 @@ use crate::{
     utils::oneshot_nofail,
 };
 
+use super::fork_download_budget::ForkDownloadBudget;
+
 #[derive(Debug, Clone)]
 pub enum PeerBlockSyncManagerLocalEvent {
     /// Chainstate got new tip.
@@ -94,6 +96,19 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
     /// of headers less than the maximum. This is the signal to the peer that we have no more
     /// headers, so it may not ask us for more of them in the future.
     have_sent_all_headers: bool,
+    /// A per-peer budget limiting the total amount of fork (non-tip) block downloads that
+    /// this peer can cause us to perform. See `ForkDownloadBudget` for the rationale.
+    fork_download_budget: ForkDownloadBudget,
+    /// The number of consecutive header lists that contained no new headers while claiming
+    /// (by their size) that the peer may have more of them. Used to stop serving peers that
+    /// keep sending already-known header lists, which would otherwise make us issue header
+    /// requests forever, at no cost to them.
+    consecutive_known_full_header_lists: u32,
+    /// If set, a header list has been deferred due to the fork download budget and we
+    /// should ask the peer for its headers again once the given time is reached. Without
+    /// this, a deferred list would never be fetched unless the peer re-announces, which
+    /// cannot be relied upon (e.g. a quiet upstream).
+    fork_budget_retry_at: Option<Time>,
 }
 
 struct IncomingDataState {
@@ -136,6 +151,11 @@ where
         local_event_receiver: UnboundedReceiver<PeerBlockSyncManagerLocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
+        let fork_download_budget = ForkDownloadBudget::new(
+            *p2p_config.protocol_config.max_fork_downloads_per_peer,
+            *p2p_config.protocol_config.fork_download_refill_interval,
+            time_getter.get_time(),
+        );
         Self {
             id: id.into(),
             chain_config,
@@ -159,6 +179,9 @@ where
             },
             peer_activity: PeerActivity::new(),
             have_sent_all_headers: false,
+            fork_download_budget,
+            consecutive_known_full_header_lists: 0,
+            fork_budget_retry_at: None,
         }
     }
 
@@ -209,6 +232,21 @@ where
 
                 _ = tokio::time::sleep(stalling_timeout),
                     if self.peer_activity.earliest_expected_activity_time().is_some() => {}
+
+                _ = async {
+                    let retry_at = self
+                        .fork_budget_retry_at
+                        .expect("Fork budget retry time must be set");
+                    let now = self.time_getter.get_time();
+                    tokio::time::sleep(retry_at.saturating_sub(now)).await;
+                },
+                    if self.fork_budget_retry_at.is_some() => {
+                    self.fork_budget_retry_at = None;
+                    log::debug!("Retrying a header request after a fork download budget deferral");
+                    if self.common_services.has_service(Service::Blocks) {
+                        self.request_headers().await?;
+                    }
+                }
             }
 
             self.handle_sync_status_change(&last_sync_status)?;
@@ -663,6 +701,43 @@ where
             .expect("Headers shouldn't be empty")
             .prev_block_id();
 
+        // Downloading and validating the blocks behind announced headers is expensive.
+        // To prevent a peer from making us perform an unbounded amount of such work over
+        // time (e.g. by repeatedly announcing distinct header chains that don't extend our
+        // tip), every header list costs tokens from the peer's download budget, and a list
+        // is only processed while the budget can pay for it. Everything sent during the
+        // initial block download is exempt, so that the budget cannot stall node bootstrap.
+        // Note that this must apply to tip-anchored lists as well: a malicious miner can
+        // produce an unlimited number of distinct valid children of our tip, so exempting
+        // them would leave the aforementioned attack open. Honest tip announcements are
+        // tiny (a few headers per new block) compared to the budget capacity, so they are
+        // unaffected in practice.
+        if !self.chainstate_handle.call(|c| Ok(c.is_initial_block_download())).await? {
+            let headers_count = headers.len();
+            if !self.fork_download_budget.try_take(headers_count, self.time_getter.get_time()) {
+                log::info!(
+                    "Deferring the processing of a header list of {headers_count} headers:\
+                     the peer's fork download budget is exhausted"
+                );
+                // No error is returned and no ban score is issued: the peer hasn't violated
+                // the protocol, it has merely exhausted a resource quota. Also note that
+                // `expecting_headers_since` has already been reset at the beginning of this
+                // function, so this deferral cannot be mistaken for peer stalling.
+                //
+                // Schedule a header request retry for when the budget is likely to have
+                // recovered. This is what makes the deferral safe for liveness: without it,
+                // the deferred data would only be fetched if the peer re-announced it. The
+                // retry is a regular header request, so it's rate-limited by the refill
+                // interval and is subject to the budget itself.
+                self.fork_budget_retry_at =
+                    Some(self.time_getter.get_time().saturating_duration_add(
+                        *self.p2p_config.protocol_config.fork_download_refill_interval,
+                    ));
+                return Ok(());
+            }
+            self.fork_budget_retry_at = None;
+        }
+
         // Note: we require a peer to send headers starting from a block that we already have
         // in our chainstate. I.e. we don't allow:
         // 1) Basing new headers on a previously sent header, because this would give a malicious
@@ -741,11 +816,32 @@ where
 
         if new_block_headers.is_empty() {
             if peer_may_have_more_headers {
-                self.request_headers().await?;
+                // A peer that keeps sending us already-known header lists while claiming that
+                // it may have more of them would otherwise make us issue header requests
+                // forever, at no cost to itself. After a few such lists in a row, stop
+                // requesting until the peer sends us something actually new. This is not a
+                // protocol violation, so the peer isn't punished; any new headers reset the
+                // counter.
+                const MAX_CONSECUTIVE_KNOWN_FULL_HEADER_LISTS: u32 = 3;
+                self.consecutive_known_full_header_lists =
+                    self.consecutive_known_full_header_lists.saturating_add(1);
+                if self.consecutive_known_full_header_lists
+                    <= MAX_CONSECUTIVE_KNOWN_FULL_HEADER_LISTS
+                {
+                    self.request_headers().await?;
+                } else {
+                    log::info!(
+                        "Not requesting more headers from the peer:\
+                         it keeps sending already-known header lists"
+                    );
+                }
+            } else {
+                self.consecutive_known_full_header_lists = 0;
             }
             return Ok(());
         }
 
+        self.consecutive_known_full_header_lists = 0;
         self.request_blocks(new_block_headers)
     }
 
