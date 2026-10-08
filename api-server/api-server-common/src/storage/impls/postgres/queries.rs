@@ -97,6 +97,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::TxGlobalIndexTooHigh(tx_global_index))
     }
 
+    /// An offset that doesn't fit a bigint is past the end of any result set.
+    /// Postgres rejects a negative OFFSET, so callers map overflow to an empty
+    /// page instead of wrapping.
+    fn offset_to_bigint(offset: u64) -> Option<i64> {
+        i64::try_from(offset).ok()
+    }
+
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
         let query_str = Self::get_table_exists_query("misc_data");
         let row_count = self
@@ -508,9 +515,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         let len = len as i64;
@@ -1721,9 +1726,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         self.tx
@@ -1769,9 +1772,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         self.tx
@@ -1944,9 +1945,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         let rows = self
@@ -2555,9 +2554,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         self.tx
@@ -2593,9 +2590,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         let escaped_ticker = escape_for_like(ticker);
@@ -3023,9 +3018,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         self.tx
@@ -3060,9 +3053,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;
-        // An offset too big for a bigint is past the end of any result set. Postgres rejects
-        // a negative OFFSET, so return an empty page rather than let the cast wrap.
-        let Ok(offset) = i64::try_from(offset) else {
+        let Some(offset) = Self::offset_to_bigint(offset) else {
             return Ok(Vec::new());
         };
         self.tx

@@ -53,6 +53,13 @@ impl PartialOrd for TokenTransactionOrderedByTxId {
     }
 }
 
+/// An offset that doesn't fit a usize is past the end of any in-memory result set.
+/// Skipping by usize::MAX yields an empty page instead of wrapping to a small number
+/// (which would return the first page) on targets with a narrower pointer width.
+fn offset_to_usize(offset: u64) -> usize {
+    usize::try_from(offset).unwrap_or(usize::MAX)
+}
+
 impl Ord for TokenTransactionOrderedByTxId {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.tx_id.cmp(&other.0.tx_id)
@@ -212,7 +219,7 @@ impl ApiServerInMemoryStorage {
                         txs.sort_by_key(|tx| std::cmp::Reverse(tx.tx_global_index));
                         txs
                     })
-                    .skip(offset as usize)
+                    .skip(offset_to_usize(offset))
                     .cloned()
                     .take(len as usize)
                     .collect()
@@ -265,7 +272,7 @@ impl ApiServerInMemoryStorage {
                     },
                 )
             })
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .collect())
     }
@@ -457,7 +464,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
 
         if offset >= self.orders_table.len() {
             return Ok(vec![]);
@@ -490,7 +497,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
 
         let mut order_data: Vec<_> = self
             .orders_table
@@ -524,7 +531,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
         let mut pool_data: Vec<_> = self
             .pool_data_table
             .iter()
@@ -555,7 +562,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
         let mut pool_data: Vec<_> = self
             .pool_data_table
             .iter()
@@ -750,7 +757,7 @@ impl ApiServerInMemoryStorage {
             .fungible_token_data
             .keys()
             .chain(self.nft_token_issuances.keys())
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .copied()
             .collect())
@@ -781,7 +788,7 @@ impl ApiServerInMemoryStorage {
                     String::from_utf8_lossy(value_ticker).to_ascii_lowercase();
                 (lowercased_value_ticker.contains(&lowercased_ticker)).then_some(key)
             }))
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .copied()
             .collect())
