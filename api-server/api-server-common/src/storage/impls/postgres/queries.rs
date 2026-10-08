@@ -506,9 +506,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
+        // An offset too big for a bigint is past the end of any result set. Postgres rejects
+        // a negative OFFSET, so return an empty page rather than let the cast wrap.
+        let Ok(offset) = i64::try_from(offset) else {
+            return Ok(Vec::new());
+        };
         let len = len as i64;
         let rows = self
             .tx
@@ -516,11 +520,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     SELECT tx_global_index, transaction_id
                     FROM ml.token_transactions
-                    WHERE token_id = $1 AND tx_global_index < $2
+                    WHERE token_id = $1
                     ORDER BY tx_global_index DESC
+                    OFFSET $2
                     LIMIT $3;
                 "#,
-                &[&token_id.encode(), &tx_global_index, &len],
+                &[&token_id.encode(), &offset, &len],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

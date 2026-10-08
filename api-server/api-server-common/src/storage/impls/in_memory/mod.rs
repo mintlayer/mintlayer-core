@@ -198,7 +198,7 @@ impl ApiServerInMemoryStorage {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
         Ok(self
             .token_transactions_table
@@ -212,7 +212,7 @@ impl ApiServerInMemoryStorage {
                         txs.sort_by_key(|tx| std::cmp::Reverse(tx.tx_global_index));
                         txs
                     })
-                    .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
+                    .skip(offset as usize)
                     .cloned()
                     .take(len as usize)
                     .collect()
