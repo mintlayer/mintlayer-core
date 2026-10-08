@@ -652,13 +652,15 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
     /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
-    /// and with a `tx_global_index` older than the specified value.
-    /// The `tx_global_index` is not continuous for a specific `token_id`.
+    /// and starting `offset` entries into the full, newest-first list for the token. An offset
+    /// greater than or equal to the number of transactions for the token yields an empty page.
+    /// As with the other offset-paginated queries, the cost of a request grows linearly with the
+    /// offset.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError>;
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;

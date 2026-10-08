@@ -1505,7 +1505,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Check count: Issue(1) + Mint(1) = 2
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1597,7 +1597,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Verify Storage: 2 previous + 4 new = 6 transactions
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1638,7 +1638,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     token_txs.insert(tx_spend_id);
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1693,7 +1693,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Verify Storage: Order creation involves the token (in 'Give'), so it should be indexed.
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1743,7 +1743,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Verify Storage: Fill Order should be indexed for the token
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1785,7 +1785,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Verify Storage: Conclude Order should be indexed for the token
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()
@@ -1827,7 +1827,7 @@ async fn token_transactions_storage_check(#[case] seed: Seed) {
     // Verify Storage: Conclude Order should be indexed for the token
     let db_tx = local_state.storage().transaction_ro().await.unwrap();
     let txs = db_tx
-        .get_token_transactions(token_id, 100, u64::MAX)
+        .get_token_transactions(token_id, 100, 0)
         .await
         .unwrap()
         .into_iter()

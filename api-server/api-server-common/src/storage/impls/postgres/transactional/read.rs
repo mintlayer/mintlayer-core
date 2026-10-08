@@ -109,10 +109,10 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_token_transactions(token_id, len, tx_global_index).await?;
+        let res = conn.get_token_transactions(token_id, len, offset).await?;
 
         Ok(res)
     }
