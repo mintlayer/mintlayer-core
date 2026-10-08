@@ -2764,6 +2764,9 @@ where
     assert!(tx.get_token_transactions(token_id, 10, 10).await.unwrap().is_empty());
     assert!(tx.get_token_transactions(token_id, 10, 12345).await.unwrap().is_empty());
     assert!(tx.get_token_transactions(token_id, 10, u64::MAX).await.unwrap().is_empty());
+    // An offset that fits a 64-bit usize but not a 32-bit one must not wrap to a small value
+    // (which would return the first page) on narrow-pointer targets.
+    assert!(tx.get_token_transactions(token_id, 10, 1 << 35).await.unwrap().is_empty());
 
     tx.commit().await.unwrap();
 
