@@ -183,6 +183,7 @@ jobs:
       env:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
+        source packaging/images.env
         ARCH=${{ matrix.arch }}
         docker run --rm --platform linux/$ARCH -v "$PWD":/work -w /work $FEDORA_IMAGE \
           packaging/checks/smoke-rpm.sh dist/Mintlayer_Node_linux_${VERSION}_${ARCH}.rpm mintlayer-node node
@@ -213,10 +214,10 @@ jobs:
 
     # x86_64 leg: arch-matched container (native strip, ldd-based
     # dependencies, help2man man pages), so the package installs natively.
-    # aarch64 leg: the same amd64-only image installs the foreign-arch
-    # package with IgnoreArch and runs the binaries through the qemu binfmt
-    # handlers registered above — the same emulation the deb/rpm legs use
-    # for their arm64 smoke tests.
+    # aarch64 leg: Docker Hub publishes no arm64 Arch image, so
+    # smoke-arch.sh assembles an Arch Linux ARM chroot and installs/runs the
+    # package there through the qemu binfmt handlers registered above — the
+    # same emulation the deb/rpm legs use for their arm64 smoke tests.
     - name: Smoke test Arch packages
       env:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
