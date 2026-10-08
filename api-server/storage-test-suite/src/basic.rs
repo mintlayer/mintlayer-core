@@ -981,28 +981,28 @@ where
         }
 
         let len = 5;
-        let global_idx = 10;
+        let offset = 0;
         let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
         assert_eq!(token_txs, expected_txs);
 
         let len = 5;
-        let global_idx = 5;
+        let offset = 5;
         let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1033,14 +1033,14 @@ where
         }
 
         let len = 5;
-        let global_idx = 200;
+        let offset = 0;
         let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1048,14 +1048,14 @@ where
         assert_eq!(token_txs, expected_txs);
 
         let len = 5;
-        let global_idx = 105;
+        let offset = 5;
         let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1082,20 +1082,21 @@ where
         }
 
         let len = rng.random_range(0..5);
-        let global_idx = rng.random_range(5..=10);
+        let offset = rng.random_range(0..=5);
         let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
-        eprintln!("getting len: {len} < idx {global_idx}");
+            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        eprintln!("getting len: {len}, offset {offset}");
         let expected_token_txs: Vec<_> = token_transactions
             .iter()
             .rev()
             .filter_map(|(idx, tx_id, _)| {
                 let idx = *idx;
-                ((idx) < global_idx).then_some(TokenTransaction {
+                Some(TokenTransaction {
                     tx_global_index: idx,
                     tx_id: *tx_id,
                 })
             })
+            .skip(offset as usize)
             .take(len as usize)
             .collect();
 
