@@ -1084,12 +1084,12 @@ where
         let expected_token_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter_map(|(idx, tx_id, _)| {
+            .map(|(idx, tx_id, _)| {
                 let idx = *idx;
-                Some(TokenTransaction {
+                TokenTransaction {
                     tx_global_index: idx,
                     tx_id: *tx_id,
-                })
+                }
             })
             .skip(offset as usize)
             .take(len as usize)
@@ -2247,7 +2247,6 @@ where
     let token_transactions: Vec<_> = (0..10)
         .map(|idx| {
             let random_tx_id = Id::<Transaction>::random_using(&mut rng);
-            let block_height = BlockHeight::new(idx);
             TokenTransaction {
                 tx_global_index: idx,
                 tx_id: random_tx_id,
@@ -2260,7 +2259,7 @@ where
         tx.set_token_transaction_at_height(
             token_id,
             txn.tx_id,
-            BlockHeight::new(txn.tx_global_index as u64),
+            BlockHeight::new(txn.tx_global_index),
             txn.tx_global_index,
         )
         .await
