@@ -268,7 +268,7 @@ async fn ok(#[case] seed: Seed) {
     let (token_id, expected_transactions) = rx.await.unwrap();
     let num_tx = expected_transactions.len();
 
-    let url = format!("/api/v2/token/{token_id}/transactions?offset=999&items={num_tx}");
+    let url = format!("/api/v2/token/{token_id}/transactions?offset=0&items={num_tx}");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -296,10 +296,7 @@ async fn ok(#[case] seed: Seed) {
     let offset = rng.random_range(1..num_tx);
     let items = num_tx - offset;
 
-    let tx_global_index = &arr_body[offset - 1].get("tx_global_index").unwrap();
-    eprintln!("tx_global_index: '{tx_global_index}'");
-    let url =
-        format!("/api/v2/token/{token_id}/transactions?offset={tx_global_index}&items={items}");
+    let url = format!("/api/v2/token/{token_id}/transactions?offset={offset}&items={items}");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
