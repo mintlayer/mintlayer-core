@@ -16,6 +16,7 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
+    time::Duration,
 };
 
 use itertools::Itertools;
@@ -110,6 +111,11 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
     /// cannot be relied upon (e.g. a quiet upstream).
     fork_budget_retry_at: Option<Time>,
 }
+
+/// How often the block sync manager checks whether a fork download budget retry is due.
+/// Only the due-ness is checked against the (possibly mocked) clock; the interval itself
+/// is fixed so that the check cannot be postponed by other main loop activity.
+const FORK_BUDGET_RETRY_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 struct IncomingDataState {
     /// A list of headers received via the `HeaderList` message that we haven't yet
@@ -233,20 +239,26 @@ where
                 _ = tokio::time::sleep(stalling_timeout),
                     if self.peer_activity.earliest_expected_activity_time().is_some() => {}
 
-                _ = async {
-                    let retry_at = self
-                        .fork_budget_retry_at
-                        .expect("Fork budget retry time must be set");
-                    let now = self.time_getter.get_time();
-                    tokio::time::sleep(retry_at.saturating_sub(now)).await;
-                },
-                    if self.fork_budget_retry_at.is_some() => {
-                    self.fork_budget_retry_at = None;
-                    log::debug!("Retrying a header request after a fork download budget deferral");
-                    if self.common_services.has_service(Service::Blocks) {
-                        self.request_headers().await?;
-                    }
-                }
+                // An unconditional tick: it guarantees the loop wakes up at least once per
+                // interval even when there is no other activity, so that the fork budget
+                // retry deadline check below cannot be postponed indefinitely by idle
+                // waiting. When the loop is busy, the deadline check runs on every
+                // iteration anyway.
+                _ = tokio::time::sleep(FORK_BUDGET_RETRY_POLL_INTERVAL) => {}
+            }
+
+            // A header list deferred due to the fork download budget is retried once the
+            // (possibly mocked) clock passes the scheduled retry time. The check lives in
+            // the loop body rather than in a select! branch, so that a busy message flow
+            // cannot starve it.
+            let is_fork_budget_retry_due = match self.fork_budget_retry_at {
+                Some(retry_at) => self.time_getter.get_time() >= retry_at,
+                None => false,
+            };
+            if is_fork_budget_retry_due && self.common_services.has_service(Service::Blocks) {
+                self.fork_budget_retry_at = None;
+                log::debug!("Retrying a header request after a fork download budget deferral");
+                self.request_headers().await?;
             }
 
             self.handle_sync_status_change(&last_sync_status)?;
@@ -729,13 +741,23 @@ where
                 // the deferred data would only be fetched if the peer re-announced it. The
                 // retry is a regular header request, so it's rate-limited by the refill
                 // interval and is subject to the budget itself.
-                self.fork_budget_retry_at =
-                    Some(self.time_getter.get_time().saturating_duration_add(
-                        *self.p2p_config.protocol_config.fork_download_refill_interval,
-                    ));
+                //
+                // Schedule the retry no later than any retry that was already scheduled: a
+                // fresh deferral must not postpone a retry the budget may already have
+                // recovered for. This also keeps the schedule sane when the clock doesn't
+                // advance (as with a mocked time getter in tests).
+                let retry_at_candidate = self.time_getter.get_time().saturating_duration_add(
+                    *self.p2p_config.protocol_config.fork_download_refill_interval,
+                );
+                self.fork_budget_retry_at = Some(match self.fork_budget_retry_at {
+                    Some(existing) => existing.min(retry_at_candidate),
+                    None => retry_at_candidate,
+                });
+                // Note: the retry is deliberately left armed here. This charge may be for a
+                // list different from the one the pending retry was scheduled for, and a
+                // deferred list can only be recovered through that retry.
                 return Ok(());
             }
-            self.fork_budget_retry_at = None;
         }
 
         // Note: we require a peer to send headers starting from a block that we already have
