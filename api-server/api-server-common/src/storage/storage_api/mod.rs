@@ -621,6 +621,8 @@ pub trait ApiServerStorageRead: Sync {
     /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
     /// and starting `offset` entries into the full, newest-first list for the token. An offset
     /// greater than or equal to the number of transactions for the token yields an empty page.
+    /// As with the other offset-paginated queries, the cost of a request grows linearly with the
+    /// offset.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
