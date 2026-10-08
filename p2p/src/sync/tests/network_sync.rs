@@ -68,6 +68,7 @@ async fn basic(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -310,6 +311,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -745,6 +747,7 @@ async fn process_block_interference2(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             }));
             let mut node = TestNode::builder(protocol_version)
                 .with_chain_config(chain_config)
@@ -917,6 +920,7 @@ async fn no_infinite_stalling_when_first_locator_cant_locate(#[case] seed: Seed)
             msg_max_locator_count: Default::default(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            ..Default::default()
         }));
 
         let common_blocks = make_new_blocks(
