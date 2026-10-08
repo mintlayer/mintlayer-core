@@ -982,8 +982,7 @@ where
 
         let len = 5;
         let offset = 0;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
@@ -996,8 +995,7 @@ where
 
         let len = 5;
         let offset = 5;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
@@ -1034,8 +1032,7 @@ where
 
         let len = 5;
         let offset = 0;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
@@ -1049,8 +1046,7 @@ where
 
         let len = 5;
         let offset = 5;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
@@ -1083,8 +1079,7 @@ where
 
         let len = rng.random_range(0..5);
         let offset = rng.random_range(0..=5);
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
         eprintln!("getting len: {len}, offset {offset}");
         let expected_token_txs: Vec<_> = token_transactions
             .iter()
@@ -2699,6 +2694,83 @@ fn random_order(
     (order_id, order)
 }
 
+/// The offset passed to `get_token_transactions` skips over the newest entries of the token's
+/// transaction list, matching the skip-N semantics of the offset parameter the HTTP API passes:
+/// offset 0 starts at the newest transaction, and an offset at or past the end of the list
+/// yields an empty page.
+pub async fn token_transactions_offset_paging<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+    let token_id = TokenId::random_using(&mut rng);
+    let mut storage = storage_maker().await;
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        let chain_config = create_unit_test_config();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    // 10 transactions for the token, with continuous tx_global_index values 0..10.
+    let token_transactions: Vec<_> = (0..10)
+        .map(|idx| {
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+            let block_height = BlockHeight::new(idx);
+            TokenTransaction {
+                tx_global_index: idx,
+                tx_id: random_tx_id,
+            }
+        })
+        .collect();
+
+    let mut tx = storage.transaction_rw().await.unwrap();
+    for txn in &token_transactions {
+        tx.set_token_transaction_at_height(
+            token_id,
+            txn.tx_id,
+            BlockHeight::new(txn.tx_global_index as u64),
+            txn.tx_global_index,
+        )
+        .await
+        .unwrap();
+    }
+
+    let newest_first: Vec<_> = token_transactions.iter().rev().cloned().collect();
+
+    // Default paging (offset 0) returns the newest transactions first.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 10, 0).await.unwrap(),
+        newest_first
+    );
+
+    // The page length is respected.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 2, 0).await.unwrap(),
+        newest_first[..2]
+    );
+
+    // The offset skips over the newest entries.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 4, 3).await.unwrap(),
+        &newest_first[3..7]
+    );
+
+    // An offset at or past the end of the list yields an empty page, however large.
+    assert!(tx.get_token_transactions(token_id, 10, 10).await.unwrap().is_empty());
+    assert!(tx.get_token_transactions(token_id, 10, 12345).await.unwrap().is_empty());
+    assert!(tx.get_token_transactions(token_id, 10, u64::MAX).await.unwrap().is_empty());
+
+    tx.commit().await.unwrap();
+
+    Ok(())
+}
+
 pub fn build_tests<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
     storage_maker: Arc<F>,
 ) -> impl Iterator<Item = libtest_mimic::Trial>
@@ -2709,6 +2781,7 @@ where
     vec![
         make_test!(initialization, storage_maker.clone()),
         make_test!(set_get, storage_maker.clone()),
+        make_test!(token_transactions_offset_paging, storage_maker.clone()),
         make_test!(pool_data_keyset, storage_maker.clone()),
         make_test!(top_address_amounts, storage_maker.clone()),
         make_test!(order_book_entries, storage_maker.clone()),
