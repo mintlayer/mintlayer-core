@@ -17,7 +17,7 @@ on:
         required: false
         default: ''
       runner:
-        description: 'Runner label, e.g. ubuntu-24.04-arm for a native arm64 build'
+        description: 'Runner label; only ubuntu-24.04 / ubuntu-24.04-arm are honored, anything else falls back to ubuntu-latest'
         required: false
         default: 'ubuntu-latest'
       assemble_manifests:
@@ -25,16 +25,29 @@ on:
         required: false
         default: 'false'
 
+# The workflow only checks out code and pushes images to Docker Hub via the
+# DOCKERHUB_* secrets; it never needs more than read access to the repository.
+permissions:
+  contents: read
+
 jobs:
   build-docker-images:
     if: github.event_name == 'workflow_call' || inputs.assemble_manifests != 'true'
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    # Explicit bound below the 360-minute GitHub default, with headroom for
+    # slow native arm64 builds; a stuck build releases the runner in 4h.
+    timeout-minutes: 240
+    # Allowlist the runner label: a free-form `runs-on:` would let anyone with
+    # workflow-dispatch rights route this build (and its Docker Hub secrets)
+    # to an arbitrary, possibly untrusted runner.
+    runs-on: ${{ (inputs.runner == 'ubuntu-24.04' || inputs.runner == 'ubuntu-24.04-arm') && inputs.runner || 'ubuntu-latest' }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version-file: './build-tools/.python-version'
 
@@ -45,11 +58,11 @@ jobs:
     #     # Install any other dependencies your script might need
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
     - name: Login to Docker Hub
       if: github.event_name != 'pull_request'
-      uses: docker/login-action@v2
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -89,6 +102,16 @@ jobs:
         PLATFORM: ${{ inputs.platform || 'amd64' }}
         TAG_SUFFIX: ${{ inputs.tag_suffix }}
       run: |
+        # Validate the suffix up front: it flows into image tags on docker
+        # command lines, so anything outside the Docker tag grammar must fail
+        # here with a clear message instead of producing a broken (or
+        # hostile) tag. The bash regex matches the whole value (grep would
+        # match line by line and pass a multi-line suffix). build.py validates
+        # it again for standalone use.
+        if [[ -n "$TAG_SUFFIX" ]] && ! [[ "$TAG_SUFFIX" =~ ^[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,127})?$ ]]; then
+          echo "invalid tag_suffix '$TAG_SUFFIX'; expected [a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}" >&2
+          exit 1
+        fi
         args=(--push --docker-hub-user "$DOCKERHUB_USERNAME" \
               --version "$VERSION" --latest --platform "$PLATFORM")
         if [[ -n "$TAG_SUFFIX" ]]; then
@@ -108,13 +131,22 @@ jobs:
   # the file content from the dispatched ref.
   assemble-manifests:
     if: github.event_name == 'workflow_dispatch' && inputs.assemble_manifests == 'true'
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    # Serialize registry mutations for the same version: overlapping dispatches
+    # would interleave the inspect/create check-then-act sequence below and can
+    # repoint tags from inconsistent digests. Pending runs queue instead.
+    concurrency:
+      group: assemble-manifests-${{ inputs.version }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
     - name: Login to Docker Hub
-      uses: docker/login-action@v2
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -134,9 +166,23 @@ jobs:
 
         assemble() {
           local repo="$1" tag="$2"
+          local amd64_ready=0
+          # Pre-flight: confirm every source manifest before mutating
+          # anything, so a missing image fails the job here instead of
+          # leaving this tag half-assembled (part of the per-arch tags
+          # created, the base tag already repointed).
+          docker buildx imagetools inspect "$repo:$tag-amd64" >/dev/null 2>&1 && amd64_ready=1
+          if [ "$amd64_ready" -eq 0 ] && ! docker buildx imagetools inspect "$repo:$tag" >/dev/null 2>&1; then
+            echo "neither $repo:$tag-amd64 nor $repo:$tag found; push the amd64 images first" >&2
+            exit 1
+          fi
+          if ! docker buildx imagetools inspect "$repo:$tag-arm64" >/dev/null 2>&1; then
+            echo "$repo:$tag-arm64 not found; push the arm64 images first" >&2
+            exit 1
+          fi
           # Snapshot the existing (historically amd64-only) manifest under an
           # explicit arch tag, unless it's already there (idempotent re-runs).
-          if ! docker buildx imagetools inspect "$repo:$tag-amd64" >/dev/null 2>&1; then
+          if [ "$amd64_ready" -eq 0 ]; then
             docker buildx imagetools create -t "$repo:$tag-amd64" "$repo:$tag"
           fi
           docker buildx imagetools create -t "$repo:$tag" "$repo:$tag-amd64" "$repo:$tag-arm64"
@@ -165,5 +211,21 @@ jobs:
         VERSION="${INPUT_VERSION#v}"
         for repo in node-daemon api-blockchain-scanner-daemon api-web-server wallet-cli wallet-rpc-daemon dns-server; do
           echo "=== $DOCKERHUB_USERNAME/$repo:v$VERSION ==="
-          docker buildx imagetools inspect "$DOCKERHUB_USERNAME/$repo:v$VERSION" | grep -E '^Name:|Platform:' || true
+          # A missing manifest must fail the job: reporting success here would
+          # defeat the purpose of the check.
+          if ! output="$(docker buildx imagetools inspect "$DOCKERHUB_USERNAME/$repo:v$VERSION")"; then
+            echo "manifest for $DOCKERHUB_USERNAME/$repo:v$VERSION is missing" >&2
+            exit 1
+          fi
+          echo "$output" | grep -E '^Name:|Platform:'
+          # Both architectures must be present in the manifest list; a stale
+          # single-arch tag must fail the job instead of shipping silently.
+          for platform in linux/amd64 linux/arm64; do
+            # imagetools output is tabwriter-aligned ("Platform:    linux/amd64"),
+            # so tolerate any run of whitespace after the colon.
+            if ! grep -Eq "Platform:[[:space:]]+$platform" <<<"$output"; then
+              echo "manifest for $DOCKERHUB_USERNAME/$repo:v$VERSION lacks $platform" >&2
+              exit 1
+            fi
+          done
         done

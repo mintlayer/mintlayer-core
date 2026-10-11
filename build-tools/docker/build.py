@@ -1,6 +1,7 @@
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 import tomllib
 
@@ -38,29 +39,29 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platfor
     raw_tags = list(tags)
     tags = apply_tag_suffix(raw_tags, tag_suffix)
 
-    # Docker build command
-    command = f"docker build"
+    command = ["docker", "build"]
 
     full_tags = [image_name] if len(tags) == 0 else [f"{image_name}:{tag}" for tag in tags];
 
     for full_tag in full_tags:
-        command += f" -t {full_tag}"
+        command += ["-t", full_tag]
 
-    command += f" -f {dockerfile_path}"
+    command += ["-f", str(dockerfile_path)]
 
     if num_jobs:
-        command += f" --build-arg NUM_JOBS={num_jobs}"
+        command += ["--build-arg", f"NUM_JOBS={num_jobs}"]
 
-    command += f" --platform linux/{platform}"
+    command += ["--platform", f"linux/{platform}"]
 
     # Note: "plain" output is more verbose, but it makes it easier to understand what went wrong
     # when a problem occurs.
-    command += " --progress=plain"
-    command += " ."
+    command += ["--progress=plain"]
+    command += ["."]
 
     try:
-        # Run the command
-        subprocess.check_call(command, shell=True, cwd=ROOT_DIR)
+        # Run the command. An argument list (no shell) keeps every tag and path
+        # literal, so a crafted version/suffix cannot inject shell commands.
+        subprocess.check_call(command, cwd=ROOT_DIR)
         print(f"Built {image_name} successfully (the tags are: {full_tags}).")
     except subprocess.CalledProcessError as error:
         print(f"Failed to build {image_name}: {error}")
@@ -76,9 +77,9 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platfor
         # pushed (push_instances only pushes the suffixed tags), so they cannot
         # overwrite the registry's default-arch tags.
         local_alias = f"{image_name}:{raw_tags[0]}"
-        alias_command = f"docker tag {full_tags[0]} {local_alias}"
+        alias_command = ["docker", "tag", full_tags[0], local_alias]
         try:
-            subprocess.check_call(alias_command, shell=True)
+            subprocess.check_call(alias_command)
             print(f"Tagged {full_tags[0]} locally as {local_alias}.")
         except subprocess.CalledProcessError as error:
             print(f"Failed to tag {image_name}: {error}")
@@ -88,10 +89,11 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platfor
 def push_docker_image(image_name, tags):
     for tag in tags:
         full_image_name = f"{image_name}:{tag}"
-        push_command = f"docker push {full_image_name}"
+
+        push_command = ["docker", "push", full_image_name]
 
         try:
-            subprocess.check_call(push_command, shell=True)
+            subprocess.check_call(push_command)
             print(f"Pushed {full_image_name} successfully.")
         except subprocess.CalledProcessError as error:
             print(f"Failed to push {full_image_name}: {error}")
@@ -103,11 +105,11 @@ def delete_docker_image(image_name, version):
     full_image_name = f"{image_name}:{version}"
 
     # Docker rmi command
-    command = f"docker rmi {full_image_name}"
+    command = ["docker", "rmi", full_image_name]
 
     # Run the command
     try:
-        subprocess.check_call(command, shell=True)
+        subprocess.check_call(command)
         print(f"Deleted {full_image_name} successfully.")
     except subprocess.CalledProcessError as error:
         print(f"Failed to delete {full_image_name}: {error}")
@@ -158,6 +160,19 @@ def main():
     parser.add_argument('--tag_suffix', help='Suffix appended to every built and pushed image tag (e.g. "arm64")',
                         default=None)
     args = parser.parse_args()
+
+    # The suffix lands in image tags on docker command lines; anything outside
+    # the Docker tag grammar must fail here rather than produce a broken or
+    # hostile tag. (The release workflow validates the same input before
+    # invoking this script; this check covers standalone use.)
+    if args.tag_suffix and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", args.tag_suffix):
+        parser.error("--tag_suffix must match [a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}")
+
+    # An unsuffixed non-amd64 push would silently overwrite the registry's
+    # default-arch (amd64) tags, which is exactly what the suffix exists to
+    # prevent.
+    if args.push and args.platform != "amd64" and not args.tag_suffix:
+        parser.error("--tag_suffix is required when --push is used with a --platform other than amd64")
 
     version = args.version if args.version else get_cargo_version(ROOT_CARGO_TOML)
     # Note: the CI currently takes the version from the release tag, so it always starts with "v",
