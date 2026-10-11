@@ -155,12 +155,14 @@ if [ "$CHROOT_MODE" = 1 ]; then
     # functional probe beats grepping help text (help wording is not a stable
     # upstream interface): on pacman >= 6.1 the flag parses and -Sh short-
     # circuits to the sync help with exit 0, needing no database or network.
+    # Probe via pacman_cmd with SMOKE_CHROOT=1 set, so the guard validates
+    # exactly the invocation main() relies on from a single source of truth.
+    SMOKE_CHROOT=1
     probe_out=""
-    if ! probe_out="$(pacman --disable-sandbox -Sh 2>&1)"; then
-        echo "ERROR: chroot pacman probe failed; if it rejected --disable-sandbox, pacman >= 6.1 is required. Probe output: $probe_out" >&2
+    if ! probe_out="$(pacman_cmd -Sh 2>&1)"; then
+        echo "ERROR: chroot pacman probe failed (pacman >= 6.1 required for --disable-sandbox; a broken chroot config produces the same signature). Probe output: $probe_out" >&2
         exit 1
     fi
-    SMOKE_CHROOT=1
     PKG_FILE="$1"
     PKG_NAME="$2"
     KIND="$3"
@@ -195,8 +197,7 @@ if [ -f /proc/sys/fs/binfmt_misc/status ]; then
         echo "ERROR: binfmt_misc is mounted but disabled; emulation would fail at the first exec (enable with: echo 1 > /proc/sys/fs/binfmt_misc/status)" >&2
         exit 1
     fi
-    binfmt_entries="$(ls /proc/sys/fs/binfmt_misc 2>/dev/null || true)"
-    if ! grep -qx qemu-aarch64 <<<"$binfmt_entries"; then
+    if [ ! -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
         echo "ERROR: no qemu-aarch64 binfmt handler on this kernel (registered by docker/setup-qemu-action in release_linux.yml)" >&2
         exit 1
     fi
@@ -238,7 +239,11 @@ if [ -n "${ALARM_ROOTFS_SHA256:-}" ]; then
     echo "WARNING: rootfs pin overridden via ALARM_ROOTFS_SHA256; the sha256 check compares against the overridden value, not the known-good pin" >&2
 fi
 if [ -n "${ALARM_ROOTFS_URL:-}" ]; then
-    echo "WARNING: rootfs source overridden via ALARM_ROOTFS_URL; the sha256 is still checked against the known-good pin" >&2
+    if [ -n "${ALARM_ROOTFS_SHA256:-}" ]; then
+        echo "WARNING: rootfs source overridden via ALARM_ROOTFS_URL; the sha256 is checked against the ALARM_ROOTFS_SHA256 override, not the known-good pin" >&2
+    else
+        echo "WARNING: rootfs source overridden via ALARM_ROOTFS_URL; the sha256 is still checked against the known-good pin" >&2
+    fi
 fi
 rc=1
 while IFS= read -r url; do
@@ -297,8 +302,11 @@ mknod_in_chroot -m 444 "$CHROOT_DIR/dev/random"  c 1 8
 mknod_in_chroot -m 444 "$CHROOT_DIR/dev/urandom" c 1 9
 
 # chroot plumbing the rootfs does not ship: DNS resolution and a mount table
-# (pacman reads /etc/mtab for its free-space check; /proc is not mounted here,
-# so a static copy of the container's table is used).
+# (/proc is not mounted here, so a static copy of the container's table is
+# used). The copy is a best-effort stand-in for tools that read it (df,
+# mount): its entries reference host paths absent from the chroot, and
+# modern pacman derives its free-space check from statvfs() on the target
+# directory, not from mtab.
 rm -f "$CHROOT_DIR/etc/resolv.conf"
 cp -L /etc/resolv.conf "$CHROOT_DIR/etc/resolv.conf"
 rm -f "$CHROOT_DIR/etc/mtab"
@@ -313,7 +321,12 @@ cp /proc/self/mounts "$CHROOT_DIR/etc/mtab"
 # --populate applies ownertrust only from <keyring>-trusted; without it
 # every imported key lands at unknown trust and pacman refuses packages.
 for f in archlinuxarm.gpg archlinuxarm-trusted archlinuxarm-revoked; do
-    cp "$CHROOT_DIR/usr/share/pacman/keyrings/$f" /usr/share/pacman/keyrings/
+    keyring="$CHROOT_DIR/usr/share/pacman/keyrings/$f"
+    if [ ! -f "$keyring" ]; then
+        echo "ERROR: $f missing from the pinned ALARM rootfs; the rootfs layout changed and the pin needs review" >&2
+        exit 1
+    fi
+    cp "$keyring" /usr/share/pacman/keyrings/
 done
 pacman-key --gpgdir "$CHROOT_DIR/etc/pacman.d/gnupg" --init >/dev/null
 pacman-key --gpgdir "$CHROOT_DIR/etc/pacman.d/gnupg" --populate archlinuxarm
