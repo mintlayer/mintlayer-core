@@ -61,3 +61,12 @@ docker run -it --network=mintlayer-net -v ~/.mintlayer:/root/.mintlayer mintlaye
 replace `<NETWORK>` with `mainnet` or `testnet` depending on what network you're running and `<IP_ADDRESS>` with the result of the command above.
 
 This command mounts the same `~/.mintlayer` directory as a volume in the `wallet-cli` container and uses the `--rpc-cookie-file` option to specify the path to the cookie file.
+
+## Multi-arch (amd64 / arm64) images
+
+By default the build produces `linux/amd64` images, exactly as it always has. Two extra knobs exist for building other architectures:
+
+- `build.py --platform arm64` builds `linux/arm64` images (must run on an arm64 machine, e.g. the `ubuntu-24.04-arm` GitHub runner, since the compilation happens inside the container).
+- `build.py --tag_suffix arm64` appends the suffix to every built and pushed tag (e.g. `node-daemon:1.4.1-arm64`), so a non-default architecture never overwrites the default-arch tags.
+
+To assemble the suffixed images into a proper multi-arch manifest list under the unsuffixed tags (`docker pull mintlayer/node-daemon` then auto-selects the architecture), dispatch the **"Assemble multi-arch Docker manifests"** workflow (`release_docker_manifest.yml`) with the release version after both architectures have been pushed.
