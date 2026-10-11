@@ -45,7 +45,7 @@ pub enum Error {
     InvariantNonzeroGiveBalanceForMissingOrder(OrderId),
     #[error("Order overflow: `{0}`")]
     OrderOverflow(OrderId),
-    #[error("Order `{0}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]
+    #[error("Order `{0:x}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]
     OrderOverbid(OrderId, Amount, Amount),
     #[error("Order `{0}` provides amount `{1:?}` that is not enough to fill even a single atom")]
     OrderUnderbid(OrderId, Amount),
@@ -73,5 +73,22 @@ pub type Result<T> = core::result::Result<T, Error>;
 impl From<std::convert::Infallible> for Error {
     fn from(value: std::convert::Infallible) -> Self {
         match value {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common::primitives::H256;
+
+    use super::*;
+
+    #[test]
+    fn order_overbid_displays_full_order_id() {
+        let order_id = OrderId::new(H256::repeat_byte(0xab));
+
+        assert_eq!(
+            Error::OrderOverbid(order_id, Amount::from_atoms(1), Amount::from_atoms(2)).to_string(),
+            "Order `abababababababababababababababababababababababababababababababab` can provide `Amount { atoms: 1 }` amount; but attempted to fill `Amount { atoms: 2 }`"
+        );
     }
 }
