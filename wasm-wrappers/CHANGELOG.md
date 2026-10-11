@@ -6,6 +6,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.1]
+
 ### Added
 - `make_default_account_privkey` now accepts an optional BIP39 passphrase as its third
   argument: `make_default_account_privkey(mnemonic, network, passphrase?)`. The passphrase
