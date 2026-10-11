@@ -32,12 +32,28 @@ permissions:
 
 jobs:
   build-docker-images:
-    if: github.event_name == 'workflow_call' || inputs.assemble_manifests != 'true'
+    # workflow_dispatch builds may push shared mutable tags ('<version>',
+    # 'v<version>', 'latest') with the repo's Docker Hub credentials, so they
+    # are restricted to protected refs; feature-branch dispatches cannot push.
+    # Tag refs are allowed at the same trust level as the release pipeline.
+    if: github.event_name == 'workflow_call' || (inputs.assemble_manifests != 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/v')))
     permissions:
       contents: read
     # Explicit bound below the 360-minute GitHub default, with headroom for
     # slow native arm64 builds; a stuck build releases the runner in 4h.
     timeout-minutes: 240
+    # Serialize ALL registry mutations (builds and assemblies mutate the same
+    # tag space) behind one group. GitHub keeps at most one in-progress and
+    # one pending run per group; a newer run cancels an older PENDING run, so
+    # an overlapping dispatch can drop a queued run — including a release
+    # build from release.yml, and the per-arch flow itself (with amd64
+    # running, queueing arm64 makes it PENDING, and queueing the assembly
+    # then cancels it). Wait for each queued run to finish before dispatching
+    # the next, re-dispatch anything canceled, and re-run release.yml if a
+    # release run fails this way; in-progress runs are never canceled.
+    concurrency:
+      group: docker-release
+      cancel-in-progress: false
     # Allowlist the runner label: a free-form `runs-on:` would let anyone with
     # workflow-dispatch rights route this build (and its Docker Hub secrets)
     # to an arbitrary, possibly untrusted runner.
@@ -75,8 +91,10 @@ jobs:
         validate() {
           # Validate the grammar up front (the version flows into docker build/push
           # command lines inside build.py), so a bad version fails here with a
-          # clear message. The leading 'v' is allowed here; build.py strips it.
-          if ! echo "$1" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+          # clear message. Whole-value match: grep would compare line by line
+          # and pass a multi-line value, which would later expand into several
+          # tag arguments. The leading 'v' is allowed here; build.py strips it.
+          if ! [[ "$1" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "derived version '$1' is not [v]X.Y.Z[-suffix]; tag a semver release or pass a valid version input" >&2
             exit 1
           fi
@@ -84,13 +102,19 @@ jobs:
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           VERSION=${GITHUB_REF#refs/tags/}
           validate "$VERSION"
+          STAMP_LATEST=true
         elif [[ -n "$INPUT_VERSION" ]]; then
           VERSION="$INPUT_VERSION"
           validate "$VERSION"
+          STAMP_LATEST=true
         else
+          # Ad-hoc dispatch default: the short commit SHA. These builds keep
+          # their own tags and must not repoint the production 'latest' tag.
           VERSION=$(git rev-parse --short HEAD)
+          STAMP_LATEST=false
         fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "stamp_latest=$STAMP_LATEST" >> $GITHUB_OUTPUT
 
     # Note: the version (and the Docker Hub username) are passed through environment
     # variables instead of direct ${{ }} interpolation into the run block, so that a
@@ -98,6 +122,7 @@ jobs:
     - name: Build and Push Docker images
       env:
         VERSION: ${{ steps.version.outputs.VERSION }}
+        STAMP_LATEST: ${{ steps.version.outputs.stamp_latest }}
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         PLATFORM: ${{ inputs.platform || 'amd64' }}
         TAG_SUFFIX: ${{ inputs.tag_suffix }}
@@ -113,7 +138,13 @@ jobs:
           exit 1
         fi
         args=(--push --docker-hub-user "$DOCKERHUB_USERNAME" \
-              --version "$VERSION" --latest --platform "$PLATFORM")
+              --version "$VERSION" --platform "$PLATFORM")
+        # 'latest' is stamped only for release versions; the classification
+        # (semver vs commit SHA) happened in 'Determine version', so this
+        # step re-derives no grammar.
+        if [[ "$STAMP_LATEST" == 'true' ]]; then
+          args+=(--latest)
+        fi
         if [[ -n "$TAG_SUFFIX" ]]; then
           args+=(--tag_suffix "$TAG_SUFFIX")
         fi
@@ -130,15 +161,14 @@ jobs:
   # validates the workflow registration against the default branch but reads
   # the file content from the dispatched ref.
   assemble-manifests:
-    if: github.event_name == 'workflow_dispatch' && inputs.assemble_manifests == 'true'
+    if: github.event_name == 'workflow_dispatch' && inputs.assemble_manifests == 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
     timeout-minutes: 60
-    # Serialize registry mutations for the same version: overlapping dispatches
-    # would interleave the inspect/create check-then-act sequence below and can
-    # repoint tags from inconsistent digests. Pending runs queue instead.
+    # Builds and assemblies mutate the same tag space, so both share the
+    # 'docker-release' group (see the build job for the pending-run caveat).
     concurrency:
-      group: assemble-manifests-${{ inputs.version }}
+      group: docker-release
       cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +189,10 @@ jobs:
         set -euo pipefail
 
         VERSION="${INPUT_VERSION#v}"
-        if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+        # Whole-value match: grep would compare line by line and pass a
+        # multi-line value, which would later expand into several tag
+        # arguments.
+        if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
           echo "invalid version '$INPUT_VERSION'; expected [v]X.Y.Z[-suffix]" >&2
           exit 1
         fi
@@ -185,6 +218,14 @@ jobs:
           if [ "$amd64_ready" -eq 0 ]; then
             docker buildx imagetools create -t "$repo:$tag-amd64" "$repo:$tag"
           fi
+          # Provenance: the two sources were pushed by independent dispatches
+          # and can originate from different commits. Full cross-arch
+          # integrity needs image-level attestation; until then, log both
+          # digests so the pairing is auditable after the fact.
+          echo "amd64 digest of $repo:$tag-amd64:"
+          docker buildx imagetools inspect "$repo:$tag-amd64" | grep '^Digest:'
+          echo "arm64 digest of $repo:$tag-arm64:"
+          docker buildx imagetools inspect "$repo:$tag-arm64" | grep '^Digest:'
           docker buildx imagetools create -t "$repo:$tag" "$repo:$tag-amd64" "$repo:$tag-arm64"
         }
 

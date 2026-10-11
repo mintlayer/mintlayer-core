@@ -67,7 +67,7 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platfor
         print(f"Failed to build {image_name}: {error}")
         exit(1) # stop the build
 
-    if tag_suffix:
+    if tag_suffix and raw_tags:
         # The app images reference "mintlayer-builder:latest" / "mintlayer-runner-base"
         # without a suffix in their FROM lines. When building for a non-default
         # architecture, the suffixed base image exists locally but the unsuffixed tag
@@ -75,7 +75,8 @@ def build_docker_image(dockerfile_path, image_name, tags, num_jobs=None, platfor
         # Add a local unsuffixed alias pointing to the image we've just built, so the
         # subsequent app image builds resolve it locally. These local aliases are never
         # pushed (push_instances only pushes the suffixed tags), so they cannot
-        # overwrite the registry's default-arch tags.
+        # overwrite the registry's default-arch tags. Skipped when the caller
+        # passed no tags: there is no versioned tag to derive an alias from.
         local_alias = f"{image_name}:{raw_tags[0]}"
         alias_command = ["docker", "tag", full_tags[0], local_alias]
         try:
