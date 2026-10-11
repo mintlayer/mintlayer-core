@@ -81,9 +81,9 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        self.transaction.get_token_transactions(token_id, len, tx_global_index)
+        self.transaction.get_token_transactions(token_id, len, offset)
     }
 
     async fn get_block(
