@@ -64,9 +64,13 @@ This command mounts the same `~/.mintlayer` directory as a volume in the `wallet
 
 ## Multi-arch (amd64 / arm64) images
 
-By default the build produces `linux/amd64` images, exactly as it always has. Two extra knobs exist for building other architectures:
+The release pipeline builds `linux/amd64` and `linux/arm64` natively on separate
+GitHub runners and assembles the results into multi-arch manifest lists under
+the unsuffixed tags, so `docker pull` auto-selects the architecture. A local
+build defaults to `linux/amd64`, exactly as it always has. Two extra knobs
+exist for building other architectures:
 
 - `build.py --platform arm64` builds `linux/arm64` images (must run on an arm64 machine, e.g. the `ubuntu-24.04-arm` GitHub runner, since the compilation happens inside the container).
 - `build.py --tag_suffix arm64` appends the suffix to every built and pushed tag (e.g. `node-daemon:1.4.1-arm64`), so a non-default architecture never overwrites the default-arch tags.
 
-To assemble the suffixed images into a proper multi-arch manifest list under the unsuffixed tags (`docker pull mintlayer/node-daemon` then auto-selects the architecture), dispatch the **"Assemble multi-arch Docker manifests"** workflow (`release_docker_manifest.yml`) with the release version after both architectures have been pushed.
+To assemble the suffixed images into a proper multi-arch manifest list under the unsuffixed tags (`docker pull mintlayer/node-daemon` then auto-selects the architecture), run the **"Build Docker"** workflow (`release_docker.yml`) with `assemble_manifests: true` and the release version after both architectures have been pushed. The release pipeline (`release.yml`) runs the same assembly automatically for semver tags.

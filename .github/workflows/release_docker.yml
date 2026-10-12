@@ -2,6 +2,36 @@ name: Build Docker
 
 on:
   workflow_call:
+    # Inputs for callers such as release.yml. They must be declared here:
+    # a workflow_call trigger without an inputs block drops every value a
+    # caller passes, which would silently turn an arm64 build into an amd64
+    # build on the wrong runner.
+    inputs:
+      version:
+        description: 'Version for image tags, e.g. 1.4.1 (defaults to the pushed tag name, or the short commit SHA for ad-hoc dispatches)'
+        required: false
+        type: string
+        default: ''
+      platform:
+        description: 'Target CPU architecture (amd64 or arm64)'
+        required: false
+        type: string
+        default: 'amd64'
+      tag_suffix:
+        description: 'Suffix appended to every image tag, e.g. arm64 (leave empty for the default arch)'
+        required: false
+        type: string
+        default: ''
+      runner:
+        description: 'Runner label; only ubuntu-24.04 / ubuntu-24.04-arm are honored, anything else falls back to ubuntu-latest'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      assemble_manifests:
+        description: "Skip image builds and only assemble multi-arch manifests from already-pushed '<tag>-amd64'/'<tag>-arm64' tags"
+        required: false
+        type: string
+        default: 'false'
   workflow_dispatch:
     inputs:
       version:
@@ -32,11 +62,17 @@ permissions:
 
 jobs:
   build-docker-images:
-    # workflow_dispatch builds may push shared mutable tags ('<version>',
-    # 'v<version>', 'latest') with the repo's Docker Hub credentials, so they
-    # are restricted to protected refs; feature-branch dispatches cannot push.
-    # Tag refs are allowed at the same trust level as the release pipeline.
-    if: github.event_name == 'workflow_call' || (inputs.assemble_manifests != 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/v')))
+    # Builds are skipped for assembly-only calls; all remaining builds push
+    # shared mutable tags ('<version>', 'v<version>', 'latest') with the
+    # repo's Docker Hub credentials, so they are restricted to protected
+    # refs. A called workflow inherits the caller's github.ref, so the tag
+    # pipeline's calls pass the same ref checks as a manual dispatch from a
+    # tag: any tag ref qualifies (the trigger glob of release.yml allows
+    # bare 'X.Y.Z' as well as 'vX.Y.Z', and 'Determine version' validates
+    # the grammar and strips a leading 'v' before anything is pushed);
+    # feature-branch dispatches (or hypothetical feature-branch callers)
+    # cannot push.
+    if: inputs.assemble_manifests != 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: read
     # Explicit bound below the 360-minute GitHub default, with headroom for
@@ -153,15 +189,14 @@ jobs:
     env:
       DOCKER_BUILDKIT: 1
 
-  # Registry-side assembly of multi-arch manifest lists from images that were
-  # pushed earlier by separate per-arch dispatches of the build job above
-  # ("--platform arm64 --tag_suffix arm64"). Nothing is rebuilt: "docker
-  # buildx imagetools create" only references already-pushed manifests. Runs
-  # from the default branch via "gh workflow run ... --ref <branch>": GitHub
-  # validates the workflow registration against the default branch but reads
-  # the file content from the dispatched ref.
+  # Registry-side assembly of multi-arch manifest lists from images that
+  # were pushed earlier by the separate per-arch builds of the build job
+  # above ("--platform arm64 --tag_suffix arm64"). Called automatically
+  # after both builds by release.yml (workflow_call), or manually via
+  # "gh workflow run ... --ref <protected ref>". Nothing is rebuilt: "docker
+  # buildx imagetools create" only references already-pushed manifests.
   assemble-manifests:
-    if: github.event_name == 'workflow_dispatch' && inputs.assemble_manifests == 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/v'))
+    if: inputs.assemble_manifests == 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: read
     timeout-minutes: 60
