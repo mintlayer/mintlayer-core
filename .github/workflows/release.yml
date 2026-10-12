@@ -36,7 +36,9 @@ jobs:
   # (a newer pending run cancels an older pending one — see the build job
   # in release_docker.yml), so an overlapping release or dispatch can
   # cancel this run's queued arm64 leg, which then skips the assembly and
-  # leaves the release amd64-only (create-release does not wait for it).
+  # leaves the release amd64-only (create-release does not wait for it);
+  # the docker-release-status job below then fails the run so the gap is
+  # visible instead of silent.
   # The assembly then merges the two per-arch image
   # sets into multi-arch manifest lists under the unsuffixed tags.
   # create-release deliberately does NOT depend on the arm64 build or the
@@ -137,3 +139,35 @@ jobs:
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: ${{ steps.generate_body.outputs.BODY }}
         token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Runs after everything else and fails the run when a published release
+  # lacks its multi-arch assembly (arm64 build failed/canceled — including a
+  # concurrency-dropped pending leg, where no job fails and the run would
+  # otherwise conclude 'cancelled' — or the assembly itself failed). The
+  # status job therefore runs always(); the script only alerts when the
+  # release actually shipped, so a deliberately canceled run still
+  # terminates quietly and a red run here means "repair the arm64 half",
+  # not "the release is missing".
+  docker-release-status:
+    needs: [create-release, build-docker-amd64, build-docker-arm64, assemble-docker]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 10
+    steps:
+      - name: Check multi-arch completeness
+        env:
+          RELEASE: ${{ needs.create-release.result }}
+          AMD64: ${{ needs.build-docker-amd64.result }}
+          ARM64: ${{ needs.build-docker-arm64.result }}
+          ASSEMBLY: ${{ needs.assemble-docker.result }}
+        run: |
+          if [[ "$ASSEMBLY" != 'success' ]]; then
+            echo "multi-arch manifest assembly incomplete (release=$RELEASE, amd64=$AMD64, arm64=$ARM64, assembly=$ASSEMBLY)" >&2
+            if [[ "$RELEASE" == 'success' ]]; then
+              echo "the release shipped amd64-only" >&2
+              echo "repair by re-running the failed jobs of this run, or by dispatching release_docker.yml (platform=arm64, tag_suffix=arm64, runner=ubuntu-24.04-arm, then assemble_manifests=true) from the tag ref" >&2
+              exit 1
+            fi
+            echo "the release itself did not ship; fix the earlier failed or skipped job first" >&2
+          fi
