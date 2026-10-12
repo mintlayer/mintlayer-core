@@ -260,10 +260,23 @@ where
                 Some(retry_at) => self.time_getter.get_time() >= retry_at,
                 None => false,
             };
-            if is_fork_budget_retry_due && self.common_services.has_service(Service::Blocks) {
+            if is_fork_budget_retry_due {
                 self.fork_budget_retry_at = None;
-                log::debug!("Retrying a header request after a fork download budget deferral");
-                self.request_headers().await?;
+                if self.common_services.has_service(Service::Blocks) {
+                    log::debug!("Retrying a header request after a fork download budget deferral");
+                    self.request_headers().await?;
+                } else {
+                    // Without the Blocks service the retry can never be serviced, so the
+                    // schedule is dropped instead of left armed: keeping it set would make
+                    // the retry tick wake the loop every poll interval forever without any
+                    // progress. A future deferral re-arms the schedule, and the deferred
+                    // data is recovered when the peer re-announces it, as before the retry
+                    // mechanism existed.
+                    log::debug!(
+                        "Dropping the fork download budget retry schedule: \
+                         the common services don't include Blocks"
+                    );
+                }
             }
 
             self.handle_sync_status_change(&last_sync_status)?;

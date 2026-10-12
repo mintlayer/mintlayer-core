@@ -40,14 +40,15 @@ use test_utils::{
 };
 
 use crate::{
-    config::P2pConfig,
+    config::{NodeType, NodeTypeSetting, P2pConfig},
     message::{BlockSyncMessage, HeaderList},
     protocol::{ForkDownloadLimit, ForkDownloadRefillInterval, ProtocolConfig},
     sync::tests::helpers::{
-        TestNode, make_new_block, make_new_top_blocks_return_headers,
+        TestNode, get_random_hash, make_new_block, make_new_top_blocks_return_headers,
         test_node_group::{BlockSyncMessageWithNodeIdx, TestNodeGroup},
     },
     test_helpers::{for_each_protocol_version, test_p2p_config_with_protocol_config},
+    types::peer_id::PeerId,
 };
 
 // The retry timer for deferred header lists runs on the real tokio clock and sleeps for
@@ -360,6 +361,76 @@ async fn fork_download_budget_is_not_enforced_during_initial_block_download(#[ca
         );
 
         nodes.join_subsystem_managers().await;
+    })
+    .await;
+}
+
+/// A node whose common services don't include the Blocks service can never service a
+/// deferred header list. When the retry deadline passes, the retry schedule must be
+/// dropped instead of staying armed forever. In particular, the node must not send any
+/// header request to the peer after the deadline and it must not punish the peer for
+/// the deferred announcement, even though the budget has been refilled by then.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn retry_schedule_is_dropped_without_blocks_service(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = Arc::new(create_unit_test_config());
+        let time_getter = BasicTestTimeGetter::new();
+
+        let blocks = make_chain(&chain_config, &[], 10, &time_getter, &mut rng);
+        let tip_header = blocks.last().unwrap().header().clone();
+
+        // A `DnsServer` node provides no Blocks service, so any connected peer shares no
+        // Blocks-capable services with it and a deferred header list can never be
+        // fetched back. A budget of 1 token keeps the scenario small: the tip header
+        // alone exhausts the budget.
+        let mut p2p_config = make_p2p_config(1);
+        p2p_config.node_type = NodeTypeSetting::new(NodeType::DnsServer);
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_time_getter(time_getter.get_time_getter())
+            .with_blocks(blocks)
+            .with_p2p_config(Arc::new(p2p_config))
+            .build()
+            .await;
+
+        // Note: no initial header list request is expected, because the node doesn't
+        // provide the Blocks service.
+        let peer = node.try_connect_peer(PeerId::new(), protocol_version);
+
+        // The tip header charges the whole budget, so the second (already-known) list
+        // must be deferred without any response and without punishing the peer.
+        peer.send_headers(vec![tip_header.clone()]).await;
+        peer.send_headers(vec![tip_header.clone()]).await;
+
+        // The sentinel is echoed back by the block sync manager, so its arrival proves
+        // that both lists have been processed and nothing was sent in response.
+        let sentinel = BlockSyncMessage::TestSentinel(get_random_hash(&mut rng).into());
+        peer.send_block_sync_message(sentinel.clone()).await;
+        assert_eq!(node.get_sent_block_sync_message().await.1, sentinel);
+
+        // The retry deadline now passes. The node must drop the retry schedule instead
+        // of spinning on it: no header request may be sent even though the budget has
+        // been refilled.
+        //
+        // Note: this test cannot distinguish a dropped schedule from the old
+        // armed-but-inert one (both are silent here); it pins that no request is sent
+        // and the peer is not punished while unserviceable.
+        time_getter.advance_time(REFILL_INTERVAL * 2);
+        tokio::time::sleep(REFILL_INTERVAL).await;
+
+        let sentinel = BlockSyncMessage::TestSentinel(get_random_hash(&mut rng).into());
+        peer.send_block_sync_message(sentinel.clone()).await;
+        assert_eq!(node.get_sent_block_sync_message().await.1, sentinel);
+
+        node.assert_no_peer_manager_event().await;
+        node.assert_no_error().await;
+        node.join_subsystem_manager().await;
     })
     .await;
 }
