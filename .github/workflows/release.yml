@@ -27,13 +27,51 @@ jobs:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
     secrets: inherit
 
-  build-docker:
+  # Docker images still build only after the OS binaries built (a red OS
+  # build aborts before any image is pushed). The two per-arch builds run on
+  # native runners and serialize behind the release_docker.yml
+  # 'docker-release' concurrency group. Within one release run at most one
+  # job is ever pending in that group, so the legs of a single run cannot
+  # drop each other; across runs the one-pending-slot rule still applies
+  # (a newer pending run cancels an older pending one — see the build job
+  # in release_docker.yml), so an overlapping release or dispatch can
+  # cancel this run's queued arm64 leg, which then skips the assembly and
+  # leaves the release amd64-only (create-release does not wait for it).
+  # The assembly then merges the two per-arch image
+  # sets into multi-arch manifest lists under the unsuffixed tags.
+  # create-release deliberately does NOT depend on the arm64 build or the
+  # assembly: if either fails, the OS binaries and the amd64 images are
+  # still released, and the arm64 half can be repaired afterwards by
+  # re-running the failed jobs of this run or by dispatching
+  # release_docker.yml (build with tag_suffix arm64, then assembly) from
+  # the tag ref.
+  build-docker-amd64:
     needs: [build-macos, build-linux, build-windows]
     uses: ./.github/workflows/release_docker.yml
     secrets: inherit
 
+  build-docker-arm64:
+    needs: [build-macos, build-linux, build-windows]
+    uses: ./.github/workflows/release_docker.yml
+    with:
+      platform: arm64
+      tag_suffix: arm64
+      runner: ubuntu-24.04-arm
+    secrets: inherit
+
+  assemble-docker:
+    needs: [build-docker-amd64, build-docker-arm64]
+    uses: ./.github/workflows/release_docker.yml
+    with:
+      # release.yml only triggers on semver tag pushes, so the ref name is
+      # the tag (e.g. 'v1.4.2' or '1.4.2'); release_docker.yml strips a
+      # leading 'v' before validating it.
+      version: ${{ github.ref_name }}
+      assemble_manifests: 'true'
+    secrets: inherit
+
   create-release:
-    needs: [build-macos, build-linux, build-windows, build-docker]
+    needs: [build-macos, build-linux, build-windows, build-docker-amd64]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
