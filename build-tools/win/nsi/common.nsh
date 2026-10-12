@@ -3,6 +3,22 @@
 ; the template directory to makensis via /I so the bare name resolves.
 ; Pure ASCII only (the generator writes the rendered script as ASCII).
 
+; ${RunningX64} for the MintlayerRequireX64 macro below.
+!include "x64.nsh"
+
+; Refuse to run on 32-bit Windows and switch registry operations to the
+; 64-bit view, so HKLM\SOFTWARE entries (uninstall keys, PATH backup) land in
+; the native hive instead of the WOW6432Node redirect. Must be inserted from
+; both .onInit (installer) and un.onInit (uninstaller): the uninstaller is a
+; separate process and does not inherit the installer's registry view.
+!macro MintlayerRequireX64
+    ${IfNot} ${RunningX64}
+        MessageBox MB_OK|MB_ICONSTOP "${APPNAME} requires a 64-bit version of Windows."
+        Abort
+    ${EndIf}
+    SetRegView 64
+!macroend
+
 ; Silently remove a previously installed version of the product whose
 ; uninstall registry entries live under ${UNINSTKEY}. The stored
 ; UninstallString includes quotes, which must not be re-quoted, so they are
