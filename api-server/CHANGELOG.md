@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.2]
+
+### Fixed
+- Token transaction pagination now uses real offset paging: `offset` skips that many
+  transactions from the newest, `items` caps the page size, and offsets beyond the end
+  return an empty page. Previously the endpoints derived pages from the transactions'
+  global index, so requests with an `offset` did not return the expected window, offsets
+  too large for the storage could surface raw storage errors, and the in-memory scanner
+  storage disagreed with the Postgres-backed one. The two storages now share the same
+  offset semantics and the same empty-page behavior for out-of-range offsets.
+
 ## [1.4.1]
 
 ### Added

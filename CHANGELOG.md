@@ -11,6 +11,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-12
+
+### Fixed
+  - API server:
+    - Fixed token transaction pagination: the `offset` parameter of the token
+      transaction endpoints now consistently skips the requested number of newest
+      transactions instead of using stale cursor semantics, out-of-range offsets
+      return an empty page instead of an error, and the in-memory scanner storage
+      behaves identically to the Postgres-backed one.
+
 ## [1.4.1] - 2026-09-25
 
 ### Added
