@@ -239,12 +239,17 @@ where
                 _ = tokio::time::sleep(stalling_timeout),
                     if self.peer_activity.earliest_expected_activity_time().is_some() => {}
 
-                // An unconditional tick: it guarantees the loop wakes up at least once per
-                // interval even when there is no other activity, so that the fork budget
-                // retry deadline check below cannot be postponed indefinitely by idle
-                // waiting. When the loop is busy, the deadline check runs on every
-                // iteration anyway.
-                _ = tokio::time::sleep(FORK_BUDGET_RETRY_POLL_INTERVAL) => {}
+                // A tick that is only armed while a fork budget retry is pending: it
+                // guarantees the loop wakes up at least once per interval even when there
+                // is no other activity, so that the retry deadline check below cannot be
+                // postponed indefinitely by idle waiting. When the loop is busy, the
+                // deadline check runs on every iteration anyway. The branch must stay
+                // disabled when no retry is pending: an unconditional wake would also run
+                // the stalling checks on clocks that jumped forward (e.g. mocked time in
+                // tests), disconnecting peers on stalling deadlines that no other loop
+                // activity would have detected.
+                _ = tokio::time::sleep(FORK_BUDGET_RETRY_POLL_INTERVAL),
+                    if self.fork_budget_retry_at.is_some() => {}
             }
 
             // A header list deferred due to the fork download budget is retried once the
@@ -725,11 +730,19 @@ where
         // tiny (a few headers per new block) compared to the budget capacity, so they are
         // unaffected in practice.
         if !self.chainstate_handle.call(|c| Ok(c.is_initial_block_download())).await? {
-            let headers_count = headers.len();
+            // A list larger than the budget capacity could never be paid for, not even
+            // by a full bucket, so charging its full size would defer it forever. Charging
+            // at most the capacity keeps any single list eventually processable, while the
+            // total download work per refill interval stays bounded. Note that a capacity
+            // of 0 therefore disables the budget: the charge is always payable.
+            let headers_count =
+                headers.len().min(*self.p2p_config.protocol_config.max_fork_downloads_per_peer);
             if !self.fork_download_budget.try_take(headers_count, self.time_getter.get_time()) {
                 log::info!(
-                    "Deferring the processing of a header list of {headers_count} headers:\
-                     the peer's fork download budget is exhausted"
+                    "Deferring the processing of a header list of {} headers ({} charged against \
+                     the fork budget): the peer's fork download budget is exhausted",
+                    headers.len(),
+                    headers_count
                 );
                 // No error is returned and no ban score is issued: the peer hasn't violated
                 // the protocol, it has merely exhausted a resource quota. Also note that
