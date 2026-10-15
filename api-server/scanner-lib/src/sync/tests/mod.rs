@@ -719,6 +719,7 @@ fn new_pool_data(
 // The builder output carries placeholder `NoSignature` witnesses; input 0 is
 // signed here.
 fn sign_pool_spend_transaction(
+    tf: &TestFramework,
     tx: SignedTransaction,
     spent_output: TxOutput,
     pool_id: PoolId,
@@ -729,6 +730,13 @@ fn sign_pool_spend_transaction(
     staking_pk: &PublicKey,
     rng: &mut impl CryptoRng,
 ) -> SignedTransaction {
+    // The sighash of a `ProduceBlockFromStake` spend commits the pool's live
+    // staker balance, so refuse to sign over anything but the live value.
+    assert_eq!(
+        staker_balance,
+        pool_staker_balance(tf, pool_id),
+        "the signed staker balance must equal the pool's live staker balance, otherwise the sighash commitment would be stale",
+    );
     assert_eq!(
         tx.transaction().inputs().len(),
         1,
@@ -791,14 +799,8 @@ fn decommission_spend_transaction(
 ) -> SignedTransaction {
     // `payout` doubles as the sighash `PoolInfo.staker_balance` when
     // `spent_output` is a `ProduceBlockFromStake` (a `CreateStakePool` spend
-    // commits just the UTXO); it must equal the pool's live balance, which
-    // holds because a decommission spend always pays out the pool's full
-    // balance.
-    assert_eq!(
-        payout,
-        pool_staker_balance(tf, pool_id),
-        "payout must equal the pool's live staker balance, otherwise a ProduceBlockFromStake spend would be signed over a stale sighash commitment",
-    );
+    // commits just the UTXO); `sign_pool_spend_transaction` asserts that it
+    // equals the pool's live balance.
     let transaction = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(input_source, input_index),
@@ -807,6 +809,7 @@ fn decommission_spend_transaction(
         .add_output(stake_spend_payout_output(chain_config, tf, payout))
         .build();
     sign_pool_spend_transaction(
+        tf,
         transaction,
         spent_output,
         pool_id,
@@ -1118,6 +1121,7 @@ async fn decommission_and_delegation_spends_update_staked_statistic(#[case] seed
         ))
         .build();
     let transaction = sign_pool_spend_transaction(
+        &tf,
         transaction,
         block5_reward_out0,
         pool_id,
