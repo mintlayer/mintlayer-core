@@ -532,6 +532,7 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -635,6 +636,7 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
@@ -735,6 +737,7 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),

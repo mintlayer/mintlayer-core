@@ -14,5 +14,6 @@
 // limitations under the License.
 
 pub mod block_manager;
+pub mod fork_download_budget;
 pub mod requested_transactions;
 pub mod transaction_manager;

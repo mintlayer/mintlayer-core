@@ -246,6 +246,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
                 max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
+                ..Default::default()
             },
 
             bind_addresses: Default::default(),
