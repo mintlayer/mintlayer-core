@@ -234,14 +234,7 @@ mod tests {
         let mut rng = make_true_rng();
         let (sk, _pk) = SchnorrkelPrivateKey::new(&mut rng);
 
-        let encoded_sk = sk.encode();
-        let debug_output = format!("{sk:?}");
-
-        assert!(debug_output.contains("<redacted>"));
-        // No byte of the encoded secret may appear anywhere in the formatted output.
-        for byte in &encoded_sk {
-            assert!(!debug_output.contains(&byte.to_string()));
-        }
+        assert_eq!(format!("{sk:?}"), "SchnorrkelPrivateKey(<redacted>)");
     }
 
     #[test]

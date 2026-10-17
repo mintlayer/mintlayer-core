@@ -367,14 +367,7 @@ mod tests {
         let mut rng = make_seedable_rng(Seed::from_entropy());
         let (sk, _pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let encoded_sk = sk.encode();
-        let debug_output = format!("{sk:?}");
-
-        assert!(debug_output.contains("<redacted>"));
-        // No byte of the encoded secret may appear anywhere in the formatted output.
-        for byte in &encoded_sk {
-            assert!(!debug_output.contains(&byte.to_string()));
-        }
+        assert_eq!(format!("{sk:?}"), "VRFPrivateKey(<redacted>)");
     }
 
     #[rstest]
