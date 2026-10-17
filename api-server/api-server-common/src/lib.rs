@@ -57,7 +57,12 @@ pub fn parse_args_or_exit<T: clap::Parser>() -> T {
                 if error_is_value_free(err.kind()) {
                     let _ = err.print();
                 } else {
-                    eprintln!("Invalid command line arguments; run with --help for usage");
+                    // The error kind's rendering is a static category name and can never
+                    // contain argument values, so it is safe to include here.
+                    eprintln!(
+                        "Invalid command line arguments ({:?}); run with --help for usage",
+                        err.kind()
+                    );
                 }
                 std::process::exit(2);
             }

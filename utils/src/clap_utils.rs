@@ -67,7 +67,7 @@ pub fn env_adder_hiding_env_values<'a>(
 /// Test helper: asserts that every option named in `secret_options` exists in `cmd`
 /// (recursively, including all nested subcommands), is bound to an environment variable,
 /// and has its environment-sourced value hidden from the help output.
-#[cfg(feature = "test-util")]
+#[cfg(any(test, feature = "test-util"))]
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
     fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
@@ -121,13 +121,12 @@ mod tests {
     }
 }
 
-// NOTE: `test-util` is not enabled by default, so `cargo test -p utils` skips these
-// guard tests, and `cargo test --workspace` does not run them either: with resolver
-// v2/v3, `test-util` enabled by consumer crates' dev-dependencies applies only to the
-// lib units built for those consumers (compiled without `cfg(test)`), never to this
-// crate's own test units. They run only with an explicit
-// `cargo test -p utils --features test-util` (or `--all-features`).
-#[cfg(all(test, feature = "test-util"))]
+// The helper above is additionally gated on `test-util` for non-test builds; in this
+// crate's own test units plain `cfg(test)` suffices, so the guard tests run under a
+// plain `cargo test -p utils` and in `cargo test --workspace`. Consumer test suites
+// reach the helper through the `test-util` feature enabled in their dev-dependency
+// entries.
+#[cfg(test)]
 mod secret_options_guard_tests {
     use super::*;
 
