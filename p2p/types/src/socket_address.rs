@@ -86,8 +86,6 @@ pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
     }
 }
 
-/// Same reduction as [`canonical_ip_addr`], applied to a socket address including its port.
-/// Non-mapped IPv6 addresses are returned untouched, so flowinfo and scope id are preserved.
 /// Same reduction as [`canonical_ip_addr`], applied to a socket address including its
 /// port. Non-mapped IPv6 addresses are returned untouched, so flowinfo and scope id are
 /// preserved. Mapped forms are assumed to carry zero flowinfo/scope id (as RFC 4291

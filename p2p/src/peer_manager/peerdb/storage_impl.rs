@@ -126,7 +126,7 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     }
 
     fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool> {
-        fn canonical_socket_address_spelling(key: &str) -> Option<String> {
+        fn canonical_socket_address_spelling(table: &'static str, key: &str) -> Option<String> {
             // Mapped spellings always start with one of these prefixes, so the parse can
             // be skipped for the vast majority of keys on every startup.
             if !(key.starts_with("[::ffff:") || key.starts_with("::ffff:")) {
@@ -135,7 +135,10 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             let address = match key.parse::<SocketAddress>() {
                 Ok(address) => address,
                 Err(err) => {
-                    logging::log::warn!("Skipping unparseable legacy address key {key}: {err}");
+                    logging::log::warn!(
+                        "Skipping unparseable legacy {table} key {key}: {err}; reading the \
+                         table keeps failing until the row is removed"
+                    );
                     return None;
                 }
             };
@@ -143,14 +146,17 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             (canonical != key).then_some(canonical)
         }
 
-        fn canonical_bannable_address_spelling(key: &str) -> Option<String> {
+        fn canonical_bannable_address_spelling(table: &'static str, key: &str) -> Option<String> {
             if !key.starts_with("::ffff:") {
                 return None;
             }
             let address = match key.parse::<BannableAddress>() {
                 Ok(address) => address,
                 Err(err) => {
-                    logging::log::warn!("Skipping unparseable legacy ban key {key}: {err}");
+                    logging::log::warn!(
+                        "Skipping unparseable legacy {table} key {key}: {err}; reading the \
+                         table keeps failing until the row is removed"
+                    );
                     return None;
                 }
             };
@@ -163,7 +169,7 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
 
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
-            canonical_socket_address_spelling,
+            |key| canonical_socket_address_spelling("known addresses", key),
             // A legacy row marked as tried keeps its selection preference.
             |canonical, legacy| match legacy {
                 KnownAddressState::Tried => legacy,
@@ -172,18 +178,18 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBAnchorAddresses, _>(),
-            canonical_socket_address_spelling,
+            |key| canonical_socket_address_spelling("anchor addresses", key),
             |_canonical, _legacy| (),
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBBannedAddresses, _>(),
-            canonical_bannable_address_spelling,
+            |key| canonical_bannable_address_spelling("banned addresses", key),
             // The later unban time wins so the migration cannot shorten a ban.
             std::cmp::max,
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
-            canonical_bannable_address_spelling,
+            |key| canonical_bannable_address_spelling("discouraged addresses", key),
             std::cmp::max,
         )?;
 
