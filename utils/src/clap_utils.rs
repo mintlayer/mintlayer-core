@@ -57,7 +57,7 @@ pub fn env_adder_hiding_env_values<'a>(
 ) -> impl FnMut(Arg) -> Arg + 'a {
     move |mut arg| {
         arg = add_env(infix, arg);
-        if hidden.contains(&arg.get_long().unwrap_or_default()) {
+        if arg.get_long().is_some_and(|long| hidden.contains(&long)) {
             arg = arg.hide_env_values(true);
         }
         arg
@@ -68,6 +68,8 @@ pub fn env_adder_hiding_env_values<'a>(
 /// has its environment-sourced value hidden from the help output.
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
+    // Note: only the top-level command and its immediate subcommands are inspected;
+    // args under deeper nested subcommands are not verified.
     let all_args = cmd
         .get_arguments()
         .chain(cmd.get_subcommands().flat_map(|sub| sub.get_arguments()));

@@ -41,6 +41,14 @@ pub trait RedactedSummary: std::fmt::Debug {
 /// (ArgumentConflict, MissingRequiredArgument, MissingSubcommand, NoEquals, plus help
 /// and version) are printed as-is; every other error, including UnknownArgument, is
 /// replaced by a generic message.
+///
+/// # Contract with the argument definitions
+///
+/// Help and version output is echoed verbatim, and the error fallback tells users to
+/// run `--help`. Any secret-bearing argument bound to an environment variable must
+/// therefore set `hide_env_values(true)` (see
+/// `clap_utils::env_adder_hiding_env_values`), otherwise clap renders
+/// `[env: NAME=value]` into the help text and this function prints the secret.
 pub fn parse_args_or_exit<T: clap::Parser>() -> T {
     match T::try_parse() {
         Ok(args) => args,
@@ -68,7 +76,10 @@ fn error_is_value_free(kind: clap::error::ErrorKind) -> bool {
         ErrorKind::ArgumentConflict
             | ErrorKind::MissingRequiredArgument
             | ErrorKind::MissingSubcommand
-            | ErrorKind::NoEquals
+            | ErrorKind::NoEquals // DisplayHelpOnMissingArgumentOrSubcommand (stderr-routed, value-free under the
+                                  // hide_env_values contract) is deliberately excluded, so a binary configured
+                                  // with `arg_required_else_help` prints the generic message rather than its help
+                                  // on empty arguments.
     )
 }
 
@@ -91,6 +102,53 @@ mod parse_args_tests {
         assert!(super::error_is_value_free(ErrorKind::ArgumentConflict));
         assert!(super::error_is_value_free(ErrorKind::MissingSubcommand));
         assert!(super::error_is_value_free(ErrorKind::NoEquals));
+    }
+
+    /// Pins that the clap rendering of the allowlisted kinds never embeds raw argument
+    /// values, so a clap upgrade that starts echoing them fails here instead of leaking
+    /// secrets in production.
+    #[test]
+    fn allowlisted_kinds_never_render_raw_values() {
+        let secret = "s3cret-canary-value";
+        let cmd = clap::Command::new("canary")
+            .arg(clap::Arg::new("a").long("a").num_args(1))
+            .arg(
+                clap::Arg::new("b")
+                    .long("b")
+                    .conflicts_with("a")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(clap::Arg::new("c").long("c").required(true));
+
+        let conflict =
+            cmd.clone().try_get_matches_from(["canary", "--a", secret, "--b"]).unwrap_err();
+        assert_eq!(conflict.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert!(!conflict.render().to_string().contains(secret));
+
+        let missing_required =
+            cmd.clone().try_get_matches_from(["canary", "--a", secret]).unwrap_err();
+        assert_eq!(
+            missing_required.kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
+        assert!(!missing_required.render().to_string().contains(secret));
+
+        let requires_equals = clap::Command::new("canary")
+            .arg(clap::Arg::new("a").long("a").require_equals(true).num_args(1));
+        let no_equals =
+            requires_equals.try_get_matches_from(["canary", "--a", secret]).unwrap_err();
+        assert_eq!(no_equals.kind(), clap::error::ErrorKind::NoEquals);
+        assert!(!no_equals.render().to_string().contains(secret));
+
+        let subcommanded = clap::Command::new("canary")
+            .subcommand_required(true)
+            .subcommand(clap::Command::new("run"));
+        let missing_subcommand = subcommanded.try_get_matches_from(["canary"]).unwrap_err();
+        assert_eq!(
+            missing_subcommand.kind(),
+            clap::error::ErrorKind::MissingSubcommand
+        );
+        assert!(!missing_subcommand.render().to_string().contains(secret));
     }
 }
 

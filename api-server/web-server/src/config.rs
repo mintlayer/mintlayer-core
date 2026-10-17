@@ -139,12 +139,12 @@ impl std::fmt::Debug for ApiServerWebServerConfig {
         f.debug_struct("ApiServerWebServerConfig")
             .field("network", network)
             .field("bind_address", bind_address)
+            .field("postgres_config", postgres_config)
+            .field("enable_post_routes", enable_post_routes)
             .field("node_rpc_address", node_rpc_address)
             .field("node_rpc_cookie_file", node_rpc_cookie_file)
             .field("node_rpc_username", &redact(node_rpc_username))
             .field("node_rpc_password", &redact(node_rpc_password))
-            .field("postgres_config", postgres_config)
-            .field("enable_post_routes", enable_post_routes)
             .field(
                 "stream_events_broadcast_capacity",
                 stream_events_broadcast_capacity,
@@ -177,6 +177,20 @@ impl RedactedSummary for ApiServerWebServerConfig {
 mod tests {
     use super::*;
     use api_server_common::REDACTED;
+    use clap::CommandFactory;
+
+    /// Options whose values can hold a secret; their environment-sourced values are hidden
+    /// from the help output (see the `mut_args` attribute above).
+    const SECRET_OPTIONS: &[&str] =
+        &["node-rpc-username", "node-rpc-password", "postgres-password"];
+
+    #[test]
+    fn secret_options_are_hidden_from_help() {
+        clap_utils::assert_secret_options_hidden(
+            &ApiServerWebServerConfig::command(),
+            SECRET_OPTIONS,
+        );
+    }
 
     #[test]
     fn redacted_summary_omits_secrets() {

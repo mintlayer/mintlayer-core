@@ -19,11 +19,12 @@ use api_server_common::{Network, PostgresConfig, RedactedSummary, redact};
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
+/// Options whose values can hold a secret; their environment-sourced values are hidden
+/// from the help output.
+const SECRET_OPTIONS: &[&str] = &["node-rpc-username", "node-rpc-password", "postgres-password"];
+
 #[derive(Parser)]
-#[clap(mut_args(clap_utils::env_adder_hiding_env_values(
-    "API_SCANNER_DAEMON",
-    &["node-rpc-username", "node-rpc-password", "postgres-password"]
-)))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values("API_SCANNER_DAEMON", SECRET_OPTIONS)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerScannerArgs {
     /// Network
@@ -87,6 +88,12 @@ impl RedactedSummary for ApiServerScannerArgs {
 mod tests {
     use super::*;
     use api_server_common::REDACTED;
+    use clap::CommandFactory;
+
+    #[test]
+    fn secret_options_are_hidden_from_help() {
+        clap_utils::assert_secret_options_hidden(&ApiServerScannerArgs::command(), SECRET_OPTIONS);
+    }
 
     #[test]
     fn redacted_summary_omits_secrets() {

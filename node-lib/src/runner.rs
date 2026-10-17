@@ -306,16 +306,23 @@ pub async fn setup(
                                 })
                             });
                         if name == log_file_name || is_rotated_log {
+                            // Capture the identity at listing time so a swap between the
+                            // listing and the open is detected by the check below.
+                            let listed = match entry.metadata() {
+                                Ok(listed) => listed,
+                                Err(err) => {
+                                    permission_fix_errors.push((entry.path(), err));
+                                    continue;
+                                }
+                            };
                             // Open the file and change the mode through the descriptor. A
-                            // path swapped in after the listing could still be followed, so
-                            // compare the listed identity with the opened file and report a
-                            // mismatch instead of changing the mode.
+                            // path swapped in after this point is reported as a mismatch
+                            // instead of having its mode changed.
                             if let Err(err) = std::fs::OpenOptions::new()
                                 .read(true)
                                 .open(entry.path())
                                 .and_then(|file| {
                                     use std::os::unix::fs::MetadataExt;
-                                    let listed = entry.metadata()?;
                                     let opened = file.metadata()?;
                                     if (listed.dev(), listed.ino()) != (opened.dev(), opened.ino())
                                     {
