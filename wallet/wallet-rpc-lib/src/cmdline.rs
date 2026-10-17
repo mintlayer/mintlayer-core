@@ -330,3 +330,38 @@ pub enum ConfigError {
     #[error(transparent)]
     RunningAsRoot(anyhow::Error),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn every_secret_option_has_its_env_value_hidden() {
+        let cmd = WalletRpcDaemonArgs::command();
+        let all_args = cmd
+            .get_arguments()
+            .chain(cmd.get_subcommands().flat_map(|sub| sub.get_arguments()));
+        let mut matched = std::collections::HashSet::new();
+        for arg in all_args {
+            if let Some(long) =
+                arg.get_long().filter(|long| WALLET_RPC_SECRET_OPTIONS.contains(long))
+            {
+                assert!(
+                    arg.is_hide_env_values_set(),
+                    "env value of --{long} is not hidden from help"
+                );
+                matched.insert(long);
+            }
+        }
+        assert_eq!(
+            matched,
+            WALLET_RPC_SECRET_OPTIONS
+                .iter()
+                .copied()
+                .collect::<std::collections::HashSet<_>>(),
+            "WALLET_RPC_SECRET_OPTIONS does not match the actual secret options; \
+             stale entries pass silently and missing entries leak env values in --help"
+        );
+    }
+}
