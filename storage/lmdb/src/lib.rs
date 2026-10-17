@@ -89,28 +89,28 @@ impl<Tx: lmdb::Transaction> DbTx<'_, Tx> {
     }
 }
 
-impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
+impl<'tx, Tx: lmdb::Transaction> backend::ReadOps for DbTx<'tx, Tx> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         self.tx
             .get(self.backend.dbs[map_id], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        let iter = self.greater_equal_iter_impl(map_id, prefix.as_slice())?;
-        Ok(PrefixIter::new(iter, prefix))
+        prefix: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, Tx>> {
+        let iter = self.greater_equal_iter_impl(map_id, prefix)?;
+        Ok(PrefixIter::new(iter, prefix.to_vec()))
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
-        let iter = self.greater_equal_iter_impl(map_id, key.as_slice())?.map(|result| {
+        key: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, Tx>> {
+        let iter = self.greater_equal_iter_impl(map_id, key)?.map(|result| {
             let (k, v) = result.expect("iteration to proceed");
             (k.to_vec(), v.to_vec())
         });

@@ -122,8 +122,8 @@ fn put_iterator_count_matches<B: Backend, F: BackendFactory<B>>(backend_factory:
     dbtx.commit().expect("commit to succeed");
 
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.prefix_iter(MAPID.0, vec![]).unwrap().count(), 4);
-    assert_eq!(dbtx.greater_equal_iter(MAPID.0, vec![]).unwrap().count(), 4);
+    assert_eq!(dbtx.prefix_iter(MAPID.0, &[]).unwrap().count(), 4);
+    assert_eq!(dbtx.greater_equal_iter(MAPID.0, &[]).unwrap().count(), 4);
 }
 
 fn put_and_iterate<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
@@ -147,8 +147,7 @@ fn put_and_iterate<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
     {
         let check = |range: std::ops::Range<usize>, prefix: Data| {
             let dbtx = store.transaction_ro().unwrap();
-            let vals: Vec<_> =
-                dbtx.prefix_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+            let vals: Vec<_> = dbtx.prefix_iter(MAPID.0, &prefix).unwrap().map(|x| x.1).collect();
             let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
             assert_eq!(vals, expected, "prefix={prefix:?}");
             drop(dbtx);
@@ -169,7 +168,7 @@ fn put_and_iterate<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
         let check = |range: std::ops::Range<usize>, prefix: Data| {
             let dbtx = store.transaction_ro().unwrap();
             let vals: Vec<_> =
-                dbtx.greater_equal_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+                dbtx.greater_equal_iter(MAPID.0, &prefix).unwrap().map(|x| x.1).collect();
             let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
             assert_eq!(vals, expected, "prefix={prefix:?}");
             drop(dbtx);
@@ -187,7 +186,7 @@ fn put_and_iterate<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
 }
 
 fn check_prefix_iter<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
-    let entries = dbtx.prefix_iter(MAPID.0, prefix).unwrap();
+    let entries = dbtx.prefix_iter(MAPID.0, &prefix).unwrap();
     let expected = expected
         .iter()
         .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
@@ -195,7 +194,7 @@ fn check_prefix_iter<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &s
 }
 
 fn check_greater_equal_iter<Tx: ReadOps>(dbtx: &Tx, key: Data, expected: &[(&str, &str)]) {
-    let entries = dbtx.greater_equal_iter(MAPID.0, key).unwrap();
+    let entries = dbtx.greater_equal_iter(MAPID.0, &key).unwrap();
     let expected = expected
         .iter()
         .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
