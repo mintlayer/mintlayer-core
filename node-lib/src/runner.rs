@@ -41,7 +41,7 @@ use crate::{
     config_files::{DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED, NodeConfigFile},
     mock_time::set_mock_time,
     node_controller::NodeController,
-    options::{OptionsWithResolvedCommand, RunOptions, default_data_dir},
+    options::{Command, OptionsWithResolvedCommand, RunOptions, default_data_dir},
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -303,7 +303,20 @@ pub async fn setup(
         return Ok(NodeSetupResult::DataDirCleanedUp);
     }
 
-    logging::log::info!("Command line options: {options:?}");
+    // The full command line contains secrets (RPC credentials, staking keys), so only a
+    // curated subset of options that cannot hold secrets is logged.
+    let network = match options.command {
+        Command::Mainnet(_) => "mainnet",
+        Command::Testnet(_) => "testnet",
+        Command::Regtest(_) => "regtest",
+    };
+    logging::log::info!(
+        "Command line options (secrets omitted): network: {network}, data directory: {:?}, \
+         create data dir if missing: {:?}, log to file: {:?}",
+        options.top_level.data_dir,
+        options.top_level.create_data_dir_if_missing,
+        options.top_level.log_to_file,
+    );
 
     let mut options = options;
 
