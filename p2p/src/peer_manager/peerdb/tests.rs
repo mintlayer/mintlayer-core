@@ -1127,6 +1127,16 @@ fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed:
         assert!(tx.normalize_legacy_mapped_address_keys().unwrap());
         tx.commit().unwrap();
     }
+
+    // Pin the other half of the contract: committing a `true` result persists the rewrite.
+    {
+        use storage::MakeMapRef as _;
+
+        let tx = db_store.transaction_ro().unwrap();
+        let known = tx.storage().get::<DBKnownAddresses, _>();
+        assert!(known.get("[::ffff:1.2.3.4]:12345").unwrap().is_none());
+        assert!(known.get("1.2.3.4:12345").unwrap().is_some());
+    }
 }
 
 #[rstest]
