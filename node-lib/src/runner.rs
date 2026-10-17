@@ -277,7 +277,16 @@ fn collect_log_permission_fix_errors(
                 // name left as a directory, symlink, or special file is reported below
                 // instead of being silently ignored.
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
+                let is_regular_file = match entry.file_type() {
+                    Ok(file_type) => file_type.is_file(),
+                    Err(err) => {
+                        if name == log_file_name || is_rotated_log_name(log_file_name, &name) {
+                            permission_fix_errors.push((entry.path(), err));
+                        }
+                        continue;
+                    }
+                };
+                if !is_regular_file {
                     if name == log_file_name || is_rotated_log_name(log_file_name, &name) {
                         permission_fix_errors.push((
                             entry.path(),
