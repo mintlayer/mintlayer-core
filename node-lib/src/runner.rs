@@ -250,7 +250,6 @@ fn collect_log_permission_fix_errors(
     log_file_name: &str,
 ) -> Vec<(std::path::PathBuf, std::io::Error)> {
     use std::os::unix::fs::PermissionsExt;
-    let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
     // A rotated log file carries the base name plus a dot and a numeric suffix.
     fn is_rotated_log_name(log_file_name: &str, name: &str) -> bool {
         name.strip_prefix(log_file_name).is_some_and(|suffix| {
@@ -259,6 +258,7 @@ fn collect_log_permission_fix_errors(
                 .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
         })
     }
+    let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
     match std::fs::read_dir(data_dir.join("logs")) {
         // The first run has no logs directory yet.
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
