@@ -79,7 +79,7 @@ impl TransactionalApiServerPostgresStorage {
         );
 
         let mut config = tokio_postgres::Config::new();
-        config.host(host).port(port).user(user).dbname(&database);
+        config.host(host).port(port).user(user).dbname(database);
         if let Some(password) = password {
             config.password(password);
         }
