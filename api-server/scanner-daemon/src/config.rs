@@ -107,6 +107,7 @@ mod tests {
         assert!(!summary.contains("dbsecret"));
         let debug_dump = format!("{args:?}");
         assert!(debug_dump.contains("ApiServerScannerArgs"));
+        assert!(debug_dump.contains("node_rpc_username: Some(\"<redacted>\")"));
         assert!(debug_dump.contains("node_rpc_password: Some(\"<redacted>\")"));
         assert!(debug_dump.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!debug_dump.contains("alice"));

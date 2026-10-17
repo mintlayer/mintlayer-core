@@ -95,8 +95,15 @@ mod tests {
 
     #[test]
     fn debug_output_redacts_postgres_password() {
-        let config = PostgresConfig::parse_from(["postgres-config", "--postgres-password", "dbsecret"]);
+        let config = PostgresConfig::parse_from([
+            "postgres-config",
+            "--postgres-host",
+            "dbhost",
+            "--postgres-password",
+            "dbsecret",
+        ]);
         let dump = format!("{config:?}");
+        assert!(dump.contains("postgres_host: \"dbhost\""));
         assert!(dump.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!dump.contains("dbsecret"));
     }
