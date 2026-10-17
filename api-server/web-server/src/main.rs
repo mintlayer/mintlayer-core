@@ -65,7 +65,29 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     logging::init_logging();
 
     let args = ApiServerWebServerConfig::parse();
-    log::info!("Command line options: {args:?}");
+    // The full command line contains secrets (RPC credentials, database password), so only a
+    // curated subset of options that cannot hold secrets is logged.
+    log::info!(
+        "Command line options (secrets omitted): network: {:?}, bind address: {:?}, \
+         enable post routes: {}, node RPC address: {:?}, node RPC cookie file: {:?}, \
+         postgres host: {}, port: {}, user: {}, database: {:?}, max connections: {}, \
+         stream events broadcast capacity: {}, max subscribers: {}, poll interval: {}s, \
+         keepalive interval: {}s",
+        args.network,
+        args.bind_address,
+        args.enable_post_routes,
+        args.node_rpc_address,
+        args.node_rpc_cookie_file,
+        args.postgres_config.postgres_host,
+        args.postgres_config.postgres_port,
+        args.postgres_config.postgres_user,
+        args.postgres_config.postgres_database,
+        args.postgres_config.postgres_max_connections,
+        args.stream_events_broadcast_capacity,
+        args.stream_events_max_subscribers,
+        args.stream_events_poll_interval_secs,
+        args.stream_events_keepalive_interval_secs,
+    );
 
     let chain_type: ChainType = args.network.into();
     let chain_config = Arc::new(Builder::new(chain_type).build());
