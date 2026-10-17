@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{Ipv4Addr, Ipv6Addr};
-
 use crate::types::peer_address::PeerAddress;
 
 // IPv4 addresses grouped into /16 subnets
@@ -39,17 +37,18 @@ impl AddressGroup {
     ///
     /// See `NetGroupManager::GetGroup` in Bitcoin Core for a reference.
     pub fn from_peer_address(address: &PeerAddress) -> AddressGroup {
+        // IPv4-mapped IPv6 addresses are reduced to the embedded IPv4 form so that they
+        // land in the same group as the IPv4 address they represent.
+        let std_ip = crate::types::socket_address::canonical_ip_addr(
+            std::net::SocketAddr::from(address).ip(),
+        );
         if address.is_global_unicast_ip() {
-            match address {
-                PeerAddress::Ip4(addr) => AddressGroup::PublicV4(
-                    Ipv4Addr::from(addr.ip).octets()[0..IPV4_GROUP_BYTES]
-                        .try_into()
-                        .expect("must be valid"),
+            match std_ip {
+                std::net::IpAddr::V4(ip) => AddressGroup::PublicV4(
+                    ip.octets()[0..IPV4_GROUP_BYTES].try_into().expect("must be valid"),
                 ),
-                PeerAddress::Ip6(addr) => AddressGroup::PublicV6(
-                    Ipv6Addr::from(addr.ip).octets()[0..IPV6_GROUP_BYTES]
-                        .try_into()
-                        .expect("must be valid"),
+                std::net::IpAddr::V6(ip) => AddressGroup::PublicV6(
+                    ip.octets()[0..IPV6_GROUP_BYTES].try_into().expect("must be valid"),
                 ),
             }
         } else if address.is_loopback() {
@@ -88,6 +87,55 @@ mod tests {
         check_group(
             "2a00:1450:4017:815::200e",
             AddressGroup::PublicV6([0x2a, 0x00, 0x14, 0x50]),
+        );
+    }
+}
+
+#[cfg(test)]
+mod mapped_address_tests {
+    use super::*;
+
+    fn mapped_v6_address(ip: std::net::Ipv4Addr) -> PeerAddress {
+        let o = ip.octets();
+        PeerAddress::Ip6(crate::types::peer_address::PeerAddressIp6 {
+            ip: std::net::Ipv6Addr::new(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0xffff,
+                u16::from_be_bytes([o[0], o[1]]),
+                u16::from_be_bytes([o[2], o[3]]),
+            )
+            .into(),
+            port: 12345,
+        })
+    }
+
+    #[test]
+    fn mapped_addresses_are_grouped_like_the_embedded_ipv4() {
+        assert_eq!(
+            AddressGroup::from_peer_address(&mapped_v6_address(std::net::Ipv4Addr::LOCALHOST)),
+            AddressGroup::Local
+        );
+        assert_eq!(
+            AddressGroup::from_peer_address(&mapped_v6_address(std::net::Ipv4Addr::new(
+                192, 168, 1, 1
+            ))),
+            AddressGroup::Private
+        );
+        assert_eq!(
+            AddressGroup::from_peer_address(&mapped_v6_address(std::net::Ipv4Addr::new(
+                10, 0, 0, 1
+            ))),
+            AddressGroup::Private
+        );
+        assert_eq!(
+            AddressGroup::from_peer_address(&mapped_v6_address(std::net::Ipv4Addr::new(
+                1, 2, 3, 4
+            ))),
+            AddressGroup::PublicV4([1, 2])
         );
     }
 }

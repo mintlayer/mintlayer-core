@@ -15,7 +15,7 @@
 
 use std::{
     fmt::Display,
-    net::{AddrParseError, IpAddr, SocketAddr},
+    net::{AddrParseError, IpAddr, SocketAddr, SocketAddrV4},
     str::FromStr,
 };
 
@@ -47,16 +47,42 @@ impl SocketAddress {
         self.0
     }
 
+    /// The IP address with IPv4-mapped IPv6 addresses reduced to the embedded IPv4 form,
+    /// so that classification, bans and connection limits treat `::ffff:a.b.c.d` as the
+    /// IPv4 address it represents.
     pub fn ip_addr(&self) -> IpAddr {
-        self.0.ip()
+        canonical_ip_addr(self.0.ip())
     }
 
     pub fn as_bannable(&self) -> BannableAddress {
-        BannableAddress::new(self.0.ip())
+        BannableAddress::new(self.ip_addr())
     }
 
     pub fn as_peer_address(&self) -> PeerAddress {
         self.0.into()
+    }
+}
+
+/// Reduce an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) to the embedded IPv4 address;
+/// any other address is returned unchanged.
+pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => IpAddr::V6(v6),
+        },
+        v4 => v4,
+    }
+}
+
+/// Same reduction as [`canonical_ip_addr`], applied to a socket address including its port.
+pub fn canonical_socket_address(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::V4(SocketAddrV4::new(v4, v6.port())),
+            None => SocketAddr::V6(v6),
+        },
+        v4 => v4,
     }
 }
 
@@ -77,5 +103,42 @@ impl FromStr for SocketAddress {
 impl From<SocketAddr> for SocketAddress {
     fn from(value: SocketAddr) -> Self {
         SocketAddress::new(value)
+    }
+}
+
+#[cfg(test)]
+mod mapped_address_tests {
+    use super::*;
+    use crate::bannable_address::BannableAddress;
+
+    #[test]
+    fn mapped_addresses_are_canonicalized() {
+        let mapped: SocketAddr = "[::ffff:1.2.3.4]:12345".parse().unwrap();
+        let socket_address = SocketAddress::new(mapped);
+
+        assert_eq!(
+            socket_address.ip_addr(),
+            IpAddr::V4(std::net::Ipv4Addr::new(1, 2, 3, 4))
+        );
+        assert_eq!(
+            socket_address.as_bannable(),
+            BannableAddress::new(IpAddr::V4(std::net::Ipv4Addr::new(1, 2, 3, 4)))
+        );
+
+        // Non-mapped addresses are unchanged.
+        let plain_v6: SocketAddr = "[2a00:1450:4017:815::200e]:12345".parse().unwrap();
+        assert_eq!(
+            SocketAddress::new(plain_v6).ip_addr(),
+            IpAddr::V6("2a00:1450:4017:815::200e".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn canonical_socket_address_reduces_mapped_form() {
+        let mapped: SocketAddr = "[::ffff:127.0.0.1]:12345".parse().unwrap();
+        assert_eq!(
+            canonical_socket_address(mapped),
+            SocketAddr::V4(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 12345))
+        );
     }
 }
