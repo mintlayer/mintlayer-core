@@ -124,6 +124,66 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
         Ok(self.storage().get_mut::<DBAnchorAddresses, _>().del(address.to_string())?)
     }
+
+    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<()> {
+        let storage = self.storage();
+
+        fn canonical_socket_address_spelling(key: &str) -> Option<String> {
+            let address = key.parse::<SocketAddress>().ok()?;
+            let canonical = address.to_string();
+            (canonical != key).then_some(canonical)
+        }
+
+        fn canonical_bannable_address_spelling(key: &str) -> Option<String> {
+            let address = key.parse::<BannableAddress>().ok()?;
+            let canonical = address.to_string();
+            (canonical != key).then_some(canonical)
+        }
+
+        rekey_mapped_rows(
+            &mut storage.get_mut::<DBKnownAddresses, _>(),
+            canonical_socket_address_spelling,
+        )?;
+        rekey_mapped_rows(
+            &mut storage.get_mut::<DBAnchorAddresses, _>(),
+            canonical_socket_address_spelling,
+        )?;
+        rekey_mapped_rows(
+            &mut storage.get_mut::<DBBannedAddresses, _>(),
+            canonical_bannable_address_spelling,
+        )?;
+        rekey_mapped_rows(
+            &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
+            canonical_bannable_address_spelling,
+        )?;
+
+        Ok(())
+    }
+}
+
+/// Rewrite rows keyed by a non-canonical spelling of an IPv4 address (the mapped form
+/// `::ffff:a.b.c.d` written by an older version) so that the key matches the canonical
+/// spelling used at runtime, keeping the value unchanged.
+fn rekey_mapped_rows<B, DBM>(
+    map: &mut storage::MapMut<'_, storage::TransactionRw<'_, B, Schema>, DBM>,
+    canonical_spelling: impl Fn(&str) -> Option<String>,
+) -> crate::Result<()>
+where
+    B: storage::SharedBackend,
+    DBM: storage::schema::DbMap<Key = String>,
+    DBM::Value: serialization::Encode + serialization::EncodeLike + Clone,
+{
+    let mut rewrites = Vec::new();
+    for (key, value) in map.prefix_iter(&())? {
+        if let Some(canonical) = canonical_spelling(&key) {
+            rewrites.push((key, canonical, value.decode()));
+        }
+    }
+    for (legacy_key, canonical_key, value) in rewrites {
+        map.del(&legacy_key)?;
+        map.put(&canonical_key, value)?;
+    }
+    Ok(())
 }
 
 impl<B: storage::SharedBackend> PeerDbStorageRead for PeerDbStoreTxRo<'_, B> {

@@ -1088,3 +1088,69 @@ fn new_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
 fn tried_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
     peerdb.address_tables.tried_addr_table()
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
+    use crate::peer_manager::peerdb::storage_load::LoadedStorage;
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+    use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+    use storage::MakeMapRef as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    // Seed the store with rows keyed by the mapped spelling, as an older version could
+    // have written them before the canonicalization was introduced.
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        tx.storage()
+            .get_mut::<DBKnownAddresses, _>()
+            .put("[::ffff:1.2.3.4]:12345".to_owned(), KnownAddressState::New)
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60))
+            .unwrap();
+        tx.commit().unwrap();
+    }
+
+    let peerdb_config = test_p2p_config().peer_manager_config.peerdb_config;
+    LoadedStorage::load_storage(&db_store, &peerdb_config, &mut rng).unwrap();
+
+    let tx = db_store.transaction_ro().unwrap();
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("1.2.3.4:12345")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:1.2.3.4")
+            .unwrap()
+            .is_none()
+    );
+    assert!(tx.storage().get::<DBBannedAddresses, _>().get("1.2.3.4").unwrap().is_some());
+
+    // Sanity check on the canonical spellings, mirroring what the runtime writes.
+    let canonical_socket: SocketAddress = "1.2.3.4:12345".parse().unwrap();
+    assert_eq!(canonical_socket.to_string(), "1.2.3.4:12345");
+    let canonical_bannable: BannableAddress = "1.2.3.4".parse().unwrap();
+    assert_eq!(canonical_bannable.to_string(), "1.2.3.4");
+}

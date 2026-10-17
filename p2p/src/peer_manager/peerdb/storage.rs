@@ -71,6 +71,11 @@ pub trait PeerDbStorageWrite {
 
     fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
     fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
+
+    /// Rewrite rows keyed by the mapped spelling (`::ffff:a.b.c.d`) of an IPv4 address so
+    /// that they are keyed by the canonical form; without this, removals would miss the
+    /// legacy rows and bans could resurrect after a restart.
+    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<()>;
 }
 
 // Note: here we want to say something like:
