@@ -1235,6 +1235,13 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
     assert!(
         tx.storage()
             .get::<DBBannedAddresses, _>()
+            .get("::ffff:5.6.7.8")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
             .get("::ffff:1.2.3.4")
             .unwrap()
             .is_none()
