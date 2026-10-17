@@ -37,22 +37,16 @@ pub trait RedactedSummary: std::fmt::Debug {
 
 /// Parses command line arguments, and on failure exits without echoing them: clap errors
 /// for value-bearing arguments can repeat raw `--flag=value` tokens, which may carry
-/// secrets. Errors that only name flags or render static text (missing arguments,
-/// conflicts, help and version) are printed as-is.
+/// secrets. Only errors whose clap rendering is guaranteed to name flags or static text
+/// (ArgumentConflict, MissingRequiredArgument, MissingSubcommand, NoEquals, plus help
+/// and version) are printed as-is; every other error, including UnknownArgument, is
+/// replaced by a generic message.
 pub fn parse_args_or_exit<T: clap::Parser>() -> T {
-    use clap::error::ErrorKind;
     match T::try_parse() {
         Ok(args) => args,
         Err(err) => {
-            let value_free = matches!(
-                err.kind(),
-                ErrorKind::ArgumentConflict
-                    | ErrorKind::MissingRequiredArgument
-                    | ErrorKind::MissingSubcommand
-                    | ErrorKind::NoEquals
-            );
             if err.use_stderr() {
-                if value_free {
+                if error_is_value_free(err.kind()) {
                     let _ = err.print();
                 } else {
                     eprintln!("Invalid command line arguments; run with --help for usage");
@@ -62,6 +56,41 @@ pub fn parse_args_or_exit<T: clap::Parser>() -> T {
             let _ = err.print();
             std::process::exit(0);
         }
+    }
+}
+
+/// Whether the clap rendering of this error kind is guaranteed to name flags or static
+/// text only, never raw argument values.
+fn error_is_value_free(kind: clap::error::ErrorKind) -> bool {
+    use clap::error::ErrorKind;
+    matches!(
+        kind,
+        ErrorKind::ArgumentConflict
+            | ErrorKind::MissingRequiredArgument
+            | ErrorKind::MissingSubcommand
+            | ErrorKind::NoEquals
+    )
+}
+
+#[cfg(test)]
+mod parse_args_tests {
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn value_bearing_error_kinds_are_suppressed() {
+        assert!(!super::error_is_value_free(ErrorKind::InvalidValue));
+        assert!(!super::error_is_value_free(ErrorKind::ValueValidation));
+        assert!(!super::error_is_value_free(ErrorKind::UnknownArgument));
+    }
+
+    #[test]
+    fn flag_naming_error_kinds_are_printed() {
+        assert!(super::error_is_value_free(
+            ErrorKind::MissingRequiredArgument
+        ));
+        assert!(super::error_is_value_free(ErrorKind::ArgumentConflict));
+        assert!(super::error_is_value_free(ErrorKind::MissingSubcommand));
+        assert!(super::error_is_value_free(ErrorKind::NoEquals));
     }
 }
 
@@ -140,8 +169,17 @@ impl std::fmt::Debug for PostgresConfig {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
-        // Route through the non-echoing parse path.
-        parse_args_or_exit::<PostgresConfig>()
+        // Literal defaults mirroring the clap `default_value` attributes above; parsing
+        // here would read the process's real arguments and is not safe outside of the
+        // actual CLI startup.
+        Self {
+            postgres_host: "localhost".to_string(),
+            postgres_port: 5432,
+            postgres_user: "postgres".to_string(),
+            postgres_password: None,
+            postgres_database: None,
+            postgres_max_connections: 10,
+        }
     }
 }
 

@@ -76,17 +76,15 @@ impl TransactionalApiServerPostgresStorage {
 
         let config_str =
             format!("host={host} port={port} user={user} {password_part} {database_part}");
-        // The logged string is built from the same parts, so it stays parallel to the real
-        // one while the password never appears in it.
-        let logged_password_part = match password {
-            Some(_) => format!("password={}", crate::REDACTED),
-            None => String::new(),
-        };
-        let logged_config_str =
-            format!("host={host} port={port} user={user} {logged_password_part} {database_part}");
+        // The discrete fields are logged instead of the connection string, so the log
+        // format does not have to be kept parallel to the real one.
         logging::log::debug!(
-            "Using postgres config connection string: {}",
-            logged_config_str
+            "Using postgres config: host={host} port={port} user={user} password={} {database_part}",
+            if password.is_some() {
+                crate::REDACTED
+            } else {
+                "<unset>"
+            }
         );
 
         let config: tokio_postgres::Config =

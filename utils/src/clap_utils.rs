@@ -47,3 +47,40 @@ pub fn add_env(infix: &str, mut arg: Arg) -> Arg {
 pub fn env_adder(infix: &str) -> impl FnMut(Arg) -> Arg + '_ {
     |arg| add_env(infix, arg)
 }
+
+/// Same as [`env_adder`], but the values of the options named in `hidden` are excluded
+/// from the help output, so secrets provided through the environment are not rendered
+/// as `[env: NAME=value]`.
+pub fn env_adder_hiding_env_values<'a>(
+    infix: &'a str,
+    hidden: &'static [&'static str],
+) -> impl FnMut(Arg) -> Arg + 'a {
+    move |mut arg| {
+        arg = add_env(infix, arg);
+        if hidden.contains(&arg.get_long().unwrap_or_default()) {
+            arg = arg.hide_env_values(true);
+        }
+        arg
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_values_are_hidden_only_for_the_named_options() {
+        let mut wrap = env_adder_hiding_env_values("NODE", &["rpc-username", "rpc-password"]);
+
+        let arg = wrap(clap::Arg::new("rpc_password").long("rpc-password"));
+        assert!(arg.is_hide_env_values_set());
+        assert!(arg.get_env().is_some());
+
+        let arg = wrap(clap::Arg::new("rpc_username").long("rpc-username"));
+        assert!(arg.is_hide_env_values_set());
+
+        let arg = wrap(clap::Arg::new("datadir").long("datadir"));
+        assert!(!arg.is_hide_env_values_set());
+        assert!(arg.get_env().is_some());
+    }
+}

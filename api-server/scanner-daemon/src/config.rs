@@ -20,7 +20,10 @@ use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
 #[derive(Parser)]
-#[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+    "API_SCANNER_DAEMON",
+    &["node-rpc-username", "node-rpc-password", "postgres-password"]
+)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerScannerArgs {
     /// Network
@@ -105,7 +108,11 @@ mod tests {
         };
         let summary = args.redacted_summary();
         // Assertions are value-based rather than pinned to clap's Debug rendering.
+        // NetworkAddressWithPort renders the address and port as separate Debug fields,
+        // so they are asserted separately.
+        assert!(summary.contains("node_rpc_address"));
         assert!(summary.contains("127.0.0.1"));
+        assert!(summary.contains("port: 12345"));
         assert!(summary.contains(REDACTED));
         assert!(summary.contains("node_rpc_cookie_file"));
         assert!(summary.contains("/tmp/rpc-cookie-file"));
@@ -129,7 +136,14 @@ mod tests {
             node_rpc_cookie_file: None,
             node_rpc_username: None,
             node_rpc_password: None,
-            postgres_config: PostgresConfig::default(),
+            postgres_config: PostgresConfig {
+                postgres_host: "dbhost".to_string(),
+                postgres_port: 5432,
+                postgres_user: "dbuser".to_string(),
+                postgres_password: None,
+                postgres_database: None,
+                postgres_max_connections: 10,
+            },
         };
         let summary = args.redacted_summary();
         assert!(!summary.contains(REDACTED));

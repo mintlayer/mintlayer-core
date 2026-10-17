@@ -59,7 +59,10 @@ pub const IMPORT_BOOTSTRAP_FILE_OPTION_ID: &str = "import_bootstrap_file";
 // Note: this struct is shared between different node executables, namely, node-daemon and node-gui,
 // so the env vars for both of them will use the same infix; this is intended.
 #[derive(Parser, Debug, Clone)]
-#[clap(mut_args(clap_utils::env_adder("NODE")))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+    "NODE",
+    &["rpc-username", "rpc-password"]
+)))]
 #[clap(author, version(app_version_with_git_info!().to_pretty_string()), about)]
 pub struct Options {
     #[clap(flatten)]

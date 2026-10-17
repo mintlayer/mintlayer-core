@@ -30,7 +30,10 @@ use api_server_common::streaming;
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Parser)]
-#[clap(mut_args(clap_utils::env_adder("API_WEB_SRV")))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+    "API_WEB_SRV",
+    &["node-rpc-username", "node-rpc-password", "postgres-password"]
+)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerWebServerConfig {
     /// Network
@@ -207,7 +210,11 @@ mod tests {
         // Assertions are value-based rather than pinned to clap's Debug rendering.
         assert!(summary.contains("127.0.0.1:3000"));
         assert!(summary.contains("enable_post_routes"));
+        // NetworkAddressWithPort renders the address and port as separate Debug fields,
+        // so they are asserted separately.
+        assert!(summary.contains("node_rpc_address"));
         assert!(summary.contains("127.0.0.1"));
+        assert!(summary.contains("port: 12345"));
         assert!(summary.contains(REDACTED));
         assert!(!summary.contains("alice"));
         assert!(!summary.contains("supersecret"));
@@ -226,7 +233,14 @@ mod tests {
         let args = ApiServerWebServerConfig {
             network: Network::Mainnet,
             bind_address: None,
-            postgres_config: PostgresConfig::default(),
+            postgres_config: PostgresConfig {
+                postgres_host: "localhost".to_string(),
+                postgres_port: 5432,
+                postgres_user: "postgres".to_string(),
+                postgres_password: None,
+                postgres_database: None,
+                postgres_max_connections: 10,
+            },
             enable_post_routes: false,
             node_rpc_address: None,
             node_rpc_cookie_file: None,
