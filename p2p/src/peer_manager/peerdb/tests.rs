@@ -1160,7 +1160,7 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
     use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
-    use crate::peer_manager::peerdb::storage_impl::DBKnownAddresses;
+    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
     use crate::peer_manager::peerdb::storage_load::LoadedStorage;
     use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
     use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
@@ -1181,6 +1181,10 @@ fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
             )
             .unwrap();
         known.put("1.2.3.4:12345".to_owned(), KnownAddressState::New).unwrap();
+
+        let mut banned = tx.storage().get_mut::<DBBannedAddresses, _>();
+        banned.put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60)).unwrap();
+        banned.put("1.2.3.4".to_owned(), Duration::from_secs(120)).unwrap();
         tx.commit().unwrap();
     }
 
@@ -1201,6 +1205,24 @@ fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
         tx.storage()
             .get::<DBKnownAddresses, _>()
             .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+
+    // The same merge rule applies to ban rows: the canonical ban keeps its value.
+    assert_eq!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("1.2.3.4")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(120)
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:1.2.3.4")
             .unwrap()
             .is_none()
     );
