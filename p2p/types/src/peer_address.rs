@@ -48,14 +48,22 @@ pub enum PeerAddress {
 }
 
 impl PeerAddress {
-    pub fn is_loopback(&self) -> bool {
+    /// The IP address in canonical form, where an IPv4-mapped IPv6 address
+    /// (`::ffff:a.b.c.d`) is reduced to the embedded IPv4 address.
+    ///
+    /// Note that the derived `Eq`/`Hash`/`Ord` still distinguish the mapped form from
+    /// the plain form, because the wire format keeps them distinct; deduplicate or key
+    /// collections on this canonical value rather than on the address itself.
+    pub fn canonical_ip(&self) -> std::net::IpAddr {
         crate::socket_address::canonical_ip_addr(std::net::SocketAddr::from(self).ip())
-            .is_loopback()
+    }
+
+    pub fn is_loopback(&self) -> bool {
+        self.canonical_ip().is_loopback()
     }
 
     pub fn is_global_unicast_ip(&self) -> bool {
-        crate::socket_address::canonical_ip_addr(std::net::SocketAddr::from(self).ip())
-            .is_global_unicast_ip()
+        self.canonical_ip().is_global_unicast_ip()
     }
 
     /// If the address is eligible for being sent to peers via AddrListResponse, return Some,

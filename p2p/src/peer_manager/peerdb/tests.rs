@@ -1094,7 +1094,7 @@ fn tried_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
 #[case(Seed::from_entropy())]
 fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed: Seed) {
     use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
-    use crate::peer_manager::peerdb::storage_impl::DBKnownAddresses;
+    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
     use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
     use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
 
@@ -1119,6 +1119,10 @@ fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed:
         let mut tx = db_store.transaction_rw().unwrap();
         let mut known = tx.storage().get_mut::<DBKnownAddresses, _>();
         known.put("[::ffff:1.2.3.4]:12345".to_owned(), KnownAddressState::New).unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60))
+            .unwrap();
         tx.commit().unwrap();
     }
 
@@ -1136,6 +1140,9 @@ fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed:
         let known = tx.storage().get::<DBKnownAddresses, _>();
         assert!(known.get("[::ffff:1.2.3.4]:12345").unwrap().is_none());
         assert!(known.get("1.2.3.4:12345").unwrap().is_some());
+        let banned = tx.storage().get::<DBBannedAddresses, _>();
+        assert!(banned.get("::ffff:1.2.3.4").unwrap().is_none());
+        assert!(banned.get("1.2.3.4").unwrap().is_some());
     }
 }
 
@@ -1231,6 +1238,8 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
             )
             .unwrap();
         known.put("1.2.3.4:12345".to_owned(), KnownAddressState::New).unwrap();
+        known.put("[::ffff:9.9.9.9]:9999".to_owned(), KnownAddressState::New).unwrap();
+        known.put("9.9.9.9:9999".to_owned(), KnownAddressState::Tried).unwrap();
 
         let mut banned = tx.storage().get_mut::<DBBannedAddresses, _>();
         banned.put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60)).unwrap();
@@ -1249,6 +1258,16 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
         tx.storage()
             .get::<DBKnownAddresses, _>()
             .get("1.2.3.4:12345")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        KnownAddressState::Tried
+    );
+    // The reverse pair: a legacy New row must not downgrade a canonical Tried row.
+    assert_eq!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("9.9.9.9:9999")
             .unwrap()
             .unwrap()
             .decode(),
