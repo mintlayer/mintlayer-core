@@ -1092,6 +1092,46 @@ fn tried_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::DBKnownAddresses;
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        tx.commit().unwrap();
+    }
+
+    // A store whose keys are already canonical needs no rewrites, so the caller can
+    // skip committing the migration transaction.
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        assert!(!tx.normalize_legacy_mapped_address_keys().unwrap());
+    }
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        let mut known = tx.storage().get_mut::<DBKnownAddresses, _>();
+        known.put("[::ffff:1.2.3.4]:12345".to_owned(), KnownAddressState::New).unwrap();
+        tx.commit().unwrap();
+    }
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        assert!(tx.normalize_legacy_mapped_address_keys().unwrap());
+        tx.commit().unwrap();
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
     use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
     use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};

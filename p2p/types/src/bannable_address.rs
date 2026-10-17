@@ -30,6 +30,8 @@ use std::{
     serde::Serialize,
     rpc_description::HasValueHint,
 )]
+// Note: the derived newtype `Serialize` delegates to the inner `IpAddr`, matching the
+// manual `Deserialize` below; keep the two impls wire-compatible if this changes.
 pub struct BannableAddress(IpAddr);
 
 // Deserialize routes through `new` so that persisted bans stored in the mapped form are
