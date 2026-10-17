@@ -75,7 +75,7 @@ pub trait PeerDbStorageWrite {
     /// Rewrite rows keyed by the mapped spelling (`::ffff:a.b.c.d`) of an IPv4 address so
     /// that they are keyed by the canonical form; without this, removals would miss the
     /// legacy rows and bans could resurrect after a restart.
-    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<()>;
+    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool>;
 }
 
 // Note: here we want to say something like:

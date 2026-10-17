@@ -125,7 +125,7 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         Ok(self.storage().get_mut::<DBAnchorAddresses, _>().del(address.to_string())?)
     }
 
-    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<()> {
+    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool> {
         fn canonical_socket_address_spelling(key: &str) -> Option<String> {
             // Mapped spellings always start with one of these prefixes, so the parse can
             // be skipped for the vast majority of keys on every startup.
@@ -147,8 +147,9 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         }
 
         let storage = self.storage();
+        let mut rewrote_any = false;
 
-        rekey_mapped_rows(
+        rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
             canonical_socket_address_spelling,
             // A legacy row marked as tried keeps its selection preference.
@@ -157,24 +158,24 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
                 KnownAddressState::New => canonical,
             },
         )?;
-        rekey_mapped_rows(
+        rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBAnchorAddresses, _>(),
             canonical_socket_address_spelling,
             |_canonical, _legacy| (),
         )?;
-        rekey_mapped_rows(
+        rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBBannedAddresses, _>(),
             canonical_bannable_address_spelling,
             // The later unban time wins so the migration cannot shorten a ban.
             std::cmp::max,
         )?;
-        rekey_mapped_rows(
+        rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
             canonical_bannable_address_spelling,
             std::cmp::max,
         )?;
 
-        Ok(())
+        Ok(rewrote_any)
     }
 }
 
@@ -186,7 +187,7 @@ fn rekey_mapped_rows<B, DBM>(
     map: &mut storage::MapMut<'_, storage::TransactionRw<'_, B, Schema>, DBM>,
     canonical_spelling: impl Fn(&str) -> Option<String>,
     merge: impl Fn(DBM::Value, DBM::Value) -> DBM::Value,
-) -> crate::Result<()>
+) -> crate::Result<bool>
 where
     B: storage::SharedBackend,
     DBM: storage::schema::DbMap<Key = String>,
@@ -205,6 +206,7 @@ where
             rewrites.push((key, canonical, value));
         }
     }
+    let mut rewrote_any = false;
     for (legacy_key, canonical_key, legacy_value) in rewrites {
         map.del(&legacy_key)?;
         let value = match map.get(&canonical_key)? {
@@ -223,8 +225,9 @@ where
             None => legacy_value,
         };
         map.put(&canonical_key, value)?;
+        rewrote_any = true;
     }
-    Ok(())
+    Ok(rewrote_any)
 }
 
 impl<B: storage::SharedBackend> PeerDbStorageRead for PeerDbStoreTxRo<'_, B> {

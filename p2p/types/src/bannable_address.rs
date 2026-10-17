@@ -19,8 +19,26 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, rpc_description::HasValueHint)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    rpc_description::HasValueHint,
+)]
 pub struct BannableAddress(IpAddr);
+
+// Deserialize routes through `new` so that persisted bans stored in the mapped form are
+// treated as their plain IPv4 form when loaded.
+impl<'de> serde::Deserialize<'de> for BannableAddress {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        IpAddr::deserialize(deserializer).map(BannableAddress::new)
+    }
+}
 
 impl BannableAddress {
     pub fn new(ip: IpAddr) -> Self {
@@ -31,20 +49,6 @@ impl BannableAddress {
 
     pub fn ip_addr(&self) -> IpAddr {
         self.0
-    }
-}
-
-impl serde::Serialize for BannableAddress {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(serializer)
-    }
-}
-
-// Deserialize routes through `new` so that persisted bans stored in the mapped form are
-// treated as their plain IPv4 form when loaded.
-impl<'de> serde::Deserialize<'de> for BannableAddress {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        IpAddr::deserialize(deserializer).map(BannableAddress::new)
     }
 }
 

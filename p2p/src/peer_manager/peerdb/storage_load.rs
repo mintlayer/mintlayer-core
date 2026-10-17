@@ -87,8 +87,11 @@ impl LoadedStorage {
             // Rewrite any rows written by an older version under the mapped spelling of an
             // IPv4 address, so the stored keys match the canonical form used at runtime.
             let mut write_tx = storage.transaction_rw()?;
-            write_tx.normalize_legacy_mapped_address_keys()?;
-            write_tx.commit()?;
+            // Commit only when rows were actually rewritten, so the common case of an
+            // already-canonical database stays read-only.
+            if write_tx.normalize_legacy_mapped_address_keys()? {
+                write_tx.commit()?;
+            }
         }
 
         let tx = storage.transaction_ro()?;
