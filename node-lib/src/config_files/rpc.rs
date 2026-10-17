@@ -70,8 +70,8 @@ impl RpcConfigFile {
             .rpc_enabled
             .unwrap_or_else(|| rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
-        let username = username.or(options.rpc_username.clone());
-        let password = password.or(options.rpc_password.clone());
+        let username = username.or_else(|| options.rpc_username.clone());
+        let password = password.or_else(|| options.rpc_password.clone());
         let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
         RpcConfigFile {

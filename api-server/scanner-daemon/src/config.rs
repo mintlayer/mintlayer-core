@@ -98,7 +98,8 @@ mod tests {
     #[test]
     fn redacted_summary_omits_secrets() {
         // Every value that can also come from the ML_API_SCANNER_DAEMON_* environment
-        // variables is passed explicitly, so the test is fully hermetic.
+        // variables is passed explicitly; values not asserted on may still come from the
+        // environment.
         let args = ApiServerScannerArgs::parse_from([
             "scanner-daemon",
             "--network",
