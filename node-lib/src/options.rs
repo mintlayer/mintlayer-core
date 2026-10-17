@@ -241,6 +241,12 @@ pub struct RegtestOptions {
 
 /// A value that must never appear in debug output, meant for command line options holding
 /// credentials so that any debug formatting of the containing struct stays secret-safe.
+/// A value that must never appear in debug output, meant for command line options holding
+/// credentials so that any debug formatting of the containing struct stays secret-safe.
+///
+/// Note: serialization emits the real value so configuration files can round-trip
+/// credentials; do not embed this type in structs that are serialized to logs,
+/// telemetry, or API responses.
 #[derive(Clone, Default)]
 pub struct Redacted<T>(T);
 

@@ -19,6 +19,14 @@ pub mod streaming;
 use clap::Parser;
 use common::chain::config::ChainType;
 
+/// Marker printed in place of any secret-bearing value.
+pub const REDACTED: &str = "<redacted>";
+
+/// Debug-safe replacement for an `Option` that may hold a secret.
+pub fn redact<T>(value: &Option<T>) -> Option<&'static str> {
+    value.as_ref().map(|_| REDACTED)
+}
+
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
     Mainnet,
@@ -83,10 +91,7 @@ impl std::fmt::Debug for PostgresConfig {
             .field("postgres_host", postgres_host)
             .field("postgres_port", postgres_port)
             .field("postgres_user", postgres_user)
-            .field(
-                "postgres_password",
-                &postgres_password.as_ref().map(|_| "<redacted>"),
-            )
+            .field("postgres_password", &redact(postgres_password))
             .field("postgres_database", postgres_database)
             .field("postgres_max_connections", postgres_max_connections)
             .finish()

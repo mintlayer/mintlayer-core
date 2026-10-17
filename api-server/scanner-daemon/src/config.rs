@@ -15,7 +15,7 @@
 
 use clap::Parser;
 
-use api_server_common::{Network, PostgresConfig};
+use api_server_common::{Network, PostgresConfig, redact};
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
 
@@ -66,14 +66,8 @@ impl std::fmt::Debug for ApiServerScannerArgs {
             .field("network", network)
             .field("node_rpc_address", node_rpc_address)
             .field("node_rpc_cookie_file", node_rpc_cookie_file)
-            .field(
-                "node_rpc_username",
-                &node_rpc_username.as_ref().map(|_| "<redacted>"),
-            )
-            .field(
-                "node_rpc_password",
-                &node_rpc_password.as_ref().map(|_| "<redacted>"),
-            )
+            .field("node_rpc_username", &redact(node_rpc_username))
+            .field("node_rpc_password", &redact(node_rpc_password))
             .field("postgres_config", postgres_config)
             .finish()
     }
