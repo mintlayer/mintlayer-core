@@ -288,10 +288,9 @@ pub async fn setup(
                         // change is not applied to a path that is swapped in afterwards;
                         // a path swapped in before the open can still be followed. Failures
                         // are ignored.
-                        let _ =
-                            std::fs::OpenOptions::new().write(true).open(entry.path()).and_then(
-                                |file| file.set_permissions(std::fs::Permissions::from_mode(0o600)),
-                            );
+                        let _ = std::fs::OpenOptions::new().read(true).open(entry.path()).and_then(
+                            |file| file.set_permissions(std::fs::Permissions::from_mode(0o600)),
+                        );
                     }
                 }
             }
