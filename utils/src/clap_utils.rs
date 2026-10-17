@@ -122,8 +122,11 @@ mod tests {
 }
 
 // NOTE: `test-util` is not enabled by default, so `cargo test -p utils` skips these
-// guard tests; they run under `cargo test --workspace` (via the consumer crates'
-// dev-dependencies) or `cargo test -p utils --features test-util`.
+// guard tests, and `cargo test --workspace` does not run them either: with resolver
+// v2/v3, `test-util` enabled by consumer crates' dev-dependencies applies only to the
+// lib units built for those consumers (compiled without `cfg(test)`), never to this
+// crate's own test units. They run only with an explicit
+// `cargo test -p utils --features test-util` (or `--all-features`).
 #[cfg(all(test, feature = "test-util"))]
 mod secret_options_guard_tests {
     use super::*;
