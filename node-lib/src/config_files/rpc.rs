@@ -15,7 +15,7 @@
 
 use std::{net::SocketAddr, str::FromStr};
 
-use crate::RunOptions;
+use crate::{Redacted, RunOptions};
 use chainstate_launcher::ChainConfig;
 use serde::{Deserialize, Serialize};
 
@@ -70,8 +70,8 @@ impl RpcConfigFile {
             .rpc_enabled
             .unwrap_or_else(|| rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
-        let username = username.or(options.rpc_username.clone());
-        let password = password.or(options.rpc_password.clone());
+        let username = username.or(options.rpc_username.clone().map(Redacted::into_inner));
+        let password = password.or(options.rpc_password.clone().map(Redacted::into_inner));
         let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
         RpcConfigFile {

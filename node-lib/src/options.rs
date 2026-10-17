@@ -17,9 +17,11 @@
 
 use std::{
     ffi::OsString,
+    fmt,
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -237,6 +239,43 @@ pub struct RegtestOptions {
     pub chain_config: ChainConfigOptions,
 }
 
+/// A value that must never appear in debug output, meant for command line options holding
+/// credentials so that any debug formatting of the containing struct stays secret-safe.
+#[derive(Clone, Default)]
+pub struct Redacted<T>(T);
+
+impl<T> fmt::Debug for Redacted<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
+impl<T> From<T> for Redacted<T> {
+    fn from(value: T) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: FromStr> FromStr for Redacted<T> {
+    type Err = T::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        T::from_str(s).map(Self)
+    }
+}
+
+impl<T> Redacted<T> {
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+impl<T> AsRef<T> for Redacted<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// Minimum number of connected peers to enable block production.
@@ -412,12 +451,12 @@ pub struct RunOptions {
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
     #[clap(long, value_name = "USERNAME")]
-    pub rpc_username: Option<String>,
+    pub rpc_username: Option<Redacted<String>>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
     #[clap(long, value_name = "PASSWORD")]
-    pub rpc_password: Option<String>,
+    pub rpc_password: Option<Redacted<String>>,
 
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
@@ -451,7 +490,7 @@ pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, str::FromStr as _};
+    use std::collections::BTreeMap;
 
     use rstest::rstest;
 
@@ -574,5 +613,24 @@ mod tests {
             let chain_config = cmd.create_chain_config().unwrap();
             assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
         }
+    }
+}
+
+#[cfg(test)]
+mod redacted_tests {
+    use super::*;
+
+    #[test]
+    fn run_options_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let debug_output = format!("{options:?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
     }
 }

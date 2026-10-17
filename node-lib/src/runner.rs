@@ -271,14 +271,15 @@ pub async fn setup(
             },
         );
         // Log files written by earlier versions may have wider permissions; restrict them too.
-        // Failures are ignored: this is best-effort hardening of existing files.
+        // This is best-effort hardening: the check and the mode change are separate steps, so a
+        // path swapped in between is only skipped or left unchanged, and failures are ignored.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             if let Ok(entries) = std::fs::read_dir(data_dir.join("logs")) {
                 for entry in entries.flatten() {
-                    // Skip directories and symlinks so the mode is never applied through a link
-                    // or to anything but a regular file.
+                    // Skip directories and symlinks so the mode is normally never applied
+                    // through a link or to anything but a regular file.
                     if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
                         continue;
                     }
@@ -332,7 +333,7 @@ pub async fn setup(
         "Command line options (secrets omitted): network: {}, data directory: {:?}, \
          create data dir if missing: {:?}, log to file: {:?}",
         options.command.chain_type().name(),
-        options.top_level.data_dir,
+        data_dir,
         options.top_level.create_data_dir_if_missing,
         options.top_level.log_to_file,
     );

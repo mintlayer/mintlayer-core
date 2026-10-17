@@ -66,19 +66,29 @@ pub struct PostgresConfig {
 }
 
 // The password must never appear in debug output; anything that embeds this struct in a
-// derived Debug (command line option dumps, error types) is safe by construction.
+// derived Debug (command line option dumps, error types) is safe by construction. The
+// destructure has no `..` so a newly added field fails to compile until it is either added
+// here or shown to be safe.
 impl std::fmt::Debug for PostgresConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            postgres_host,
+            postgres_port,
+            postgres_user,
+            postgres_password,
+            postgres_database,
+            postgres_max_connections,
+        } = self;
         f.debug_struct("PostgresConfig")
-            .field("postgres_host", &self.postgres_host)
-            .field("postgres_port", &self.postgres_port)
-            .field("postgres_user", &self.postgres_user)
+            .field("postgres_host", postgres_host)
+            .field("postgres_port", postgres_port)
+            .field("postgres_user", postgres_user)
             .field(
                 "postgres_password",
-                &self.postgres_password.as_ref().map(|_| "<redacted>"),
+                &postgres_password.as_ref().map(|_| "<redacted>"),
             )
-            .field("postgres_database", &self.postgres_database)
-            .field("postgres_max_connections", &self.postgres_max_connections)
+            .field("postgres_database", postgres_database)
+            .field("postgres_max_connections", postgres_max_connections)
             .finish()
     }
 }

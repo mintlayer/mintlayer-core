@@ -52,19 +52,29 @@ pub struct ApiServerScannerArgs {
 // dump of the whole struct is therefore safe by construction.
 impl std::fmt::Debug for ApiServerScannerArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructure without `..` so a newly added field fails to compile until it is either
+        // added here or shown to be safe.
+        let Self {
+            network,
+            node_rpc_address,
+            node_rpc_cookie_file,
+            node_rpc_username,
+            node_rpc_password,
+            postgres_config,
+        } = self;
         f.debug_struct("ApiServerScannerArgs")
-            .field("network", &self.network)
-            .field("node_rpc_address", &self.node_rpc_address)
-            .field("node_rpc_cookie_file", &self.node_rpc_cookie_file)
+            .field("network", network)
+            .field("node_rpc_address", node_rpc_address)
+            .field("node_rpc_cookie_file", node_rpc_cookie_file)
             .field(
                 "node_rpc_username",
-                &self.node_rpc_username.as_ref().map(|_| "<redacted>"),
+                &node_rpc_username.as_ref().map(|_| "<redacted>"),
             )
             .field(
                 "node_rpc_password",
-                &self.node_rpc_password.as_ref().map(|_| "<redacted>"),
+                &node_rpc_password.as_ref().map(|_| "<redacted>"),
             )
-            .field("postgres_config", &self.postgres_config)
+            .field("postgres_config", postgres_config)
             .finish()
     }
 }
@@ -87,8 +97,14 @@ mod tests {
 
     #[test]
     fn redacted_summary_omits_secrets() {
+        // Every asserted value is passed explicitly so the test cannot be affected by
+        // ML_API_SCANNER_DAEMON_* environment variables.
         let args = ApiServerScannerArgs::parse_from([
             "scanner-daemon",
+            "--network",
+            "mainnet",
+            "--node-rpc-cookie-file",
+            "/tmp/rpc-cookie-file",
             "--node-rpc-username",
             "alice",
             "--node-rpc-password",
@@ -98,8 +114,9 @@ mod tests {
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
-        assert!(summary.contains("node RPC address: None"));
-        assert!(summary.contains("node RPC cookie file: None"));
+        // The value of the address depends on the environment, so only its label is asserted.
+        assert!(summary.contains("node RPC address:"));
+        assert!(summary.contains("node RPC cookie file: Some(\"/tmp/rpc-cookie-file\")"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));

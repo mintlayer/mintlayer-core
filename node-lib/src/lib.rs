@@ -34,7 +34,7 @@ pub use config_files::{
 pub use node_daemon_runner::{ExitCode, run_node_daemon};
 pub use options::{
     CLEAN_DATA_OPTION_LONG_NAME, Command, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, Options,
-    OptionsWithResolvedCommand, RunOptions, TopLevelOptions,
+    OptionsWithResolvedCommand, Redacted, RunOptions, TopLevelOptions,
 };
 pub use runner::{NodeSetupResult, NodeType, setup};
 

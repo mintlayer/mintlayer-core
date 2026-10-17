@@ -117,36 +117,52 @@ pub struct ApiServerWebServerConfig {
 // dump of the whole struct is therefore safe by construction.
 impl std::fmt::Debug for ApiServerWebServerConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructure without `..` so a newly added field fails to compile until it is either
+        // added here or shown to be safe.
+        let Self {
+            network,
+            bind_address,
+            postgres_config,
+            enable_post_routes,
+            node_rpc_address,
+            node_rpc_cookie_file,
+            node_rpc_username,
+            node_rpc_password,
+            stream_events_broadcast_capacity,
+            stream_events_max_subscribers,
+            stream_events_poll_interval_secs,
+            stream_events_keepalive_interval_secs,
+        } = self;
         f.debug_struct("ApiServerWebServerConfig")
-            .field("network", &self.network)
-            .field("bind_address", &self.bind_address)
-            .field("node_rpc_address", &self.node_rpc_address)
-            .field("node_rpc_cookie_file", &self.node_rpc_cookie_file)
+            .field("network", network)
+            .field("bind_address", bind_address)
+            .field("node_rpc_address", node_rpc_address)
+            .field("node_rpc_cookie_file", node_rpc_cookie_file)
             .field(
                 "node_rpc_username",
-                &self.node_rpc_username.as_ref().map(|_| "<redacted>"),
+                &node_rpc_username.as_ref().map(|_| "<redacted>"),
             )
             .field(
                 "node_rpc_password",
-                &self.node_rpc_password.as_ref().map(|_| "<redacted>"),
+                &node_rpc_password.as_ref().map(|_| "<redacted>"),
             )
-            .field("postgres_config", &self.postgres_config)
-            .field("enable_post_routes", &self.enable_post_routes)
+            .field("postgres_config", postgres_config)
+            .field("enable_post_routes", enable_post_routes)
             .field(
                 "stream_events_broadcast_capacity",
-                &self.stream_events_broadcast_capacity,
+                stream_events_broadcast_capacity,
             )
             .field(
                 "stream_events_max_subscribers",
-                &self.stream_events_max_subscribers,
+                stream_events_max_subscribers,
             )
             .field(
                 "stream_events_poll_interval_secs",
-                &self.stream_events_poll_interval_secs,
+                stream_events_poll_interval_secs,
             )
             .field(
                 "stream_events_keepalive_interval_secs",
-                &self.stream_events_keepalive_interval_secs,
+                stream_events_keepalive_interval_secs,
             )
             .finish()
     }
@@ -181,8 +197,15 @@ mod tests {
 
     #[test]
     fn redacted_summary_omits_secrets() {
+        // Every asserted value is passed explicitly so the test cannot be affected by
+        // ML_API_WEB_SERVER_* environment variables.
         let args = ApiServerWebServerConfig::parse_from([
             "web-server",
+            "--network",
+            "mainnet",
+            "--bind-address",
+            "127.0.0.1:3000",
+            "--enable-post-routes",
             "--node-rpc-username",
             "alice",
             "--node-rpc-password",
@@ -192,8 +215,9 @@ mod tests {
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
-        assert!(summary.contains("bind address: None"));
-        assert!(summary.contains("enable post routes: false"));
+        assert!(summary.contains("bind address: Some"));
+        assert!(summary.contains("127.0.0.1:3000"));
+        assert!(summary.contains("enable post routes: true"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));
