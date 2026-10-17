@@ -65,8 +65,9 @@ pub fn env_adder_hiding_env_values<'a>(
 }
 
 /// Test helper: asserts that every option named in `secret_options` exists in `cmd`
-/// (recursively, including all nested subcommands) and has its environment-sourced value
-/// hidden from the help output.
+/// (recursively, including all nested subcommands), is bound to an environment variable,
+/// and has its environment-sourced value hidden from the help output.
+#[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
     fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
@@ -83,6 +84,10 @@ pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]
             assert!(
                 arg.is_hide_env_values_set(),
                 "env value of --{long} is not hidden from help"
+            );
+            assert!(
+                arg.get_env().is_some(),
+                "--{long} has no environment variable bound; env wiring was dropped"
             );
             matched.insert(long);
         }
@@ -113,5 +118,58 @@ mod tests {
         let arg = wrap(clap::Arg::new("datadir").long("datadir"));
         assert!(!arg.is_hide_env_values_set());
         assert!(arg.get_env().is_some());
+    }
+}
+
+#[cfg(all(test, feature = "test-util"))]
+mod secret_options_guard_tests {
+    use super::*;
+
+    #[test]
+    fn guard_accepts_a_wired_command_tree() {
+        let cmd = clap::Command::new("root").subcommand(
+            clap::Command::new("sub").arg(
+                add_env("NODE", clap::Arg::new("rpc_password").long("rpc-password"))
+                    .hide_env_values(true),
+            ),
+        );
+        assert_secret_options_hidden(&cmd, &["rpc-password"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "does not match the actual secret options")]
+    fn guard_rejects_a_stale_entry() {
+        let cmd = clap::Command::new("root").arg(
+            add_env("NODE", clap::Arg::new("rpc_password").long("rpc-password"))
+                .hide_env_values(true),
+        );
+        assert_secret_options_hidden(&cmd, &["rpc-password", "old-option"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "does not match the actual secret options")]
+    fn guard_rejects_a_missing_entry() {
+        let cmd = clap::Command::new("root")
+            .arg(add_env("NODE", clap::Arg::new("datadir").long("datadir")));
+        assert_secret_options_hidden(&cmd, &["rpc-password"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "not hidden from help")]
+    fn guard_rejects_an_unhidden_option() {
+        let cmd = clap::Command::new("root").arg(
+            add_env("NODE", clap::Arg::new("rpc_password").long("rpc-password"))
+                // The env wiring is present but the value is not hidden.
+                .hide_env_values(false),
+        );
+        assert_secret_options_hidden(&cmd, &["rpc-password"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "no environment variable bound")]
+    fn guard_rejects_a_dropped_env_binding() {
+        let cmd = clap::Command::new("root")
+            .arg(clap::Arg::new("rpc_password").long("rpc-password").hide_env_values(true));
+        assert_secret_options_hidden(&cmd, &["rpc-password"]);
     }
 }

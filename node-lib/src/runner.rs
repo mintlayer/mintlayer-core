@@ -279,6 +279,14 @@ pub async fn setup(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            // A rotated log file carries the base name plus a dot and a numeric suffix.
+            fn is_rotated_log_name(log_file_name: &str, name: &str) -> bool {
+                name.strip_prefix(log_file_name).is_some_and(|suffix| {
+                    suffix.strip_prefix('.').is_some_and(|rest| {
+                        !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+                    })
+                })
+            }
             match std::fs::read_dir(data_dir.join("logs")) {
                 // The first run has no logs directory yet.
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -292,22 +300,24 @@ pub async fn setup(
                                 continue;
                             }
                         };
-                        // Skip directories and symlinks so the mode is normally never applied
-                        // through a link or to anything but a regular file.
+                        // Skip entries that are not regular files so the mode is normally
+                        // never applied through a link or to anything but a regular file;
+                        // a matching name left as a directory, symlink, or special file is
+                        // reported below instead of being silently ignored.
+                        let name = entry.file_name().to_string_lossy().into_owned();
                         if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
+                            if name == log_file_name || is_rotated_log_name(&log_file_name, &name) {
+                                permission_fix_errors.push((
+                                    entry.path(),
+                                    std::io::Error::other("skipped: not a regular file"),
+                                ));
+                            }
                             continue;
                         }
                         // Only touch the log file of this executable and its rotated variants.
-                        let name = entry.file_name().to_string_lossy().into_owned();
-                        let is_rotated_log =
-                            name.strip_prefix(&log_file_name).is_some_and(|suffix| {
-                                suffix.strip_prefix('.').is_some_and(|rest| {
-                                    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
-                                })
-                            });
-                        if name == log_file_name || is_rotated_log {
+                        if name == log_file_name || is_rotated_log_name(&log_file_name, &name) {
                             // Capture the identity at listing time so a swap between the
-                            // listing and the open is detected by the check below.
+                            // listing and the mode change is detected by the check below.
                             let listed = match entry.metadata() {
                                 Ok(listed) => listed,
                                 Err(err) => {
@@ -315,24 +325,25 @@ pub async fn setup(
                                     continue;
                                 }
                             };
-                            // Open the file and change the mode through the descriptor. A
-                            // path swapped in after this point is reported as a mismatch
-                            // instead of having its mode changed.
-                            if let Err(err) = std::fs::OpenOptions::new()
-                                .read(true)
-                                .open(entry.path())
-                                .and_then(|file| {
-                                    use std::os::unix::fs::MetadataExt;
-                                    let opened = file.metadata()?;
-                                    if (listed.dev(), listed.ino()) != (opened.dev(), opened.ino())
-                                    {
-                                        return Err(std::io::Error::other(
-                                            "log file changed while scanning",
-                                        ));
-                                    }
-                                    file.set_permissions(std::fs::Permissions::from_mode(0o600))
-                                })
-                            {
+                            // Change the mode through the path rather than an open file:
+                            // chmod never blocks, while opening a path swapped in for a FIFO
+                            // would wait for a writer. A swap is instead detected after the
+                            // fact by comparing the listed identity with the path's current
+                            // identity and reported as an error.
+                            if let Err(err) = std::fs::set_permissions(
+                                entry.path(),
+                                std::fs::Permissions::from_mode(0o600),
+                            )
+                            .and_then(|()| {
+                                use std::os::unix::fs::MetadataExt;
+                                let current = std::fs::symlink_metadata(entry.path())?;
+                                if (listed.dev(), listed.ino()) != (current.dev(), current.ino()) {
+                                    return Err(std::io::Error::other(
+                                        "log file changed while scanning",
+                                    ));
+                                }
+                                Ok(())
+                            }) {
                                 permission_fix_errors.push((entry.path(), err));
                             }
                         }

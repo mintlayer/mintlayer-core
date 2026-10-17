@@ -84,6 +84,7 @@ impl RedactedSummary for ApiServerScannerArgs {
         format!("{self:?}")
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

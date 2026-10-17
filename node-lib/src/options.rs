@@ -529,6 +529,17 @@ mod tests {
     };
     use utils::concatln;
 
+    /// Pins the secret option list against the derived command: a renamed field would
+    /// silently stop matching the hiding list in the `mut_args` attributes and leak its
+    /// environment value into `--help`.
+    #[test]
+    fn secret_options_env_values_are_hidden() {
+        utils::clap_utils::assert_secret_options_hidden(
+            &<Options as clap::CommandFactory>::command(),
+            &["rpc-username", "rpc-password"],
+        );
+    }
+
     use super::*;
 
     #[rstest]
