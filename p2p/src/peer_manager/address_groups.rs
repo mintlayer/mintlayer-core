@@ -41,19 +41,23 @@ impl AddressGroup {
         // embedded IPv4 form of an IPv4-mapped IPv6 address happens here. All checks run
         // on the canonical form. Note that other IPv4-embedded encodings (6to4, Teredo,
         // NAT64, IPv4-translated) are not reduced and are grouped as plain IPv6: 6to4
-        // keeps IPv6-style /32 granularity, though only the first two octets of the
-        // embedded IPv4 fall inside the key, while all Teredo (2001:0::/32), all NAT64
+        // keeps per-/16 granularity of the embedded IPv4 (the key holds the 6to4 prefix
+        // plus its first two octets), while all Teredo (2001:0::/32), all NAT64
         // (64:ff9b::/96), and all IPv4-translated (::ffff:0:0:0/96) addresses collapse
-        // into one group bucket each (the all-zero one for IPv4-translated), unlike the
-        // Teredo-aware grouping of Bitcoin Core's GetGroup.
+        // into one group bucket each, unlike the Teredo-aware grouping of Bitcoin
+        // Core's GetGroup.
         let std_ip = address.canonical_ip();
         if std_ip.is_global_unicast_ip() {
             match std_ip {
                 std::net::IpAddr::V4(ip) => AddressGroup::PublicV4(
-                    ip.octets()[0..IPV4_GROUP_BYTES].try_into().expect("must be valid"),
+                    ip.octets()[0..IPV4_GROUP_BYTES]
+                        .try_into()
+                        .expect("group size must not exceed the IPv4 octet count"),
                 ),
                 std::net::IpAddr::V6(ip) => AddressGroup::PublicV6(
-                    ip.octets()[0..IPV6_GROUP_BYTES].try_into().expect("must be valid"),
+                    ip.octets()[0..IPV6_GROUP_BYTES]
+                        .try_into()
+                        .expect("group size must not exceed the IPv6 octet count"),
                 ),
             }
         } else if std_ip.is_loopback() {

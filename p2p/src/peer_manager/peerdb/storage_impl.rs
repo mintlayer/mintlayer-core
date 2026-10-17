@@ -132,7 +132,13 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             if !(key.starts_with("[::ffff:") || key.starts_with("::ffff:")) {
                 return None;
             }
-            let address = key.parse::<SocketAddress>().ok()?;
+            let address = match key.parse::<SocketAddress>() {
+                Ok(address) => address,
+                Err(err) => {
+                    logging::log::warn!("Skipping unparseable legacy address key {key}: {err}");
+                    return None;
+                }
+            };
             let canonical = address.to_string();
             (canonical != key).then_some(canonical)
         }
@@ -141,7 +147,13 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             if !key.starts_with("::ffff:") {
                 return None;
             }
-            let address = key.parse::<BannableAddress>().ok()?;
+            let address = match key.parse::<BannableAddress>() {
+                Ok(address) => address,
+                Err(err) => {
+                    logging::log::warn!("Skipping unparseable legacy ban key {key}: {err}");
+                    return None;
+                }
+            };
             let canonical = address.to_string();
             (canonical != key).then_some(canonical)
         }

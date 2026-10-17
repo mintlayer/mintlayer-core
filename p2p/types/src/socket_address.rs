@@ -41,7 +41,7 @@ pub struct SocketAddress(SocketAddr);
 // matching the wire format of the derived `Serialize`.
 impl<'de> serde::Deserialize<'de> for SocketAddress {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        SocketAddr::deserialize(deserializer).map(SocketAddress::new)
+        <SocketAddr as serde::Deserialize>::deserialize(deserializer).map(SocketAddress::new)
     }
 }
 
@@ -88,6 +88,10 @@ pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
 
 /// Same reduction as [`canonical_ip_addr`], applied to a socket address including its port.
 /// Non-mapped IPv6 addresses are returned untouched, so flowinfo and scope id are preserved.
+/// Same reduction as [`canonical_ip_addr`], applied to a socket address including its
+/// port. Non-mapped IPv6 addresses are returned untouched, so flowinfo and scope id are
+/// preserved. Mapped forms are assumed to carry zero flowinfo/scope id (as RFC 4291
+/// requires), which are then dropped along with the IPv6 framing.
 pub fn canonical_socket_address(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {

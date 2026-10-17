@@ -38,7 +38,7 @@ pub struct BannableAddress(IpAddr);
 // treated as their plain IPv4 form when loaded.
 impl<'de> serde::Deserialize<'de> for BannableAddress {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        IpAddr::deserialize(deserializer).map(BannableAddress::new)
+        <IpAddr as serde::Deserialize>::deserialize(deserializer).map(BannableAddress::new)
     }
 }
 

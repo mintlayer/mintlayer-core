@@ -1217,7 +1217,9 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
     use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
-    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
+    use crate::peer_manager::peerdb::storage_impl::{
+        DBAnchorAddresses, DBBannedAddresses, DBDiscouragedAddresses, DBKnownAddresses,
+    };
     use crate::peer_manager::peerdb::storage_load::LoadedStorage;
     use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
     use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
@@ -1246,6 +1248,19 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
         banned.put("1.2.3.4".to_owned(), Duration::from_secs(120)).unwrap();
         banned.put("::ffff:5.6.7.8".to_owned(), Duration::from_secs(300)).unwrap();
         banned.put("5.6.7.8".to_owned(), Duration::from_secs(120)).unwrap();
+
+        tx.storage()
+            .get_mut::<DBDiscouragedAddresses, _>()
+            .put("::ffff:7.7.7.7".to_owned(), Duration::from_secs(30))
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBDiscouragedAddresses, _>()
+            .put("7.7.7.7".to_owned(), Duration::from_secs(90))
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBAnchorAddresses, _>()
+            .put("[::ffff:8.8.8.8]:8888".to_owned(), ())
+            .unwrap();
         tx.commit().unwrap();
     }
 
@@ -1312,6 +1327,39 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
         tx.storage()
             .get::<DBBannedAddresses, _>()
             .get("::ffff:1.2.3.4")
+            .unwrap()
+            .is_none()
+    );
+
+    // Discouraged rows follow the same later-time-wins rule, and anchor rows keep
+    // their unit value when folded.
+    assert_eq!(
+        tx.storage()
+            .get::<DBDiscouragedAddresses, _>()
+            .get("7.7.7.7")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(90)
+    );
+    assert!(
+        tx.storage()
+            .get::<DBDiscouragedAddresses, _>()
+            .get("::ffff:7.7.7.7")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBAnchorAddresses, _>()
+            .get("8.8.8.8:8888")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBAnchorAddresses, _>()
+            .get("[::ffff:8.8.8.8]:8888")
             .unwrap()
             .is_none()
     );
