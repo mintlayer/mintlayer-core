@@ -64,6 +64,31 @@ pub fn env_adder_hiding_env_values<'a>(
     }
 }
 
+/// Test helper: asserts that every option named in `secret_options` exists in `cmd` and
+/// has its environment-sourced value hidden from the help output.
+#[doc(hidden)]
+pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
+    let all_args = cmd
+        .get_arguments()
+        .chain(cmd.get_subcommands().flat_map(|sub| sub.get_arguments()));
+    let mut matched = std::collections::HashSet::new();
+    for arg in all_args {
+        if let Some(long) = arg.get_long().filter(|long| secret_options.contains(long)) {
+            assert!(
+                arg.is_hide_env_values_set(),
+                "env value of --{long} is not hidden from help"
+            );
+            matched.insert(long);
+        }
+    }
+    assert_eq!(
+        matched,
+        secret_options.iter().copied().collect::<std::collections::HashSet<_>>(),
+        "the secret options list does not match the actual secret options; \
+         stale entries pass silently and missing entries leak env values in --help"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
