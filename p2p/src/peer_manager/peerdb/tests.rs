@@ -1185,6 +1185,8 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
         let mut banned = tx.storage().get_mut::<DBBannedAddresses, _>();
         banned.put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60)).unwrap();
         banned.put("1.2.3.4".to_owned(), Duration::from_secs(120)).unwrap();
+        banned.put("::ffff:5.6.7.8".to_owned(), Duration::from_secs(300)).unwrap();
+        banned.put("5.6.7.8".to_owned(), Duration::from_secs(120)).unwrap();
         tx.commit().unwrap();
     }
 
@@ -1210,7 +1212,8 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
             .is_none()
     );
 
-    // The same merge rule applies to ban rows: the later unban time wins.
+    // The same merge rule applies to ban rows: the later unban time wins, regardless of
+    // whether it comes from the legacy or the canonical row.
     assert_eq!(
         tx.storage()
             .get::<DBBannedAddresses, _>()
@@ -1219,6 +1222,15 @@ fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
             .unwrap()
             .decode(),
         Duration::from_secs(120)
+    );
+    assert_eq!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("5.6.7.8")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(300)
     );
     assert!(
         tx.storage()

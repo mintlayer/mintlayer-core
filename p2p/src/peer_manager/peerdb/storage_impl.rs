@@ -208,7 +208,18 @@ where
     for (legacy_key, canonical_key, legacy_value) in rewrites {
         map.del(&legacy_key)?;
         let value = match map.get(&canonical_key)? {
-            Some(existing) => merge(existing.decode(), legacy_value),
+            Some(existing) => {
+                // Decode explicitly so a corrupt canonical row is reported too.
+                let existing_value = <DBM::Value as serialization::DecodeAll>::decode_all(
+                    &mut existing.as_ref(),
+                )
+                .map_err(|err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Failed to decode the value of the row keyed by {canonical_key}: {err}"
+                    ))
+                })?;
+                merge(existing_value, legacy_value)
+            }
             None => legacy_value,
         };
         map.put(&canonical_key, value)?;
