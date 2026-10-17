@@ -164,7 +164,11 @@ impl std::fmt::Debug for ApiServerWebServerConfig {
 
 // The hand-written Debug impl redacts the secret-bearing fields and guards new fields
 // with an exhaustive destructure, so the summary is the Debug output itself.
-impl RedactedSummary for ApiServerWebServerConfig {}
+impl RedactedSummary for ApiServerWebServerConfig {
+    fn redacted_summary(&self) -> String {
+        format!("{self:?}")
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -202,7 +206,6 @@ mod tests {
         assert!(summary.contains("node_rpc_address: Some("));
         assert!(summary.contains("127.0.0.1"));
         assert!(summary.contains("port: 12345"));
-        assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(summary.contains("node_rpc_username: Some(\"<redacted>\")"));
         assert!(summary.contains("node_rpc_password: Some(\"<redacted>\")"));
@@ -217,6 +220,16 @@ mod tests {
         assert!(!debug_dump.contains("alice"));
         assert!(!debug_dump.contains("supersecret"));
         assert!(!debug_dump.contains("dbsecret"));
+    }
+
+    #[test]
+    fn redacted_summary_renders_absent_secrets_as_none() {
+        let args = ApiServerWebServerConfig::parse_from(["web-server", "--network", "mainnet"]);
+        let summary = args.redacted_summary();
+        assert!(summary.contains("node_rpc_username: None"));
+        assert!(summary.contains("node_rpc_password: None"));
+        assert!(summary.contains("postgres_password: None"));
+        assert!(!summary.contains("<redacted>"));
     }
 }
 

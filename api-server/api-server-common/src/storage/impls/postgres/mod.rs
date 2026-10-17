@@ -76,7 +76,16 @@ impl TransactionalApiServerPostgresStorage {
 
         let config_str =
             format!("host={host} port={port} user={user} {password_part} {database_part}");
-        logging::log::debug!("Using postgres config connection string: {}", config_str);
+        // The connection string contains the database password, so only its redacted form is
+        // logged.
+        let logged_config_str = match password {
+            Some(p) => config_str.replacen(&format!("password={p}"), "password=<redacted>", 1),
+            None => config_str.clone(),
+        };
+        logging::log::debug!(
+            "Using postgres config connection string: {}",
+            logged_config_str
+        );
 
         let config: tokio_postgres::Config =
             config_str.parse().map_err(|e: <tokio_postgres::Config as FromStr>::Err| {

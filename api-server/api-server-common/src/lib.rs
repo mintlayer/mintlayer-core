@@ -28,13 +28,11 @@ pub fn redact<T>(value: &Option<T>) -> Option<&'static str> {
 }
 
 /// A loggable summary of the options, omitting every value that can hold a secret.
-/// Implement this for types whose hand-written Debug impl redacts the secret-bearing
-/// fields and guards new fields with an exhaustive destructure; the summary is then the
-/// Debug output itself and stays correct as fields are added.
+/// Implementors must consciously provide the summary; for types whose hand-written Debug
+/// impl redacts the secret-bearing fields (with an exhaustive destructure guarding new
+/// fields), the body is the Debug output itself.
 pub trait RedactedSummary: std::fmt::Debug {
-    fn redacted_summary(&self) -> String {
-        format!("{self:?}")
-    }
+    fn redacted_summary(&self) -> String;
 }
 
 /// Parses command line arguments, and on failure exits without echoing them: clap errors

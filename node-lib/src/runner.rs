@@ -284,7 +284,14 @@ pub async fn setup(
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
                 Err(err) => permission_fix_errors.push((data_dir.join("logs"), err)),
                 Ok(entries) => {
-                    for entry in entries.flatten() {
+                    for entry in entries {
+                        let entry = match entry {
+                            Ok(entry) => entry,
+                            Err(err) => {
+                                permission_fix_errors.push((data_dir.join("logs"), err));
+                                continue;
+                            }
+                        };
                         // Skip directories and symlinks so the mode is normally never applied
                         // through a link or to anything but a regular file.
                         if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
@@ -312,8 +319,7 @@ pub async fn setup(
                                     let opened = file.metadata()?;
                                     if (listed.dev(), listed.ino()) != (opened.dev(), opened.ino())
                                     {
-                                        return Err(std::io::Error::new(
-                                            std::io::ErrorKind::NotFound,
+                                        return Err(std::io::Error::other(
                                             "log file changed while scanning",
                                         ));
                                     }
