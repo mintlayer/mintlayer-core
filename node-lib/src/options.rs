@@ -248,7 +248,7 @@ pub struct RegtestOptions {
 /// Note: serialization emits the real value so configuration files can round-trip
 /// credentials; do not embed this type in structs that are serialized to logs,
 /// telemetry, or API responses.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct Redacted<T>(T);
 
 impl<T> fmt::Debug for Redacted<T> {

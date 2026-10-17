@@ -17,7 +17,7 @@ use std::{net::SocketAddr, ops::Deref};
 
 use clap::Parser;
 
-use api_server_common::{Network, PostgresConfig, redact};
+use api_server_common::{Network, PostgresConfig, RedactedSummary, redact};
 use tokio::net::TcpListener;
 use utils::{app_version_with_git_info, clap_utils};
 use utils_networking::NetworkAddressWithPort;
@@ -162,15 +162,9 @@ impl std::fmt::Debug for ApiServerWebServerConfig {
     }
 }
 
-impl ApiServerWebServerConfig {
-    /// A loggable summary of the options, omitting every value that can hold a secret.
-    /// Keep this method, not a struct dump, in log statements. The hand-written Debug
-    /// impl redacts the secret-bearing fields and guards new fields with an exhaustive
-    /// destructure, so delegating keeps the summary correct as fields are added.
-    pub fn redacted_summary(&self) -> String {
-        format!("{self:?}")
-    }
-}
+// The hand-written Debug impl redacts the secret-bearing fields and guards new fields
+// with an exhaustive destructure, so the summary is the Debug output itself.
+impl RedactedSummary for ApiServerWebServerConfig {}
 
 #[cfg(test)]
 mod tests {

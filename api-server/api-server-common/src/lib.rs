@@ -27,6 +27,33 @@ pub fn redact<T>(value: &Option<T>) -> Option<&'static str> {
     value.as_ref().map(|_| REDACTED)
 }
 
+/// A loggable summary of the options, omitting every value that can hold a secret.
+/// Implement this for types whose hand-written Debug impl redacts the secret-bearing
+/// fields and guards new fields with an exhaustive destructure; the summary is then the
+/// Debug output itself and stays correct as fields are added.
+pub trait RedactedSummary: std::fmt::Debug {
+    fn redacted_summary(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+/// Parses command line arguments, and on failure exits without echoing them: clap errors
+/// can repeat raw `--flag=value` tokens, which may carry secrets. Help and version output
+/// is rendered as-is.
+pub fn parse_args_or_exit<T: clap::Parser>() -> T {
+    match T::try_parse() {
+        Ok(args) => args,
+        Err(err) => {
+            if err.use_stderr() {
+                eprintln!("Invalid command line arguments; run with --help for usage");
+                std::process::exit(2);
+            }
+            let _ = err.print();
+            std::process::exit(0);
+        }
+    }
+}
+
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
     Mainnet,
@@ -76,7 +103,9 @@ pub struct PostgresConfig {
 // The password must never appear in debug output; anything that embeds this struct in a
 // derived Debug (command line option dumps, error types) is safe by construction. The
 // destructure has no `..` so a newly added field fails to compile until it is either added
-// here or shown to be safe.
+// here or shown to be safe. The database role name in `postgres_user` is not a credential
+// and is shown in clear text, unlike the RPC username, which is part of the basic-auth
+// credential pair.
 impl std::fmt::Debug for PostgresConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
