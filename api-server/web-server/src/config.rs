@@ -29,11 +29,12 @@ use api_server_common::streaming;
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
+/// Options whose values can hold a secret; their environment-sourced values are hidden
+/// from the help output (see the `mut_args` attribute and the guard test below).
+const SECRET_OPTIONS: &[&str] = &["node-rpc-username", "node-rpc-password", "postgres-password"];
+
 #[derive(Parser)]
-#[clap(mut_args(clap_utils::env_adder_hiding_env_values(
-    "API_WEB_SRV",
-    &["node-rpc-username", "node-rpc-password", "postgres-password"]
-)))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values("API_WEB_SRV", SECRET_OPTIONS)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerWebServerConfig {
     /// Network
@@ -178,11 +179,6 @@ mod tests {
     use super::*;
     use api_server_common::REDACTED;
     use clap::CommandFactory;
-
-    /// Options whose values can hold a secret; their environment-sourced values are hidden
-    /// from the help output (see the `mut_args` attribute above).
-    const SECRET_OPTIONS: &[&str] =
-        &["node-rpc-username", "node-rpc-password", "postgres-password"];
 
     #[test]
     fn secret_options_are_hidden_from_help() {

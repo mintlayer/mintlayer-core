@@ -71,15 +71,16 @@ pub fn parse_args_or_exit<T: clap::Parser>() -> T {
 /// text only, never raw argument values.
 fn error_is_value_free(kind: clap::error::ErrorKind) -> bool {
     use clap::error::ErrorKind;
+    // `DisplayHelpOnMissingArgumentOrSubcommand` is deliberately excluded even though its
+    // rendering is stderr-routed and value-free under the `hide_env_values` contract: a
+    // binary configured with `arg_required_else_help` should print the generic message
+    // rather than its full help when invoked with no arguments.
     matches!(
         kind,
         ErrorKind::ArgumentConflict
             | ErrorKind::MissingRequiredArgument
             | ErrorKind::MissingSubcommand
-            | ErrorKind::NoEquals // DisplayHelpOnMissingArgumentOrSubcommand (stderr-routed, value-free under the
-                                  // hide_env_values contract) is deliberately excluded, so a binary configured
-                                  // with `arg_required_else_help` prints the generic message rather than its help
-                                  // on empty arguments.
+            | ErrorKind::NoEquals
     )
 }
 

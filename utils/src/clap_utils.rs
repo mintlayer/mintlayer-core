@@ -64,15 +64,19 @@ pub fn env_adder_hiding_env_values<'a>(
     }
 }
 
-/// Test helper: asserts that every option named in `secret_options` exists in `cmd` and
-/// has its environment-sourced value hidden from the help output.
+/// Test helper: asserts that every option named in `secret_options` exists in `cmd`
+/// (recursively, including all nested subcommands) and has its environment-sourced value
+/// hidden from the help output.
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
-    // Note: only the top-level command and its immediate subcommands are inspected;
-    // args under deeper nested subcommands are not verified.
-    let all_args = cmd
-        .get_arguments()
-        .chain(cmd.get_subcommands().flat_map(|sub| sub.get_arguments()));
+    fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
+        args.extend(cmd.get_arguments());
+        for sub in cmd.get_subcommands() {
+            collect_args(sub, args);
+        }
+    }
+    let mut all_args = Vec::new();
+    collect_args(cmd, &mut all_args);
     let mut matched = std::collections::HashSet::new();
     for arg in all_args {
         if let Some(long) = arg.get_long().filter(|long| secret_options.contains(long)) {
