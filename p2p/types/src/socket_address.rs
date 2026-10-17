@@ -145,4 +145,15 @@ mod mapped_address_tests {
             SocketAddr::V4(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 12345))
         );
     }
+
+    #[test]
+    fn canonical_socket_address_preserves_v6_flowinfo_and_scope_id() {
+        let scoped = SocketAddr::V6(std::net::SocketAddrV6::new(
+            "fe80::1".parse().unwrap(),
+            12345,
+            7,
+            9,
+        ));
+        assert_eq!(canonical_socket_address(scoped), scoped);
+    }
 }
