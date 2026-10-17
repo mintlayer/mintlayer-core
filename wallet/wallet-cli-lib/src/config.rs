@@ -27,25 +27,37 @@ use wallet_rpc_lib::cmdline::CliHardwareWalletType;
 pub enum Network {
     #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
         "MAINNET_WALLET",
-        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+        WALLET_SECRET_OPTIONS
     )))]
     Mainnet(CliArgs),
     #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
         "TESTNET_WALLET",
-        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+        WALLET_SECRET_OPTIONS
     )))]
     Testnet(CliArgs),
     #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
         "REGTEST_WALLET",
-        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+        WALLET_SECRET_OPTIONS
     )))]
     Regtest(Box<RegtestOptions>),
     #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
         "SIGNET_WALLET",
-        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+        WALLET_SECRET_OPTIONS
     )))]
     Signet(CliArgs),
 }
+
+/// Options whose values can hold a secret; their environment-sourced values are hidden
+/// from the help output.
+const WALLET_SECRET_OPTIONS: &[&str] = &[
+    "node-rpc-username",
+    "node-rpc-password",
+    "wallet-rpc-username",
+    "wallet-rpc-password",
+    "wallet-password",
+    "remote-rpc-wallet-username",
+    "remote-rpc-wallet-password",
+];
 
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
@@ -56,7 +68,7 @@ pub struct RegtestOptions {
 }
 
 #[derive(Parser, Debug)]
-#[clap(mut_args(clap_utils::env_adder("WALLET")))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values("WALLET", WALLET_SECRET_OPTIONS)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {

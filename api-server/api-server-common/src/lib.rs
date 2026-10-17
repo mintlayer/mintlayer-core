@@ -113,7 +113,7 @@ impl From<Network> for ChainType {
     }
 }
 
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 pub struct PostgresConfig {
     /// Postgres host
     #[clap(long, default_value = "localhost")]
@@ -190,16 +190,7 @@ mod tests {
     #[test]
     fn default_matches_clap_defaults() {
         let from_clap = PostgresConfig::parse_from(["postgres-config"]);
-        let default = PostgresConfig::default();
-        assert_eq!(from_clap.postgres_host, default.postgres_host);
-        assert_eq!(from_clap.postgres_port, default.postgres_port);
-        assert_eq!(from_clap.postgres_user, default.postgres_user);
-        assert_eq!(from_clap.postgres_password, default.postgres_password);
-        assert_eq!(from_clap.postgres_database, default.postgres_database);
-        assert_eq!(
-            from_clap.postgres_max_connections,
-            default.postgres_max_connections
-        );
+        assert_eq!(from_clap, PostgresConfig::default());
     }
 
     #[test]
