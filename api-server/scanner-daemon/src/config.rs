@@ -75,13 +75,11 @@ impl std::fmt::Debug for ApiServerScannerArgs {
 
 impl ApiServerScannerArgs {
     /// A loggable summary of the options, omitting every value that can hold a secret.
-    /// Keep this method, not a struct dump, in log statements.
+    /// Keep this method, not a struct dump, in log statements. The hand-written Debug
+    /// impl redacts the secret-bearing fields and guards new fields with an exhaustive
+    /// destructure, so delegating keeps the summary correct as fields are added.
     pub fn redacted_summary(&self) -> String {
-        // PostgresConfig's Debug output redacts the database password.
-        format!(
-            "network: {:?}, node RPC address: {:?}, node RPC cookie file: {:?}, postgres: {:?}",
-            self.network, self.node_rpc_address, self.node_rpc_cookie_file, self.postgres_config,
-        )
+        format!("{self:?}")
     }
 }
 
@@ -115,12 +113,14 @@ mod tests {
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
-        assert!(summary.contains("node RPC address: Some("));
+        assert!(summary.contains("node_rpc_address: Some("));
         assert!(summary.contains("127.0.0.1"));
         assert!(summary.contains("port: 12345"));
-        assert!(summary.contains("node RPC cookie file: Some(\"/tmp/rpc-cookie-file\")"));
+        assert!(summary.contains("node_rpc_cookie_file: Some(\"/tmp/rpc-cookie-file\")"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
+        assert!(summary.contains("node_rpc_username: Some(\"<redacted>\")"));
+        assert!(summary.contains("node_rpc_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));
         assert!(!summary.contains("supersecret"));
         assert!(!summary.contains("dbsecret"));

@@ -272,7 +272,10 @@ pub async fn setup(
         );
         // Log files written by earlier versions may have wider permissions; restrict them too.
         // This is best-effort hardening: the check and the mode change are separate steps, so a
-        // path swapped in between is only skipped or left unchanged, and failures are ignored.
+        // path swapped in between is only skipped or left unchanged. Failures are collected and
+        // reported once logging is initialized below.
+        #[cfg(unix)]
+        let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -283,14 +286,26 @@ pub async fn setup(
                     if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
                         continue;
                     }
-                    if entry.file_name().to_string_lossy().contains(".log") {
+                    // Only touch the log file of this executable and its rotated variants.
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let is_rotated_log = name.strip_prefix(&log_file_name).is_some_and(|suffix| {
+                        suffix
+                            .strip_prefix('.')
+                            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+                    });
+                    if name == log_file_name || is_rotated_log {
                         // Open the file and change the mode through the descriptor so the
                         // change is not applied to a path that is swapped in afterwards;
-                        // a path swapped in before the open can still be followed. Failures
-                        // are ignored.
-                        let _ = std::fs::OpenOptions::new().read(true).open(entry.path()).and_then(
-                            |file| file.set_permissions(std::fs::Permissions::from_mode(0o600)),
-                        );
+                        // a path swapped in before the open can still be followed.
+                        if let Err(err) = std::fs::OpenOptions::new()
+                            .read(true)
+                            .open(entry.path())
+                            .and_then(|file| {
+                                file.set_permissions(std::fs::Permissions::from_mode(0o600))
+                            })
+                        {
+                            permission_fix_errors.push((entry.path(), err));
+                        }
                     }
                 }
             }
@@ -316,6 +331,14 @@ pub async fn setup(
                 )),
             }),
         );
+        #[cfg(unix)]
+        for (path, err) in &permission_fix_errors {
+            logging::log::warn!(
+                "Failed to restrict permissions of log file {}: {}",
+                path.display(),
+                err
+            );
+        }
     } else {
         logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
     }

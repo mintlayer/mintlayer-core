@@ -164,24 +164,11 @@ impl std::fmt::Debug for ApiServerWebServerConfig {
 
 impl ApiServerWebServerConfig {
     /// A loggable summary of the options, omitting every value that can hold a secret.
-    /// Keep this method, not a struct dump, in log statements.
+    /// Keep this method, not a struct dump, in log statements. The hand-written Debug
+    /// impl redacts the secret-bearing fields and guards new fields with an exhaustive
+    /// destructure, so delegating keeps the summary correct as fields are added.
     pub fn redacted_summary(&self) -> String {
-        // PostgresConfig's Debug output redacts the database password.
-        format!(
-            "network: {:?}, bind address: {:?}, enable post routes: {}, node RPC address: {:?}, \
-             node RPC cookie file: {:?}, postgres: {:?}, stream events broadcast capacity: {}, \
-             max subscribers: {}, poll interval: {}s, keepalive interval: {}s",
-            self.network,
-            self.bind_address,
-            self.enable_post_routes,
-            self.node_rpc_address,
-            self.node_rpc_cookie_file,
-            self.postgres_config,
-            self.stream_events_broadcast_capacity,
-            self.stream_events_max_subscribers,
-            self.stream_events_poll_interval_secs,
-            self.stream_events_keepalive_interval_secs,
-        )
+        format!("{self:?}")
     }
 }
 
@@ -215,14 +202,16 @@ mod tests {
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
-        assert!(summary.contains("bind address: Some"));
+        assert!(summary.contains("bind_address: Some"));
         assert!(summary.contains("127.0.0.1:3000"));
-        assert!(summary.contains("enable post routes: true"));
-        assert!(summary.contains("node RPC address: Some("));
+        assert!(summary.contains("enable_post_routes: true"));
+        assert!(summary.contains("node_rpc_address: Some("));
         assert!(summary.contains("127.0.0.1"));
         assert!(summary.contains("port: 12345"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
+        assert!(summary.contains("node_rpc_username: Some(\"<redacted>\")"));
+        assert!(summary.contains("node_rpc_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));
         assert!(!summary.contains("supersecret"));
         assert!(!summary.contains("dbsecret"));
