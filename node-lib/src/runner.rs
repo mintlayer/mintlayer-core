@@ -271,9 +271,9 @@ pub async fn setup(
             },
         );
         // Log files written by earlier versions may have wider permissions; restrict them too.
-        // This is best-effort hardening: the check and the mode change are separate steps, so a
-        // path swapped in between is only skipped or left unchanged. Failures are collected and
-        // reported once logging is initialized below.
+        // This is best-effort hardening: the scan and the mode change are separate steps, so a
+        // path swapped in between is skipped or reported. Failures are collected and reported
+        // once logging is initialized below.
         #[cfg(unix)]
         let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
         #[cfg(unix)]
@@ -299,13 +299,24 @@ pub async fn setup(
                                 })
                             });
                         if name == log_file_name || is_rotated_log {
-                            // Open the file and change the mode through the descriptor so the
-                            // change is not applied to a path that is swapped in afterwards;
-                            // a path swapped in before the open can still be followed.
+                            // Open the file and change the mode through the descriptor. A
+                            // path swapped in after the listing could still be followed, so
+                            // compare the listed identity with the opened file and report a
+                            // mismatch instead of changing the mode.
                             if let Err(err) = std::fs::OpenOptions::new()
                                 .read(true)
                                 .open(entry.path())
                                 .and_then(|file| {
+                                    use std::os::unix::fs::MetadataExt;
+                                    let listed = entry.metadata()?;
+                                    let opened = file.metadata()?;
+                                    if (listed.dev(), listed.ino()) != (opened.dev(), opened.ino())
+                                    {
+                                        return Err(std::io::Error::new(
+                                            std::io::ErrorKind::NotFound,
+                                            "log file changed while scanning",
+                                        ));
+                                    }
                                     file.set_permissions(std::fs::Permissions::from_mode(0o600))
                                 })
                             {

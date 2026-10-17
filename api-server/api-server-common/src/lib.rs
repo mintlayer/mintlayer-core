@@ -129,7 +129,8 @@ impl std::fmt::Debug for PostgresConfig {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
-        Self::parse()
+        // Route through the non-echoing parse path.
+        parse_args_or_exit::<PostgresConfig>()
     }
 }
 

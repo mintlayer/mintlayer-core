@@ -245,9 +245,8 @@ pub struct RegtestOptions {
 /// Note: redaction covers debug output only — values passed on the command line remain
 /// visible in process listings and shell history.
 ///
-/// Note: serialization emits the real value so configuration files can round-trip
-/// credentials; do not embed this type in structs that are serialized to logs,
-/// telemetry, or API responses.
+/// Note: serialization is intentionally not supported so that configuration dumps cannot
+/// emit credentials; the type is only deserialized when reading a configuration file.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Redacted<T>(T);
 
@@ -283,17 +282,8 @@ impl<T> AsRef<T> for Redacted<T> {
     }
 }
 
-// Serialization writes the real value so configuration files can round-trip credentials;
-// only debug output is redacted.
-impl<T> serde::Serialize for Redacted<T>
-where
-    T: serde::Serialize,
-{
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(serializer)
-    }
-}
-
+// Serialization is intentionally not supported so that configuration dumps cannot emit
+// credentials; only deserialization (reading a configuration file) is provided.
 impl<'de, T> serde::Deserialize<'de> for Redacted<T>
 where
     T: serde::Deserialize<'de>,
