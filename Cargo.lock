@@ -5679,6 +5679,7 @@ dependencies = [
  "toml 0.8.23",
  "utils",
  "utils-networking",
+ "zeroize",
 ]
 
 [[package]]

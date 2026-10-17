@@ -172,25 +172,21 @@ impl TopLevelOptions {
     }
 }
 
+// Options whose values can hold a secret: RPC credentials and the genesis staking
+// settings, which carry staking and VRF private keys. Their environment-sourced values
+// are hidden from the help output (see the `mut_args` attributes and the guard test).
+const SECRET_OPTIONS: &[&str] = &["rpc-username", "rpc-password", "chain-genesis-staking-settings"];
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the mainnet node.
-    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
-        "MAINNET_NODE",
-        &["rpc-username", "rpc-password"]
-    )))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("MAINNET_NODE", SECRET_OPTIONS)))]
     Mainnet(RunOptions),
     /// Run the testnet node.
-    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
-        "TESTNET_NODE",
-        &["rpc-username", "rpc-password"]
-    )))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("TESTNET_NODE", SECRET_OPTIONS)))]
     Testnet(RunOptions),
     /// Run the regtest node.
-    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
-        "REGTEST_NODE",
-        &["rpc-username", "rpc-password"]
-    )))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("REGTEST_NODE", SECRET_OPTIONS)))]
     Regtest(Box<RegtestOptions>),
 }
 
@@ -259,22 +255,34 @@ pub struct RegtestOptions {
 ///
 /// Note: equality comparison is intentionally not derived; a derived comparison invites
 /// non-constant-time checks on secret values in future authentication decisions.
+///
+/// Note: equality comparison is intentionally not derived; a derived comparison invites
+/// non-constant-time checks on secret values in future authentication decisions.
+///
+/// Note: the inner value is zeroized when the value is dropped, so the memory holding
+/// the credential is wiped instead of lingering in freed memory (for zeroizable types).
 #[derive(Clone, Default)]
-pub struct Redacted<T>(T);
+pub struct Redacted<T: zeroize::Zeroize>(T);
 
-impl<T> fmt::Debug for Redacted<T> {
+impl<T: zeroize::Zeroize> Drop for Redacted<T> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<T: zeroize::Zeroize> fmt::Debug for Redacted<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("<redacted>")
     }
 }
 
-impl<T> From<T> for Redacted<T> {
+impl<T: zeroize::Zeroize> From<T> for Redacted<T> {
     fn from(value: T) -> Self {
         Self(value)
     }
 }
 
-impl<T: FromStr> FromStr for Redacted<T> {
+impl<T: FromStr + zeroize::Zeroize> FromStr for Redacted<T> {
     type Err = T::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -282,13 +290,7 @@ impl<T: FromStr> FromStr for Redacted<T> {
     }
 }
 
-impl<T> Redacted<T> {
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-}
-
-impl<T> AsRef<T> for Redacted<T> {
+impl<T: zeroize::Zeroize> AsRef<T> for Redacted<T> {
     fn as_ref(&self) -> &T {
         &self.0
     }
@@ -296,9 +298,12 @@ impl<T> AsRef<T> for Redacted<T> {
 
 // Serialization is intentionally not supported so that configuration dumps cannot emit
 // credentials; only deserialization (reading a configuration file) is provided.
+// Consuming access is intentionally not provided either: `into_inner` would move the
+// value out of a type with a `Drop` impl, and dropped values are zeroized, not handed
+// out. Read access goes through `AsRef`.
 impl<'de, T> serde::Deserialize<'de> for Redacted<T>
 where
-    T: serde::Deserialize<'de>,
+    T: serde::Deserialize<'de> + zeroize::Zeroize,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         T::deserialize(deserializer).map(Self)
@@ -536,7 +541,7 @@ mod tests {
     fn secret_options_env_values_are_hidden() {
         utils::clap_utils::assert_secret_options_hidden(
             &<Options as clap::CommandFactory>::command(),
-            &["rpc-username", "rpc-password"],
+            SECRET_OPTIONS,
         );
     }
 

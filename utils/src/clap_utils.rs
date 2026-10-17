@@ -51,6 +51,11 @@ pub fn env_adder(infix: &str) -> impl FnMut(Arg) -> Arg + '_ {
 /// Same as [`env_adder`], but the values of the options named in `hidden` are excluded
 /// from the help output, so secrets provided through the environment are not rendered
 /// as `[env: NAME=value]`.
+///
+/// Matching is by exact long name: an option missing from (or misspelled in) `hidden`
+/// silently keeps rendering its environment value in `--help`. Always pair this helper
+/// with [`assert_secret_options_hidden`] in a test so the list is pinned against the
+/// derived command.
 pub fn env_adder_hiding_env_values<'a>(
     infix: &'a str,
     hidden: &'a [&'a str],
@@ -67,6 +72,9 @@ pub fn env_adder_hiding_env_values<'a>(
 /// Test helper: asserts that every option named in `secret_options` exists in `cmd`
 /// (recursively, including all nested subcommands), is bound to an environment variable,
 /// and has its environment-sourced value hidden from the help output.
+// Gated additionally on `test-util` so consumer test suites can reach it through a
+// dev-dependency feature entry, while this crate's own test units get it from plain
+// `cfg(test)`.
 #[cfg(any(test, feature = "test-util"))]
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
@@ -121,11 +129,8 @@ mod tests {
     }
 }
 
-// The helper above is additionally gated on `test-util` for non-test builds; in this
-// crate's own test units plain `cfg(test)` suffices, so the guard tests run under a
-// plain `cargo test -p utils` and in `cargo test --workspace`. Consumer test suites
-// reach the helper through the `test-util` feature enabled in their dev-dependency
-// entries.
+// The helper carries the `test-util` gate (see its definition); these tests exercise it
+// in this crate's own test units, which get it from plain `cfg(test)`.
 #[cfg(test)]
 mod secret_options_guard_tests {
     use super::*;

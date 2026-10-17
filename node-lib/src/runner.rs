@@ -310,9 +310,11 @@ fn collect_log_permission_fix_errors(
                     };
                     // Change the mode through the path rather than an open file: chmod
                     // never blocks, while opening a path swapped in for a FIFO would wait
-                    // for a writer. A swap is instead detected after the fact by
-                    // comparing the listed identity with the path's current identity and
-                    // reported as an error.
+                    // for a writer. The pre-checks above do not follow links, but chmod
+                    // itself does, so a path swapped in between the listing and this call
+                    // could still redirect the mode change; such a swap is detected after
+                    // the fact by comparing the listed identity with the path's current
+                    // identity and reported as an error rather than silently accepted.
                     if let Err(err) = std::fs::set_permissions(
                         entry.path(),
                         std::fs::Permissions::from_mode(0o600),

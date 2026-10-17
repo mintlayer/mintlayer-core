@@ -21,6 +21,9 @@ use utils_networking::NetworkAddressWithPort;
 
 /// Options whose values can hold a secret; their environment-sourced values are hidden
 /// from the help output.
+// NOTE: when adding a secret-bearing field, update BOTH the Debug impl below (the
+// exhaustive destructure enforces this) AND this list (nothing enforces it; the guard
+// test only rejects stale entries, not omissions).
 const SECRET_OPTIONS: &[&str] = &["node-rpc-username", "node-rpc-password", "postgres-password"];
 
 #[derive(Parser)]
