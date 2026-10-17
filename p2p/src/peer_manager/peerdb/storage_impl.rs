@@ -129,12 +129,20 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         let storage = self.storage();
 
         fn canonical_socket_address_spelling(key: &str) -> Option<String> {
+            // Mapped spellings always start with one of these prefixes, so the parse can
+            // be skipped for the vast majority of keys on every startup.
+            if !(key.starts_with("[::ffff:") || key.starts_with("::ffff:")) {
+                return None;
+            }
             let address = key.parse::<SocketAddress>().ok()?;
             let canonical = address.to_string();
             (canonical != key).then_some(canonical)
         }
 
         fn canonical_bannable_address_spelling(key: &str) -> Option<String> {
+            if !key.starts_with("::ffff:") {
+                return None;
+            }
             let address = key.parse::<BannableAddress>().ok()?;
             let canonical = address.to_string();
             (canonical != key).then_some(canonical)
@@ -181,7 +189,10 @@ where
     }
     for (legacy_key, canonical_key, value) in rewrites {
         map.del(&legacy_key)?;
-        map.put(&canonical_key, value)?;
+        // A canonical row written by this version supersedes the legacy one.
+        if map.get(&canonical_key)?.is_none() {
+            map.put(&canonical_key, value)?;
+        }
     }
     Ok(())
 }

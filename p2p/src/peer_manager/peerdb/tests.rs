@@ -1154,3 +1154,54 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
     let canonical_bannable: BannableAddress = "1.2.3.4".parse().unwrap();
     assert_eq!(canonical_bannable.to_string(), "1.2.3.4");
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::DBKnownAddresses;
+    use crate::peer_manager::peerdb::storage_load::LoadedStorage;
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+    use storage::MakeMapRef as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        let mut known = tx.storage().get_mut::<DBKnownAddresses, _>();
+        known
+            .put(
+                "[::ffff:1.2.3.4]:12345".to_owned(),
+                KnownAddressState::Tried,
+            )
+            .unwrap();
+        known.put("1.2.3.4:12345".to_owned(), KnownAddressState::New).unwrap();
+        tx.commit().unwrap();
+    }
+
+    let peerdb_config = test_p2p_config().peer_manager_config.peerdb_config;
+    LoadedStorage::load_storage(&db_store, &peerdb_config, &mut rng).unwrap();
+
+    let tx = db_store.transaction_ro().unwrap();
+    assert_eq!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("1.2.3.4:12345")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        KnownAddressState::New
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+}
