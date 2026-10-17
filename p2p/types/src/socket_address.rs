@@ -19,7 +19,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{bannable_address::BannableAddress, peer_address::PeerAddress};
 
@@ -32,28 +32,34 @@ use crate::{bannable_address::BannableAddress, peer_address::PeerAddress};
     PartialOrd,
     Ord,
     Serialize,
-    Deserialize,
     Hash,
     rpc_description::HasValueHint,
 )]
 pub struct SocketAddress(SocketAddr);
 
+// Deserialize routes through the constructor so that mapped forms are folded on the way in,
+// matching the wire format of the derived `Serialize`.
+impl<'de> serde::Deserialize<'de> for SocketAddress {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        SocketAddr::deserialize(deserializer).map(SocketAddress::new)
+    }
+}
+
 impl SocketAddress {
+    /// The stored address is canonical by construction: IPv4-mapped IPv6 forms are reduced
+    /// to the embedded IPv4 form, so classification, bans, deduplication and storage treat
+    /// `::ffff:a.b.c.d` as the IPv4 address it represents.
     pub fn new(addr: SocketAddr) -> Self {
-        Self(addr)
+        Self(canonical_socket_address(addr))
     }
 
     pub fn socket_addr(&self) -> SocketAddr {
         self.0
     }
 
-    /// The IP address with IPv4-mapped IPv6 addresses reduced to the embedded IPv4 form,
-    /// so that classification, bans and deduplication treat `::ffff:a.b.c.d` as the IPv4
-    /// address it represents. Note that code that keys on the raw form must use this
-    /// accessor (or [`canonical_socket_address`]) on both the insert and the lookup side;
-    /// [`socket_addr`] returns the address unchanged.
+    /// The IP address of the canonical form; see [`SocketAddress::new`].
     pub fn ip_addr(&self) -> IpAddr {
-        canonical_ip_addr(self.0.ip())
+        self.0.ip()
     }
 
     pub fn as_bannable(&self) -> BannableAddress {
@@ -99,7 +105,7 @@ impl FromStr for SocketAddress {
     type Err = AddrParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        SocketAddr::from_str(s).map(SocketAddress)
+        SocketAddr::from_str(s).map(SocketAddress::new)
     }
 }
 
@@ -155,5 +161,20 @@ mod mapped_address_tests {
             9,
         ));
         assert_eq!(canonical_socket_address(scoped), scoped);
+    }
+
+    #[test]
+    fn mapped_forms_are_canonicalized_on_construction() {
+        let plain: SocketAddr = "1.2.3.4:12345".parse().unwrap();
+        let mapped: SocketAddr = "[::ffff:1.2.3.4]:12345".parse().unwrap();
+        assert_eq!(SocketAddress::new(mapped), SocketAddress::new(plain));
+        assert_eq!(
+            "[::ffff:1.2.3.4]:12345".parse::<SocketAddress>().unwrap(),
+            SocketAddress::new(plain)
+        );
+        assert_eq!(
+            serde_json::from_str::<SocketAddress>("\"[::ffff:1.2.3.4]:12345\"").unwrap(),
+            SocketAddress::new(plain)
+        );
     }
 }
