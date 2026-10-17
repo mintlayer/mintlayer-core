@@ -1158,7 +1158,7 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
+fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
     use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
     use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
     use crate::peer_manager::peerdb::storage_load::LoadedStorage;
@@ -1192,6 +1192,7 @@ fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
     LoadedStorage::load_storage(&db_store, &peerdb_config, &mut rng).unwrap();
 
     let tx = db_store.transaction_ro().unwrap();
+    // The legacy Tried state merges over the canonical New state.
     assert_eq!(
         tx.storage()
             .get::<DBKnownAddresses, _>()
@@ -1199,7 +1200,7 @@ fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
             .unwrap()
             .unwrap()
             .decode(),
-        KnownAddressState::New
+        KnownAddressState::Tried
     );
     assert!(
         tx.storage()
@@ -1209,7 +1210,7 @@ fn folded_legacy_rows_do_not_clobber_canonical_ones(#[case] seed: Seed) {
             .is_none()
     );
 
-    // The same merge rule applies to ban rows: the canonical ban keeps its value.
+    // The same merge rule applies to ban rows: the later unban time wins.
     assert_eq!(
         tx.storage()
             .get::<DBBannedAddresses, _>()

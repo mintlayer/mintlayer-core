@@ -41,7 +41,8 @@ impl AddressGroup {
     pub fn from_peer_address(address: &PeerAddress) -> AddressGroup {
         // PeerAddress is not canonicalized at construction, so the reduction to the
         // embedded IPv4 form of an IPv4-mapped IPv6 address happens here. All checks run
-        // on the canonical form.
+        // on the canonical form. Note that other IPv4-embedded encodings (6to4, Teredo,
+        // NAT64, IPv4-translated) are not reduced and are grouped as plain IPv6.
         let std_ip = canonical_ip_addr(std::net::SocketAddr::from(address).ip());
         if std_ip.is_global_unicast_ip() {
             match std_ip {

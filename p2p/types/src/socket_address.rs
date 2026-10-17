@@ -73,6 +73,9 @@ impl SocketAddress {
 
 /// Reduce an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) to the embedded IPv4 address;
 /// any other address is returned unchanged.
+///
+/// Note that only the mapped form is reduced. Other IPv4-embedded encodings (6to4,
+/// Teredo, NAT64, IPv4-translated) are treated as plain IPv6 addresses.
 pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
     match ip {
         IpAddr::V6(v6) => match v6.to_ipv4_mapped() {

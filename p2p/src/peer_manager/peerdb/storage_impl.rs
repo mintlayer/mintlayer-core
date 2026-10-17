@@ -151,18 +151,27 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
             canonical_socket_address_spelling,
+            // A legacy row marked as tried keeps its selection preference.
+            |canonical, legacy| match legacy {
+                KnownAddressState::Tried => legacy,
+                KnownAddressState::New => canonical,
+            },
         )?;
         rekey_mapped_rows(
             &mut storage.get_mut::<DBAnchorAddresses, _>(),
             canonical_socket_address_spelling,
+            |_canonical, _legacy| (),
         )?;
         rekey_mapped_rows(
             &mut storage.get_mut::<DBBannedAddresses, _>(),
             canonical_bannable_address_spelling,
+            // The later unban time wins so the migration cannot shorten a ban.
+            std::cmp::max,
         )?;
         rekey_mapped_rows(
             &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
             canonical_bannable_address_spelling,
+            std::cmp::max,
         )?;
 
         Ok(())
@@ -171,28 +180,38 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
 
 /// Rewrite rows keyed by a non-canonical spelling of an IPv4 address (the mapped form
 /// `::ffff:a.b.c.d` written by an older version) so that the key matches the canonical
-/// spelling used at runtime, keeping the value unchanged.
+/// spelling used at runtime, merging the value with an existing canonical row via
+/// `merge` when one is already present.
 fn rekey_mapped_rows<B, DBM>(
     map: &mut storage::MapMut<'_, storage::TransactionRw<'_, B, Schema>, DBM>,
     canonical_spelling: impl Fn(&str) -> Option<String>,
+    merge: impl Fn(DBM::Value, DBM::Value) -> DBM::Value,
 ) -> crate::Result<()>
 where
     B: storage::SharedBackend,
     DBM: storage::schema::DbMap<Key = String>,
-    DBM::Value: serialization::Encode + serialization::EncodeLike + Clone,
+    DBM::Value: serialization::Encode + serialization::EncodeLike,
 {
     let mut rewrites = Vec::new();
-    for (key, value) in map.prefix_iter(&())? {
+    for (key, encoded) in map.prefix_iter(&())? {
         if let Some(canonical) = canonical_spelling(&key) {
-            rewrites.push((key, canonical, value.decode()));
+            // Decode explicitly so a corrupt row is reported instead of panicking.
+            let value = <DBM::Value as serialization::DecodeAll>::decode_all(&mut encoded.as_ref())
+                .map_err(|err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Failed to decode the value of the row keyed by {key}: {err}"
+                    ))
+                })?;
+            rewrites.push((key, canonical, value));
         }
     }
-    for (legacy_key, canonical_key, value) in rewrites {
+    for (legacy_key, canonical_key, legacy_value) in rewrites {
         map.del(&legacy_key)?;
-        // A canonical row written by this version supersedes the legacy one.
-        if map.get(&canonical_key)?.is_none() {
-            map.put(&canonical_key, value)?;
-        }
+        let value = match map.get(&canonical_key)? {
+            Some(existing) => merge(existing.decode(), legacy_value),
+            None => legacy_value,
+        };
+        map.put(&canonical_key, value)?;
     }
     Ok(())
 }
