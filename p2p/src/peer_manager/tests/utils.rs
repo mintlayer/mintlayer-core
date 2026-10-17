@@ -21,7 +21,10 @@ use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_age
 use logging::log;
 use p2p_test_utils::wait_for_recv;
 use p2p_types::{
-    PeerId, bannable_address::BannableAddress, peer_address::PeerAddress, services::Service,
+    PeerId,
+    bannable_address::BannableAddress,
+    peer_address::{PeerAddress, PeerAddressIp6},
+    services::Service,
     socket_address::SocketAddress,
 };
 use test_utils::{BasicTestTimeGetter, assert_matches_return_val};
@@ -351,7 +354,7 @@ pub async fn add_reserved_peer(
 // Build an IPv4-mapped IPv6 peer address (::ffff:a.b.c.d).
 pub(crate) fn mapped_v6_peer_address(ip: std::net::Ipv4Addr, port: u16) -> PeerAddress {
     let o = ip.octets();
-    PeerAddress::Ip6(crate::types::peer_address::PeerAddressIp6 {
+    PeerAddress::Ip6(PeerAddressIp6 {
         ip: std::net::Ipv6Addr::new(
             0,
             0,

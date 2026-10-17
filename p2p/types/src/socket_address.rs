@@ -78,8 +78,15 @@ pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
 }
 
 /// Same reduction as [`canonical_ip_addr`], applied to a socket address including its port.
+/// Non-mapped IPv6 addresses are returned untouched, so flowinfo and scope id are preserved.
 pub fn canonical_socket_address(addr: SocketAddr) -> SocketAddr {
-    SocketAddr::new(canonical_ip_addr(addr.ip()), addr.port())
+    match addr {
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::new(IpAddr::V4(v4), v6.port()),
+            None => SocketAddr::V6(v6),
+        },
+        v4 => v4,
+    }
 }
 
 impl Display for SocketAddress {
