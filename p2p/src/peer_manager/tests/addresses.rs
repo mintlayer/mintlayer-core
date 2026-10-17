@@ -900,23 +900,7 @@ async fn announce_mapped_ipv4_address_follows_ipv4_rules(#[case] seed: Seed) {
     );
     assert_eq!(pm.peers.len(), 1);
 
-    let mapped = |ip: std::net::Ipv4Addr, port: u16| {
-        let o = ip.octets();
-        PeerAddress::Ip6(p2p_types::peer_address::PeerAddressIp6 {
-            ip: std::net::Ipv6Addr::new(
-                0,
-                0,
-                0,
-                0,
-                0,
-                0xffff,
-                u16::from_be_bytes([o[0], o[1]]),
-                u16::from_be_bytes([o[2], o[3]]),
-            )
-            .into(),
-            port,
-        })
-    };
+    let mapped = crate::peer_manager::tests::utils::mapped_v6_peer_address;
 
     // Non-routable embedded IPv4 addresses are rejected like their plain form; nothing
     // must enter the known address table.

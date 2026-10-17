@@ -1445,7 +1445,9 @@ where
             }
 
             let socket_addr = addr.socket_addr();
-            cur_conn_ip_port_to_role_map.insert((socket_addr.ip(), socket_addr.port()), role);
+            // Key on the canonical ip so that a mapped form (::ffff:a.b.c.d) counts towards
+            // the same per-ip connection limit as the plain ipv4 form.
+            cur_conn_ip_port_to_role_map.insert((addr.ip_addr(), socket_addr.port()), role);
         }
 
         let needed_outbound_full_relay_conn_count = {
@@ -2078,7 +2080,7 @@ where
     ) -> bool {
         assert!(new_peer_role.is_outbound());
 
-        let new_peer_ip = new_peer_addr.socket_addr().ip();
+        let new_peer_ip = new_peer_addr.ip_addr();
         let new_peer_port = new_peer_addr.socket_addr().port();
         existing_connections.range((new_peer_ip, 0)..=(new_peer_ip, u16::MAX)).all(
             |((_, existing_peer_port), existing_peer_role)| {

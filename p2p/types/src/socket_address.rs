@@ -15,7 +15,7 @@
 
 use std::{
     fmt::Display,
-    net::{AddrParseError, IpAddr, SocketAddr, SocketAddrV4},
+    net::{AddrParseError, IpAddr, SocketAddr},
     str::FromStr,
 };
 
@@ -48,8 +48,10 @@ impl SocketAddress {
     }
 
     /// The IP address with IPv4-mapped IPv6 addresses reduced to the embedded IPv4 form,
-    /// so that classification, bans and connection limits treat `::ffff:a.b.c.d` as the
-    /// IPv4 address it represents.
+    /// so that classification, bans and deduplication treat `::ffff:a.b.c.d` as the IPv4
+    /// address it represents. Note that code that keys on the raw form must use this
+    /// accessor (or [`canonical_socket_address`]) on both the insert and the lookup side;
+    /// [`socket_addr`] returns the address unchanged.
     pub fn ip_addr(&self) -> IpAddr {
         canonical_ip_addr(self.0.ip())
     }
@@ -77,13 +79,7 @@ pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
 
 /// Same reduction as [`canonical_ip_addr`], applied to a socket address including its port.
 pub fn canonical_socket_address(addr: SocketAddr) -> SocketAddr {
-    match addr {
-        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
-            Some(v4) => SocketAddr::V4(SocketAddrV4::new(v4, v6.port())),
-            None => SocketAddr::V6(v6),
-        },
-        v4 => v4,
-    }
+    SocketAddr::new(canonical_ip_addr(addr.ip()), addr.port())
 }
 
 impl Display for SocketAddress {
@@ -110,6 +106,7 @@ impl From<SocketAddr> for SocketAddress {
 mod mapped_address_tests {
     use super::*;
     use crate::bannable_address::BannableAddress;
+    use std::net::SocketAddrV4;
 
     #[test]
     fn mapped_addresses_are_canonicalized() {

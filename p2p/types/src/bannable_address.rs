@@ -19,25 +19,32 @@ use std::{
     str::FromStr,
 };
 
-use serde::{Deserialize, Serialize};
-
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    rpc_description::HasValueHint,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, rpc_description::HasValueHint)]
 pub struct BannableAddress(IpAddr);
 
 impl BannableAddress {
     pub fn new(ip: IpAddr) -> Self {
-        Self(ip)
+        // IPv4-mapped IPv6 addresses are reduced to the embedded IPv4 form so that a mapped
+        // address and the plain IPv4 address it represents share one ban key.
+        Self(crate::socket_address::canonical_ip_addr(ip))
+    }
+
+    pub fn ip_addr(&self) -> IpAddr {
+        self.0
+    }
+}
+
+impl serde::Serialize for BannableAddress {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+// Deserialize routes through `new` so that persisted bans stored in the mapped form are
+// treated as their plain IPv4 form when loaded.
+impl<'de> serde::Deserialize<'de> for BannableAddress {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        IpAddr::deserialize(deserializer).map(BannableAddress::new)
     }
 }
 
@@ -51,6 +58,23 @@ impl FromStr for BannableAddress {
     type Err = AddrParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        IpAddr::from_str(s).map(BannableAddress)
+        IpAddr::from_str(s).map(BannableAddress::new)
+    }
+}
+
+#[cfg(test)]
+mod bannable_address_tests {
+    use super::*;
+
+    #[test]
+    fn mapped_addresses_share_the_ban_key_with_the_embedded_ipv4() {
+        let plain = IpAddr::V4(std::net::Ipv4Addr::new(1, 2, 3, 4));
+        let mapped: IpAddr = "::ffff:1.2.3.4".parse().unwrap();
+        assert_eq!(BannableAddress::new(mapped), BannableAddress::new(plain));
+
+        // The serde round trip folds the mapped form into the plain form.
+        let serialized = serde_json::to_string(&BannableAddress::new(mapped)).unwrap();
+        let deserialized: BannableAddress = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, BannableAddress::new(plain));
     }
 }
