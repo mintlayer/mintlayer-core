@@ -270,6 +270,21 @@ pub async fn setup(
                 )
             },
         );
+        // Log files written by earlier versions may have wider permissions; restrict them too.
+        // Failures are ignored: this is best-effort hardening of existing files.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(entries) = std::fs::read_dir(data_dir.join("logs")) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.to_string_lossy().contains(".log") {
+                        let _ =
+                            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+                    }
+                }
+            }
+        }
         let log_file = FileRotate::new(
             data_dir.join(format!("logs/{}", log_file_name)),
             AppendCount::new(13),            // total 14 files
