@@ -51,15 +51,24 @@ impl WalletRpcDaemonArgs {
 #[derive(clap::Subcommand)]
 pub enum WalletRpcDaemonCommand {
     /// Run the mainnet wallet.
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "MAINNET_WALLET_RPC_DAEMON",
+        &["rpc-username", "rpc-password"]
+    )))]
     Mainnet(WalletRpcDaemonChainArgs),
 
     /// Run the testnet wallet.
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "TESTNET_WALLET_RPC_DAEMON",
+        &["rpc-username", "rpc-password"]
+    )))]
     Testnet(WalletRpcDaemonChainArgs),
 
     /// Run the regtest wallet.
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "REGTEST_WALLET_RPC_DAEMON",
+        &["rpc-username", "rpc-password"]
+    )))]
     Regtest {
         #[command(flatten)]
         args: WalletRpcDaemonChainArgs,

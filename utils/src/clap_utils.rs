@@ -53,7 +53,7 @@ pub fn env_adder(infix: &str) -> impl FnMut(Arg) -> Arg + '_ {
 /// as `[env: NAME=value]`.
 pub fn env_adder_hiding_env_values<'a>(
     infix: &'a str,
-    hidden: &'static [&'static str],
+    hidden: &'a [&'a str],
 ) -> impl FnMut(Arg) -> Arg + 'a {
     move |mut arg| {
         arg = add_env(infix, arg);

@@ -25,13 +25,25 @@ use wallet_rpc_lib::cmdline::CliHardwareWalletType;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "MAINNET_WALLET",
+        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+    )))]
     Mainnet(CliArgs),
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "TESTNET_WALLET",
+        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+    )))]
     Testnet(CliArgs),
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "REGTEST_WALLET",
+        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+    )))]
     Regtest(Box<RegtestOptions>),
-    #[clap(mut_args(clap_utils::env_adder("SIGNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "SIGNET_WALLET",
+        &["node-rpc-username", "node-rpc-password", "wallet-rpc-username", "wallet-rpc-password"]
+    )))]
     Signet(CliArgs),
 }
 
