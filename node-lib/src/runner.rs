@@ -277,10 +277,16 @@ pub async fn setup(
             use std::os::unix::fs::PermissionsExt;
             if let Ok(entries) = std::fs::read_dir(data_dir.join("logs")) {
                 for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.to_string_lossy().contains(".log") {
-                        let _ =
-                            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+                    // Skip directories and symlinks so the mode is never applied through a link
+                    // or to anything but a regular file.
+                    if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
+                        continue;
+                    }
+                    if entry.file_name().to_string_lossy().contains(".log") {
+                        let _ = std::fs::set_permissions(
+                            entry.path(),
+                            std::fs::Permissions::from_mode(0o600),
+                        );
                     }
                 }
             }
