@@ -33,10 +33,10 @@ pub struct RpcConfigFile {
     pub bind_address: Option<SocketAddr>,
 
     /// Username for RPC server basic authorization
-    pub username: Option<String>,
+    pub username: Option<Redacted<String>>,
 
     /// Password for RPC server basic authorization
-    pub password: Option<String>,
+    pub password: Option<Redacted<String>>,
 
     /// Custom file path for the RPC cookie file
     pub cookie_file: Option<String>,
@@ -70,8 +70,8 @@ impl RpcConfigFile {
             .rpc_enabled
             .unwrap_or_else(|| rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
-        let username = username.or(options.rpc_username.clone().map(Redacted::into_inner));
-        let password = password.or(options.rpc_password.clone().map(Redacted::into_inner));
+        let username = username.or(options.rpc_username.clone());
+        let password = password.or(options.rpc_password.clone());
         let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
         RpcConfigFile {

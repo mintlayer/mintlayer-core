@@ -197,8 +197,8 @@ mod tests {
 
     #[test]
     fn redacted_summary_omits_secrets() {
-        // Every asserted value is passed explicitly so the test cannot be affected by
-        // ML_API_WEB_SERVER_* environment variables.
+        // Every value that can also come from the ML_API_WEB_SRV_* environment variables
+        // is passed explicitly, so the test is fully hermetic.
         let args = ApiServerWebServerConfig::parse_from([
             "web-server",
             "--network",
@@ -206,10 +206,16 @@ mod tests {
             "--bind-address",
             "127.0.0.1:3000",
             "--enable-post-routes",
+            "--node-rpc-address",
+            "127.0.0.1:12345",
             "--node-rpc-username",
             "alice",
             "--node-rpc-password",
             "supersecret",
+            "--postgres-host",
+            "dbhost",
+            "--postgres-user",
+            "dbuser",
             "--postgres-password",
             "dbsecret",
         ]);

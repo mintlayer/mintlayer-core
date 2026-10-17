@@ -97,25 +97,32 @@ mod tests {
 
     #[test]
     fn redacted_summary_omits_secrets() {
-        // Every asserted value is passed explicitly so the test cannot be affected by
-        // ML_API_SCANNER_DAEMON_* environment variables.
+        // Every value that can also come from the ML_API_SCANNER_DAEMON_* environment
+        // variables is passed explicitly, so the test is fully hermetic.
         let args = ApiServerScannerArgs::parse_from([
             "scanner-daemon",
             "--network",
             "mainnet",
+            "--node-rpc-address",
+            "127.0.0.1:12345",
             "--node-rpc-cookie-file",
             "/tmp/rpc-cookie-file",
             "--node-rpc-username",
             "alice",
             "--node-rpc-password",
             "supersecret",
+            "--postgres-host",
+            "dbhost",
+            "--postgres-user",
+            "dbuser",
             "--postgres-password",
             "dbsecret",
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
-        // The value of the address depends on the environment, so only its label is asserted.
-        assert!(summary.contains("node RPC address:"));
+        assert!(summary.contains("node RPC address: Some("));
+        assert!(summary.contains("127.0.0.1"));
+        assert!(summary.contains("12345"));
         assert!(summary.contains("node RPC cookie file: Some(\"/tmp/rpc-cookie-file\")"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));

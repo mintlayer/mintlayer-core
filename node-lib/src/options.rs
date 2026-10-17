@@ -276,6 +276,26 @@ impl<T> AsRef<T> for Redacted<T> {
     }
 }
 
+// Serialization writes the real value so configuration files can round-trip credentials;
+// only debug output is redacted.
+impl<T> serde::Serialize for Redacted<T>
+where
+    T: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, T> serde::Deserialize<'de> for Redacted<T>
+where
+    T: serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        T::deserialize(deserializer).map(Self)
+    }
+}
+
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// Minimum number of connected peers to enable block production.
@@ -629,6 +649,26 @@ mod redacted_tests {
         };
 
         let debug_output = format!("{options:?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
+    }
+
+    #[test]
+    fn rpc_config_file_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let config = crate::RpcConfigFile::with_run_options(
+            &common::chain::config::create_testnet(),
+            crate::RpcConfigFile::default(),
+            &options,
+        );
+
+        let debug_output = format!("{config:#?}");
         assert!(debug_output.contains("<redacted>"), "{debug_output}");
         assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
         assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");

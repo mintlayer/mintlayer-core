@@ -202,8 +202,8 @@ async fn initialize(
     if rpc_config.rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
             data_dir,
-            rpc_config.username.as_deref(),
-            rpc_config.password.as_deref(),
+            rpc_config.username.as_ref().map(|value| value.as_ref().as_str()),
+            rpc_config.password.as_ref().map(|value| value.as_ref().as_str()),
             rpc_config.cookie_file.as_deref(),
         )?;
 
@@ -284,10 +284,13 @@ pub async fn setup(
                         continue;
                     }
                     if entry.file_name().to_string_lossy().contains(".log") {
-                        let _ = std::fs::set_permissions(
-                            entry.path(),
-                            std::fs::Permissions::from_mode(0o600),
-                        );
+                        // Open the file and change the mode through the descriptor so the
+                        // change cannot be redirected to a different path after the open;
+                        // failures are ignored.
+                        let _ =
+                            std::fs::OpenOptions::new().write(true).open(entry.path()).and_then(
+                                |file| file.set_permissions(std::fs::Permissions::from_mode(0o600)),
+                            );
                     }
                 }
             }

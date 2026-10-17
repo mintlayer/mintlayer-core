@@ -325,11 +325,11 @@ fn read_config_override_values() {
     assert!(config.rpc.clone().unwrap().rpc_enabled.unwrap());
 
     assert_eq!(
-        config.rpc.as_ref().unwrap().username.as_deref(),
+        config.rpc.as_ref().unwrap().username.as_ref().map(|v| v.as_ref().as_str()),
         Some(rpc_username)
     );
     assert_eq!(
-        config.rpc.as_ref().unwrap().password.as_deref(),
+        config.rpc.as_ref().unwrap().password.as_ref().map(|v| v.as_ref().as_str()),
         Some(rpc_password)
     );
     assert_eq!(
