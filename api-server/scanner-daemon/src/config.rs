@@ -98,11 +98,17 @@ mod tests {
         ]);
         let summary = args.redacted_summary();
         assert!(summary.contains("network: Mainnet"));
+        assert!(summary.contains("node RPC address: None"));
+        assert!(summary.contains("node RPC cookie file: None"));
         assert!(summary.contains("postgres"));
+        assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));
         assert!(!summary.contains("supersecret"));
         assert!(!summary.contains("dbsecret"));
         let debug_dump = format!("{args:?}");
+        assert!(debug_dump.contains("ApiServerScannerArgs"));
+        assert!(debug_dump.contains("node_rpc_password: Some(\"<redacted>\")"));
+        assert!(debug_dump.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!debug_dump.contains("alice"));
         assert!(!debug_dump.contains("supersecret"));
         assert!(!debug_dump.contains("dbsecret"));
