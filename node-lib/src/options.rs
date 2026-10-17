@@ -256,9 +256,6 @@ pub struct RegtestOptions {
 /// Note: equality comparison is intentionally not derived; a derived comparison invites
 /// non-constant-time checks on secret values in future authentication decisions.
 ///
-/// Note: equality comparison is intentionally not derived; a derived comparison invites
-/// non-constant-time checks on secret values in future authentication decisions.
-///
 /// Note: the inner value is zeroized when the value is dropped, so the memory holding
 /// the credential is wiped instead of lingering in freed memory (for zeroizable types).
 #[derive(Clone, Default)]

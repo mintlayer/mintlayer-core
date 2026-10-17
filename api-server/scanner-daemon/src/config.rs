@@ -21,9 +21,12 @@ use utils_networking::NetworkAddressWithPort;
 
 /// Options whose values can hold a secret; their environment-sourced values are hidden
 /// from the help output.
-// NOTE: when adding a secret-bearing field, update BOTH the Debug impl below (the
-// exhaustive destructure enforces this) AND this list (nothing enforces it; the guard
-// test only rejects stale entries, not omissions).
+// NOTE: when adding a secret-bearing field to this struct, update BOTH the Debug impl
+// below (the exhaustive destructure enforces this) AND this list (nothing enforces it;
+// the guard test only rejects stale entries, not omissions). A secret-bearing field
+// added to the flattened `PostgresConfig` escapes the destructure here: it is guarded
+// by `PostgresConfig`'s own Debug impl in api-server-common, but it must still be
+// added to this list.
 const SECRET_OPTIONS: &[&str] = &["node-rpc-username", "node-rpc-password", "postgres-password"];
 
 #[derive(Parser)]
