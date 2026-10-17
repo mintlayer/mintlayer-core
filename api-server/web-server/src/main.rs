@@ -14,7 +14,6 @@
 // limitations under the License.
 
 mod api;
-mod config;
 mod error;
 
 use api_server_common::storage::impls::postgres::{
@@ -65,28 +64,11 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     logging::init_logging();
 
     let args = ApiServerWebServerConfig::parse();
-    // The full command line contains secrets (RPC credentials, database password), so only a
-    // curated subset of options that cannot hold secrets is logged.
+    // The command line contains secrets (RPC credentials, database password), so the summary
+    // logged here omits them; see ApiServerWebServerConfig::redacted_summary.
     log::info!(
-        "Command line options (secrets omitted): network: {:?}, bind address: {:?}, \
-         enable post routes: {}, node RPC address: {:?}, node RPC cookie file: {:?}, \
-         postgres host: {}, port: {}, user: {}, database: {:?}, max connections: {}, \
-         stream events broadcast capacity: {}, max subscribers: {}, poll interval: {}s, \
-         keepalive interval: {}s",
-        args.network,
-        args.bind_address,
-        args.enable_post_routes,
-        args.node_rpc_address,
-        args.node_rpc_cookie_file,
-        args.postgres_config.postgres_host,
-        args.postgres_config.postgres_port,
-        args.postgres_config.postgres_user,
-        args.postgres_config.postgres_database,
-        args.postgres_config.postgres_max_connections,
-        args.stream_events_broadcast_capacity,
-        args.stream_events_max_subscribers,
-        args.stream_events_poll_interval_secs,
-        args.stream_events_keepalive_interval_secs,
+        "Command line options (secrets omitted): {}",
+        args.redacted_summary(),
     );
 
     let chain_type: ChainType = args.network.into();

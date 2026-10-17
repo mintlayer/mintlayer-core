@@ -29,7 +29,7 @@ use api_server_common::streaming;
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
-#[derive(Debug, Parser)]
+#[derive(Parser)]
 #[clap(mut_args(clap_utils::env_adder("API_WEB_SRV")))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 pub struct ApiServerWebServerConfig {
@@ -111,6 +111,96 @@ pub struct ApiServerWebServerConfig {
         value_parser = clap::value_parser!(u64).range(1..)
     )]
     pub stream_events_keepalive_interval_secs: u64,
+}
+
+// RPC credentials and the database password must never appear in debug output; a debug
+// dump of the whole struct is therefore safe by construction.
+impl std::fmt::Debug for ApiServerWebServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiServerWebServerConfig")
+            .field("network", &self.network)
+            .field("bind_address", &self.bind_address)
+            .field("node_rpc_address", &self.node_rpc_address)
+            .field("node_rpc_cookie_file", &self.node_rpc_cookie_file)
+            .field(
+                "node_rpc_username",
+                &self.node_rpc_username.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "node_rpc_password",
+                &self.node_rpc_password.as_ref().map(|_| "<redacted>"),
+            )
+            .field("postgres_config", &self.postgres_config)
+            .field("enable_post_routes", &self.enable_post_routes)
+            .field(
+                "stream_events_broadcast_capacity",
+                &self.stream_events_broadcast_capacity,
+            )
+            .field(
+                "stream_events_max_subscribers",
+                &self.stream_events_max_subscribers,
+            )
+            .field(
+                "stream_events_poll_interval_secs",
+                &self.stream_events_poll_interval_secs,
+            )
+            .field(
+                "stream_events_keepalive_interval_secs",
+                &self.stream_events_keepalive_interval_secs,
+            )
+            .finish()
+    }
+}
+
+impl ApiServerWebServerConfig {
+    /// A loggable summary of the options, omitting every value that can hold a secret.
+    /// Keep this method, not a struct dump, in log statements.
+    pub fn redacted_summary(&self) -> String {
+        // PostgresConfig's Debug output redacts the database password.
+        format!(
+            "network: {:?}, bind address: {:?}, enable post routes: {}, node RPC address: {:?}, \
+             node RPC cookie file: {:?}, postgres: {:?}, stream events broadcast capacity: {}, \
+             max subscribers: {}, poll interval: {}s, keepalive interval: {}s",
+            self.network,
+            self.bind_address,
+            self.enable_post_routes,
+            self.node_rpc_address,
+            self.node_rpc_cookie_file,
+            self.postgres_config,
+            self.stream_events_broadcast_capacity,
+            self.stream_events_max_subscribers,
+            self.stream_events_poll_interval_secs,
+            self.stream_events_keepalive_interval_secs,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacted_summary_omits_secrets() {
+        let args = ApiServerWebServerConfig::parse_from([
+            "web-server",
+            "--node-rpc-username",
+            "alice",
+            "--node-rpc-password",
+            "supersecret",
+            "--postgres-password",
+            "dbsecret",
+        ]);
+        let summary = args.redacted_summary();
+        assert!(summary.contains("network: Mainnet"));
+        assert!(summary.contains("postgres"));
+        assert!(!summary.contains("alice"));
+        assert!(!summary.contains("supersecret"));
+        assert!(!summary.contains("dbsecret"));
+        let debug_dump = format!("{args:?}");
+        assert!(!debug_dump.contains("alice"));
+        assert!(!debug_dump.contains("supersecret"));
+        assert!(!debug_dump.contains("dbsecret"));
+    }
 }
 
 #[derive(Clone, Debug, Parser)]

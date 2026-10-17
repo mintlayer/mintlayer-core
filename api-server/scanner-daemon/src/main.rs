@@ -31,20 +31,11 @@ async fn main() -> Result<(), ApiServerScannerError> {
     let args = ApiServerScannerArgs::parse();
 
     logging::init_logging();
-    // The full command line contains secrets (RPC credentials, database password), so only a
-    // curated subset of options that cannot hold secrets is logged.
+    // The command line contains secrets (RPC credentials, database password), so the summary
+    // logged here omits them; see ApiServerScannerArgs::redacted_summary.
     logging::log::info!(
-        "Command line options (secrets omitted): network: {:?}, node RPC address: {:?}, \
-         node RPC cookie file: {:?}, postgres host: {}, port: {}, user: {}, database: {:?}, \
-         max connections: {}",
-        args.network,
-        args.node_rpc_address,
-        args.node_rpc_cookie_file,
-        args.postgres_config.postgres_host,
-        args.postgres_config.postgres_port,
-        args.postgres_config.postgres_user,
-        args.postgres_config.postgres_database,
-        args.postgres_config.postgres_max_connections,
+        "Command line options (secrets omitted): {}",
+        args.redacted_summary(),
     );
 
     let ApiServerScannerArgs {

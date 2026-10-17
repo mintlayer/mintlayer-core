@@ -38,7 +38,7 @@ impl From<Network> for ChainType {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 pub struct PostgresConfig {
     /// Postgres host
     #[clap(long, default_value = "localhost")]
@@ -63,6 +63,24 @@ pub struct PostgresConfig {
     /// Postgres max connections
     #[clap(long, default_value = "10")]
     pub postgres_max_connections: u32,
+}
+
+// The password must never appear in debug output; anything that embeds this struct in a
+// derived Debug (command line option dumps, error types) is safe by construction.
+impl std::fmt::Debug for PostgresConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PostgresConfig")
+            .field("postgres_host", &self.postgres_host)
+            .field("postgres_port", &self.postgres_port)
+            .field("postgres_user", &self.postgres_user)
+            .field(
+                "postgres_password",
+                &self.postgres_password.as_ref().map(|_| "<redacted>"),
+            )
+            .field("postgres_database", &self.postgres_database)
+            .field("postgres_max_connections", &self.postgres_max_connections)
+            .finish()
+    }
 }
 
 impl Default for PostgresConfig {
