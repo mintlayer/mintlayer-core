@@ -72,7 +72,7 @@ impl RpcConfigFile {
 
         let username = username.or_else(|| options.rpc_username.clone());
         let password = password.or_else(|| options.rpc_password.clone());
-        let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
+        let cookie_file = cookie_file.or_else(|| options.rpc_cookie_file.clone());
 
         RpcConfigFile {
             bind_address: Some(bind_address),

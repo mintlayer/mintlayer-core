@@ -225,7 +225,8 @@ mod tests {
         assert!(summary.contains("127.0.0.1:3000"));
         assert!(summary.contains("enable post routes: true"));
         assert!(summary.contains("node RPC address: Some("));
-        assert!(summary.contains("12345"));
+        assert!(summary.contains("127.0.0.1"));
+        assert!(summary.contains("port: 12345"));
         assert!(summary.contains("postgres"));
         assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
         assert!(!summary.contains("alice"));
