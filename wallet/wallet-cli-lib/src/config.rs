@@ -59,6 +59,28 @@ const WALLET_SECRET_OPTIONS: &[&str] = &[
     "remote-rpc-wallet-password",
 ];
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn every_secret_option_has_its_env_value_hidden() {
+        let cmd = WalletCliArgs::command();
+        let all_args = cmd
+            .get_arguments()
+            .chain(cmd.get_subcommands().flat_map(|sub| sub.get_arguments()));
+        for arg in all_args {
+            if let Some(long) = arg.get_long().filter(|long| WALLET_SECRET_OPTIONS.contains(long)) {
+                assert!(
+                    arg.is_hide_env_values_set(),
+                    "env value of --{long} is not hidden from help"
+                );
+            }
+        }
+    }
+}
+
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
     #[clap(flatten)]
