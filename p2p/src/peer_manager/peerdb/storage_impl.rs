@@ -126,8 +126,6 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     }
 
     fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<()> {
-        let storage = self.storage();
-
         fn canonical_socket_address_spelling(key: &str) -> Option<String> {
             // Mapped spellings always start with one of these prefixes, so the parse can
             // be skipped for the vast majority of keys on every startup.
@@ -147,6 +145,8 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             let canonical = address.to_string();
             (canonical != key).then_some(canonical)
         }
+
+        let storage = self.storage();
 
         rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
