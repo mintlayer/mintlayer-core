@@ -276,7 +276,9 @@ pub async fn setup(
             ContentLimit::Bytes(10_000_000), // 10MB each
             Compression::None,
             #[cfg(unix)]
-            None,
+            // Logs can contain sensitive information, so they are only readable by the owner,
+            // like the RPC cookie file.
+            Some(0o600),
         );
         logging::init_logging_generic(
             main_log_writer_settings,
