@@ -76,12 +76,14 @@ impl TransactionalApiServerPostgresStorage {
 
         let config_str =
             format!("host={host} port={port} user={user} {password_part} {database_part}");
-        // The connection string contains the database password, so only its redacted form is
-        // logged.
-        let logged_config_str = match password {
-            Some(p) => config_str.replacen(&format!("password={p}"), "password=<redacted>", 1),
-            None => config_str.clone(),
+        // The logged string is built from the same parts, so it stays parallel to the real
+        // one while the password never appears in it.
+        let logged_password_part = match password {
+            Some(_) => format!("password={}", crate::REDACTED),
+            None => String::new(),
         };
+        let logged_config_str =
+            format!("host={host} port={port} user={user} {logged_password_part} {database_part}");
         logging::log::debug!(
             "Using postgres config connection string: {}",
             logged_config_str

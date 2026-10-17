@@ -36,14 +36,27 @@ pub trait RedactedSummary: std::fmt::Debug {
 }
 
 /// Parses command line arguments, and on failure exits without echoing them: clap errors
-/// can repeat raw `--flag=value` tokens, which may carry secrets. Help and version output
-/// is rendered as-is.
+/// for value-bearing arguments can repeat raw `--flag=value` tokens, which may carry
+/// secrets. Errors that only name flags or render static text (missing arguments,
+/// conflicts, help and version) are printed as-is.
 pub fn parse_args_or_exit<T: clap::Parser>() -> T {
+    use clap::error::ErrorKind;
     match T::try_parse() {
         Ok(args) => args,
         Err(err) => {
+            let value_free = matches!(
+                err.kind(),
+                ErrorKind::ArgumentConflict
+                    | ErrorKind::MissingRequiredArgument
+                    | ErrorKind::MissingSubcommand
+                    | ErrorKind::NoEquals
+            );
             if err.use_stderr() {
-                eprintln!("Invalid command line arguments; run with --help for usage");
+                if value_free {
+                    let _ = err.print();
+                } else {
+                    eprintln!("Invalid command line arguments; run with --help for usage");
+                }
                 std::process::exit(2);
             }
             let _ = err.print();

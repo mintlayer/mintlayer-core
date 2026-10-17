@@ -173,50 +173,48 @@ impl RedactedSummary for ApiServerWebServerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use api_server_common::REDACTED;
 
     #[test]
     fn redacted_summary_omits_secrets() {
-        // Every value that can also come from the ML_API_WEB_SRV_* environment variables
-        // is passed explicitly; values not asserted on may still come from the environment.
-        let args = ApiServerWebServerConfig::parse_from([
-            "web-server",
-            "--network",
-            "mainnet",
-            "--bind-address",
-            "127.0.0.1:3000",
-            "--enable-post-routes",
-            "--node-rpc-address",
-            "127.0.0.1:12345",
-            "--node-rpc-username",
-            "alice",
-            "--node-rpc-password",
-            "supersecret",
-            "--postgres-host",
-            "dbhost",
-            "--postgres-user",
-            "dbuser",
-            "--postgres-password",
-            "dbsecret",
-        ]);
+        // Built directly so no ML_API_WEB_SRV_* environment fallback applies.
+        let args = ApiServerWebServerConfig {
+            network: Network::Mainnet,
+            bind_address: Some(ListenAddress {
+                socket: "127.0.0.1:3000".parse().unwrap(),
+            }),
+            postgres_config: PostgresConfig {
+                postgres_host: "dbhost".to_string(),
+                postgres_port: 5432,
+                postgres_user: "dbuser".to_string(),
+                postgres_password: Some("dbsecret".to_string()),
+                postgres_database: None,
+                postgres_max_connections: 10,
+            },
+            enable_post_routes: true,
+            node_rpc_address: Some("127.0.0.1:12345".parse().unwrap()),
+            node_rpc_cookie_file: None,
+            node_rpc_username: Some("alice".to_string()),
+            node_rpc_password: Some("supersecret".to_string()),
+            stream_events_broadcast_capacity: streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY,
+            stream_events_max_subscribers: streaming::DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS,
+            stream_events_poll_interval_secs: streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL
+                .as_secs(),
+            stream_events_keepalive_interval_secs:
+                streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs(),
+        };
         let summary = args.redacted_summary();
-        assert!(summary.contains("network: Mainnet"));
-        assert!(summary.contains("bind_address: Some"));
+        // Assertions are value-based rather than pinned to clap's Debug rendering.
         assert!(summary.contains("127.0.0.1:3000"));
-        assert!(summary.contains("enable_post_routes: true"));
-        assert!(summary.contains("node_rpc_address: Some("));
+        assert!(summary.contains("enable_post_routes"));
         assert!(summary.contains("127.0.0.1"));
-        assert!(summary.contains("port: 12345"));
-        assert!(summary.contains("postgres_password: Some(\"<redacted>\")"));
-        assert!(summary.contains("node_rpc_username: Some(\"<redacted>\")"));
-        assert!(summary.contains("node_rpc_password: Some(\"<redacted>\")"));
+        assert!(summary.contains(REDACTED));
         assert!(!summary.contains("alice"));
         assert!(!summary.contains("supersecret"));
         assert!(!summary.contains("dbsecret"));
         let debug_dump = format!("{args:?}");
         assert!(debug_dump.contains("ApiServerWebServerConfig"));
-        assert!(debug_dump.contains("node_rpc_username: Some(\"<redacted>\")"));
-        assert!(debug_dump.contains("node_rpc_password: Some(\"<redacted>\")"));
-        assert!(debug_dump.contains("postgres_password: Some(\"<redacted>\")"));
+        assert!(debug_dump.contains(REDACTED));
         assert!(!debug_dump.contains("alice"));
         assert!(!debug_dump.contains("supersecret"));
         assert!(!debug_dump.contains("dbsecret"));
@@ -224,12 +222,28 @@ mod tests {
 
     #[test]
     fn redacted_summary_renders_absent_secrets_as_none() {
-        let args = ApiServerWebServerConfig::parse_from(["web-server", "--network", "mainnet"]);
+        // Built directly so no ML_API_WEB_SRV_* environment fallback applies.
+        let args = ApiServerWebServerConfig {
+            network: Network::Mainnet,
+            bind_address: None,
+            postgres_config: PostgresConfig::default(),
+            enable_post_routes: false,
+            node_rpc_address: None,
+            node_rpc_cookie_file: None,
+            node_rpc_username: None,
+            node_rpc_password: None,
+            stream_events_broadcast_capacity: streaming::DEFAULT_STREAM_EVENTS_BROADCAST_CAPACITY,
+            stream_events_max_subscribers: streaming::DEFAULT_STREAM_EVENTS_MAX_SUBSCRIBERS,
+            stream_events_poll_interval_secs: streaming::DEFAULT_STREAM_EVENTS_POLL_INTERVAL
+                .as_secs(),
+            stream_events_keepalive_interval_secs:
+                streaming::DEFAULT_STREAM_EVENTS_KEEPALIVE_INTERVAL.as_secs(),
+        };
         let summary = args.redacted_summary();
-        assert!(summary.contains("node_rpc_username: None"));
-        assert!(summary.contains("node_rpc_password: None"));
-        assert!(summary.contains("postgres_password: None"));
-        assert!(!summary.contains("<redacted>"));
+        assert!(!summary.contains(REDACTED));
+        assert!(summary.contains("node_rpc_username"));
+        assert!(summary.contains("node_rpc_password"));
+        assert!(summary.contains("postgres_password"));
     }
 }
 

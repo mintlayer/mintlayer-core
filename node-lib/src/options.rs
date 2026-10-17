@@ -247,7 +247,10 @@ pub struct RegtestOptions {
 ///
 /// Note: serialization is intentionally not supported so that configuration dumps cannot
 /// emit credentials; the type is only deserialized when reading a configuration file.
-#[derive(Clone, Default, PartialEq, Eq)]
+///
+/// Note: equality comparison is intentionally not derived; a derived comparison invites
+/// non-constant-time checks on secret values in future authentication decisions.
+#[derive(Clone, Default)]
 pub struct Redacted<T>(T);
 
 impl<T> fmt::Debug for Redacted<T> {
