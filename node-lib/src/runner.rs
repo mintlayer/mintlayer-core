@@ -277,17 +277,19 @@ fn collect_log_permission_fix_errors(
                 // name left as a directory, symlink, or special file is reported below
                 // instead of being silently ignored.
                 let name = entry.file_name().to_string_lossy().into_owned();
+                let is_matching_log_name =
+                    name == log_file_name || is_rotated_log_name(log_file_name, &name);
                 let is_regular_file = match entry.file_type() {
                     Ok(file_type) => file_type.is_file(),
                     Err(err) => {
-                        if name == log_file_name || is_rotated_log_name(log_file_name, &name) {
+                        if is_matching_log_name {
                             permission_fix_errors.push((entry.path(), err));
                         }
                         continue;
                     }
                 };
                 if !is_regular_file {
-                    if name == log_file_name || is_rotated_log_name(log_file_name, &name) {
+                    if is_matching_log_name {
                         permission_fix_errors.push((
                             entry.path(),
                             std::io::Error::other("skipped: not a regular file"),
@@ -296,7 +298,7 @@ fn collect_log_permission_fix_errors(
                     continue;
                 }
                 // Only touch the log file of this executable and its rotated variants.
-                if name == log_file_name || is_rotated_log_name(log_file_name, &name) {
+                if is_matching_log_name {
                     // Capture the identity at listing time so a swap between the listing
                     // and the mode change is detected by the check below.
                     let listed = match entry.metadata() {
