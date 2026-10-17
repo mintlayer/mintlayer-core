@@ -78,9 +78,8 @@ mod bannable_address_tests {
         let mapped: IpAddr = "::ffff:1.2.3.4".parse().unwrap();
         assert_eq!(BannableAddress::new(mapped), BannableAddress::new(plain));
 
-        // The serde round trip folds the mapped form into the plain form.
-        let serialized = serde_json::to_string(&BannableAddress::new(mapped)).unwrap();
-        let deserialized: BannableAddress = serde_json::from_str(&serialized).unwrap();
+        // Deserializing the mapped spelling directly must fold it to the plain form.
+        let deserialized: BannableAddress = serde_json::from_str("\"::ffff:1.2.3.4\"").unwrap();
         assert_eq!(deserialized, BannableAddress::new(plain));
     }
 }

@@ -92,6 +92,8 @@ impl LoadedStorage {
             if write_tx.normalize_legacy_mapped_address_keys()? {
                 write_tx.commit()?;
             }
+            // TODO: once older databases are no longer expected, replace this
+            // every-startup scan with a one-time versioned migration or a stored marker.
         }
 
         let tx = storage.transaction_ro()?;

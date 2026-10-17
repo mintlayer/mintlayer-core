@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::{
-    global_ip::IsGlobalIp, peer_address::PeerAddress, socket_address::canonical_ip_addr,
-};
+use crate::types::{global_ip::IsGlobalIp, peer_address::PeerAddress};
 
 // IPv4 addresses grouped into /16 subnets
 pub const IPV4_GROUP_BYTES: usize = 2;
@@ -48,7 +46,7 @@ impl AddressGroup {
         // (64:ff9b::/96), and all IPv4-translated (::ffff:0:0:0/96) addresses collapse
         // into one group bucket each (the all-zero one for IPv4-translated), unlike the
         // Teredo-aware grouping of Bitcoin Core's GetGroup.
-        let std_ip = canonical_ip_addr(std::net::SocketAddr::from(address).ip());
+        let std_ip = address.canonical_ip();
         if std_ip.is_global_unicast_ip() {
             match std_ip {
                 std::net::IpAddr::V4(ip) => AddressGroup::PublicV4(
