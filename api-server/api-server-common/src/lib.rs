@@ -38,6 +38,21 @@ pub trait RedactedSummary: std::fmt::Debug {
     fn redacted_summary(&self) -> String;
 }
 
+/// Returns a value-free ` for <flag>` suffix naming the rejected argument, or an
+/// empty string when the error carries no invalid-argument context. The rejected
+/// value lives in a separate clap context and is never included in the result.
+fn offending_arg_suffix(err: &clap::Error) -> String {
+    match err.get(clap::error::ContextKind::InvalidArg) {
+        Some(clap::error::ContextValue::String(name)) if name.starts_with('-') => {
+            // Only flag-shaped ids are echoed: for `UnknownArgument` raised on an
+            // unexpected positional token, clap places the raw token itself (the
+            // potential secret) into this same invalid-argument context.
+            format!(" for {name}")
+        }
+        _ => String::new(),
+    }
+}
+
 /// Parses command line arguments, and on failure exits without echoing them: clap errors
 /// for value-bearing arguments can repeat raw `--flag=value` tokens, which may carry
 /// secrets. Only errors whose clap rendering is guaranteed to name flags or static text
@@ -60,10 +75,12 @@ pub fn parse_args_or_exit<T: clap::Parser>() -> T {
                 if error_is_value_free(err.kind()) {
                     let _ = err.print();
                 } else {
-                    // The error kind's rendering is a static category name and can never
-                    // contain argument values, so it is safe to include here.
+                    // The error kind's rendering is a static category name and the
+                    // offending flag's id is value-free, so both are safe to include;
+                    // the value context (e.g. the rejected input) never is.
+                    let offending_arg = offending_arg_suffix(&err);
                     eprintln!(
-                        "Invalid command line arguments ({:?}); run with --help for usage",
+                        "Invalid command line arguments ({:?}){offending_arg}; run with --help for usage",
                         err.kind()
                     );
                 }
@@ -94,6 +111,7 @@ fn error_is_value_free(kind: clap::error::ErrorKind) -> bool {
 
 #[cfg(test)]
 mod parse_args_tests {
+    use super::offending_arg_suffix;
     use clap::error::ErrorKind;
 
     #[test]
@@ -158,6 +176,59 @@ mod parse_args_tests {
             clap::error::ErrorKind::MissingSubcommand
         );
         assert!(!missing_subcommand.render().to_string().contains(secret));
+    }
+
+    #[test]
+    fn offending_arg_suffix_names_the_flag_but_never_the_value() {
+        let cmd = clap::Command::new("canary").arg(
+            clap::Arg::new("postgres-port")
+                .long("postgres-port")
+                .value_parser(clap::value_parser!(usize)),
+        );
+        let err = cmd
+            .try_get_matches_from(["canary", "--postgres-port", "99999999999999999999"])
+            .unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
+        let suffix = offending_arg_suffix(&err);
+        assert!(suffix.contains("postgres-port"), "{suffix}");
+        assert!(!suffix.contains("99999999999999999999"), "{suffix}");
+    }
+
+    #[test]
+    fn no_echo_kinds_never_carry_a_value_in_the_invalid_arg_context() {
+        let secret = "s3cret-canary-value";
+        // `InvalidValue` and `UnknownArgument` reach the generic no-echo message;
+        // neither may smuggle the rejected value through the invalid-argument context.
+        let cmd = clap::Command::new("canary")
+            .arg(
+                clap::Arg::new("rpc-password")
+                    .long("rpc-password")
+                    .value_parser(clap::value_parser!(u16)),
+            )
+            .arg(clap::Arg::new("mode").long("mode").value_parser(["fast", "slow"]));
+
+        let invalid_value =
+            cmd.clone().try_get_matches_from(["canary", "--mode", secret]).unwrap_err();
+        assert_eq!(invalid_value.kind(), clap::error::ErrorKind::InvalidValue);
+        let suffix = offending_arg_suffix(&invalid_value);
+        assert!(suffix.contains("mode"), "{suffix}");
+        assert!(!suffix.contains(secret), "{suffix}");
+
+        // Glue the value to the flag in one token: this is the form whose parse path
+        // could plausibly copy the raw token into the invalid-arg context.
+        let unknown = cmd
+            .clone()
+            .try_get_matches_from(["canary".to_owned(), format!("--unknown={secret}")])
+            .unwrap_err();
+        assert_eq!(unknown.kind(), clap::error::ErrorKind::UnknownArgument);
+        let suffix = offending_arg_suffix(&unknown);
+        assert!(!suffix.contains(secret), "{suffix}");
+
+        // An unexpected bare positional token is also echoed into the invalid-arg
+        // context by clap; the suffix must stay empty there.
+        let bare = cmd.try_get_matches_from(["canary".to_owned(), secret.to_owned()]).unwrap_err();
+        assert_eq!(bare.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(offending_arg_suffix(&bare), "");
     }
 }
 

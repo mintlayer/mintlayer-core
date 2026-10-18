@@ -69,9 +69,6 @@ pub fn env_adder_hiding_env_values<'a>(
     }
 }
 
-/// Test helper: asserts that every option named in `secret_options` exists in `cmd`
-/// (recursively, including all nested subcommands), is bound to an environment variable,
-/// and has its environment-sourced value hidden from the help output.
 // Gated additionally on `test-util` so consumer test suites can reach it through a
 // dev-dependency feature entry, while this crate's own test units get it from plain
 // `cfg(test)`.
@@ -83,6 +80,9 @@ fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
     }
 }
 
+/// Test helper: asserts that every option named in `secret_options` exists in `cmd`
+/// (recursively, including all nested subcommands), is bound to an environment variable,
+/// and has its environment-sourced value hidden from the help output.
 #[cfg(any(test, feature = "test-util"))]
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
@@ -124,11 +124,19 @@ pub fn assert_options_classified(
     secret_options: &[&str],
     non_secret_options: &[&str],
 ) {
+    // Fail safe when a credential-shaped name is classified as non-secret; the
+    // exhaustive classification below is still the authoritative contract.
+    const SECRET_LIKE_MARKERS: &[&str] = &["password", "secret", "token", "key"];
     assert_secret_options_hidden(cmd, secret_options);
     let mut all_args = Vec::new();
     collect_args(cmd, &mut all_args);
-    let longs: std::collections::HashSet<_> =
-        all_args.iter().filter_map(|arg| arg.get_long()).collect();
+    // Arguments that clap generates itself (`help`, `version`) are not part of the
+    // classification contract, which only covers the options this crate declares.
+    let longs: std::collections::HashSet<_> = all_args
+        .iter()
+        .filter_map(|arg| arg.get_long())
+        .filter(|long| !matches!(*long, "help" | "version"))
+        .collect();
     let unclassified: Vec<_> = longs
         .iter()
         .copied()
@@ -146,6 +154,15 @@ pub fn assert_options_classified(
     assert!(
         stale.is_empty(),
         "non-secret options not found in the command (stale entries): {stale:?}"
+    );
+    let secret_shaped: Vec<_> = non_secret_options
+        .iter()
+        .copied()
+        .filter(|long| SECRET_LIKE_MARKERS.iter().any(|marker| long.contains(marker)))
+        .collect();
+    assert!(
+        secret_shaped.is_empty(),
+        "non-secret options with credential-shaped names: {secret_shaped:?}"
     );
 }
 
@@ -239,5 +256,25 @@ mod secret_options_guard_tests {
         let cmd = clap::Command::new("root")
             .arg(add_env("NODE", clap::Arg::new("datadir").long("datadir")));
         assert_options_classified(&cmd, &[], &["datadir", "old-option"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "credential-shaped names")]
+    fn classification_rejects_a_credential_shaped_non_secret_entry() {
+        let cmd = clap::Command::new("root").arg(add_env(
+            "NODE",
+            clap::Arg::new("api_token").long("api-token"),
+        ));
+        assert_options_classified(&cmd, &[], &["api-token"]);
+    }
+
+    #[test]
+    fn classification_ignores_the_generated_help_and_version_args() {
+        let mut cmd = clap::Command::new("root")
+            .version("1.0")
+            .arg(add_env("NODE", clap::Arg::new("datadir").long("datadir")));
+        // Build the command so clap generates its own help and version arguments.
+        cmd.build();
+        assert_options_classified(&cmd, &[], &["datadir"]);
     }
 }

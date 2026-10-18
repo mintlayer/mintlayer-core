@@ -205,6 +205,7 @@ mod genesis_staking_settings_tests {
         .unwrap();
         let rendering = format!("{settings:?}");
         assert!(rendering.contains("<redacted>"), "{rendering}");
+        assert!(rendering.contains(GENESIS_POOL_ID), "{rendering}");
         assert!(
             !rendering.contains("8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"),
             "{rendering}"
@@ -219,7 +220,10 @@ impl Display for GenesisStakingSettings {
     // This rendering deliberately includes the private keys: it is the value format of
     // the --chain-genesis-staking-settings option (rendered as the clap default and
     // parsed back by FromStr). It is an input format, never a log format, and must not
-    // be used in diagnostics; Debug above prints the redacted form.
+    // be used in diagnostics; Debug above prints the redacted form. Rendering the
+    // default in --help is intentional as well: the shipped defaults are public
+    // constants in this repository, and the rendering doubles as the format example
+    // for operators supplying their own settings.
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut values = vec![];
 

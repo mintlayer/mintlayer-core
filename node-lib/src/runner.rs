@@ -243,7 +243,8 @@ async fn initialize(
 /// Restricts the permissions of log files left by earlier versions (which may hold
 /// material dumped from the command line) to owner-only. Returns per-file failures and
 /// the skipped non-regular entries so the caller can report everything once logging is
-/// initialized.
+/// initialized. Unix only: Windows keeps its own ACL model, so no equivalent
+/// restriction is applied there.
 #[cfg(unix)]
 fn collect_log_permission_fix_errors(
     data_dir: &std::path::Path,
@@ -269,11 +270,20 @@ fn collect_log_permission_fix_errors(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => permission_fix_errors.push((data_dir.join("logs"), err)),
         Ok(entries) => {
+            // A failing entry yields only an io::Error without its path, so the failure
+            // is reported once against the directory; later repeats add no information.
+            let mut directory_read_error_reported = false;
+            let mut suppressed_read_errors: usize = 0;
             for entry in entries {
                 let entry = match entry {
                     Ok(entry) => entry,
                     Err(err) => {
-                        permission_fix_errors.push((data_dir.join("logs"), err));
+                        if !directory_read_error_reported {
+                            permission_fix_errors.push((data_dir.join("logs"), err));
+                            directory_read_error_reported = true;
+                        } else {
+                            suppressed_read_errors += 1;
+                        }
                         continue;
                     }
                 };
@@ -331,6 +341,14 @@ fn collect_log_permission_fix_errors(
                     }
                 }
             }
+            if suppressed_read_errors > 0 {
+                permission_fix_errors.push((
+                    data_dir.join("logs"),
+                    std::io::Error::other(format!(
+                        "{suppressed_read_errors} further directory read failures suppressed"
+                    )),
+                ));
+            }
         }
     }
     (permission_fix_errors, skipped_entries)
@@ -370,6 +388,8 @@ pub async fn setup(
     // file. The scan and the mode change are separate steps, so a path swapped in between
     // is skipped or reported. Failures are reported once logging is initialized below.
     // A --clean-data-dir run deletes the whole directory, so the scan is skipped there.
+    // The scan is a synchronous one-shot during startup, before the runtime serves any
+    // request, so blocking the async context here is acceptable.
     #[cfg(unix)]
     let (permission_fix_errors, skipped_log_entries) = if options.clean_data_option_set() {
         (Vec::new(), Vec::new())
