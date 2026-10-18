@@ -188,9 +188,35 @@ mod tests {
 
     #[test]
     fn secret_options_are_hidden_from_help() {
-        clap_utils::assert_secret_options_hidden(
-            &ApiServerWebServerConfig::command(),
-            SECRET_OPTIONS,
+        let cmd = ApiServerWebServerConfig::command();
+        clap_utils::assert_secret_options_hidden(&cmd, SECRET_OPTIONS);
+
+        // Options explicitly classified as non-secret; anything else must be listed in
+        // SECRET_OPTIONS or the assertion below fails.
+        const NON_SECRET_OPTIONS: &[&str] = &[
+            "network",
+            "bind-address",
+            "enable-post-routes",
+            "node-rpc-address",
+            "node-rpc-cookie-file",
+            "postgres-host",
+            "postgres-port",
+            "postgres-user",
+            "postgres-database",
+            "postgres-max-connections",
+            "stream-events-broadcast-capacity",
+            "stream-events-max-subscribers",
+            "stream-events-poll-interval-secs",
+            "stream-events-keepalive-interval-secs",
+        ];
+        let unclassified: Vec<_> = cmd
+            .get_arguments()
+            .filter_map(|arg| arg.get_long())
+            .filter(|long| !SECRET_OPTIONS.contains(long) && !NON_SECRET_OPTIONS.contains(long))
+            .collect();
+        assert!(
+            unclassified.is_empty(),
+            "env-bound options not classified as secret or non-secret: {unclassified:?}"
         );
     }
 

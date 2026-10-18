@@ -100,9 +100,12 @@ pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]
             matched.insert(long);
         }
     }
+    let mut matched: Vec<_> = matched.into_iter().collect();
+    let mut expected: Vec<_> = secret_options.to_vec();
+    matched.sort_unstable();
+    expected.sort_unstable();
     assert_eq!(
-        matched,
-        secret_options.iter().copied().collect::<std::collections::HashSet<_>>(),
+        matched, expected,
         "the secret options list does not match the actual secret options; \
          stale entries pass silently and missing entries leak env values in --help"
     );
@@ -122,6 +125,7 @@ mod tests {
 
         let arg = wrap(clap::Arg::new("rpc_username").long("rpc-username"));
         assert!(arg.is_hide_env_values_set());
+        assert!(arg.get_env().is_some());
 
         let arg = wrap(clap::Arg::new("datadir").long("datadir"));
         assert!(!arg.is_hide_env_values_set());

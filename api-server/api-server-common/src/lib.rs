@@ -177,18 +177,23 @@ impl From<Network> for ChainType {
     }
 }
 
+const DEFAULT_POSTGRES_HOST: &str = "localhost";
+const DEFAULT_POSTGRES_PORT: u16 = 5432;
+const DEFAULT_POSTGRES_USER: &str = "postgres";
+const DEFAULT_POSTGRES_MAX_CONNECTIONS: u32 = 10;
+
 #[derive(Parser, PartialEq)]
 pub struct PostgresConfig {
     /// Postgres host
-    #[clap(long, default_value = "localhost")]
+    #[clap(long, default_value = DEFAULT_POSTGRES_HOST)]
     pub postgres_host: String,
 
     /// Postgres port
-    #[clap(long, default_value = "5432")]
+    #[clap(long, default_value_t = DEFAULT_POSTGRES_PORT)]
     pub postgres_port: u16,
 
     /// Postgres user
-    #[clap(long, default_value = "postgres")]
+    #[clap(long, default_value = DEFAULT_POSTGRES_USER)]
     pub postgres_user: String,
 
     /// Postgres password
@@ -200,7 +205,7 @@ pub struct PostgresConfig {
     pub postgres_database: Option<String>,
 
     /// Postgres max connections
-    #[clap(long, default_value = "10")]
+    #[clap(long, default_value_t = DEFAULT_POSTGRES_MAX_CONNECTIONS)]
     pub postgres_max_connections: u32,
 }
 
@@ -233,16 +238,15 @@ impl std::fmt::Debug for PostgresConfig {
 
 impl Default for PostgresConfig {
     fn default() -> Self {
-        // Literal defaults mirroring the clap `default_value` attributes above; parsing
-        // here would read the process's real arguments and is not safe outside of the
-        // actual CLI startup.
+        // Shared constants, not parsing: parsing here would read the process's real
+        // arguments and is not safe outside of the actual CLI startup.
         Self {
-            postgres_host: "localhost".to_string(),
-            postgres_port: 5432,
-            postgres_user: "postgres".to_string(),
+            postgres_host: DEFAULT_POSTGRES_HOST.to_string(),
+            postgres_port: DEFAULT_POSTGRES_PORT,
+            postgres_user: DEFAULT_POSTGRES_USER.to_string(),
             postgres_password: None,
             postgres_database: None,
-            postgres_max_connections: 10,
+            postgres_max_connections: DEFAULT_POSTGRES_MAX_CONNECTIONS,
         }
     }
 }
