@@ -23,7 +23,9 @@ use utils_networking::NetworkAddressWithPort;
 /// from the help output.
 // NOTE: when adding a secret-bearing field to this struct, update BOTH the Debug impl
 // below (the exhaustive destructure enforces this) AND this list (nothing enforces it;
-// the guard test only rejects stale entries, not omissions). A secret-bearing field
+// the classification check in the guard test rejects omissions: any new option left
+// out of both SECRET_OPTIONS and NON_SECRET_OPTIONS fails the test, though it cannot
+// tell which list an option belongs in). A secret-bearing field
 // added to the flattened `PostgresConfig` escapes the destructure here: it is guarded
 // by `PostgresConfig`'s own Debug impl in api-server-common, but it must still be
 // added to this list.

@@ -76,14 +76,16 @@ pub fn env_adder_hiding_env_values<'a>(
 // dev-dependency feature entry, while this crate's own test units get it from plain
 // `cfg(test)`.
 #[cfg(any(test, feature = "test-util"))]
+fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
+    args.extend(cmd.get_arguments());
+    for sub in cmd.get_subcommands() {
+        collect_args(sub, args);
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
 #[doc(hidden)]
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
-    fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
-        args.extend(cmd.get_arguments());
-        for sub in cmd.get_subcommands() {
-            collect_args(sub, args);
-        }
-    }
     let mut all_args = Vec::new();
     collect_args(cmd, &mut all_args);
     let mut matched = std::collections::HashSet::new();
@@ -122,8 +124,10 @@ pub fn assert_options_classified(
     non_secret_options: &[&str],
 ) {
     assert_secret_options_hidden(cmd, secret_options);
+    let mut all_args = Vec::new();
+    collect_args(cmd, &mut all_args);
     let longs: std::collections::HashSet<_> =
-        cmd.get_arguments().filter_map(|arg| arg.get_long()).collect();
+        all_args.iter().filter_map(|arg| arg.get_long()).collect();
     let unclassified: Vec<_> = longs
         .iter()
         .copied()
@@ -131,7 +135,7 @@ pub fn assert_options_classified(
         .collect();
     assert!(
         unclassified.is_empty(),
-        "env-bound options not classified as secret or non-secret: {unclassified:?}"
+        "options not classified as secret or non-secret: {unclassified:?}"
     );
     let stale: Vec<_> = non_secret_options
         .iter()
@@ -218,5 +222,21 @@ mod secret_options_guard_tests {
         let cmd = clap::Command::new("root")
             .arg(clap::Arg::new("rpc_password").long("rpc-password").hide_env_values(true));
         assert_secret_options_hidden(&cmd, &["rpc-password"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "not classified as secret or non-secret")]
+    fn classification_rejects_an_unclassified_option() {
+        let cmd = clap::Command::new("root")
+            .arg(add_env("NODE", clap::Arg::new("datadir").long("datadir")));
+        assert_options_classified(&cmd, &[], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "stale entries")]
+    fn classification_rejects_a_stale_non_secret_entry() {
+        let cmd = clap::Command::new("root")
+            .arg(add_env("NODE", clap::Arg::new("datadir").long("datadir")));
+        assert_options_classified(&cmd, &[], &["datadir", "old-option"]);
     }
 }
