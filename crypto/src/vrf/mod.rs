@@ -55,15 +55,29 @@ pub enum VRFKeyKind {
 }
 
 #[must_use]
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(PartialEq, Eq, Clone, Decode, Encode)]
 pub struct VRFPrivateKey {
     key: VRFPrivateKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+impl std::fmt::Debug for VRFPrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Keep the key material out of the formatted output; this type can end up in
+        // log lines through derived Debug impls of larger structures.
+        f.write_str("VRFPrivateKey(<redacted>)")
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Decode, Encode)]
 pub(crate) enum VRFPrivateKeyHolder {
     #[codec(index = 0)]
     Schnorrkel(SchnorrkelPrivateKey),
+}
+
+impl std::fmt::Debug for VRFPrivateKeyHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("VRFPrivateKeyHolder(<redacted>)")
+    }
 }
 
 #[must_use]
@@ -347,6 +361,14 @@ mod tests {
     use self::transcript::no_rng::VRFTranscript;
 
     use super::*;
+
+    #[test]
+    fn private_key_debug_hides_key_material() {
+        let mut rng = make_seedable_rng(Seed::from_entropy());
+        let (sk, _pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        assert_eq!(format!("{sk:?}"), "VRFPrivateKey(<redacted>)");
+    }
 
     #[rstest]
     #[trace]
