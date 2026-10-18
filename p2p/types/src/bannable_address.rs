@@ -35,7 +35,10 @@ use std::{
 pub struct BannableAddress(IpAddr);
 
 // Deserialize routes through `new` so that persisted bans stored in the mapped form are
-// treated as their plain IPv4 form when loaded.
+// treated as their plain IPv4 form when loaded. Serialization round-trips are therefore
+// normalizing, not identity-preserving: a value serialized as `"::ffff:a.b.c.d"` reads
+// back as `a.b.c.d`. This is intended (one address, one ban key), but any serialized
+// consumer of this type sees the canonical form after a round-trip.
 impl<'de> serde::Deserialize<'de> for BannableAddress {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         <IpAddr as serde::Deserialize>::deserialize(deserializer).map(BannableAddress::new)
