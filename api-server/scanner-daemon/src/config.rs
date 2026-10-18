@@ -114,14 +114,25 @@ mod tests {
             "postgres-database",
             "postgres-max-connections",
         ];
-        let unclassified: Vec<_> = cmd
-            .get_arguments()
-            .filter_map(|arg| arg.get_long())
+        let longs: std::collections::HashSet<_> =
+            cmd.get_arguments().filter_map(|arg| arg.get_long()).collect();
+        let unclassified: Vec<_> = longs
+            .iter()
+            .copied()
             .filter(|long| !SECRET_OPTIONS.contains(long) && !NON_SECRET_OPTIONS.contains(long))
             .collect();
         assert!(
             unclassified.is_empty(),
             "env-bound options not classified as secret or non-secret: {unclassified:?}"
+        );
+        let stale: Vec<_> = NON_SECRET_OPTIONS
+            .iter()
+            .copied()
+            .filter(|long| !longs.contains(long))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "non-secret options not found in the command (stale entries): {stale:?}"
         );
     }
 
