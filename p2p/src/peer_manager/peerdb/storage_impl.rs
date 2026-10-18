@@ -159,12 +159,21 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
             }
         }
 
+        const MAPPED_SOCKET_ADDRESS_PREFIX: &str = "[::ffff:";
+        const MAPPED_BANNABLE_ADDRESS_PREFIX: &str = "::ffff:";
+
         let storage = self.storage();
         let mut rewrote_any = false;
 
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
-            |key| canonical_spelling::<SocketAddress>("known addresses", key, "[::ffff:"),
+            |key| {
+                canonical_spelling::<SocketAddress>(
+                    "known addresses",
+                    key,
+                    MAPPED_SOCKET_ADDRESS_PREFIX,
+                )
+            },
             // A legacy row marked as tried keeps its selection preference.
             |canonical, legacy| match legacy {
                 KnownAddressState::Tried => legacy,
@@ -173,18 +182,36 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBAnchorAddresses, _>(),
-            |key| canonical_spelling::<SocketAddress>("anchor addresses", key, "[::ffff:"),
+            |key| {
+                canonical_spelling::<SocketAddress>(
+                    "anchor addresses",
+                    key,
+                    MAPPED_SOCKET_ADDRESS_PREFIX,
+                )
+            },
             |_canonical, _legacy| (),
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBBannedAddresses, _>(),
-            |key| canonical_spelling::<BannableAddress>("banned addresses", key, "::ffff:"),
+            |key| {
+                canonical_spelling::<BannableAddress>(
+                    "banned addresses",
+                    key,
+                    MAPPED_BANNABLE_ADDRESS_PREFIX,
+                )
+            },
             // The later unban time wins so the migration cannot shorten a ban.
             std::cmp::max,
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
-            |key| canonical_spelling::<BannableAddress>("discouraged addresses", key, "::ffff:"),
+            |key| {
+                canonical_spelling::<BannableAddress>(
+                    "discouraged addresses",
+                    key,
+                    MAPPED_BANNABLE_ADDRESS_PREFIX,
+                )
+            },
             std::cmp::max,
         )?;
 

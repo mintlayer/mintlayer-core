@@ -1184,6 +1184,10 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
                 KnownAddressState::New,
             )
             .unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:not-an-ip".to_owned(), Duration::from_secs(60))
+            .unwrap();
         tx.commit().unwrap();
     }
 
@@ -1202,6 +1206,13 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
         tx.storage()
             .get::<DBKnownAddresses, _>()
             .get("[::ffff:not-an-address]:12345")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:not-an-ip")
             .unwrap()
             .is_none()
     );
