@@ -312,9 +312,11 @@ fn collect_log_permission_fix_errors(
                     // never blocks, while opening a path swapped in for a FIFO would wait
                     // for a writer. The pre-checks above do not follow links, but chmod
                     // itself does, so a path swapped in between the listing and this call
-                    // could still redirect the mode change; such a swap is detected after
-                    // the fact by comparing the listed identity with the path's current
-                    // identity and reported as an error rather than silently accepted.
+                    // still redirects the mode change to whatever it now references; the
+                    // identity comparison below then reports the swap. Fully closing the
+                    // window would need platform-specific open flags (no-follow, or
+                    // non-blocking to keep the FIFO case non-blocking), which would add a
+                    // platform dependency this workspace does not carry.
                     if let Err(err) = std::fs::set_permissions(
                         entry.path(),
                         std::fs::Permissions::from_mode(0o600),

@@ -175,6 +175,9 @@ impl TopLevelOptions {
 // Options whose values can hold a secret: RPC credentials and the genesis staking
 // settings, which carry staking and VRF private keys. Their environment-sourced values
 // are hidden from the help output (see the `mut_args` attributes and the guard test).
+// For chain-genesis-staking-settings this hides the help rendering only; the options
+// dump that debug-printed the staking keys was removed rather than redacted, so debug
+// output stays secret-safe only as long as no full-options debug formatting returns.
 const SECRET_OPTIONS: &[&str] = &["rpc-username", "rpc-password", "chain-genesis-staking-settings"];
 
 #[derive(Subcommand, Clone, Debug)]
