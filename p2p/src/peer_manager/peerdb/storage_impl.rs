@@ -127,17 +127,18 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
 
     fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool> {
         fn canonical_socket_address_spelling(table: &'static str, key: &str) -> Option<String> {
-            // Mapped spellings always start with one of these prefixes, so the parse can
-            // be skipped for the vast majority of keys on every startup.
-            if !(key.starts_with("[::ffff:") || key.starts_with("::ffff:")) {
+            // Socket addresses were persisted through their Display form, which brackets
+            // IPv6 addresses, so the parse can be skipped for the vast majority of keys
+            // on every startup.
+            if !key.starts_with("[::ffff:") {
                 return None;
             }
             let address = match key.parse::<SocketAddress>() {
                 Ok(address) => address,
                 Err(err) => {
                     logging::log::warn!(
-                        "Skipping unparseable legacy {table} key {key}: {err}; reading the \
-                         table keeps failing until the row is removed"
+                        "Skipping unparseable legacy {table} key {key}: {err}; the row is \
+                         ignored until it is removed"
                     );
                     return None;
                 }
@@ -154,8 +155,8 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
                 Ok(address) => address,
                 Err(err) => {
                     logging::log::warn!(
-                        "Skipping unparseable legacy {table} key {key}: {err}; reading the \
-                         table keeps failing until the row is removed"
+                        "Skipping unparseable legacy {table} key {key}: {err}; the row is \
+                         ignored until it is removed"
                     );
                     return None;
                 }

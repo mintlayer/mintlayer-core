@@ -93,7 +93,14 @@ pub fn canonical_ip_addr(ip: IpAddr) -> IpAddr {
 pub fn canonical_socket_address(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
-            Some(v4) => SocketAddr::new(IpAddr::V4(v4), v6.port()),
+            Some(v4) => {
+                debug_assert_eq!(
+                    (v6.flowinfo(), v6.scope_id()),
+                    (0, 0),
+                    "mapped IPv4 form is assumed to carry no flowinfo or scope id",
+                );
+                SocketAddr::new(IpAddr::V4(v4), v6.port())
+            }
             None => SocketAddr::V6(v6),
         },
         v4 => v4,
