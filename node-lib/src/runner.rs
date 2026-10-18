@@ -248,7 +248,10 @@ async fn initialize(
 fn collect_log_permission_fix_errors(
     data_dir: &std::path::Path,
     log_file_name: &str,
-) -> Vec<(std::path::PathBuf, std::io::Error)> {
+) -> (
+    Vec<(std::path::PathBuf, std::io::Error)>,
+    Vec<std::path::PathBuf>,
+) {
     use std::os::unix::fs::PermissionsExt;
     // A rotated log file carries the base name plus a dot and a numeric suffix.
     fn is_rotated_log_name(log_file_name: &str, name: &str) -> bool {
