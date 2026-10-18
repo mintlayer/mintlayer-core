@@ -259,6 +259,8 @@ fn collect_log_permission_fix_errors(
         })
     }
     let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
+    #[cfg(unix)]
+    let mut skipped_entries: Vec<std::path::PathBuf> = Vec::new();
     match std::fs::read_dir(data_dir.join("logs")) {
         // The first run has no logs directory yet.
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -290,10 +292,7 @@ fn collect_log_permission_fix_errors(
                 };
                 if !is_regular_file {
                     if is_matching_log_name {
-                        permission_fix_errors.push((
-                            entry.path(),
-                            std::io::Error::other("skipped: not a regular file"),
-                        ));
+                        skipped_entries.push(entry.path());
                     }
                     continue;
                 }
@@ -331,6 +330,12 @@ fn collect_log_permission_fix_errors(
             }
         }
     }
+    for path in skipped_entries {
+        logging::log::info!(
+            "Skipping log entry that is not a regular file: {}",
+            path.display()
+        );
+    }
     permission_fix_errors
 }
 
@@ -367,8 +372,13 @@ pub async fn setup(
     // This best-effort hardening runs even when this invocation does not write logs to a
     // file. The scan and the mode change are separate steps, so a path swapped in between
     // is skipped or reported. Failures are reported once logging is initialized below.
+    // A --clean-data-dir run deletes the whole directory, so the scan is skipped there.
     #[cfg(unix)]
-    let permission_fix_errors = collect_log_permission_fix_errors(&data_dir, &log_file_name);
+    let permission_fix_errors = if options.clean_data_option_set() {
+        Vec::new()
+    } else {
+        collect_log_permission_fix_errors(&data_dir, &log_file_name)
+    };
     if options.log_to_file_option_set() {
         let log_file = FileRotate::new(
             data_dir.join(format!("logs/{}", log_file_name)),

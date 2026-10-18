@@ -88,9 +88,10 @@ fn collect_args<'a>(cmd: &'a clap::Command, args: &mut Vec<&'a clap::Arg>) {
 pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]) {
     let mut all_args = Vec::new();
     collect_args(cmd, &mut all_args);
+    let secrets = secret_options.iter().copied().collect::<std::collections::HashSet<_>>();
     let mut matched = std::collections::HashSet::new();
     for arg in all_args {
-        if let Some(long) = arg.get_long().filter(|long| secret_options.contains(long)) {
+        if let Some(long) = arg.get_long().filter(|long| secrets.contains(long)) {
             assert!(
                 arg.is_hide_env_values_set(),
                 "env value of --{long} is not hidden from help"

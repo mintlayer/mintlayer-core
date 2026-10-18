@@ -69,13 +69,12 @@ impl TransactionalApiServerPostgresStorage {
             Some(d) => d.to_owned(),
             None => format!("mintlayer-{}", chain_config.chain_type().name()),
         };
+        let password_part = match password {
+            Some(_) => crate::REDACTED,
+            None => crate::UNSET_SENTINEL,
+        };
         logging::log::debug!(
-            "Using postgres config: host={host} port={port} user={user} password={} database={database}",
-            if password.is_some() {
-                crate::REDACTED
-            } else {
-                "<unset>"
-            }
+            "Using postgres config: host={host} port={port} user={user} password={password_part} database={database}"
         );
 
         let mut config = tokio_postgres::Config::new();

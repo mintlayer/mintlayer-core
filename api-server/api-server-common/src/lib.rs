@@ -22,6 +22,9 @@ use common::chain::config::ChainType;
 /// Marker printed in place of any secret-bearing value.
 pub const REDACTED: &str = "<redacted>";
 
+/// Marker printed in place of a secret-bearing value that is not set.
+pub const UNSET_SENTINEL: &str = "<unset>";
+
 /// Debug-safe replacement for an `Option` that may hold a secret.
 pub fn redact<T>(value: &Option<T>) -> Option<&'static str> {
     value.as_ref().map(|_| REDACTED)
@@ -182,6 +185,9 @@ const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_POSTGRES_USER: &str = "postgres";
 const DEFAULT_POSTGRES_MAX_CONNECTIONS: u32 = 10;
 
+// When adding a field, keep the Debug destructure, the `Default` impl, and the
+// `default_matches_clap_defaults` test in sync, and classify the new option in the
+// help-output guard tests of both daemons.
 #[derive(Parser, PartialEq)]
 pub struct PostgresConfig {
     /// Postgres host
