@@ -111,6 +111,39 @@ pub fn assert_secret_options_hidden(cmd: &clap::Command, secret_options: &[&str]
     );
 }
 
+/// Test helper: same as [`assert_secret_options_hidden`], plus an exhaustive
+/// classification check: every option of `cmd` must be listed in `secret_options` or
+/// `non_secret_options`, and every non-secret entry must exist in the command.
+#[cfg(any(test, feature = "test-util"))]
+#[doc(hidden)]
+pub fn assert_options_classified(
+    cmd: &clap::Command,
+    secret_options: &[&str],
+    non_secret_options: &[&str],
+) {
+    assert_secret_options_hidden(cmd, secret_options);
+    let longs: std::collections::HashSet<_> =
+        cmd.get_arguments().filter_map(|arg| arg.get_long()).collect();
+    let unclassified: Vec<_> = longs
+        .iter()
+        .copied()
+        .filter(|long| !secret_options.contains(long) && !non_secret_options.contains(long))
+        .collect();
+    assert!(
+        unclassified.is_empty(),
+        "env-bound options not classified as secret or non-secret: {unclassified:?}"
+    );
+    let stale: Vec<_> = non_secret_options
+        .iter()
+        .copied()
+        .filter(|long| !longs.contains(long))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "non-secret options not found in the command (stale entries): {stale:?}"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -100,10 +100,8 @@ mod tests {
     #[test]
     fn secret_options_are_hidden_from_help() {
         let cmd = ApiServerScannerArgs::command();
-        clap_utils::assert_secret_options_hidden(&cmd, SECRET_OPTIONS);
-
         // Options explicitly classified as non-secret; anything else must be listed in
-        // SECRET_OPTIONS or the assertion below fails.
+        // SECRET_OPTIONS or the classification check below fails.
         const NON_SECRET_OPTIONS: &[&str] = &[
             "network",
             "node-rpc-address",
@@ -114,26 +112,9 @@ mod tests {
             "postgres-database",
             "postgres-max-connections",
         ];
-        let longs: std::collections::HashSet<_> =
-            cmd.get_arguments().filter_map(|arg| arg.get_long()).collect();
-        let unclassified: Vec<_> = longs
-            .iter()
-            .copied()
-            .filter(|long| !SECRET_OPTIONS.contains(long) && !NON_SECRET_OPTIONS.contains(long))
-            .collect();
-        assert!(
-            unclassified.is_empty(),
-            "env-bound options not classified as secret or non-secret: {unclassified:?}"
-        );
-        let stale: Vec<_> = NON_SECRET_OPTIONS
-            .iter()
-            .copied()
-            .filter(|long| !longs.contains(long))
-            .collect();
-        assert!(
-            stale.is_empty(),
-            "non-secret options not found in the command (stale entries): {stale:?}"
-        );
+        // Every option must be classified as secret or non-secret; the helper includes
+        // the secret pin above and rejects stale non-secret entries.
+        clap_utils::assert_options_classified(&cmd, SECRET_OPTIONS, NON_SECRET_OPTIONS);
     }
 
     #[test]
