@@ -299,15 +299,11 @@ fn collect_log_permission_fix_errors(
                 }
                 // Only touch the log file of this executable and its rotated variants.
                 if is_matching_log_name {
-                    // Capture the identity at listing time so a swap between the listing
-                    // and the mode change is detected by the check below.
-                    let listed = match entry.metadata() {
-                        Ok(listed) => listed,
-                        Err(err) => {
-                            permission_fix_errors.push((entry.path(), err));
-                            continue;
-                        }
-                    };
+                    // Anchor the identity in the directory entry itself: the inode comes
+                    // from the readdir buffer, so it reflects the listing rather than the
+                    // current state of the path.
+                    use std::os::unix::fs::DirEntryExt;
+                    let listed_ino = entry.ino();
                     // Change the mode through the path rather than an open file: chmod
                     // never blocks, while opening a path swapped in for a FIFO would wait
                     // for a writer. The pre-checks above do not follow links, but chmod
@@ -324,7 +320,7 @@ fn collect_log_permission_fix_errors(
                     .and_then(|()| {
                         use std::os::unix::fs::MetadataExt;
                         let current = std::fs::symlink_metadata(entry.path())?;
-                        if (listed.dev(), listed.ino()) != (current.dev(), current.ino()) {
+                        if listed_ino != current.ino() {
                             return Err(std::io::Error::other("log file changed while scanning"));
                         }
                         Ok(())
