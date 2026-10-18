@@ -288,6 +288,9 @@ impl<T: zeroize::Zeroize> From<T> for Redacted<T> {
 impl<T: FromStr + zeroize::Zeroize> FromStr for Redacted<T> {
     type Err = T::Err;
 
+    // Note that the intermediate `String` handed over by the command line parser and
+    // the parser's own argument copies are not zeroized, so the wipe only covers the
+    // value inside this wrapper.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         T::from_str(s).map(Self)
     }
