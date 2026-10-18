@@ -261,6 +261,9 @@ pub struct RegtestOptions {
 ///
 /// Note: the inner value is zeroized when the value is dropped, so the memory holding
 /// the credential is wiped instead of lingering in freed memory (for zeroizable types).
+/// This covers this wrapper's copy only: copies a consumer makes out of the value (e.g.
+/// [`std::string::String`]s inside an RPC server) are ordinary values with ordinary
+/// lifetimes and are not scrubbed.
 #[derive(Clone, Default)]
 pub struct Redacted<T: zeroize::Zeroize>(T);
 

@@ -216,6 +216,10 @@ mod genesis_staking_settings_tests {
 }
 
 impl Display for GenesisStakingSettings {
+    // This rendering deliberately includes the private keys: it is the value format of
+    // the --chain-genesis-staking-settings option (rendered as the clap default and
+    // parsed back by FromStr). It is an input format, never a log format, and must not
+    // be used in diagnostics; Debug above prints the redacted form.
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut values = vec![];
 

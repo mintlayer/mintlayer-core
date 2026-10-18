@@ -241,9 +241,9 @@ async fn initialize(
 }
 
 /// Restricts the permissions of log files left by earlier versions (which may hold
-/// material dumped from the command line) to owner-only. Returns per-file failures so
-/// the caller can report them once logging is initialized. Matching entries that are
-/// not regular files are reported as skipped.
+/// material dumped from the command line) to owner-only. Returns per-file failures and
+/// the skipped non-regular entries so the caller can report everything once logging is
+/// initialized.
 #[cfg(unix)]
 fn collect_log_permission_fix_errors(
     data_dir: &std::path::Path,
@@ -330,13 +330,7 @@ fn collect_log_permission_fix_errors(
             }
         }
     }
-    for path in skipped_entries {
-        logging::log::info!(
-            "Skipping log entry that is not a regular file: {}",
-            path.display()
-        );
-    }
-    permission_fix_errors
+    (permission_fix_errors, skipped_entries)
 }
 
 /// Processes options and potentially runs the node.
@@ -374,8 +368,8 @@ pub async fn setup(
     // is skipped or reported. Failures are reported once logging is initialized below.
     // A --clean-data-dir run deletes the whole directory, so the scan is skipped there.
     #[cfg(unix)]
-    let permission_fix_errors = if options.clean_data_option_set() {
-        Vec::new()
+    let (permission_fix_errors, skipped_log_entries) = if options.clean_data_option_set() {
+        (Vec::new(), Vec::new())
     } else {
         collect_log_permission_fix_errors(&data_dir, &log_file_name)
     };
@@ -410,6 +404,13 @@ pub async fn setup(
             "Failed to restrict permissions of log file {}: {}",
             path.display(),
             err
+        );
+    }
+    #[cfg(unix)]
+    for path in &skipped_log_entries {
+        logging::log::info!(
+            "Skipping log entry that is not a regular file: {}",
+            path.display()
         );
     }
 
