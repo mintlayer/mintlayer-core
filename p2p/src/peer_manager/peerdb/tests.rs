@@ -1175,6 +1175,15 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
             .get_mut::<DBBannedAddresses, _>()
             .put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60))
             .unwrap();
+        // A legacy mapped key that no longer parses cannot be loaded by the regular
+        // read path either; the fold must drop it instead of failing every startup.
+        tx.storage()
+            .get_mut::<DBKnownAddresses, _>()
+            .put(
+                "[::ffff:not-an-address]:12345".to_owned(),
+                KnownAddressState::New,
+            )
+            .unwrap();
         tx.commit().unwrap();
     }
 
@@ -1186,6 +1195,13 @@ fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
         tx.storage()
             .get::<DBKnownAddresses, _>()
             .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:not-an-address]:12345")
             .unwrap()
             .is_none()
     );

@@ -130,7 +130,6 @@ impl From<SocketAddr> for SocketAddress {
 #[cfg(test)]
 mod mapped_address_tests {
     use super::*;
-    use crate::bannable_address::BannableAddress;
     use std::net::SocketAddrV4;
 
     #[test]

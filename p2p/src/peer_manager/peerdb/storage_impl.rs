@@ -126,43 +126,37 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     }
 
     fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool> {
-        fn canonical_socket_address_spelling(table: &'static str, key: &str) -> Option<String> {
-            // Socket addresses were persisted through their Display form, which brackets
-            // IPv6 addresses, so the parse can be skipped for the vast majority of keys
-            // on every startup.
-            if !key.starts_with("[::ffff:") {
-                return None;
+        fn canonical_spelling<T: std::str::FromStr + std::fmt::Display>(
+            table: &'static str,
+            key: &str,
+            prefix: &str,
+        ) -> LegacyKeyAction
+        where
+            <T as std::str::FromStr>::Err: std::fmt::Display,
+        {
+            // Legacy mapped spellings always start with the prefix, so the parse can
+            // be skipped for the vast majority of keys on every startup. Socket
+            // addresses were persisted through their Display form, which brackets
+            // IPv6 addresses.
+            if !key.starts_with(prefix) {
+                return LegacyKeyAction::Keep;
             }
-            let address = match key.parse::<SocketAddress>() {
+            let address = match key.parse::<T>() {
                 Ok(address) => address,
                 Err(err) => {
                     logging::log::warn!(
-                        "Skipping unparseable legacy {table} key {key}: {err}; the row is \
-                         ignored until it is removed"
+                        "Dropping unparseable legacy {table} key {key}: {err}; the row \
+                         cannot be read by this version"
                     );
-                    return None;
+                    return LegacyKeyAction::Drop;
                 }
             };
             let canonical = address.to_string();
-            (canonical != key).then_some(canonical)
-        }
-
-        fn canonical_bannable_address_spelling(table: &'static str, key: &str) -> Option<String> {
-            if !key.starts_with("::ffff:") {
-                return None;
+            if canonical == key {
+                LegacyKeyAction::Keep
+            } else {
+                LegacyKeyAction::Rewrite(canonical)
             }
-            let address = match key.parse::<BannableAddress>() {
-                Ok(address) => address,
-                Err(err) => {
-                    logging::log::warn!(
-                        "Skipping unparseable legacy {table} key {key}: {err}; the row is \
-                         ignored until it is removed"
-                    );
-                    return None;
-                }
-            };
-            let canonical = address.to_string();
-            (canonical != key).then_some(canonical)
         }
 
         let storage = self.storage();
@@ -170,7 +164,7 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
 
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBKnownAddresses, _>(),
-            |key| canonical_socket_address_spelling("known addresses", key),
+            |key| canonical_spelling::<SocketAddress>("known addresses", key, "[::ffff:"),
             // A legacy row marked as tried keeps its selection preference.
             |canonical, legacy| match legacy {
                 KnownAddressState::Tried => legacy,
@@ -179,18 +173,18 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBAnchorAddresses, _>(),
-            |key| canonical_socket_address_spelling("anchor addresses", key),
+            |key| canonical_spelling::<SocketAddress>("anchor addresses", key, "[::ffff:"),
             |_canonical, _legacy| (),
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBBannedAddresses, _>(),
-            |key| canonical_bannable_address_spelling("banned addresses", key),
+            |key| canonical_spelling::<BannableAddress>("banned addresses", key, "::ffff:"),
             // The later unban time wins so the migration cannot shorten a ban.
             std::cmp::max,
         )?;
         rewrote_any |= rekey_mapped_rows(
             &mut storage.get_mut::<DBDiscouragedAddresses, _>(),
-            |key| canonical_bannable_address_spelling("discouraged addresses", key),
+            |key| canonical_spelling::<BannableAddress>("discouraged addresses", key, "::ffff:"),
             std::cmp::max,
         )?;
 
@@ -198,13 +192,25 @@ impl<B: storage::SharedBackend> PeerDbStorageWrite for PeerDbStoreTxRw<'_, B> {
     }
 }
 
+/// What to do with a key during the legacy fold.
+enum LegacyKeyAction {
+    // Not a legacy mapped-form key; leave the row alone.
+    Keep,
+    // A legacy mapped-form key that no longer parses; drop the row. It cannot
+    // be loaded by the regular read path either, so keeping it would fail the
+    // startup load on every run.
+    Drop,
+    // Rewrite the row under the canonical spelling of the same address.
+    Rewrite(String),
+}
+
 /// Rewrite rows keyed by a non-canonical spelling of an IPv4 address (the mapped form
 /// `::ffff:a.b.c.d` written by an older version) so that the key matches the canonical
 /// spelling used at runtime, merging the value with an existing canonical row via
-/// `merge` when one is already present.
+/// `merge` when one is already present. Rows whose key no longer parses are dropped.
 fn rekey_mapped_rows<B, DBM>(
     map: &mut storage::MapMut<'_, storage::TransactionRw<'_, B, Schema>, DBM>,
-    canonical_spelling: impl Fn(&str) -> Option<String>,
+    key_action: impl Fn(&str) -> LegacyKeyAction,
     merge: impl Fn(DBM::Value, DBM::Value) -> DBM::Value,
 ) -> crate::Result<bool>
 where
@@ -213,19 +219,29 @@ where
     DBM::Value: serialization::Encode + serialization::EncodeLike,
 {
     let mut rewrites = Vec::new();
+    let mut drops = Vec::new();
     for (key, encoded) in map.prefix_iter(&())? {
-        if let Some(canonical) = canonical_spelling(&key) {
-            // Decode explicitly so a corrupt row is reported instead of panicking.
-            let value = <DBM::Value as serialization::DecodeAll>::decode_all(&mut encoded.as_ref())
-                .map_err(|err| {
-                    P2pError::InvalidStorageState(format!(
-                        "Failed to decode the value of the row keyed by {key}: {err}"
-                    ))
-                })?;
-            rewrites.push((key, canonical, value));
+        match key_action(&key) {
+            LegacyKeyAction::Keep => {}
+            LegacyKeyAction::Drop => drops.push(key),
+            LegacyKeyAction::Rewrite(canonical) => {
+                // Decode explicitly so a corrupt row is reported instead of panicking.
+                let value =
+                    <DBM::Value as serialization::DecodeAll>::decode_all(&mut encoded.as_ref())
+                        .map_err(|err| {
+                            P2pError::InvalidStorageState(format!(
+                                "Failed to decode the value of the row keyed by {key}: {err}"
+                            ))
+                        })?;
+                rewrites.push((key, canonical, value));
+            }
         }
     }
     let mut rewrote_any = false;
+    for legacy_key in drops {
+        map.del(&legacy_key)?;
+        rewrote_any = true;
+    }
     for (legacy_key, canonical_key, legacy_value) in rewrites {
         map.del(&legacy_key)?;
         let value = match map.get(&canonical_key)? {
