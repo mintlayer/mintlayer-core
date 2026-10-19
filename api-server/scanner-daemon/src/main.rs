@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use api_blockchain_scanner_daemon::{ApiServerScannerError, make_postgres_storage, run};
-use clap::Parser;
+use api_server_common::RedactedSummary;
 use common::chain::config::ChainType;
 use config::ApiServerScannerArgs;
 use rpc::RpcAuthData;
@@ -28,10 +28,16 @@ utils::enable_rust_backtrace!();
 
 #[tokio::main]
 async fn main() -> Result<(), ApiServerScannerError> {
-    let args = ApiServerScannerArgs::parse();
+    // Parse errors are not echoed because they can repeat secret-bearing command line tokens.
+    let args = api_server_common::parse_args_or_exit::<ApiServerScannerArgs>();
 
     logging::init_logging();
-    logging::log::info!("Command line options: {args:?}");
+    // The command line contains secrets (RPC credentials, database password), so the summary
+    // logged here omits them; see ApiServerScannerArgs::redacted_summary.
+    logging::log::info!(
+        "Command line options (secrets omitted): {}",
+        args.redacted_summary(),
+    );
 
     let ApiServerScannerArgs {
         network,

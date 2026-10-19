@@ -94,7 +94,7 @@ impl<S: ApiServerStorage> BlockchainState<S> {
     }
 
     pub async fn scan_genesis(&mut self, genesis: &Genesis) -> Result<(), BlockchainStateError> {
-        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+        let mut db_tx = self.storage.transaction_rw().await?;
 
         update_tables_from_block_reward(
             self.chain_config.clone(),
@@ -103,10 +103,9 @@ impl<S: ApiServerStorage> BlockchainState<S> {
             genesis.utxos(),
             genesis.get_id().into(),
         )
-        .await
-        .expect("Unable to update tables from block reward");
+        .await?;
 
-        db_tx.commit().await.expect("Unable to commit transaction");
+        db_tx.commit().await?;
         logging::log::info!("Database commit completed successfully");
 
         Ok(())
@@ -118,8 +117,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
-        let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
+        let db_tx = self.storage.transaction_ro().await?;
+        let best_block = db_tx.get_best_block().await?;
         Ok((best_block.block_height(), best_block.block_id()))
     }
 
@@ -128,7 +127,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+        let mut db_tx = self.storage.transaction_rw().await?;
 
         // Note: a reorg happened iff the local best block is above the common ancestor with the
         // new chain, in which case the blocks above the common ancestor are about to be
@@ -146,9 +145,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             None
         };
 
-        disconnect_tables_above_height(&mut db_tx, common_block_height)
-            .await
-            .expect("Unable to disconnect tables");
+        disconnect_tables_above_height(&mut db_tx, common_block_height).await?;
 
         let mut last_event_id: StreamEventId = 0;
         if let Some(removed_block_ids) = removed_block_ids {
@@ -217,8 +214,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     tx,
                     next_order_number + idx as u64,
                 )
-                .await
-                .expect("Unable to update tables from transaction");
+                .await?;
 
                 let tx_info = TransactionInfo {
                     tx: tx.clone(),
@@ -232,10 +228,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 block: WithId::take(block.clone()),
                 tx_additional_infos,
             };
-            db_tx
-                .set_mainchain_block(block_id, block_height, &block_with_extras)
-                .await
-                .expect("Unable to set block");
+            db_tx.set_mainchain_block(block_id, block_height, &block_with_extras).await?;
 
             let event = StreamEvent::Block {
                 block_id,
@@ -253,8 +246,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         block_id,
                         tx_info,
                     )
-                    .await
-                    .expect("Unable to set transaction");
+                    .await?;
             }
             next_order_number += transactions.len() as u64;
 
@@ -263,8 +255,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     block_id,
                     &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
                 )
-                .await
-                .expect("Unable to set block aux data");
+                .await?;
 
             let block_fees = total_fees
                 .map_into_block_fees(&self.chain_config, block_height)
@@ -277,25 +268,29 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 &block,
                 block_fees,
             )
-            .await
-            .expect("Unable to update tables from block");
+            .await?;
         }
 
         // Note: sent within the transaction, so the notification is only delivered if the
         // transaction commits; this is what wakes up the stream event pump in the web server.
         // Note: the guard also skips the notify for the backends that don't support stream
         // events, since those return the dummy event id 0 from the appends.
+        // Note: the pruning runs only once per retention window, instead of on every block
+        // commit; see the `stream_events_next_prune_id` field documentation.
+        // The watermark only moves after the commit succeeds: a rolled-back transaction
+        // rolls the pruning back with it, so the next attempt must run it again.
+        let should_prune = last_event_id > 0 && last_event_id >= self.stream_events_next_prune_id;
+        if should_prune {
+            db_tx.prune_stream_events().await?;
+        }
         if last_event_id > 0 {
-            // Note: the pruning runs only once per retention window, instead of on every block
-            // commit; see the `stream_events_next_prune_id` field documentation.
-            if last_event_id >= self.stream_events_next_prune_id {
-                db_tx.prune_stream_events().await?;
-                self.stream_events_next_prune_id = last_event_id + STREAM_EVENTS_RETENTION_COUNT;
-            }
             db_tx.notify_new_stream_events(last_event_id).await?;
         }
 
-        db_tx.commit().await.expect("Unable to commit transaction");
+        db_tx.commit().await?;
+        if should_prune {
+            self.stream_events_next_prune_id = last_event_id + STREAM_EVENTS_RETENTION_COUNT;
+        }
         logging::log::info!("Database commit completed successfully");
 
         Ok(())
@@ -465,8 +460,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
         block.block_reward().outputs(),
         block.get_id().into(),
     )
-    .await
-    .expect("Unable to update tables from block reward");
+    .await?;
 
     update_tables_from_consensus_data(
         chain_config.clone(),
@@ -475,8 +469,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
         block,
         total_tx_fees,
     )
-    .await
-    .expect("Unable to update tables from consensus data");
+    .await?;
 
     Ok(())
 }
@@ -535,7 +528,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 increase_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::CirculatingSupply,
@@ -543,7 +536,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 increase_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::Staked,
@@ -551,7 +544,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => {
@@ -575,7 +568,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             CoinOrTokenId::TokenId(*token_id),
                             block_height,
                         )
-                        .await;
+                        .await?;
                         increase_statistic_amount(
                             db_tx,
                             CoinOrTokenStatistic::CirculatingSupply,
@@ -583,7 +576,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             CoinOrTokenId::TokenId(*token_id),
                             block_height,
                         )
-                        .await;
+                        .await?;
                         Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
                     }
                     OutputValue::Coin(amount) => {
@@ -602,7 +595,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                         increase_statistic_amount(
                             db_tx,
                             CoinOrTokenStatistic::CirculatingSupply,
@@ -610,7 +603,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                         None
                     }
                 };
@@ -1055,7 +1048,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 CoinOrTokenId::Coin,
                 block_height,
             )
-            .await;
+            .await?;
             increase_statistic_amount(
                 db_tx,
                 CoinOrTokenStatistic::CirculatingSupply,
@@ -1063,7 +1056,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 CoinOrTokenId::Coin,
                 block_height,
             )
-            .await;
+            .await?;
 
             for (delegation_id, rewards) in adapter.rewards_per_delegation() {
                 let delegation = delegation_shares.get(delegation_id).expect("must exist").clone();
@@ -1108,8 +1101,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         transaction,
         tx_global_index,
     )
-    .await
-    .expect("Unable to update tables from transaction inputs");
+    .await?;
 
     update_tables_from_transaction_outputs(
         Arc::clone(&chain_config),
@@ -1119,8 +1111,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         transaction.transaction(),
         tx_global_index,
     )
-    .await
-    .expect("Unable to update tables from transaction outputs");
+    .await?;
 
     Ok(())
 }
@@ -1169,7 +1160,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::TokenId(*token_id),
                         block_height,
                     )
-                    .await;
+                    .await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
                         db_tx,
@@ -1178,7 +1169,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1186,7 +1177,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnmintTokens(token_id) => {
@@ -1206,7 +1197,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1214,7 +1205,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FreezeToken(token_id, is_unfreezable) => {
@@ -1231,7 +1222,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1239,7 +1230,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnfreezeToken(token_id) => {
@@ -1256,7 +1247,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1264,7 +1255,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::LockTokenSupply(token_id) => {
@@ -1281,7 +1272,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1289,7 +1280,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, destination) => {
@@ -1306,7 +1297,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1314,7 +1305,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
@@ -1331,7 +1322,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::CirculatingSupply,
@@ -1339,7 +1330,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
@@ -1422,7 +1413,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                     }
                 }
             }
@@ -1453,16 +1444,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateOrder(_) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            let pool_data = db_tx
-                                .get_pool_data(pool_id)
-                                .await?
-                                .expect("pool data should exist")
-                                .decommission_pool();
-
-                            db_tx
-                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
-                                .await
-                                .expect("unable to update pool data");
+                            let pool_data = decommission_pool_and_decrement_staked(
+                                db_tx,
+                                pool_id,
+                                block_height,
+                            )
+                            .await?;
 
                             let address = Address::<Destination>::new(
                                 &chain_config,
@@ -1474,14 +1461,6 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 .entry(address.clone())
                                 .or_default()
                                 .insert(tx.get_id());
-                            decrease_statistic_amount(
-                                db_tx,
-                                CoinOrTokenStatistic::Staked,
-                                &pool_data.pledge_amount(),
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
                         }
                     }
                 }
@@ -1507,24 +1486,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateOrder(_) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            let pool_data = db_tx
-                                .get_pool_data(pool_id)
-                                .await?
-                                .expect("pool data should exist")
-                                .decommission_pool();
-
-                            db_tx
-                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
-                                .await
-                                .expect("unable to update pool data");
-                            decrease_statistic_amount(
-                                db_tx,
-                                CoinOrTokenStatistic::Staked,
-                                &pool_data.pledge_amount(),
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
+                            decommission_pool_and_decrement_staked(db_tx, pool_id, block_height)
+                                .await?;
                         }
                         TxOutput::IssueNft(token_id, _, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -1682,7 +1645,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     coin_or_token_id,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::CirculatingSupply,
@@ -1690,7 +1653,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     coin_or_token_id,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::DataDeposit(_) => {
                 let amount = chain_config.data_deposit_fee(block_height);
@@ -1701,7 +1664,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::CirculatingSupply,
@@ -1709,7 +1672,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::IssueFungibleToken(issuance) => {
                 let token_id = make_token_id(chain_config.as_ref(), block_height, inputs)?;
@@ -1735,7 +1698,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::CirculatingSupply,
@@ -1743,7 +1706,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 transaction_tokens.insert(token_id);
             }
             TxOutput::IssueNft(token_id, issuance, destination) => {
@@ -1771,7 +1734,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::TokenId(*token_id),
                     block_height,
                 )
-                .await;
+                .await?;
                 let amount = chain_config.nft_issuance_fee(block_height);
                 increase_statistic_amount(
                     db_tx,
@@ -1780,7 +1743,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::CirculatingSupply,
@@ -1788,7 +1751,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
 
                 set_utxo(
                     outpoint,
@@ -1835,7 +1798,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 set_utxo(
                     outpoint,
                     output,
@@ -1880,7 +1843,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
 
                 let pool_id = *new_delegation.pool_id();
                 let pool_data = db_tx
@@ -2127,19 +2090,54 @@ async fn increase_statistic_amount<T: ApiServerStorageWrite>(
     amount: &Amount,
     coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_statistic(statistic, coin_or_token_id)
-        .await
-        .expect("Unable to get statistic")
-        .unwrap_or(Amount::ZERO);
+) -> Result<(), ApiServerStorageError> {
+    let current_balance =
+        db_tx.get_statistic(statistic, coin_or_token_id).await?.unwrap_or(Amount::ZERO);
 
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+    let new_amount = current_balance.add(*amount).ok_or_else(|| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "statistic {statistic:?} overflow: current balance {current_balance:?}, \
+             increment {amount:?}",
+        ))
+    })?;
 
     db_tx
         .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
-        .await
-        .expect("Unable to update statistic")
+        .await?;
+    Ok(())
+}
+
+/// Decommissions a stake pool and removes its whole balance (pledge plus
+/// accumulated staker rewards, matching what the creation and block-reward
+/// paths added to the `Staked` statistic) from it. The balance is captured
+/// before `decommission_pool` zeroes the record; the zeroed record is stored
+/// and returned so callers can read the decommission destination.
+async fn decommission_pool_and_decrement_staked<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    pool_id: PoolId,
+    block_height: BlockHeight,
+) -> Result<PoolDataWithExtraInfo, ApiServerStorageError> {
+    let pool_data = db_tx.get_pool_data(pool_id).await?.ok_or_else(|| {
+        ApiServerStorageError::LowLevelStorageError(format!("pool data for {pool_id} should exist"))
+    })?;
+    let staker_balance = pool_data.staker_balance().map_err(|error| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "staker balance overflow for pool {pool_id}: {error}",
+        ))
+    })?;
+    let pool_data = pool_data.decommission_pool();
+
+    db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
+
+    decrease_statistic_amount(
+        db_tx,
+        CoinOrTokenStatistic::Staked,
+        &staker_balance,
+        CoinOrTokenId::Coin,
+        block_height,
+    )
+    .await?;
+    Ok(pool_data)
 }
 
 async fn decrease_statistic_amount<T: ApiServerStorageWrite>(
@@ -2148,19 +2146,21 @@ async fn decrease_statistic_amount<T: ApiServerStorageWrite>(
     amount: &Amount,
     coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_statistic(statistic, coin_or_token_id)
-        .await
-        .expect("Unable to get statistic")
-        .unwrap_or(Amount::ZERO);
+) -> Result<(), ApiServerStorageError> {
+    let current_balance =
+        db_tx.get_statistic(statistic, coin_or_token_id).await?.unwrap_or(Amount::ZERO);
 
-    let new_amount = current_balance.sub(*amount).expect("Balance should not underflow");
+    let new_amount = current_balance.sub(*amount).ok_or_else(|| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "statistic {statistic:?} underflow: current balance {current_balance:?}, \
+             decrement {amount:?}",
+        ))
+    })?;
 
     db_tx
         .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
-        .await
-        .expect("Unable to update statistic")
+        .await?;
+    Ok(())
 }
 
 async fn increase_address_amount<T: ApiServerStorageWrite>(

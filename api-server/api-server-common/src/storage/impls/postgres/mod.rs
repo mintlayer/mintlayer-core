@@ -18,7 +18,6 @@ pub mod transactional;
 
 mod queries;
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use bb8_postgres::PostgresConnectionManager;
@@ -64,27 +63,25 @@ impl TransactionalApiServerPostgresStorage {
         max_connections: u32,
         chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
+        // The configuration is built from the discrete fields instead of a connection
+        // string, so the password never exists as a string that a parse error could echo.
+        let database = match database {
+            Some(d) => d.to_owned(),
+            None => format!("mintlayer-{}", chain_config.chain_type().name()),
+        };
         let password_part = match password {
-            Some(p) => format!("password={}", p),
-            None => "".to_string(),
+            Some(_) => crate::REDACTED,
+            None => crate::UNSET_SENTINEL,
         };
+        logging::log::debug!(
+            "Using postgres config: host={host} port={port} user={user} password={password_part} database={database}"
+        );
 
-        let database_part = match database {
-            Some(d) => format!("dbname={}", d),
-            None => format!("dbname=mintlayer-{}", chain_config.chain_type().name()),
-        };
-
-        let config_str =
-            format!("host={host} port={port} user={user} {password_part} {database_part}");
-        logging::log::debug!("Using postgres config connection string: {}", config_str);
-
-        let config: tokio_postgres::Config =
-            config_str.parse().map_err(|e: <tokio_postgres::Config as FromStr>::Err| {
-                ApiServerStorageError::InitializationError(format!(
-                    "Postgres configuration parsing error: {}",
-                    e
-                ))
-            })?;
+        let mut config = tokio_postgres::Config::new();
+        config.host(host).port(port).user(user).dbname(database);
+        if let Some(password) = password {
+            config.password(password);
+        }
 
         let manager = PostgresConnectionManager::new(config.clone(), NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {

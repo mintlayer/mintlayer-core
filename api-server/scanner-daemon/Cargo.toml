@@ -24,6 +24,7 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
+utils = { path = "../../utils", features = ["test-util"] }
 
 [build-dependencies]
 build_utils = { path = "../../utils/build_utils" }

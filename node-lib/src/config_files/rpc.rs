@@ -15,15 +15,15 @@
 
 use std::{net::SocketAddr, str::FromStr};
 
-use crate::RunOptions;
+use crate::{Redacted, RunOptions};
 use chainstate_launcher::ChainConfig;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use super::DEFAULT_RPC_ENABLED;
 
 /// The rpc subsystem configuration.
 #[must_use]
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RpcConfigFile {
     /// Whether http RPC is enabled
@@ -33,10 +33,10 @@ pub struct RpcConfigFile {
     pub bind_address: Option<SocketAddr>,
 
     /// Username for RPC server basic authorization
-    pub username: Option<String>,
+    pub username: Option<Redacted<String>>,
 
     /// Password for RPC server basic authorization
-    pub password: Option<String>,
+    pub password: Option<Redacted<String>>,
 
     /// Custom file path for the RPC cookie file
     pub cookie_file: Option<String>,
@@ -70,9 +70,9 @@ impl RpcConfigFile {
             .rpc_enabled
             .unwrap_or_else(|| rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
-        let username = username.or(options.rpc_username.clone());
-        let password = password.or(options.rpc_password.clone());
-        let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
+        let username = username.or_else(|| options.rpc_username.clone());
+        let password = password.or_else(|| options.rpc_password.clone());
+        let cookie_file = cookie_file.or_else(|| options.rpc_cookie_file.clone());
 
         RpcConfigFile {
             bind_address: Some(bind_address),

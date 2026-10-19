@@ -41,7 +41,7 @@ use crate::{
     config_files::{DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED, NodeConfigFile},
     mock_time::set_mock_time,
     node_controller::NodeController,
-    options::{OptionsWithResolvedCommand, RunOptions, default_data_dir},
+    options::{OptionsWithResolvedCommand, RunOptions, TopLevelOptions, default_data_dir},
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -202,8 +202,8 @@ async fn initialize(
     if rpc_config.rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
             data_dir,
-            rpc_config.username.as_deref(),
-            rpc_config.password.as_deref(),
+            rpc_config.username.as_ref().map(|value| value.as_ref().as_str()),
+            rpc_config.password.as_ref().map(|value| value.as_ref().as_str()),
             rpc_config.cookie_file.as_deref(),
         )?;
 
@@ -240,6 +240,120 @@ async fn initialize(
     Ok((manager, controller))
 }
 
+/// Restricts the permissions of log files left by earlier versions (which may hold
+/// material dumped from the command line) to owner-only. Returns per-file failures and
+/// the skipped non-regular entries so the caller can report everything once logging is
+/// initialized. Unix only: Windows keeps its own ACL model, so no equivalent
+/// restriction is applied there.
+#[cfg(unix)]
+fn collect_log_permission_fix_errors(
+    data_dir: &std::path::Path,
+    log_file_name: &str,
+) -> (
+    Vec<(std::path::PathBuf, std::io::Error)>,
+    Vec<std::path::PathBuf>,
+) {
+    use std::os::unix::fs::PermissionsExt;
+    // A rotated log file carries the base name plus a dot and a numeric suffix.
+    fn is_rotated_log_name(log_file_name: &str, name: &str) -> bool {
+        name.strip_prefix(log_file_name).is_some_and(|suffix| {
+            suffix
+                .strip_prefix('.')
+                .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+        })
+    }
+    let mut permission_fix_errors: Vec<(std::path::PathBuf, std::io::Error)> = Vec::new();
+    #[cfg(unix)]
+    let mut skipped_entries: Vec<std::path::PathBuf> = Vec::new();
+    match std::fs::read_dir(data_dir.join("logs")) {
+        // The first run has no logs directory yet.
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => permission_fix_errors.push((data_dir.join("logs"), err)),
+        Ok(entries) => {
+            // A failing entry yields only an io::Error without its path, so the failure
+            // is reported once against the directory; later repeats add no information.
+            let mut directory_read_error_reported = false;
+            let mut suppressed_read_errors: usize = 0;
+            for entry in entries {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        if !directory_read_error_reported {
+                            permission_fix_errors.push((data_dir.join("logs"), err));
+                            directory_read_error_reported = true;
+                        } else {
+                            suppressed_read_errors += 1;
+                        }
+                        continue;
+                    }
+                };
+                // Skip entries that are not regular files so the mode is normally never
+                // applied through a link or to anything but a regular file; a matching
+                // name left as a directory, symlink, or special file is reported below
+                // instead of being silently ignored.
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let is_matching_log_name =
+                    name == log_file_name || is_rotated_log_name(log_file_name, &name);
+                let is_regular_file = match entry.file_type() {
+                    Ok(file_type) => file_type.is_file(),
+                    Err(err) => {
+                        if is_matching_log_name {
+                            permission_fix_errors.push((entry.path(), err));
+                        }
+                        continue;
+                    }
+                };
+                if !is_regular_file {
+                    if is_matching_log_name {
+                        skipped_entries.push(entry.path());
+                    }
+                    continue;
+                }
+                // Only touch the log file of this executable and its rotated variants.
+                if is_matching_log_name {
+                    // Anchor the identity in the directory entry itself: the inode comes
+                    // from the readdir buffer, so it reflects the listing rather than the
+                    // current state of the path.
+                    use std::os::unix::fs::DirEntryExt;
+                    let listed_ino = entry.ino();
+                    // Change the mode through the path rather than an open file: chmod
+                    // never blocks, while opening a path swapped in for a FIFO would wait
+                    // for a writer. The pre-checks above do not follow links, but chmod
+                    // itself does, so a path swapped in between the listing and this call
+                    // still redirects the mode change to whatever it now references; the
+                    // identity comparison below then reports the swap. Fully closing the
+                    // window would need platform-specific open flags (no-follow, or
+                    // non-blocking to keep the FIFO case non-blocking), which would add a
+                    // platform dependency this workspace does not carry.
+                    if let Err(err) = std::fs::set_permissions(
+                        entry.path(),
+                        std::fs::Permissions::from_mode(0o600),
+                    )
+                    .and_then(|()| {
+                        use std::os::unix::fs::MetadataExt;
+                        let current = std::fs::symlink_metadata(entry.path())?;
+                        if listed_ino != current.ino() {
+                            return Err(std::io::Error::other("log file changed while scanning"));
+                        }
+                        Ok(())
+                    }) {
+                        permission_fix_errors.push((entry.path(), err));
+                    }
+                }
+            }
+            if suppressed_read_errors > 0 {
+                permission_fix_errors.push((
+                    data_dir.join("logs"),
+                    std::io::Error::other(format!(
+                        "{suppressed_read_errors} further directory read failures suppressed"
+                    )),
+                ));
+            }
+        }
+    }
+    (permission_fix_errors, skipped_entries)
+}
+
 /// Processes options and potentially runs the node.
 pub async fn setup(
     options: OptionsWithResolvedCommand,
@@ -260,23 +374,38 @@ pub async fn setup(
 
     // Init logging
     let main_log_writer_settings = logging::default_writer_settings(default_log_filter.to_owned());
+    let log_file_name = std::env::current_exe().map_or_else(
+        |_| DEFAULT_LOG_FILE_NAME.to_owned(),
+        |exe| {
+            exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
+                || DEFAULT_LOG_FILE_NAME.to_owned(),
+                |s| format!("{}.log", s.to_owned()),
+            )
+        },
+    );
+    // Log files written by earlier versions may have wider permissions; restrict them too.
+    // This best-effort hardening runs even when this invocation does not write logs to a
+    // file. The scan and the mode change are separate steps, so a path swapped in between
+    // is skipped or reported. Failures are reported once logging is initialized below.
+    // A --clean-data-dir run deletes the whole directory, so the scan is skipped there.
+    // The scan is a synchronous one-shot during startup, before the runtime serves any
+    // request, so blocking the async context here is acceptable.
+    #[cfg(unix)]
+    let (permission_fix_errors, skipped_log_entries) = if options.clean_data_option_set() {
+        (Vec::new(), Vec::new())
+    } else {
+        collect_log_permission_fix_errors(&data_dir, &log_file_name)
+    };
     if options.log_to_file_option_set() {
-        let log_file_name = std::env::current_exe().map_or_else(
-            |_| DEFAULT_LOG_FILE_NAME.to_owned(),
-            |exe| {
-                exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
-                    || DEFAULT_LOG_FILE_NAME.to_owned(),
-                    |s| format!("{}.log", s.to_owned()),
-                )
-            },
-        );
         let log_file = FileRotate::new(
             data_dir.join(format!("logs/{}", log_file_name)),
             AppendCount::new(13),            // total 14 files
             ContentLimit::Bytes(10_000_000), // 10MB each
             Compression::None,
             #[cfg(unix)]
-            None,
+            // Logs can contain sensitive information, so they are only readable by the owner,
+            // like the RPC cookie file.
+            Some(0o600),
         );
         logging::init_logging_generic(
             main_log_writer_settings,
@@ -292,6 +421,21 @@ pub async fn setup(
     } else {
         logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
     }
+    #[cfg(unix)]
+    for (path, err) in &permission_fix_errors {
+        logging::log::warn!(
+            "Failed to restrict permissions of log file {}: {}",
+            path.display(),
+            err
+        );
+    }
+    #[cfg(unix)]
+    for path in &skipped_log_entries {
+        logging::log::info!(
+            "Skipping log entry that is not a regular file: {}",
+            path.display()
+        );
+    }
 
     // Clean data dir if needed
     if options.clean_data_option_set() {
@@ -303,7 +447,25 @@ pub async fn setup(
         return Ok(NodeSetupResult::DataDirCleanedUp);
     }
 
-    logging::log::info!("Command line options: {options:?}");
+    // The full command line contains secrets (RPC credentials, staking keys), so only a
+    // curated subset of options that cannot hold secrets is logged. Destructuring the
+    // top-level options exhaustively forces a decision about what the line includes
+    // whenever a new option is added.
+    let TopLevelOptions {
+        data_dir: _,
+        create_data_dir_if_missing,
+        log_to_file,
+        clean_data: _,
+        import_bootstrap_file: _,
+    } = &options.top_level;
+    logging::log::info!(
+        "Command line options (secrets omitted): network: {}, data directory: {:?}, \
+         create data dir if missing: {:?}, log to file: {:?}",
+        options.command.chain_type().name(),
+        data_dir,
+        create_data_dir_if_missing,
+        log_to_file,
+    );
 
     let mut options = options;
 

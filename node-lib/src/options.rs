@@ -17,9 +17,11 @@
 
 use std::{
     ffi::OsString,
+    fmt,
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -170,16 +172,24 @@ impl TopLevelOptions {
     }
 }
 
+// Options whose values can hold a secret: RPC credentials and the genesis staking
+// settings, which carry staking and VRF private keys. Their environment-sourced values
+// are hidden from the help output (see the `mut_args` attributes and the guard test).
+// For chain-genesis-staking-settings this hides the help rendering only; the options
+// dump that debug-printed the staking keys was removed rather than redacted, so debug
+// output stays secret-safe only as long as no full-options debug formatting returns.
+const SECRET_OPTIONS: &[&str] = &["rpc-username", "rpc-password", "chain-genesis-staking-settings"];
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the mainnet node.
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("MAINNET_NODE", SECRET_OPTIONS)))]
     Mainnet(RunOptions),
     /// Run the testnet node.
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("TESTNET_NODE", SECRET_OPTIONS)))]
     Testnet(RunOptions),
     /// Run the regtest node.
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("REGTEST_NODE", SECRET_OPTIONS)))]
     Regtest(Box<RegtestOptions>),
 }
 
@@ -235,6 +245,75 @@ pub struct RegtestOptions {
     pub run_options: RunOptions,
     #[clap(flatten)]
     pub chain_config: ChainConfigOptions,
+}
+
+/// A value that must never appear in debug output, meant for command line options holding
+/// credentials so that any debug formatting of the containing struct stays secret-safe.
+///
+/// Note: redaction covers debug output only — values passed on the command line remain
+/// visible in process listings and shell history.
+///
+/// Note: serialization is intentionally not supported so that configuration dumps cannot
+/// emit credentials; the type is only deserialized when reading a configuration file.
+///
+/// Note: equality comparison is intentionally not derived; a derived comparison invites
+/// non-constant-time checks on secret values in future authentication decisions.
+///
+/// Note: the inner value is zeroized when the value is dropped, so the memory holding
+/// the credential is wiped instead of lingering in freed memory (for zeroizable types).
+/// This covers this wrapper's copy only: copies a consumer makes out of the value (e.g.
+/// [`std::string::String`]s inside an RPC server) are ordinary values with ordinary
+/// lifetimes and are not scrubbed.
+#[derive(Clone, Default)]
+pub struct Redacted<T: zeroize::Zeroize>(T);
+
+impl<T: zeroize::Zeroize> Drop for Redacted<T> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<T: zeroize::Zeroize> fmt::Debug for Redacted<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
+impl<T: zeroize::Zeroize> From<T> for Redacted<T> {
+    fn from(value: T) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: FromStr + zeroize::Zeroize> FromStr for Redacted<T> {
+    type Err = T::Err;
+
+    // Note that the intermediate `String` handed over by the command line parser and
+    // the parser's own argument copies are not zeroized, so the wipe only covers the
+    // value inside this wrapper.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        T::from_str(s).map(Self)
+    }
+}
+
+impl<T: zeroize::Zeroize> AsRef<T> for Redacted<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+// Serialization is intentionally not supported so that configuration dumps cannot emit
+// credentials; only deserialization (reading a configuration file) is provided.
+// Consuming access is intentionally not provided either: `into_inner` would move the
+// value out of a type with a `Drop` impl, and dropped values are zeroized, not handed
+// out. Read access goes through `AsRef`.
+impl<'de, T> serde::Deserialize<'de> for Redacted<T>
+where
+    T: serde::Deserialize<'de> + zeroize::Zeroize,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        T::deserialize(deserializer).map(Self)
+    }
 }
 
 #[derive(Args, Clone, Debug, Default)]
@@ -412,12 +491,12 @@ pub struct RunOptions {
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
     #[clap(long, value_name = "USERNAME")]
-    pub rpc_username: Option<String>,
+    pub rpc_username: Option<Redacted<String>>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
     #[clap(long, value_name = "PASSWORD")]
-    pub rpc_password: Option<String>,
+    pub rpc_password: Option<Redacted<String>>,
 
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
@@ -451,7 +530,7 @@ pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, str::FromStr as _};
+    use std::collections::BTreeMap;
 
     use rstest::rstest;
 
@@ -460,6 +539,17 @@ mod tests {
         primitives::{BlockHeight, H256, Id, Idable as _},
     };
     use utils::concatln;
+
+    /// Pins the secret option list against the derived command: a renamed field would
+    /// silently stop matching the hiding list in the `mut_args` attributes and leak its
+    /// environment value into `--help`.
+    #[test]
+    fn secret_options_env_values_are_hidden() {
+        utils::clap_utils::assert_secret_options_hidden(
+            &<Options as clap::CommandFactory>::command(),
+            SECRET_OPTIONS,
+        );
+    }
 
     use super::*;
 
@@ -574,5 +664,44 @@ mod tests {
             let chain_config = cmd.create_chain_config().unwrap();
             assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
         }
+    }
+}
+
+#[cfg(test)]
+mod redacted_tests {
+    use super::*;
+
+    #[test]
+    fn run_options_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let debug_output = format!("{options:?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
+    }
+
+    #[test]
+    fn rpc_config_file_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let config = crate::RpcConfigFile::with_run_options(
+            &common::chain::config::create_testnet(),
+            crate::RpcConfigFile::default(),
+            &options,
+        );
+
+        let debug_output = format!("{config:#?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
     }
 }

@@ -46,6 +46,9 @@ loom.workspace = true
 [features]
 tokio-console = ["logging/tokio-console"]
 dev = [] # used by fixed-hash
+# Gates the clap test helpers; enabled through a dev-dependency entry by the crates
+# whose test suites use them.
+test-util = []
 
 [[bench]]
 name = "benches"

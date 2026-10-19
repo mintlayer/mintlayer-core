@@ -38,9 +38,9 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
-        AccountCommand, AccountNonce, CoinUnit, Destination, OrderAccountCommand, OrderData,
-        OrderId, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, Destination,
+        OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId, SignedTransaction,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
         htlc::{HashedTimelockContract, HtlcSecret},
         make_delegation_id, make_order_id, make_token_id,
         output_value::OutputValue,
@@ -66,8 +66,8 @@ use common::{
     primitives::{Amount, CoinOrTokenId, H256, Idable, per_thousand::PerThousand},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey},
-    vrf::{VRFKeyKind, VRFPrivateKey},
+    key::{KeyKind, PrivateKey, PublicKey},
+    vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use logging::log;
 use mempool::FeeRate;
@@ -647,6 +647,613 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     // after decommission the staker balance is 0
     assert_eq!(decommissioned_pool.staker_balance().unwrap(), Amount::ZERO);
+}
+
+/// Reads the `Staked` statistic from the scanner state.
+async fn staked_statistic(
+    local_state: &BlockchainState<TransactionalApiServerInMemoryStorage>,
+) -> Amount {
+    let stats = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    statistic_value(&stats, CoinOrTokenStatistic::Staked)
+}
+
+fn pool_staker_balance(tf: &TestFramework, pool_id: PoolId) -> Amount {
+    tf.chainstate
+        .get_stake_pool_data(&pool_id)
+        .unwrap()
+        .expect("pool must exist")
+        .staker_balance()
+        .unwrap()
+}
+
+/// The pledge and staker balance of a decommissioned pool's record must be zeroed.
+/// (Other fields, notably `delegations_balance`, legitimately survive decommissioning;
+/// see `PoolDataWithExtraInfo::decommission_pool`.)
+async fn assert_pool_record_zeroed(
+    local_state: &BlockchainState<TransactionalApiServerInMemoryStorage>,
+    pool_id: PoolId,
+    expected_delegations_balance: Amount,
+) {
+    let pool_data = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_pool_data(pool_id)
+        .await
+        .unwrap()
+        .expect("decommissioned pool record must still exist");
+    assert_eq!(pool_data.pledge_amount(), Amount::ZERO);
+    assert_eq!(pool_data.staker_balance().unwrap(), Amount::ZERO);
+    // delegations legitimately survive decommissioning; assert they are intact
+    assert_eq!(pool_data.delegations_balance, expected_delegations_balance);
+}
+
+fn new_pool_data(
+    rng: &mut impl CryptoRng,
+    staking_key: &Destination,
+    vrf_pk: VRFPublicKey,
+    pledge_amount: Amount,
+) -> StakePoolData {
+    // the test framework produces blocks with a single shared VRF key, so every
+    // pool must be registered with that same key
+    StakePoolData::new(
+        pledge_amount,
+        staking_key.clone(),
+        vrf_pk,
+        staking_key.clone(),
+        PerThousand::new_from_rng(rng),
+        Amount::ZERO,
+    )
+}
+
+/// Signs the single stake-spend input of a decommissioning transaction.
+#[allow(clippy::too_many_arguments)]
+// The builder output carries placeholder `NoSignature` witnesses; input 0 is
+// signed here.
+fn sign_pool_spend_transaction(
+    tf: &TestFramework,
+    tx: SignedTransaction,
+    spent_output: TxOutput,
+    pool_id: PoolId,
+    staker_balance: Amount,
+    chain_config: &ChainConfig,
+    next_height: BlockHeight,
+    staking_sk: &PrivateKey,
+    staking_pk: &PublicKey,
+    rng: &mut impl CryptoRng,
+) -> SignedTransaction {
+    // The sighash of a `ProduceBlockFromStake` spend commits the pool's live
+    // staker balance, so refuse to sign over anything but the live value.
+    assert_eq!(
+        staker_balance,
+        pool_staker_balance(tf, pool_id),
+        "the signed staker balance must equal the pool's live staker balance, otherwise the sighash commitment would be stale",
+    );
+    assert_eq!(
+        tx.transaction().inputs().len(),
+        1,
+        "this helper only signs the single stake-spend input of a decommissioning transaction"
+    );
+    let transaction = tx.take_transaction();
+    let input = std::slice::from_ref(&transaction.inputs()[0]);
+    let spent_utxos = [Some(spent_output)];
+    let input_commitments = make_sighash_input_commitments_for_transaction_inputs_at_height(
+        input,
+        &TrivialUtxoProvider(&spent_utxos),
+        &BTreeMap::<PoolId, PoolInfo>::from([(pool_id, PoolInfo { staker_balance })]),
+        &BTreeMap::<OrderId, OrderInfo>::new(),
+        chain_config,
+        next_height,
+    )
+    .unwrap();
+    let sighash =
+        signature_hash(SigHashType::default(), &transaction, &input_commitments, 0).unwrap();
+    let signature = sign_public_key_spending(staking_sk, staking_pk, &sighash, rng).unwrap();
+    let mut witnesses = vec![InputWitness::NoSignature(None); transaction.inputs().len()];
+    witnesses[0] = InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::default(),
+        signature.encode(),
+    ));
+    SignedTransaction::new(transaction, witnesses).unwrap()
+}
+
+/// The payout of every stake-spend: the whole balance, locked for the
+/// stake-spend maturity so the value-accumulator's constraint check passes.
+fn stake_spend_payout_output(
+    chain_config: &ChainConfig,
+    tf: &TestFramework,
+    payout: Amount,
+) -> TxOutput {
+    let maturity = chain_config
+        .staking_pool_spend_maturity_block_count(tf.next_block_height())
+        .to_int();
+    TxOutput::LockThenTransfer(
+        OutputValue::Coin(payout),
+        Destination::AnyoneCanSpend,
+        OutputTimeLock::ForBlockCount(maturity),
+    )
+}
+
+/// Builds and signs a decommissioning transaction that spends a pool output and
+/// pays out to `AnyoneCanSpend` under the stake-spend maturity lock.
+#[allow(clippy::too_many_arguments)]
+fn decommission_spend_transaction(
+    chain_config: &ChainConfig,
+    tf: &TestFramework,
+    input_source: OutPointSourceId,
+    input_index: u32,
+    spent_output: TxOutput,
+    pool_id: PoolId,
+    payout: Amount,
+    staking_sk: &PrivateKey,
+    staking_pk: &PublicKey,
+    rng: &mut impl CryptoRng,
+) -> SignedTransaction {
+    // `payout` doubles as the sighash `PoolInfo.staker_balance` when
+    // `spent_output` is a `ProduceBlockFromStake` (a `CreateStakePool` spend
+    // commits just the UTXO); `sign_pool_spend_transaction` asserts that it
+    // equals the pool's live balance.
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(input_source, input_index),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(stake_spend_payout_output(chain_config, tf, payout))
+        .build();
+    sign_pool_spend_transaction(
+        tf,
+        transaction,
+        spent_output,
+        pool_id,
+        payout,
+        chain_config,
+        tf.next_block_height(),
+        staking_sk,
+        staking_pk,
+        rng,
+    )
+}
+
+// Decommissioning a pool must decrement the `Staked` statistic by the pool's full
+// stake balance (pledge plus accumulated staker rewards) whichever output type is
+// spent, and a delegation spend must keep decrementing the statistic after the pool
+// it belongs to is gone.
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn decommission_and_delegation_spends_update_staked_statistic(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let pledge = 40_000 * CoinUnit::ATOMS_PER_COIN;
+    // enough supply to fund three more pools above the 40_000 COIN minimum pledge
+    let mint = 400_000 * CoinUnit::ATOMS_PER_COIN;
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let staking_key = Destination::PublicKey(staking_pk.clone());
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let pool_data = new_pool_data(
+        &mut rng,
+        &staking_key,
+        vrf_pk.clone(),
+        Amount::from_atoms(pledge),
+    );
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
+        Amount::from_atoms(mint),
+        pool_id,
+        pool_data,
+    )
+    .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+
+    // Genesis: the pool pledge is the entire staked supply. Each checkpoint below
+    // reassigns this from the pool balances and the pledges and delegations that
+    // are alive at that point.
+    let mut expected_staked = Amount::from_atoms(pledge);
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 1: the pool produces a block whose transaction pays a fee, so the pool
+    // earns staker rewards on top of its pledge.
+    let fee = Amount::from_atoms(100 * CoinUnit::ATOMS_PER_COIN);
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                0,
+            ),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(
+                (Amount::from_atoms(mint) - fee).expect("no underflow in test amounts"),
+            ),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx1_id = transaction.transaction().get_id();
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        chain_config.genesis_block_id(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool_id,
+        vec![transaction],
+    );
+    let block1_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
+
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    assert!(
+        pool_id_balance > Amount::from_atoms(pledge),
+        "the pool must have earned staker rewards for this test to be meaningful"
+    );
+    expected_staked = pool_id_balance;
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Blocks 2 to 4: three fresh pools are created, one transaction per block (a
+    // pool id is derived from the transaction input that pays for its creation).
+    // The pools are created one per block because value constraints are checked per
+    // block as a whole, so a chain of transactions inside a single block would count
+    // the intermediate outputs twice.
+    let pledge2 = 45_000 * CoinUnit::ATOMS_PER_COIN;
+    let pledge3 = 42_000 * CoinUnit::ATOMS_PER_COIN;
+    let pledge4 = 43_000 * CoinUnit::ATOMS_PER_COIN;
+    let amount2 = Amount::from_atoms(pledge2);
+    let amount3 = Amount::from_atoms(pledge3);
+    let amount4 = Amount::from_atoms(pledge4);
+
+    let pool2_id = PoolId::from_utxo(&UtxoOutPoint::new(OutPointSourceId::Transaction(tx1_id), 0));
+    let rest2 = (Amount::from_atoms(mint) - fee).expect("no underflow in test amounts");
+    let rest2 = (rest2 - amount2).expect("no underflow in test amounts");
+    let tx2a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx1_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(rest2),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateStakePool(
+            pool2_id,
+            Box::new(new_pool_data(
+                &mut rng,
+                &staking_key,
+                vrf_pk.clone(),
+                amount2,
+            )),
+        ))
+        .build();
+    let tx2a_id = tx2a.transaction().get_id();
+    let pool2_creation_output = tx2a.transaction().outputs()[1].clone();
+
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block1_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool_id,
+        vec![tx2a],
+    );
+    let block2_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
+
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    expected_staked = (pool_id_balance + amount2).expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 3: pool 3 is created.
+    let pool3_id = PoolId::from_utxo(&UtxoOutPoint::new(
+        OutPointSourceId::Transaction(tx2a_id),
+        0,
+    ));
+    let rest3 = (rest2 - amount3).expect("no underflow in test amounts");
+    let tx2b = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx2a_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(rest3),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateStakePool(
+            pool3_id,
+            Box::new(new_pool_data(
+                &mut rng,
+                &staking_key,
+                vrf_pk.clone(),
+                amount3,
+            )),
+        ))
+        .build();
+    let tx2b_id = tx2b.transaction().get_id();
+    let pool3_creation_output = tx2b.transaction().outputs()[1].clone();
+
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block2_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool_id,
+        vec![tx2b],
+    );
+    let block3_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
+
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    expected_staked = ((pool_id_balance + amount2).expect("no overflow in test amounts") + amount3)
+        .expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 4: pool 4 is created.
+    let pool4_id = PoolId::from_utxo(&UtxoOutPoint::new(
+        OutPointSourceId::Transaction(tx2b_id),
+        0,
+    ));
+    let rest4 = (rest3 - amount4).expect("no underflow in test amounts");
+    let tx2c = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx2b_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(rest4),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateStakePool(
+            pool4_id,
+            Box::new(new_pool_data(
+                &mut rng,
+                &staking_key,
+                vrf_pk.clone(),
+                amount4,
+            )),
+        ))
+        .build();
+    let tx2c_id = tx2c.transaction().get_id();
+
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block3_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool_id,
+        vec![tx2c],
+    );
+    let block4_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
+
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    expected_staked = [pool_id_balance, amount2, amount3, amount4]
+        .into_iter()
+        .sum::<Option<Amount>>()
+        .expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 5: pool 2 is decommissioned by spending its creation output in a
+    // transaction (the `OutPointSourceId::Transaction` path). The payout must stay
+    // locked for the stake-spend maturity or the block violates timelock constraints.
+    let transaction = decommission_spend_transaction(
+        &chain_config,
+        &tf,
+        OutPointSourceId::Transaction(tx2a_id),
+        1,
+        pool2_creation_output,
+        pool2_id,
+        amount2,
+        &staking_sk,
+        &staking_pk,
+        &mut rng,
+    );
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block4_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool_id,
+        vec![transaction],
+    );
+    let block5_id = block.get_id();
+    let block5_reward_out0 = block.block_reward().outputs()[0].clone();
+    sync_and_compare(&mut tf, block, &mut local_state, pool_id).await;
+
+    assert!(
+        tf.chainstate.get_stake_pool_data(&pool2_id).unwrap().is_none(),
+        "pool 2 must be gone from the chainstate"
+    );
+    assert_pool_record_zeroed(&local_state, pool2_id, Amount::ZERO).await;
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    expected_staked = ((pool_id_balance + amount3).expect("no overflow in test amounts") + amount4)
+        .expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 6: the first pool is decommissioned by spending the
+    // `ProduceBlockFromStake` output of the block it last produced (the
+    // `OutPointSourceId::BlockReward` path), which is worth its full stake balance.
+    // Pool 4 produces this block because the spent output is the first pool's latest
+    // block reward.
+    let pool_id_balance = pool_staker_balance(&tf, pool_id);
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(block5_id.into()), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(stake_spend_payout_output(
+            &chain_config,
+            &tf,
+            pool_id_balance,
+        ))
+        .build();
+    let transaction = sign_pool_spend_transaction(
+        &tf,
+        transaction,
+        block5_reward_out0,
+        pool_id,
+        pool_id_balance,
+        &chain_config,
+        tf.next_block_height(),
+        &staking_sk,
+        &staking_pk,
+        &mut rng,
+    );
+    // The kernel outpoint is pinned to pool 4's creation output: the default
+    // resolution would pick the parent block's reward output, which is the exact
+    // output this block's transaction spends.
+    let block = tf
+        .make_pos_block_builder()
+        .with_parent(block5_id.into())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .with_stake_pool_id(pool4_id)
+        .with_kernel_input(UtxoOutPoint::new(OutPointSourceId::Transaction(tx2c_id), 1))
+        .with_transactions(vec![transaction])
+        .build(&mut rng);
+    let block6_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool4_id).await;
+
+    assert!(
+        tf.chainstate.get_stake_pool_data(&pool_id).unwrap().is_none(),
+        "the first pool must be gone from the chainstate"
+    );
+    assert_pool_record_zeroed(&local_state, pool_id, Amount::ZERO).await;
+    // pool 4's pledge is now part of its own staker balance: producing a block
+    // moves the pledge from a standalone `CreateStakePool` output into the pool
+    let pool4_balance = pool_staker_balance(&tf, pool4_id);
+    expected_staked = (pool4_balance + amount3).expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 7: part of the supply is delegated to pool 3.
+    let delegated = Amount::from_atoms(500 * CoinUnit::ATOMS_PER_COIN);
+    let tx5_input = TxInput::from_utxo(OutPointSourceId::Transaction(tx2c_id), 0);
+    let delegation_id = make_delegation_id(std::slice::from_ref(&tx5_input)).unwrap();
+    let transaction = TransactionBuilder::new()
+        .add_input(tx5_input, InputWitness::NoSignature(None))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool3_id,
+        ))
+        .add_output(TxOutput::DelegateStaking(delegated, delegation_id))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((rest4 - delegated).expect("no underflow in test amounts")),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block6_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool4_id,
+        vec![transaction],
+    );
+    let block7_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool4_id).await;
+
+    let pool4_balance = pool_staker_balance(&tf, pool4_id);
+    expected_staked = ((pool4_balance + amount3).expect("no overflow in test amounts") + delegated)
+        .expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 8: pool 3 is decommissioned while the delegation to it is still active
+    // (the same `OutPointSourceId::Transaction` path as in block 5).
+    let transaction = decommission_spend_transaction(
+        &chain_config,
+        &tf,
+        OutPointSourceId::Transaction(tx2b_id),
+        1,
+        pool3_creation_output,
+        pool3_id,
+        amount3,
+        &staking_sk,
+        &staking_pk,
+        &mut rng,
+    );
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block7_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool4_id,
+        vec![transaction],
+    );
+    let block8_id = block.get_id();
+    sync_and_compare(&mut tf, block, &mut local_state, pool4_id).await;
+
+    assert!(
+        tf.chainstate.get_stake_pool_data(&pool3_id).unwrap().is_none(),
+        "pool 3 must be gone from the chainstate"
+    );
+    assert_pool_record_zeroed(&local_state, pool3_id, delegated).await;
+    let pool4_balance = pool_staker_balance(&tf, pool4_id);
+    expected_staked = (pool4_balance + delegated).expect("no overflow in test amounts");
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
+
+    // Block 9: the delegation is spent even though pool 3 no longer exists, and the
+    // statistic must be decremented by exactly the delegated amount.
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(0),
+                AccountSpending::DelegationBalance(delegation_id, delegated),
+            )),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(stake_spend_payout_output(&chain_config, &tf, delegated))
+        .build();
+    let block = create_block(
+        &mut rng,
+        &mut tf,
+        target_block_time,
+        block8_id.into(),
+        staking_sk.clone(),
+        vrf_sk.clone(),
+        pool4_id,
+        vec![transaction],
+    );
+    sync_and_compare(&mut tf, block, &mut local_state, pool4_id).await;
+
+    expected_staked = pool_staker_balance(&tf, pool4_id);
+    assert_eq!(staked_statistic(&local_state).await, expected_staked);
 }
 
 #[rstest]

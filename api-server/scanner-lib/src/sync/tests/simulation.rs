@@ -385,7 +385,18 @@ async fn simulation(
             let orders_store = OrderAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
             let mut new_orders_cache = orders_accounting::OrdersAccountingCache::new(&orders_store);
 
+            let mut all_inputs_utxos = Vec::new();
             for tx in block.transactions() {
+                let inputs_utxos = tx
+                    .inputs()
+                    .iter()
+                    .map(|inp| match inp.utxo_outpoint() {
+                        Some(outpoint) => {
+                            tf.chainstate.utxo(outpoint).unwrap().map(|utxo| utxo.take_output())
+                        }
+                        None => None,
+                    })
+                    .collect::<Vec<_>>();
                 let new_utxos = (0..tx.outputs().len()).map(|output_index| {
                     UtxoOutPoint::new(
                         OutPointSourceId::Transaction(tx.transaction().get_id()),
@@ -428,8 +439,11 @@ async fn simulation(
                     &mut statistics,
                     tx.transaction(),
                     &chain_config,
+                    tf.chainstate.as_ref(),
+                    inputs_utxos.as_slice(),
                     block_height,
                 );
+                all_inputs_utxos.push(inputs_utxos);
             }
 
             let block_subsidy = chain_config.block_subsidy_at_height(&block_height.next_height());
@@ -450,18 +464,8 @@ async fn simulation(
             let tokens_store = StubTokensAccounting;
 
             let mut total_fees = AccumulatedFee::new();
-            for tx in block.transactions().iter() {
-                let inputs_utxos: Vec<_> = tx
-                    .inputs()
-                    .iter()
-                    .map(|inp| match inp.utxo_outpoint() {
-                        Some(outpoint) => {
-                            tf.chainstate.utxo(outpoint).unwrap().map(|utxo| utxo.take_output())
-                        }
-                        None => None,
-                    })
-                    .collect();
-
+            assert_eq!(all_inputs_utxos.len(), block.transactions().len());
+            for (tx, inputs_utxos) in block.transactions().iter().zip(all_inputs_utxos.iter()) {
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,
                     block_height,
@@ -469,7 +473,7 @@ async fn simulation(
                     &pos_store,
                     &tokens_store,
                     tx.inputs(),
-                    &inputs_utxos,
+                    inputs_utxos.as_slice(),
                 )
                 .expect("valid block");
                 let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
@@ -571,6 +575,8 @@ fn update_statistics(
     statistics: &mut BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, Amount>>,
     tx: &Transaction,
     chain_config: &ChainConfig,
+    chainstate: &dyn ChainstateInterface,
+    inputs_utxos: &[Option<TxOutput>],
     block_height: BlockHeight,
 ) {
     tx.outputs().iter().for_each(|out| match out {
@@ -617,8 +623,51 @@ fn update_statistics(
         | TxOutput::CreateOrder(_) => {}
     });
 
-    tx.inputs().iter().for_each(|inp| match inp {
-        TxInput::Utxo(_) => {}
+    let mut spent_pools = BTreeSet::new();
+    assert_eq!(
+        inputs_utxos.len(),
+        tx.inputs().len(),
+        "inputs_utxos must map 1:1 to tx inputs"
+    );
+    tx.inputs().iter().enumerate().for_each(|(input_index, inp)| match inp {
+        TxInput::Utxo(_) => {
+            // spending a stake output moves the pool's whole balance (pledge plus
+            // staker rewards) out of the `Staked` statistic; the utxos were resolved
+            // against the parent tip before the block was applied so the balance is
+            // still intact
+            let spent_output = inputs_utxos[input_index]
+                .as_ref()
+                .unwrap_or_else(|| panic!("input utxo spent by the simulation must exist"));
+            match spent_output {
+                // subtract each pool's balance only once per transaction, even if
+                // several spent inputs reference the same pool
+                TxOutput::CreateStakePool(pool_id, _)
+                | TxOutput::ProduceBlockFromStake(_, pool_id)
+                    if spent_pools.insert(*pool_id) =>
+                {
+                    let pool_balance = chainstate
+                        .get_stake_pool_data(pool_id)
+                        .unwrap()
+                        .unwrap_or_else(|| {
+                            panic!("pool {pool_id:?} spent by the simulation must exist")
+                        })
+                        .staker_balance()
+                        .expect("no staker balance overflow in the simulation");
+                    let staked = statistics
+                        .entry(CoinOrTokenStatistic::Staked)
+                        .or_default()
+                        .entry(CoinOrTokenId::Coin)
+                        .or_insert(Amount::ZERO);
+                    *staked = (*staked - pool_balance).unwrap_or_else(|| {
+                        panic!(
+                            "Staked statistic underflow spending pool {pool_id:?} \
+                             (balance {pool_balance:?})"
+                        )
+                    });
+                }
+                _ => {}
+            }
+        }
         TxInput::Account(acc) => match acc.account() {
             AccountSpending::DelegationBalance(_, to_spend) => {
                 let staked = statistics

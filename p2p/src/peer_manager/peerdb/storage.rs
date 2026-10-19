@@ -71,6 +71,15 @@ pub trait PeerDbStorageWrite {
 
     fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
     fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
+
+    /// Rewrite rows keyed by the mapped spelling (`::ffff:a.b.c.d`) of an IPv4 address so
+    /// that they are keyed by the canonical form; without this, removals would miss the
+    /// legacy rows and bans could resurrect after a restart.
+    ///
+    /// Returns whether any rows were rewritten. A `false` result guarantees no writes were
+    /// staged on this transaction, so callers may skip committing it; a `true` result means
+    /// the transaction must be committed for the rewrites to take effect.
+    fn normalize_legacy_mapped_address_keys(&mut self) -> crate::Result<bool>;
 }
 
 // Note: here we want to say something like:

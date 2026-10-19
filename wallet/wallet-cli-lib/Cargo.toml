@@ -51,6 +51,7 @@ futures.workspace = true
 prettytable-rs = "0.10"
 
 [dev-dependencies]
+utils = { path = "../../utils", features = ["test-util"] }
 blockprod = { path = "../../blockprod" }
 chainstate-storage = { path = "../../chainstate/storage" }
 crypto = { path = "../../crypto" }
