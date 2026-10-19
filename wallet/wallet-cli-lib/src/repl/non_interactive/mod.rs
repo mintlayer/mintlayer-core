@@ -59,7 +59,14 @@ fn to_line_output<N: NodeInterface>(
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
         ConsoleCommand::Json { text, value } => Ok(LineOutput::Json { text, value }),
         ConsoleCommand::Warn(message) => Ok(LineOutput::Warn(message)),
-        ConsoleCommand::PaginatedPrint { header, body } => Ok(LineOutput::Print(header + &body)),
+        ConsoleCommand::PaginatedPrint { header, body } => {
+            let rendered = match (header.is_empty(), body.is_empty()) {
+                (true, _) => body,
+                (false, true) => header,
+                (false, false) => format!("{header}\n{body}"),
+            };
+            Ok(LineOutput::Print(rendered))
+        }
         ConsoleCommand::SetStatus {
             status: _,
             print_message,

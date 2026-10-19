@@ -20,21 +20,23 @@ use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 use bigdecimal::BigDecimal;
 use itertools::Itertools;
 
+use chainstate::ChainInfo;
 use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{Address, RpcAddress},
     chain::{
-        ChainConfig, Destination, RpcCurrency, SignedTransaction,
+        ChainConfig, Destination, RpcCurrency, SignedTransaction, block::timestamp::BlockTimestamp,
         config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, htlc::HtlcSecret,
-        tokens::TokenId,
+        tokens::TokenId, transaction::Transaction,
     },
-    primitives::{H256, Idable as _},
+    primitives::{BlockHeight, H256, Id, Idable as _},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
+use p2p_types::socket_address::SocketAddress;
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::{
@@ -42,7 +44,7 @@ use utils::{
     qrcode::{QrCode, QrCodeError},
     sorted::Sorted as _,
 };
-use wallet_controller::types::WalletExtraInfo;
+use wallet_controller::{ConnectedPeer, types::WalletExtraInfo};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 #[cfg(any(feature = "trezor", feature = "ledger"))]
 use wallet_rpc_lib::types::HardwareWalletType;
@@ -891,7 +893,7 @@ where
 
             WalletCommand::ChainstateInfo => {
                 let info = self.wallet().await?.chainstate_info().await?;
-                Ok(ConsoleCommand::Print(format!("{info:#?}")))
+                Ok(ConsoleCommand::Print(format_chainstate_info(&info)))
             }
 
             WalletCommand::BestBlock => {
@@ -959,7 +961,9 @@ where
                         check_all_timestamps_between_blocks.to_bool(),
                     )
                     .await?;
-                Ok(ConsoleCommand::Print(format!("{timestamp_map:#?}")))
+                Ok(ConsoleCommand::Print(format_staking_timestamps(
+                    &timestamp_map,
+                )))
             }
 
             WalletCommand::GetBlockIdsAsCheckpoints {
@@ -1435,10 +1439,10 @@ where
 
             WalletCommand::ListPendingTransactions => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let utxos = wallet.list_pending_transactions(selected_account).await?;
+                let transactions = wallet.list_pending_transactions(selected_account).await?;
                 Ok(ConsoleCommand::PaginatedPrint {
-                    header: "Pending Transactions".to_owned(),
-                    body: format!("{utxos:#?}"),
+                    header: "Pending transactions".to_owned(),
+                    body: format_pending_transaction_ids(&transactions),
                 })
             }
 
@@ -2028,7 +2032,7 @@ where
             }
             WalletCommand::ConnectedPeers => {
                 let peers = self.wallet().await?.connected_peers().await?;
-                Ok(ConsoleCommand::Print(format!("{peers:#?}")))
+                Ok(ConsoleCommand::Print(format_connected_peers(&peers)))
             }
             WalletCommand::ConnectedPeersJson => {
                 let peers = self.wallet().await?.connected_peers().await?;
@@ -2037,7 +2041,7 @@ where
             }
             WalletCommand::ReservedPeers => {
                 let peers = self.wallet().await?.reserved_peers().await?;
-                Ok(ConsoleCommand::Print(format!("{peers:#?}")))
+                Ok(ConsoleCommand::Print(format_reserved_peers(&peers)))
             }
             WalletCommand::AddReservedPeer { address } => {
                 self.wallet().await?.add_reserved_peer(address).await?;
@@ -2521,4 +2525,87 @@ fn get_token_ids_from_order_infos_as_str<'a>(
     get_token_ids_from_order_infos(initial_balances_iter)
         .map(|rpc_addr| rpc_addr.as_str().to_owned())
         .collect_vec()
+}
+
+fn format_chainstate_info(info: &ChainInfo) -> String {
+    format!(
+        "Chainstate info:\n\
+         \x20 Best block height: {}\n\
+         \x20 Best block id: {}\n\
+         \x20 Best block timestamp: {} ({})\n\
+         \x20 Median time: {} ({})\n\
+         \x20 Initial block download: {}",
+        info.best_block_height,
+        info.best_block_id,
+        info.best_block_timestamp,
+        info.best_block_timestamp.into_time(),
+        info.median_time,
+        info.median_time.into_time(),
+        info.is_initial_block_download,
+    )
+}
+
+fn format_staking_timestamps(timestamps: &BTreeMap<BlockHeight, Vec<BlockTimestamp>>) -> String {
+    if timestamps.is_empty() {
+        return "No staking timestamps found".to_owned();
+    }
+
+    let mut output = String::from("Staking timestamps by block height:");
+    for (height, block_timestamps) in timestamps {
+        let rendered = block_timestamps
+            .iter()
+            .map(|timestamp| format!("{} ({})", timestamp, timestamp.into_time()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(output, "\n  {}: {}", height, rendered).expect("writing to a string cannot fail");
+    }
+    output
+}
+
+fn format_pending_transaction_ids(transactions: &[Id<Transaction>]) -> String {
+    if transactions.is_empty() {
+        return "No pending transactions".to_owned();
+    }
+
+    transactions
+        .iter()
+        .map(|id| format!("  {}", id_to_hex_string(*id.as_hash())))
+        .join("\n")
+}
+
+fn format_connected_peers(peers: &[ConnectedPeer]) -> String {
+    if peers.is_empty() {
+        return "No connected peers".to_owned();
+    }
+
+    let mut table = prettytable::Table::new();
+    table.set_titles(prettytable::row![
+        "Peer id",
+        "Address",
+        "Role",
+        "Ban score",
+        "User agent",
+    ]);
+    table.extend(peers.iter().map(|peer| {
+        prettytable::row![
+            peer.peer_id,
+            peer.address,
+            format!("{:?}", peer.peer_role),
+            peer.ban_score,
+            peer.user_agent,
+        ]
+    }));
+    table.to_string()
+}
+
+fn format_reserved_peers(peers: &[SocketAddress]) -> String {
+    if peers.is_empty() {
+        return "No reserved peers".to_owned();
+    }
+
+    let mut output = String::from("Reserved peers:");
+    for (index, address) in peers.iter().enumerate() {
+        write!(output, "\n  {}. {}", index + 1, address).expect("writing to a string cannot fail");
+    }
+    output
 }
