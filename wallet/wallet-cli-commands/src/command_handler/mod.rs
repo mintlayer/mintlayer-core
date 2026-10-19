@@ -3094,7 +3094,7 @@ mod nested_translation_tests {
         const HEX_PRIVATE_KEY: &str =
             "001111111111111111111111111111111111111111111111111111111111111111";
         const HEX_TXID: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-        const HEX_UTXO: &str = concat!(
+        const UTXO_OUT_POINT_ARG: &str = concat!(
             "tx(",
             "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
             ",1)"
@@ -3404,7 +3404,7 @@ mod nested_translation_tests {
                     "create-from-cold-input",
                     "addr",
                     "1.0",
-                    HEX_UTXO,
+                    UTXO_OUT_POINT_ARG,
                     "--change",
                     "chg",
                 ],
@@ -3413,7 +3413,7 @@ mod nested_translation_tests {
                     "transaction-create-from-cold-input",
                     "addr",
                     "1.0",
-                    HEX_UTXO,
+                    UTXO_OUT_POINT_ARG,
                     "--change",
                     "chg",
                 ],
@@ -3502,7 +3502,7 @@ mod nested_translation_tests {
                     "compose",
                     "transfer(addr,1.0)",
                     "--utxos",
-                    HEX_UTXO,
+                    UTXO_OUT_POINT_ARG,
                     "--only-transaction",
                 ],
                 &[
@@ -3510,7 +3510,7 @@ mod nested_translation_tests {
                     "transaction-compose",
                     "transfer(addr,1.0)",
                     "--utxos",
-                    HEX_UTXO,
+                    UTXO_OUT_POINT_ARG,
                     "--only-transaction",
                 ],
             ),
