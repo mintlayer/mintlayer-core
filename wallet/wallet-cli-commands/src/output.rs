@@ -65,12 +65,10 @@ impl CommandOutput {
 
 impl From<CommandOutput> for ConsoleCommand {
     fn from(output: CommandOutput) -> Self {
+        let text = output.text.filter(|text| !text.is_empty());
         match output.payload {
-            Some(value) => ConsoleCommand::Json {
-                text: output.text.filter(|text| !text.is_empty()),
-                value,
-            },
-            None => ConsoleCommand::Print(output.text.unwrap_or_default()),
+            Some(value) => ConsoleCommand::Json { text, value },
+            None => ConsoleCommand::Print(text.unwrap_or_default()),
         }
     }
 }

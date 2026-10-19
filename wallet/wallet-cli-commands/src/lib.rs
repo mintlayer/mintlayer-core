@@ -1429,7 +1429,8 @@ pub enum ConsoleCommand {
         text: Option<String>,
         value: serde_json::Value,
     },
-    /// A non-fatal condition, printed through the regular output channel.
+    /// A non-fatal condition, printed through the regular output channel for now;
+    /// consumers that render to a separate warning stream may route it to stderr.
     Warn(String),
     PaginatedPrint {
         // TODO: add support for more structured data like table pagination

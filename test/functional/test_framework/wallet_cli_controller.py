@@ -555,8 +555,7 @@ class WalletCliController(WalletCliControllerBase):
 
     async def list_pending_transactions(self) -> List[str]:
         output = await self._write_command("transaction-list-pending\n")
-        pattern = r'Id<Transaction>\{([^}]*)\}'
-        return re.findall(pattern, output)
+        return re.findall(r'^\s*([0-9a-f]{64})\s*$', output, re.MULTILINE)
 
     async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:
         address = address if address else ''
