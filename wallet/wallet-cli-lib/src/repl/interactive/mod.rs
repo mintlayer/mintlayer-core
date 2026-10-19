@@ -224,10 +224,10 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
-        Ok(Some(ConsoleCommand::Json { text, value })) => match text {
-            Some(text) => console.print_line(&text),
-            None => console.print_json(&value),
-        },
+        Ok(Some(ConsoleCommand::Json { text, value })) => {
+            let text = wallet_cli_commands::output::json_display_text(text, &value);
+            console.print_line(&text);
+        }
         Ok(Some(ConsoleCommand::Warn(message))) => {
             console.print_line(&message);
         }

@@ -2022,7 +2022,7 @@ where
                 Ok(ConsoleCommand::from(
                     crate::output::CommandOutput::with_payload(
                         peer_count.to_string(),
-                        serde_json::json!(peer_count),
+                        serde_json::json!({ "peer_count": peer_count }),
                     ),
                 ))
             }

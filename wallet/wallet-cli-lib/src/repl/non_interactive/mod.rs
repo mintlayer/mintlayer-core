@@ -113,10 +113,10 @@ fn handle_response<N: NodeInterface>(
         Ok(LineOutput::Print(text)) => {
             output.print_line(&text);
         }
-        Ok(LineOutput::Json { text, value }) => match text {
-            Some(text) => output.print_line(&text),
-            None => output.print_json(&value),
-        },
+        Ok(LineOutput::Json { text, value }) => {
+            let text = wallet_cli_commands::output::json_display_text(text, &value);
+            output.print_line(&text);
+        }
         Ok(LineOutput::Warn(message)) => {
             output.print_line(&message);
         }
@@ -143,16 +143,11 @@ mod rendering_tests {
     #[derive(Default)]
     struct CapturingOutput {
         lines: Vec<String>,
-        json_values: Vec<serde_json::Value>,
     }
 
     impl ConsoleOutput for CapturingOutput {
         fn print_line(&mut self, line: &str) {
             self.lines.push(line.to_owned());
-        }
-
-        fn print_json(&mut self, value: &serde_json::Value) {
-            self.json_values.push(value.clone());
         }
 
         fn print_error<N: NodeInterface>(&mut self, _error: WalletCliError<N>) {
@@ -181,23 +176,24 @@ mod rendering_tests {
             value: json!(3),
         });
         assert_eq!(output.lines, ["peer count: 3"]);
-        assert!(output.json_values.is_empty());
     }
 
     #[test]
-    fn json_payload_without_text_prints_the_value() {
+    fn json_payload_without_text_prints_the_pretty_value() {
         let output = render(ConsoleCommand::Json {
             text: None,
             value: json!({"key": "value"}),
         });
-        assert!(output.lines.is_empty());
-        assert_eq!(output.json_values, [json!({"key": "value"})]);
+        assert_eq!(output.lines.len(), 1);
+        assert_eq!(
+            output.lines[0],
+            serde_json::to_string_pretty(&json!({"key": "value"})).expect("static value")
+        );
     }
 
     #[test]
     fn warn_is_printed_as_text() {
         let output = render(ConsoleCommand::Warn("heads up".to_owned()));
         assert_eq!(output.lines, ["heads up"]);
-        assert!(output.json_values.is_empty());
     }
 }
