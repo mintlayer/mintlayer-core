@@ -1423,13 +1423,13 @@ impl ChoiceMenu for OpenWalletDeviceSelectMenu {
 pub enum ConsoleCommand {
     Print(String),
     /// A structured result: optional human-readable text plus the machine-readable form
-    /// of the same data. Interactive mode renders the text, falling back to a pretty
-    /// print of the value; scripting modes emit the value only.
+    /// of the same data. Both the interactive REPL and the non-interactive runner print
+    /// the text when present, falling back to a pretty print of the value.
     Json {
         text: Option<String>,
         value: serde_json::Value,
     },
-    /// A non-fatal condition. Scripting modes route it to stderr.
+    /// A non-fatal condition, printed through the regular output channel.
     Warn(String),
     PaginatedPrint {
         // TODO: add support for more structured data like table pagination

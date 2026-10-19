@@ -20,7 +20,8 @@ use crate::ConsoleCommand;
 /// The structured result of a wallet command.
 ///
 /// `text` is what users read; `payload`, when present, carries the same result in a
-/// machine-readable form for scripting modes.
+/// machine-readable form. Commands are migrated to this type one by one; a command
+/// that has not been migrated keeps returning plain text.
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
     text: String,
@@ -44,6 +45,15 @@ impl CommandOutput {
         }
     }
 
+    /// A result that only has a machine-readable form. Renderers fall back to a
+    /// pretty print of the value when there is no text.
+    pub fn value_only(payload: Value) -> Self {
+        Self {
+            text: String::new(),
+            payload: Some(payload),
+        }
+    }
+
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -57,7 +67,7 @@ impl From<CommandOutput> for ConsoleCommand {
     fn from(output: CommandOutput) -> Self {
         match output.payload {
             Some(value) => ConsoleCommand::Json {
-                text: Some(output.text),
+                text: (!output.text.is_empty()).then_some(output.text),
                 value,
             },
             None => ConsoleCommand::Print(output.text),
@@ -100,5 +110,16 @@ mod tests {
 
         let output = CommandOutput::plain("text");
         assert_eq!(output.payload(), None);
+    }
+
+    #[test]
+    fn value_only_produces_json_output_without_text() {
+        let command: ConsoleCommand = CommandOutput::value_only(json!("data")).into();
+
+        let ConsoleCommand::Json { text, value } = command else {
+            panic!("expected a Json output");
+        };
+        assert_eq!(text, None);
+        assert_eq!(value, json!("data"));
     }
 }

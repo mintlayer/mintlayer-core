@@ -165,11 +165,12 @@ mod rendering_tests {
             to_line_output::<node_comm::node_traits::MockNodeInterface>(command, "test command")
                 .expect("rendering must not fail");
         let mut output = CapturingOutput::default();
-        handle_response::<node_comm::node_traits::MockNodeInterface>(
+        let exit = handle_response::<node_comm::node_traits::MockNodeInterface>(
             Ok(line_output),
             &mut output,
             false,
         );
+        assert!(exit.is_none(), "rendering a command output must not exit");
         output
     }
 
