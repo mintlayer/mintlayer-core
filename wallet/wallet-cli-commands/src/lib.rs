@@ -482,21 +482,37 @@ pub enum DataGroupSubCommand {
 pub enum StakingGroupSubCommand {
     /// Create a new staking pool
     CreatePool {
+        /// The amount to be pledged to the pool. There is a minimum to be accepted.
         amount: DecimalAmount,
+        /// An amount in coins to be subtracted from the total rewards in a block and
+        /// handed to the staker as a constant/fixed cost for running the pool.
         cost_per_block: DecimalAmount,
+        /// After subtracting "cost per block" from the reward, this ratio is taken from
+        /// the rewards and handed to the staker, written as a percentage with per-mill
+        /// accuracy (0.1% is valid and equivalent to 0.001).
         margin_ratio_per_thousand: String,
+        /// The key that can decommission the pool. It's recommended to keep the
+        /// decommission key in a cold storage.
         decommission_address: String,
+        /// The key that will sign new blocks; leave it empty if the current wallet
+        /// will be the staking wallet.
         staker_address: Option<String>,
+        /// The VRF key used to produce PoS hashes during staking; leave it empty if
+        /// the current wallet will be the staking wallet.
         vrf_public_key: Option<String>,
     },
     /// Decommission a staking pool owned by the selected account
     DecommissionPool {
+        /// The pool id of the pool to be decommissioned.
         pool_id: String,
+        /// The address that will receive the staker's balance.
         output_address: String,
     },
     /// Create a decommission request transaction without broadcasting it
     DecommissionPoolRequest {
+        /// The pool id of the pool to be decommissioned.
         pool_id: String,
+        /// The address that will receive the staker's balance.
         output_address: String,
     },
     /// Start staking with the selected account
@@ -578,32 +594,52 @@ pub enum TokenGroupSubCommand {
         command: NftGroupSubCommand,
     },
     /// Change the authority of a token
-    ChangeAuthority { token_id: String, address: String },
+    ChangeAuthority {
+        /// The token id of the token.
+        token_id: String,
+        /// The address of the new authority.
+        address: String,
+    },
     /// Change the metadata uri of a token
     ChangeMetadataUri {
+        /// The token id of the token.
         token_id: String,
+        /// The new metadata uri.
         metadata_uri: String,
     },
     /// Mint tokens
     Mint {
+        /// The token id of the tokens to be minted.
         token_id: String,
+        /// The receiving address of the minted tokens.
         address: String,
+        /// The amount to be minted.
         amount: DecimalAmount,
     },
     /// Unmint tokens
     Unmint {
+        /// The token id of the tokens to be unminted.
         token_id: String,
+        /// The amount to be unminted.
         amount: DecimalAmount,
     },
     /// Lock the supply of a token
-    LockSupply { token_id: String },
+    LockSupply {
+        /// The token id of the token whose supply will be locked.
+        token_id: String,
+    },
     /// Freeze a token
     Freeze {
+        /// The token id of the token to be frozen.
         token_id: String,
+        /// Whether these tokens can be unfrozen again, or permanently frozen.
         is_unfreezable: CliIsUnfreezable,
     },
     /// Unfreeze a token
-    Unfreeze { token_id: String },
+    Unfreeze {
+        /// The token id of the token to be unfrozen.
+        token_id: String,
+    },
     /// Send tokens to an address
     Send {
         token_id: String,
@@ -618,31 +654,48 @@ pub enum TokenGroupSubCommand {
 pub enum OrderGroupSubCommand {
     /// Create an order for exchanging currencies
     Create {
+        /// The currency you are asking for - a token id or "coin" for coins.
         ask_currency: CliCurrency,
+        /// The asked amount.
         ask_amount: DecimalAmount,
+        /// The currency you will be giving - a token id or "coin" for coins.
         give_currency: CliCurrency,
+        /// The given amount.
         give_amount: DecimalAmount,
+        /// The address that can authorize the conclusion and freezing of the order.
         conclude_address: String,
     },
     /// Fill an order
     Fill {
+        /// The id of the order to fill.
         order_id: String,
+        /// The amount of the "asked" currency to fill the order with.
         amount: DecimalAmount,
+        /// The address that receives the "given" currency; a new receive address is
+        /// generated if not specified.
         output_address: Option<String>,
     },
     /// Freeze an order
-    Freeze { order_id: String },
+    Freeze {
+        /// The id of the order to freeze.
+        order_id: String,
+    },
     /// Conclude an order
     Conclude {
+        /// The id of the order to conclude.
         order_id: String,
+        /// The address that receives the accumulated amounts; a new receive address
+        /// is generated if not specified.
         output_address: Option<String>,
     },
     /// List orders owned by the selected account
     ListOwn,
     /// List all active orders
     ListAllActive {
+        /// Filter orders by the specified "asked" currency.
         #[arg(long = "ask-currency")]
         ask_currency: Option<CliCurrency>,
+        /// Filter orders by the specified "given" currency.
         #[arg(long = "give-currency")]
         give_currency: Option<CliCurrency>,
     },
@@ -654,11 +707,17 @@ pub enum OrderGroupSubCommand {
 pub enum HtlcGroupSubCommand {
     /// Create a transaction with an HTLC output without broadcasting it
     Create {
+        /// The currency to lock inside the HTLC - a token id or "coin" for coins.
         currency: CliCurrency,
+        /// The amount to lock inside the HTLC.
         amount: DecimalAmount,
+        /// Hex-encoded hash of the HTLC secret.
         secret_hash: String,
+        /// The address that can spend the HTLC providing the secret.
         spend_address: String,
+        /// The refund timelock, e.g. block_count(720) or until_time(RFC 3339).
         refund_timelock: CliOutputTimeLock,
+        /// The address that can refund the HTLC after the refund timelock expires.
         refund_address: String,
     },
     /// Generate a new HTLC secret
@@ -673,31 +732,45 @@ pub enum HtlcGroupSubCommand {
 pub enum TransactionGroupSubCommand {
     /// Compose a transaction from outputs without broadcasting it
     Compose {
+        /// The transaction outputs, in the format `transfer(address,amount)`.
         outputs: Vec<CliUnspecifiedCurrencyTransfer>,
+        /// Choose what utxos to spend (e.g. tx(<id>,1) or block(<id>,2)).
         #[arg(long = "utxos")]
         utxos: Vec<CliUtxoOutPoint>,
+        /// Produce a "simple" transaction hex instead of a PartiallySignedTransaction.
         #[arg(long = "only-transaction", default_value_t = false)]
         only_transaction: bool,
     },
     /// Create a transaction from a cold wallet input
     CreateFromColdInput {
+        /// The receiving address of the coins.
         address: String,
+        /// The amount to be sent, in decimal format.
         amount: DecimalAmount,
+        /// The utxo to spend, e.g. tx(<id>,1) or block(<id>,2).
         utxo: CliUtxoOutPoint,
+        /// The change address; if not specified, the change returns to the input
+        /// address.
         #[arg(long = "change")]
         change_address: Option<String>,
     },
     /// Inspect a hex-encoded transaction
-    Inspect { transaction: String },
+    Inspect {
+        /// Hex-encoded transaction or PartiallySignedTransaction.
+        transaction: String,
+    },
     /// Abandon a pending transaction
     Abandon {
+        /// The id of the transaction to abandon, in hex.
         transaction_id: HexEncoded<Id<Transaction>>,
     },
     /// List pending transactions
     ListPending,
     /// List transactions by address
     ListByAddress {
+        /// Address to filter by.
         address: Option<String>,
+        /// Limit the number of printed transactions.
         #[arg(long = "limit", default_value_t = 100)]
         limit: usize,
     },
