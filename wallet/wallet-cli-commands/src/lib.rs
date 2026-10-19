@@ -480,6 +480,12 @@ pub enum DataGroupSubCommand {
 #[derive(Debug, Subcommand, Clone)]
 #[clap(rename_all = "kebab-case")]
 pub enum StakingGroupSubCommand {
+    /// Generate a new VRF public key for staking
+    NewVrfPublicKey,
+    /// Show the VRF public keys of the selected account
+    ShowVrfPublicKeys,
+    /// Show the legacy VRF key of the selected account
+    ShowLegacyVrfKey,
     /// Create a new staking pool
     CreatePool {
         /// The amount to be pledged to the pool. There is a minimum to be accepted.
@@ -536,23 +542,35 @@ pub enum StakingGroupSubCommand {
 #[clap(rename_all = "kebab-case")]
 pub enum DelegationGroupSubCommand {
     /// Create a delegation to a staking pool
-    Create { owner: String, pool_id: String },
+    Create {
+        /// The address, that will have the authority to sign withdrawals from the delegation.
+        owner: String,
+        /// The pool id of the pool that will get the delegation and stake the coins.
+        pool_id: String,
+    },
     /// List the delegation ids of the selected account
     List,
     /// Add coins to a delegation
     Stake {
+        /// The amount to be delegated for staking.
         amount: DecimalAmount,
+        /// The delegation id.
         delegation_id: String,
     },
     /// Withdraw coins from a delegation
     Withdraw {
+        /// The address that will be receiving the coins
         address: String,
+        /// The amount that will be taken away from the delegation
         amount: DecimalAmount,
+        /// The delegation id, from which the delegated coins will be taken
         delegation_id: String,
     },
     /// Move all spendable delegation coins to an address
     Sweep {
+        /// The receiving address of the coins
         destination_address: String,
+        /// The delegation to be swept
         delegation_id: String,
     },
 }
@@ -563,14 +581,23 @@ pub enum DelegationGroupSubCommand {
 pub enum NftGroupSubCommand {
     /// Issue a new NFT
     Issue {
+        /// The receiver of the token
         destination_address: String,
+        /// The hash of the media, whose ownership is represented by the NFT
         media_hash: String,
+        /// Name of the token
         name: String,
+        /// Description of the token
         description: String,
+        /// Ticker of the token
         ticker: String,
+        /// The owner, represented by a public key (hex-encoded)
         creator: Option<HexEncoded<PublicKey>>,
+        /// URI for the icon of the NFT
         icon_uri: Option<String>,
+        /// URI of the media
         media_uri: Option<String>,
+        /// URI of the additional metadata
         additional_metadata_uri: Option<String>,
     },
 }
@@ -832,6 +859,12 @@ pub const LEGACY_ALIASES: &[(&str, &str)] = &[
     ("standalone-address-show", "address standalone list"),
     ("standalone-address-details", "address standalone details"),
     ("standalone-multisig-utxos", "address standalone utxos"),
+    ("staking-new-vrf-public-key", "staking new-vrf-public-key"),
+    (
+        "staking-show-vrf-public-keys",
+        "staking show-vrf-public-keys",
+    ),
+    ("staking-show-legacy-vrf-key", "staking show-legacy-vrf-key"),
     ("staking-create-pool", "staking create-pool"),
     ("staking-decommission-pool", "staking decommission-pool"),
     (

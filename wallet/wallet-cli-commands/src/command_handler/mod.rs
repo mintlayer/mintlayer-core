@@ -901,6 +901,10 @@ where
                 };
                 self.handle_wallet_management_command(management).await
             }
+            // Keep this or-pattern in sync with `is_nested_wallet_command` and the
+            // translation arms in `normalize_nested_wallet_command`: a group added here
+            // needs a variant in the predicate, a translation arm, and a LEGACY_ALIASES
+            // entry so the coexistence and translation tests pin all three sites.
             command @ (WalletCommand::Account { .. }
             | WalletCommand::Address { .. }
             | WalletCommand::Send { .. }
@@ -2485,6 +2489,9 @@ where
 /// dispatch. Shared by the dispatch guard and the translation tests so both stay in
 /// sync when new groups are added.
 fn is_nested_wallet_command(command: &WalletCommand) -> bool {
+    // Keep in sync with the dispatch or-pattern in `handle_wallet_command` and the
+    // translation arms in `normalize_nested_wallet_command`; the LEGACY_ALIASES
+    // coexistence test and the translation test pin the three sites together.
     matches!(
         command,
         WalletCommand::Wallet { .. }
@@ -2657,6 +2664,15 @@ fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
                 pool_id,
                 output_address,
             },
+            StakingGroupSubCommand::NewVrfPublicKey => {
+                WalletCommand::ColdCommands(ColdWalletCommand::NewVrfPublicKey)
+            }
+            StakingGroupSubCommand::ShowVrfPublicKeys => {
+                WalletCommand::ColdCommands(ColdWalletCommand::GetVrfPublicKey)
+            }
+            StakingGroupSubCommand::ShowLegacyVrfKey => {
+                WalletCommand::ColdCommands(ColdWalletCommand::GetLegacyVrfPublicKey)
+            }
             StakingGroupSubCommand::Start => WalletCommand::StartStaking,
             StakingGroupSubCommand::Stop => WalletCommand::StopStaking,
             StakingGroupSubCommand::Status => WalletCommand::StakingStatus,
@@ -3185,6 +3201,18 @@ mod nested_translation_tests {
                 &["repl", "address-deposit-data", "deadbeef"],
             ),
             (
+                &["repl", "staking", "new-vrf-public-key"],
+                &["repl", "staking-new-vrf-public-key"],
+            ),
+            (
+                &["repl", "staking", "show-vrf-public-keys"],
+                &["repl", "staking-show-vrf-public-keys"],
+            ),
+            (
+                &["repl", "staking", "show-legacy-vrf-key"],
+                &["repl", "staking-show-legacy-vrf-key"],
+            ),
+            (
                 &[
                     "repl",
                     "staking",
@@ -3194,6 +3222,7 @@ mod nested_translation_tests {
                     "0.1",
                     "decomm_addr",
                     "staker_addr",
+                    "vrf_key",
                 ],
                 &[
                     "repl",
@@ -3203,6 +3232,7 @@ mod nested_translation_tests {
                     "0.1",
                     "decomm_addr",
                     "staker_addr",
+                    "vrf_key",
                 ],
             ),
             (
