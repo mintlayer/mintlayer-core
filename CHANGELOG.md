@@ -11,6 +11,31 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-19
+
+### Security
+  - Node:
+    - RPC credentials and regtest staking keys are no longer written to the node
+      log. The startup options dump redacts secret-bearing fields (rpc username,
+      rpc password, genesis staking settings), rpc credentials held in memory are
+      zeroized when dropped, and log files are created with owner-only
+      permissions; log files left by earlier versions are restricted on startup.
+    - Secret-bearing command line options no longer leak the values of their
+      environment variables through `--help`.
+  - Crypto:
+    - The staking VRF private key types (`VRFPrivateKey`, `VRFPrivateKeyHolder`,
+      `SchnorrkelPrivateKey`) no longer print their key material through `Debug`
+      and print a redacted placeholder instead. Previously, a single debug
+      rendering of the node's command line options printed the full VRF secret
+      key.
+  - P2p:
+    - IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) are now canonicalized to
+      their embedded IPv4 form, so the routable-address check, address grouping,
+      per-group connection limits and peer bans can no longer be bypassed by
+      expressing an address in mapped form. Peer database rows keyed by the
+      legacy mapped spelling are folded onto the canonical key when the database
+      is loaded.
+
 ## [1.4.2] - 2026-10-12
 
 ### Fixed

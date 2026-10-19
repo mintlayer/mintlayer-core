@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.3]
+
+### Security
+- Node RPC and database credentials no longer appear in debug output or logs: the
+  api-server configuration debug rendering redacts the node RPC username/password
+  and the postgres password, the postgres connection string is logged with the
+  password elided, and secret-bearing command line options hide the values of
+  their environment variables from `--help`.
+
 ## [1.4.2]
 
 ### Fixed
