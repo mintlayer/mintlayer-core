@@ -71,7 +71,8 @@ use super::{
 use crate::{
     AccountGroupSubCommand, AddressGroupSubCommand, CliPublicKeyFormat, DataGroupSubCommand,
     DelegationGroupSubCommand, HtlcGroupSubCommand, ManageableWalletCommand, NftGroupSubCommand,
-    OpenWalletSubCommand, OrderGroupSubCommand, StakingGroupSubCommand, StandaloneGroupSubCommand,
+    NodeGroupSubCommand, OpenWalletSubCommand, OrderGroupSubCommand, PeerGroupSubCommand,
+    ReservedPeerGroupSubCommand, StakingGroupSubCommand, StandaloneGroupSubCommand,
     TokenGroupSubCommand, TransactionGroupSubCommand, WalletGroupSubCommand,
     WalletManagementCommand,
     errors::WalletCliCommandError,
@@ -914,7 +915,9 @@ where
             | WalletCommand::Token { .. }
             | WalletCommand::Order { .. }
             | WalletCommand::Htlc { .. }
-            | WalletCommand::Transaction { .. }) => {
+            | WalletCommand::Transaction { .. }
+            | WalletCommand::Node { .. }
+            | WalletCommand::Peer { .. }) => {
                 // Nested groups translate to their flat equivalents. The recursive call
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
@@ -950,13 +953,45 @@ where
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
+            WalletCommand::NodeBestBlock {
+                id,
+                height,
+                timestamp,
+            } => {
+                // The legacy RPCs are reused per value so error behavior (including on
+                // cold wallets) matches the flat commands. Values are fetched back to
+                // back, so they can straddle a block boundary exactly like issuing the
+                // flat commands one after another. No flags means all three, mirroring
+                // the formatter's show-all rule.
+                let wallet = self.wallet().await?;
+                let show_all = !id && !height && !timestamp;
+                let best_block_id = if id || show_all {
+                    Some(wallet.node_best_block_id().await?.hex_encode())
+                } else {
+                    None
+                };
+                let best_block_height = if height || show_all {
+                    Some(wallet.node_best_block_height().await?.to_string())
+                } else {
+                    None
+                };
+                let best_block_timestamp = if timestamp || show_all {
+                    Some(format_block_timestamp(
+                        wallet.chainstate_info().await?.best_block_timestamp,
+                    ))
+                } else {
+                    None
+                };
+                Ok(ConsoleCommand::Print(format_best_block(
+                    best_block_id,
+                    best_block_height,
+                    best_block_timestamp,
+                )))
+            }
+
             WalletCommand::BestBlockTimestamp => {
                 let timestamp = self.wallet().await?.chainstate_info().await?.best_block_timestamp;
-                Ok(ConsoleCommand::Print(format!(
-                    "{} ({})",
-                    timestamp,
-                    timestamp.into_time()
-                )))
+                Ok(ConsoleCommand::Print(format_block_timestamp(timestamp)))
             }
 
             WalletCommand::BlockId { height } => {
@@ -2505,6 +2540,8 @@ fn is_nested_wallet_command(command: &WalletCommand) -> bool {
             | WalletCommand::Order { .. }
             | WalletCommand::Htlc { .. }
             | WalletCommand::Transaction { .. }
+            | WalletCommand::Node { .. }
+            | WalletCommand::Peer { .. }
     )
 }
 
@@ -2860,6 +2897,58 @@ fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
                 WalletCommand::CalcHtlcSecretHash { secret }
             }
         },
+        WalletCommand::Node { command } => match command {
+            NodeGroupSubCommand::Version => WalletCommand::NodeVersion,
+            NodeGroupSubCommand::Shutdown => WalletCommand::NodeShutdown,
+            NodeGroupSubCommand::P2p { enable } => WalletCommand::NodeEnableNetworking { enable },
+            NodeGroupSubCommand::SubmitBlock { block } => WalletCommand::SubmitBlock { block },
+            NodeGroupSubCommand::SubmitTransaction {
+                transaction,
+                do_not_store,
+            } => WalletCommand::SubmitTransaction {
+                transaction,
+                do_not_store,
+            },
+            NodeGroupSubCommand::ChainstateInfo => WalletCommand::ChainstateInfo,
+            NodeGroupSubCommand::BestBlock {
+                id,
+                height,
+                timestamp,
+            } => WalletCommand::NodeBestBlock {
+                id,
+                height,
+                timestamp,
+            },
+            NodeGroupSubCommand::BlockId { height } => WalletCommand::BlockId { height },
+            NodeGroupSubCommand::Block { id } => WalletCommand::GetBlock { id },
+            NodeGroupSubCommand::GenerateBlock { transactions } => {
+                WalletCommand::GenerateBlock { transactions }
+            }
+        },
+        WalletCommand::Peer { command } => match command {
+            PeerGroupSubCommand::Connect { address } => WalletCommand::Connect { address },
+            PeerGroupSubCommand::Disconnect { peer_id } => WalletCommand::Disconnect { peer_id },
+            PeerGroupSubCommand::Ban { address, duration } => {
+                WalletCommand::Ban { address, duration }
+            }
+            PeerGroupSubCommand::Unban { address } => WalletCommand::Unban { address },
+            PeerGroupSubCommand::Banned => WalletCommand::ListBanned,
+            PeerGroupSubCommand::Discouraged => WalletCommand::ListDiscouraged,
+            PeerGroupSubCommand::Undiscourage { address } => {
+                WalletCommand::Undiscourage { address }
+            }
+            PeerGroupSubCommand::Count => WalletCommand::PeerCount,
+            PeerGroupSubCommand::List => WalletCommand::ConnectedPeers,
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::List,
+            } => WalletCommand::ReservedPeers,
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::Add { address },
+            } => WalletCommand::AddReservedPeer { address },
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::Remove { address },
+            } => WalletCommand::RemoveReservedPeer { address },
+        },
         WalletCommand::Transaction { command } => match command {
             TransactionGroupSubCommand::Compose {
                 outputs,
@@ -2991,6 +3080,60 @@ fn get_token_ids_from_order_infos_as_str<'a>(
         .collect_vec()
 }
 
+/// Format best-block values with labels only when more than one value is shown.
+/// Values the caller did not fetch are passed as `None`; the caller must always
+/// fetch at least one value (its no-flags rule fetches all three), a single fetched
+/// value is shown bare, byte-identical to the legacy single-value commands (the
+/// unit test pins those shapes), and an all-`None` input renders an empty string.
+fn format_best_block(
+    best_block_id: Option<String>,
+    best_block_height: Option<String>,
+    best_block_timestamp: Option<String>,
+) -> String {
+    let selected = [
+        best_block_id.as_ref(),
+        best_block_height.as_ref(),
+        best_block_timestamp.as_ref(),
+    ]
+    .into_iter()
+    .filter(|value| value.is_some())
+    .count();
+    debug_assert!(
+        selected > 0,
+        "format_best_block requires at least one fetched value; \
+         all-None input renders as an empty string"
+    );
+    let labeled = selected != 1;
+    let mut lines = Vec::new();
+    if let Some(value) = best_block_id {
+        lines.push(if labeled {
+            format!("Best block id: {value}")
+        } else {
+            value
+        });
+    }
+    if let Some(value) = best_block_height {
+        lines.push(if labeled {
+            format!("Best block height: {value}")
+        } else {
+            value
+        });
+    }
+    if let Some(value) = best_block_timestamp {
+        lines.push(if labeled {
+            format!("Best block timestamp: {value}")
+        } else {
+            value
+        });
+    }
+    lines.join("\n")
+}
+
+/// Render a block timestamp the way the best-block commands print it.
+fn format_block_timestamp(timestamp: BlockTimestamp) -> String {
+    format!("{} ({})", timestamp, timestamp.into_time())
+}
+
 fn format_chainstate_info(info: &ChainInfo) -> String {
     format!(
         "Chainstate info:\n\
@@ -3087,6 +3230,45 @@ mod nested_translation_tests {
             "translation must produce a flat command"
         );
         format!("{flat:?}")
+    }
+
+    #[test]
+    fn best_block_formatter_matches_the_legacy_single_value_shapes() {
+        // Literal renderings the legacy flat commands produce; the single-flag
+        // shapes must stay byte-identical to them.
+        const ZERO_ID_HEX: &str =
+            "0000000000000000000000000000000000000000000000000000000000000000";
+        const GENESIS_TIMESTAMP_RENDERING: &str = "42 (1970-01-01 00:00:42 UTC)";
+
+        let rendered = (
+            ZERO_ID_HEX.to_owned(),
+            "7".to_owned(),
+            GENESIS_TIMESTAMP_RENDERING.to_owned(),
+        );
+
+        // Exactly one value: bare, byte-identical to the legacy commands.
+        assert_eq!(
+            format_best_block(Some(rendered.0.clone()), None, None),
+            ZERO_ID_HEX
+        );
+        assert_eq!(format_best_block(None, Some(rendered.1.clone()), None), "7");
+        assert_eq!(
+            format_best_block(None, None, Some(rendered.2.clone())),
+            GENESIS_TIMESTAMP_RENDERING
+        );
+
+        // Two values: labeled subset.
+        assert_eq!(
+            format_best_block(Some(rendered.0.clone()), Some(rendered.1.clone()), None),
+            format!("Best block id: {ZERO_ID_HEX}\nBest block height: 7")
+        );
+
+        // No values fetched: all three, labeled.
+        let all = format_best_block(Some(rendered.0), Some(rendered.1), Some(rendered.2));
+        assert_eq!(all.lines().count(), 3);
+        assert!(all.starts_with("Best block id: "));
+        assert!(all.contains("Best block height: 7"));
+        assert!(all.contains("Best block timestamp: "));
     }
 
     #[test]
@@ -3513,6 +3695,94 @@ mod nested_translation_tests {
                     UTXO_OUT_POINT_ARG,
                     "--only-transaction",
                 ],
+            ),
+            (&["repl", "node", "version"], &["repl", "node-version"]),
+            (&["repl", "node", "shutdown"], &["repl", "node-shutdown"]),
+            (
+                &["repl", "node", "p2p", "enable"],
+                &["repl", "node-enable-p2p-networking", "enable"],
+            ),
+            // submit-block / submit-transaction rows are omitted from this table:
+            // their HexEncoded payloads need valid SCALE encodings to parse from
+            // argv. Existence and argument agreement are covered by the
+            // LEGACY_ALIASES walk in lib.rs, and the translation arms destructure
+            // with field shorthand, so a dropped field is a compile error.
+            (
+                &["repl", "node", "chainstate-info"],
+                &["repl", "node-chainstate-info"],
+            ),
+            (
+                &["repl", "node", "best-block", "--id"],
+                &["repl", "node-best-block", "--id"],
+            ),
+            (
+                &["repl", "node", "best-block"],
+                &["repl", "node-best-block"],
+            ),
+            (
+                &["repl", "node", "best-block", "--height"],
+                &["repl", "node-best-block", "--height"],
+            ),
+            (
+                &["repl", "node", "best-block", "--timestamp"],
+                &["repl", "node-best-block", "--timestamp"],
+            ),
+            (
+                &["repl", "node", "block-id", "7"],
+                &["repl", "node-block-id", "7"],
+            ),
+            (
+                &["repl", "node", "block", "abc"],
+                &["repl", "node-get-block", "abc"],
+            ),
+            (
+                &["repl", "node", "generate-block"],
+                &["repl", "node-generate-block"],
+            ),
+            (
+                &["repl", "peer", "connect", "10.0.0.1:3000"],
+                &["repl", "node-connect-to-peer", "10.0.0.1:3000"],
+            ),
+            (
+                &["repl", "peer", "disconnect", "12345"],
+                &["repl", "node-disconnect-peer", "12345"],
+            ),
+            (
+                &["repl", "peer", "ban", "1.2.3.4", "1h"],
+                &["repl", "node-ban-peer-address", "1.2.3.4", "1h"],
+            ),
+            (
+                &["repl", "peer", "unban", "1.2.3.4"],
+                &["repl", "node-unban-peer-address", "1.2.3.4"],
+            ),
+            (
+                &["repl", "peer", "banned"],
+                &["repl", "node-list-banned-peers"],
+            ),
+            (
+                &["repl", "peer", "discouraged"],
+                &["repl", "node-list-discouraged-peers"],
+            ),
+            (
+                &["repl", "peer", "undiscourage", "1.2.3.4"],
+                &["repl", "node-undiscourage-peer-address", "1.2.3.4"],
+            ),
+            (&["repl", "peer", "count"], &["repl", "node-peer-count"]),
+            (
+                &["repl", "peer", "list"],
+                &["repl", "node-list-connected-peers"],
+            ),
+            (
+                &["repl", "peer", "reserved", "list"],
+                &["repl", "node-list-reserved-peers"],
+            ),
+            (
+                &["repl", "peer", "reserved", "add", "10.0.0.2:3000"],
+                &["repl", "node-add-reserved-peer", "10.0.0.2:3000"],
+            ),
+            (
+                &["repl", "peer", "reserved", "remove", "10.0.0.2:3000"],
+                &["repl", "node-remove-reserved-peer", "10.0.0.2:3000"],
             ),
         ];
 

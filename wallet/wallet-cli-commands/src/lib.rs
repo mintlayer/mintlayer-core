@@ -455,7 +455,7 @@ pub enum AddressGroupSubCommand {
         #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
         /// Sweep all addresses
-        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        #[arg(long = "all", conflicts_with_all(["addresses"]))]
         all: bool,
     },
     /// Manage standalone (non-account) addresses.
@@ -765,7 +765,7 @@ pub enum TransactionGroupSubCommand {
         #[arg(long = "utxos")]
         utxos: Vec<CliUtxoOutPoint>,
         /// Produce a "simple" transaction hex instead of a PartiallySignedTransaction.
-        #[arg(long = "only-transaction", default_value_t = false)]
+        #[arg(long = "only-transaction")]
         only_transaction: bool,
     },
     /// Create a transaction from a cold wallet input
@@ -812,6 +812,129 @@ pub enum TransactionGroupSubCommand {
     /// Get the raw hex of a signed transaction
     GetSignedRaw {
         transaction_id: HexEncoded<Id<Transaction>>,
+    },
+}
+
+/// Commands for operating the node
+#[derive(Subcommand, Clone, Debug)]
+#[clap(rename_all = "kebab-case")]
+pub enum NodeGroupSubCommand {
+    /// Show the version of the running node
+    Version,
+    /// Shut down the running node
+    Shutdown,
+    /// Enable or disable p2p networking in the node
+    P2p {
+        /// Whether to enable or disable p2p networking.
+        enable: CliEnableOrDisable,
+    },
+    /// Submit a hex-encoded block to the node
+    SubmitBlock {
+        /// Hex-encoded block
+        block: HexEncoded<Block>,
+    },
+    /// Submit a hex-encoded transaction to the node
+    SubmitTransaction {
+        /// Hex-encoded transaction.
+        transaction: HexEncoded<SignedTransaction>,
+        /// Do not store the transaction in the wallet
+        #[arg(long = "do-not-store")]
+        do_not_store: bool,
+    },
+    /// Show chainstate information of the running node
+    ChainstateInfo,
+    /// Show the best block id, height, and timestamp; pass flags to show a subset
+    BestBlock {
+        /// Show the best block id
+        #[arg(long = "id")]
+        id: bool,
+        /// Show the best block height
+        #[arg(long = "height")]
+        height: bool,
+        /// Show the best block timestamp
+        #[arg(long = "timestamp")]
+        timestamp: bool,
+    },
+    /// Show the block id at a given height
+    BlockId {
+        /// Block height
+        height: BlockHeight,
+    },
+    /// Show a block by its id
+    Block {
+        /// Block id
+        id: String,
+    },
+    /// Generate a block with the given transactions (regtest)
+    GenerateBlock {
+        /// Hex-encoded transactions to include in the block
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    },
+}
+
+/// Commands for managing peers
+#[derive(Subcommand, Clone, Debug)]
+#[clap(rename_all = "kebab-case")]
+pub enum PeerGroupSubCommand {
+    /// Connect to a peer
+    Connect {
+        /// The address of the peer to connect to
+        address: IpOrSocketAddress,
+    },
+    /// Disconnect from a peer
+    Disconnect {
+        /// The id of the peer to disconnect from
+        peer_id: PeerId,
+    },
+    /// Ban a peer address
+    Ban {
+        /// IP address to ban.
+        address: BannableAddress,
+        /// Duration of the ban, e.g. 1M (1 month) or "1y 3M 10d 6h 30m 45s"
+        /// (1 year 3 months 10 days 6 hours 30 minutes 45 seconds).
+        #[arg(value_parser(humantime::parse_duration))]
+        duration: Duration,
+    },
+    /// Unban a peer address
+    Unban {
+        /// The address to unban
+        address: BannableAddress,
+    },
+    /// List banned peer addresses
+    Banned,
+    /// List discouraged peer addresses
+    Discouraged,
+    /// Undiscourage a peer address
+    Undiscourage {
+        /// The address to undiscourage
+        address: BannableAddress,
+    },
+    /// Show the number of connected peers
+    Count,
+    /// List connected peers
+    List,
+    /// Manage reserved peers
+    Reserved {
+        #[command(subcommand)]
+        command: ReservedPeerGroupSubCommand,
+    },
+}
+
+/// Commands for managing the reserved peer list
+#[derive(Subcommand, Clone, Debug)]
+#[clap(rename_all = "kebab-case")]
+pub enum ReservedPeerGroupSubCommand {
+    /// List reserved peers
+    List,
+    /// Add a reserved peer
+    Add {
+        /// The address of the peer to reserve
+        address: IpOrSocketAddress,
+    },
+    /// Remove a reserved peer
+    Remove {
+        /// The address of the peer to remove from the reserved list
+        address: IpOrSocketAddress,
     },
 }
 
@@ -920,6 +1043,31 @@ pub const LEGACY_ALIASES: &[(&str, &str)] = &[
     ("transaction-get", "transaction get"),
     ("transaction-get-raw", "transaction get-raw"),
     ("transaction-get-signed-raw", "transaction get-signed-raw"),
+    ("node-version", "node version"),
+    ("node-shutdown", "node shutdown"),
+    ("node-enable-p2p-networking", "node p2p"),
+    ("node-submit-block", "node submit-block"),
+    ("node-submit-transaction", "node submit-transaction"),
+    ("node-chainstate-info", "node chainstate-info"),
+    ("node-best-block", "node best-block"),
+    ("node-best-block-id", "node best-block --id"),
+    ("node-best-block-height", "node best-block --height"),
+    ("node-best-block-timestamp", "node best-block --timestamp"),
+    ("node-block-id", "node block-id"),
+    ("node-get-block", "node block"),
+    ("node-generate-block", "node generate-block"),
+    ("node-connect-to-peer", "peer connect"),
+    ("node-disconnect-peer", "peer disconnect"),
+    ("node-peer-count", "peer count"),
+    ("node-list-connected-peers", "peer list"),
+    ("node-list-banned-peers", "peer banned"),
+    ("node-list-discouraged-peers", "peer discouraged"),
+    ("node-ban-peer-address", "peer ban"),
+    ("node-unban-peer-address", "peer unban"),
+    ("node-undiscourage-peer-address", "peer undiscourage"),
+    ("node-list-reserved-peers", "peer reserved list"),
+    ("node-add-reserved-peer", "peer reserved add"),
+    ("node-remove-reserved-peer", "peer reserved remove"),
 ];
 
 #[derive(Debug, Parser)]
@@ -1211,6 +1359,18 @@ pub enum WalletCommand {
         #[command(subcommand)]
         command: HtlcGroupSubCommand,
     },
+    /// Node management commands
+    #[clap(name = "node")]
+    Node {
+        #[command(subcommand)]
+        command: NodeGroupSubCommand,
+    },
+    /// Peer management commands
+    #[clap(name = "peer")]
+    Peer {
+        #[command(subcommand)]
+        command: PeerGroupSubCommand,
+    },
     /// Transaction operations
     #[clap(name = "transaction")]
     Transaction {
@@ -1487,7 +1647,7 @@ pub enum WalletCommand {
         #[arg(required_unless_present("all"))]
         addresses: Vec<String>,
         /// Sweep all addresses
-        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        #[arg(long = "all", conflicts_with_all(["addresses"]))]
         all: bool,
     },
 
@@ -1708,7 +1868,7 @@ pub enum WalletCommand {
         /// Hex-encoded transaction.
         transaction: HexEncoded<SignedTransaction>,
         /// Do not store the transaction in the wallet
-        #[arg(long = "do-not-store", default_value_t = false)]
+        #[arg(long = "do-not-store")]
         do_not_store: bool,
     },
 
@@ -1717,6 +1877,21 @@ pub enum WalletCommand {
 
     #[clap(name = "node-best-block-id")]
     BestBlock,
+
+    /// Show the best block id, height, and timestamp; pass flags to show a subset
+    #[clap(name = "node-best-block")]
+    #[clap(hide = true)]
+    NodeBestBlock {
+        /// Show the best block id
+        #[arg(long = "id")]
+        id: bool,
+        /// Show the best block height
+        #[arg(long = "height")]
+        height: bool,
+        /// Show the best block timestamp
+        #[arg(long = "timestamp")]
+        timestamp: bool,
+    },
 
     #[clap(name = "node-best-block-height")]
     BestBlockHeight,
@@ -1815,7 +1990,7 @@ pub enum WalletCommand {
         ///
         /// In general, there is no reason in specifying this option unless you care about the size
         /// of the resulting hex string.
-        #[arg(long = "only-transaction", default_value_t = false)]
+        #[arg(long = "only-transaction")]
         only_transaction: bool,
     },
 
