@@ -2476,7 +2476,7 @@ where
 /// Whether the command still carries a nested group that must be translated before
 /// dispatch. Shared by the dispatch guard and the translation tests so both stay in
 /// sync when new groups are added.
-pub(crate) fn is_nested_wallet_command(command: &WalletCommand) -> bool {
+fn is_nested_wallet_command(command: &WalletCommand) -> bool {
     matches!(
         command,
         WalletCommand::Wallet { .. }
