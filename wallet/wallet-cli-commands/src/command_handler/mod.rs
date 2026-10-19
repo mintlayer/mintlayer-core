@@ -906,13 +906,19 @@ where
                 // Nested groups translate to their flat equivalents. The recursive call
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
-                Box::pin(
-                    self.handle_wallet_command(
-                        chain_config,
-                        normalize_nested_wallet_command(command),
+                let normalized = normalize_nested_wallet_command(command);
+                debug_assert!(
+                    !matches!(
+                        normalized,
+                        WalletCommand::Wallet { .. }
+                            | WalletCommand::Account { .. }
+                            | WalletCommand::Address { .. }
+                            | WalletCommand::Send { .. }
+                            | WalletCommand::Data { .. }
                     ),
-                )
-                .await
+                    "translation must produce a flat command, otherwise this recursion is unbounded"
+                );
+                Box::pin(self.handle_wallet_command(chain_config, normalized)).await
             }
 
             WalletCommand::ConfigBroadcast { broadcast } => {
@@ -2769,4 +2775,143 @@ fn format_reserved_peers(peers: &[SocketAddress]) -> String {
         write!(output, "\n  {}. {}", index + 1, address).expect("writing to a string cannot fail");
     }
     output
+}
+
+#[cfg(test)]
+mod nested_translation_tests {
+    use super::*;
+    use clap::Parser;
+
+    fn flat_debug(argv: &[&str]) -> String {
+        let command = WalletCommand::try_parse_from(argv).expect("argv must parse");
+        let flat = normalize_nested_wallet_command(command);
+        assert!(
+            !matches!(
+                flat,
+                WalletCommand::Wallet { .. }
+                    | WalletCommand::Account { .. }
+                    | WalletCommand::Address { .. }
+                    | WalletCommand::Send { .. }
+                    | WalletCommand::Data { .. }
+            ),
+            "translation must produce a flat command"
+        );
+        format!("{flat:?}")
+    }
+
+    #[test]
+    fn nested_spellings_translate_to_the_legacy_flat_commands() {
+        const HEX_PRIVATE_KEY: &str =
+            "001111111111111111111111111111111111111111111111111111111111111111";
+
+        let cases: &[(&[&str], &[&str])] = &[
+            (
+                &["repl", "account", "create", "acc"],
+                &["repl", "account-create", "acc"],
+            ),
+            (
+                &["repl", "account", "rename", "acc"],
+                &["repl", "account-rename", "acc"],
+            ),
+            (
+                &["repl", "account", "select", "1"],
+                &["repl", "account-select", "1"],
+            ),
+            (&["repl", "account", "utxos"], &["repl", "account-utxos"]),
+            (
+                &["repl", "account", "balance"],
+                &["repl", "account-balance"],
+            ),
+            (
+                &["repl", "account", "show-xpub"],
+                &["repl", "account-extended-public-key-as-hex"],
+            ),
+            (&["repl", "address", "new"], &["repl", "address-new"]),
+            (&["repl", "address", "list"], &["repl", "address-show"]),
+            (
+                &["repl", "address", "qr", "addr"],
+                &["repl", "address-qrcode", "addr"],
+            ),
+            (
+                &["repl", "address", "reveal-public-key", "pkh", "--format", "hex"],
+                &["repl", "address-reveal-public-key-as-hex", "pkh"],
+            ),
+            (
+                &["repl", "address", "reveal-public-key", "pkh"],
+                &["repl", "address-reveal-public-key-as-address", "pkh"],
+            ),
+            (
+                &["repl", "address", "sweep", "dest", "--all"],
+                &["repl", "address-sweep-spendable", "dest", "--all"],
+            ),
+            (
+                &["repl", "address", "standalone", "rename-label", "addr", "--label", "l"],
+                &["repl", "standalone-address-label-rename", "addr", "--label", "l"],
+            ),
+            (
+                &["repl", "address", "standalone", "add", "addr", "--no-rescan", "true"],
+                &["repl", "standalone-add-watch-only-address", "addr", "--no-rescan", "true"],
+            ),
+            (
+                &[
+                    "repl",
+                    "address",
+                    "standalone",
+                    "add-private-key",
+                    HEX_PRIVATE_KEY,
+                    "--no-rescan",
+                    "true",
+                ],
+                &[
+                    "repl",
+                    "standalone-add-private-key-from-hex",
+                    HEX_PRIVATE_KEY,
+                    "--no-rescan",
+                    "true",
+                ],
+            ),
+            (
+                &[
+                    "repl",
+                    "address",
+                    "standalone",
+                    "add-multisig",
+                    "2",
+                    "pk1",
+                    "pk2",
+                    "--no-rescan",
+                    "true",
+                ],
+                &["repl", "standalone-add-multisig", "2", "pk1", "pk2", "--no-rescan", "true"],
+            ),
+            (
+                &["repl", "address", "standalone", "list"],
+                &["repl", "standalone-address-show"],
+            ),
+            (
+                &["repl", "address", "standalone", "details", "addr"],
+                &["repl", "standalone-address-details", "addr"],
+            ),
+            (
+                &["repl", "address", "standalone", "utxos"],
+                &["repl", "standalone-multisig-utxos"],
+            ),
+            (
+                &["repl", "send", "dest", "1.0"],
+                &["repl", "address-send", "dest", "1.0"],
+            ),
+            (
+                &["repl", "data", "deposit", "deadbeef"],
+                &["repl", "address-deposit-data", "deadbeef"],
+            ),
+        ];
+
+        for (nested, legacy) in cases {
+            assert_eq!(
+                flat_debug(nested),
+                flat_debug(legacy),
+                "nested {nested:?} must translate to legacy {legacy:?}"
+            );
+        }
+    }
 }

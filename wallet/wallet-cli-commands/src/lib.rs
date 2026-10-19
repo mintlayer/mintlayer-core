@@ -1936,6 +1936,42 @@ mod tests {
                 });
             }
         }
+
+        // Arguments shared between a legacy spelling and its nested leaf must agree on
+        // defaults and requiredness, so one spelling cannot silently drift from the
+        // other. Arguments unique to one spelling (such as the merged `--format` of the
+        // nested `reveal-public-key`) are skipped.
+        for (legacy, nested) in LEGACY_ALIASES {
+            let legacy_cmd = repl
+                .find_subcommand(legacy)
+                .unwrap_or_else(|| panic!("legacy command `{legacy}` is missing"));
+            let structural_path = nested.split(" --").next().unwrap_or(nested);
+            let mut nested_cmd = &repl;
+            for name in structural_path.split_whitespace() {
+                nested_cmd = nested_cmd
+                    .find_subcommand(name)
+                    .unwrap_or_else(|| panic!("nested path `{nested}` breaks at `{name}`"));
+            }
+            for legacy_arg in legacy_cmd.get_arguments() {
+                let Some(nested_arg) =
+                    nested_cmd.get_arguments().find(|arg| arg.get_id() == legacy_arg.get_id())
+                else {
+                    continue;
+                };
+                assert_eq!(
+                    legacy_arg.get_default_values(),
+                    nested_arg.get_default_values(),
+                    "default values of `{}` diverge between `{legacy}` and `{nested}`",
+                    legacy_arg.get_id(),
+                );
+                assert_eq!(
+                    legacy_arg.is_required_set(),
+                    nested_arg.is_required_set(),
+                    "requiredness of `{}` diverges between `{legacy}` and `{nested}`",
+                    legacy_arg.get_id(),
+                );
+            }
+        }
     }
 
     #[rstest]
