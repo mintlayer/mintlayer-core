@@ -31,6 +31,14 @@ pub trait ConsoleInput: Send + 'static {
 pub trait ConsoleOutput: Send + 'static {
     fn print_line(&mut self, line: &str);
 
+    /// Render a structured command payload. The default pretty-prints the value.
+    fn print_json(&mut self, value: &serde_json::Value) {
+        match serde_json::to_string_pretty(value) {
+            Ok(text) => println!("{text}"),
+            Err(error) => println!("<unserializable output: {error}>"),
+        }
+    }
+
     fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>);
 }
 

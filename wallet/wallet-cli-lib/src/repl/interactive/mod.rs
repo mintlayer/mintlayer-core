@@ -224,6 +224,13 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
+        Ok(Some(ConsoleCommand::Json { text, value })) => match text {
+            Some(text) => console.print_line(&text),
+            None => console.print_json(&value),
+        },
+        Ok(Some(ConsoleCommand::Warn(message))) => {
+            console.print_line(&message);
+        }
         Ok(Some(ConsoleCommand::PaginatedPrint { header, body })) => {
             paginate_output(header, body, line_editor, console, logger)
                 .expect("Should not fail normally");

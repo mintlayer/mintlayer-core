@@ -2019,7 +2019,12 @@ where
 
             WalletCommand::PeerCount => {
                 let peer_count = self.wallet().await?.peer_count().await?;
-                Ok(ConsoleCommand::Print(peer_count.to_string()))
+                Ok(ConsoleCommand::from(
+                    crate::output::CommandOutput::with_payload(
+                        peer_count.to_string(),
+                        serde_json::json!(peer_count),
+                    ),
+                ))
             }
             WalletCommand::ConnectedPeers => {
                 let peers = self.wallet().await?.connected_peers().await?;

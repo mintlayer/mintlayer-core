@@ -25,6 +25,11 @@ use crate::{ConsoleInput, cli_event_loop::Event, console::ConsoleOutput, errors:
 #[derive(Debug)]
 enum LineOutput {
     Print(String),
+    Json {
+        text: Option<String>,
+        value: serde_json::Value,
+    },
+    Warn(String),
     None,
     Exit,
 }
@@ -52,6 +57,8 @@ fn to_line_output<N: NodeInterface>(
 ) -> Result<LineOutput, WalletCliError<N>> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
+        ConsoleCommand::Json { text, value } => Ok(LineOutput::Json { text, value }),
+        ConsoleCommand::Warn(message) => Ok(LineOutput::Warn(message)),
         ConsoleCommand::PaginatedPrint { header, body } => Ok(LineOutput::Print(header + &body)),
         ConsoleCommand::SetStatus {
             status: _,
@@ -106,6 +113,13 @@ fn handle_response<N: NodeInterface>(
         Ok(LineOutput::Print(text)) => {
             output.print_line(&text);
         }
+        Ok(LineOutput::Json { text, value }) => match text {
+            Some(text) => output.print_line(&text),
+            None => output.print_json(&value),
+        },
+        Ok(LineOutput::Warn(message)) => {
+            output.print_line(&message);
+        }
         Ok(LineOutput::None) => {}
         Ok(LineOutput::Exit) => return Some(Ok(())),
 
@@ -118,4 +132,71 @@ fn handle_response<N: NodeInterface>(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod rendering_tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct CapturingOutput {
+        lines: Vec<String>,
+        json_values: Vec<serde_json::Value>,
+    }
+
+    impl ConsoleOutput for CapturingOutput {
+        fn print_line(&mut self, line: &str) {
+            self.lines.push(line.to_owned());
+        }
+
+        fn print_json(&mut self, value: &serde_json::Value) {
+            self.json_values.push(value.clone());
+        }
+
+        fn print_error<N: NodeInterface>(&mut self, _error: WalletCliError<N>) {
+            unreachable!("errors are not exercised by these tests");
+        }
+    }
+
+    fn render(command: ConsoleCommand) -> CapturingOutput {
+        let line_output =
+            to_line_output::<node_comm::node_traits::MockNodeInterface>(command, "test command")
+                .expect("rendering must not fail");
+        let mut output = CapturingOutput::default();
+        handle_response::<node_comm::node_traits::MockNodeInterface>(
+            Ok(line_output),
+            &mut output,
+            false,
+        );
+        output
+    }
+
+    #[test]
+    fn json_payload_with_text_prints_the_text() {
+        let output = render(ConsoleCommand::Json {
+            text: Some("peer count: 3".to_owned()),
+            value: json!(3),
+        });
+        assert_eq!(output.lines, ["peer count: 3"]);
+        assert!(output.json_values.is_empty());
+    }
+
+    #[test]
+    fn json_payload_without_text_prints_the_value() {
+        let output = render(ConsoleCommand::Json {
+            text: None,
+            value: json!({"key": "value"}),
+        });
+        assert!(output.lines.is_empty());
+        assert_eq!(output.json_values, [json!({"key": "value"})]);
+    }
+
+    #[test]
+    fn warn_is_printed_as_text() {
+        let output = render(ConsoleCommand::Warn("heads up".to_owned()));
+        assert_eq!(output.lines, ["heads up"]);
+        assert!(output.json_values.is_empty());
+    }
 }

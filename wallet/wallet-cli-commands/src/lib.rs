@@ -16,6 +16,7 @@
 mod command_handler;
 mod errors;
 mod helper_types;
+pub mod output;
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
@@ -1421,6 +1422,15 @@ impl ChoiceMenu for OpenWalletDeviceSelectMenu {
 #[derive(Debug, Clone)]
 pub enum ConsoleCommand {
     Print(String),
+    /// A structured result: optional human-readable text plus the machine-readable form
+    /// of the same data. Interactive mode renders the text, falling back to a pretty
+    /// print of the value; scripting modes emit the value only.
+    Json {
+        text: Option<String>,
+        value: serde_json::Value,
+    },
+    /// A non-fatal condition. Scripting modes route it to stderr.
+    Warn(String),
     PaginatedPrint {
         // TODO: add support for more structured data like table pagination
         header: String,
