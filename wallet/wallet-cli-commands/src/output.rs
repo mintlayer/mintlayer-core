@@ -67,7 +67,7 @@ impl From<CommandOutput> for ConsoleCommand {
     fn from(output: CommandOutput) -> Self {
         match output.payload {
             Some(value) => ConsoleCommand::Json {
-                text: output.text,
+                text: output.text.filter(|text| !text.is_empty()),
                 value,
             },
             None => ConsoleCommand::Print(output.text.unwrap_or_default()),
@@ -134,6 +134,17 @@ mod tests {
         };
         assert_eq!(text, None);
         assert_eq!(value, json!("data"));
+    }
+
+    #[test]
+    fn empty_text_is_treated_as_absent() {
+        let command: ConsoleCommand = CommandOutput::with_payload("", json!(3)).into();
+
+        let ConsoleCommand::Json { text, value } = command else {
+            panic!("expected a Json output");
+        };
+        assert_eq!(text, None);
+        assert_eq!(value, json!(3));
     }
 
     #[test]

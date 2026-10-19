@@ -31,13 +31,6 @@ pub trait ConsoleInput: Send + 'static {
 pub trait ConsoleOutput: Send + 'static {
     fn print_line(&mut self, line: &str);
 
-    /// Render a structured command payload, routing it through `print_line` so every
-    /// implementor stays on its own channel.
-    fn print_json(&mut self, value: &serde_json::Value) {
-        let text = wallet_cli_commands::output::json_display_text(None, value);
-        self.print_line(&text);
-    }
-
     fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>);
 }
 
