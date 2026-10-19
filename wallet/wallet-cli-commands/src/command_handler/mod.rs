@@ -907,15 +907,10 @@ where
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
                 let normalized = normalize_nested_wallet_command(command);
-                debug_assert!(
-                    !matches!(
-                        normalized,
-                        WalletCommand::Wallet { .. }
-                            | WalletCommand::Account { .. }
-                            | WalletCommand::Address { .. }
-                            | WalletCommand::Send { .. }
-                            | WalletCommand::Data { .. }
-                    ),
+                // Translation must terminate: a nested command fed back into this handler
+                // would recurse unboundedly through the boxed call.
+                assert!(
+                    !is_nested_wallet_command(&normalized),
                     "translation must produce a flat command, otherwise this recursion is unbounded"
                 );
                 Box::pin(self.handle_wallet_command(chain_config, normalized)).await
@@ -2478,6 +2473,20 @@ where
     }
 }
 
+/// Whether the command still carries a nested group that must be translated before
+/// dispatch. Shared by the dispatch guard and the translation tests so both stay in
+/// sync when new groups are added.
+pub(crate) fn is_nested_wallet_command(command: &WalletCommand) -> bool {
+    matches!(
+        command,
+        WalletCommand::Wallet { .. }
+            | WalletCommand::Account { .. }
+            | WalletCommand::Address { .. }
+            | WalletCommand::Send { .. }
+            | WalletCommand::Data { .. }
+    )
+}
+
 /// Translate the nested command grammar (`account select`, `address qr`, `send`, ...)
 /// into the flat commands that drive the implementation, so every command has exactly
 /// one implementation regardless of how it was spelled. The `wallet` group is handled
@@ -2786,14 +2795,7 @@ mod nested_translation_tests {
         let command = WalletCommand::try_parse_from(argv).expect("argv must parse");
         let flat = normalize_nested_wallet_command(command);
         assert!(
-            !matches!(
-                flat,
-                WalletCommand::Wallet { .. }
-                    | WalletCommand::Account { .. }
-                    | WalletCommand::Address { .. }
-                    | WalletCommand::Send { .. }
-                    | WalletCommand::Data { .. }
-            ),
+            !is_nested_wallet_command(&flat),
             "translation must produce a flat command"
         );
         format!("{flat:?}")

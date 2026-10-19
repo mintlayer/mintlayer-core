@@ -1911,6 +1911,19 @@ mod tests {
         logging::init_logging();
     }
 
+    // Everything before the first `--option` must be a chain of subcommand names;
+    // options inside a nested path are not part of the structural check.
+    fn resolve_structural_path<'a>(repl: &'a Command, nested: &str) -> &'a Command {
+        let (structural_path, _) = nested.split_once(" --").unwrap_or((nested, ""));
+        let mut level = repl;
+        for name in structural_path.split_whitespace() {
+            level = level.find_subcommand(name).unwrap_or_else(|| {
+                panic!("nested path `{nested}` breaks at `{name}` in the repl command tree")
+            });
+        }
+        level
+    }
+
     #[test]
     fn legacy_command_names_and_group_grammar_coexist() {
         let mut repl = get_repl_command(false, true);
@@ -1928,13 +1941,7 @@ mod tests {
         // are not part of the structural check, so everything from the first option on
         // is dropped before the walk.
         for (_legacy, nested) in LEGACY_ALIASES {
-            let structural_path = nested.split(" --").next().unwrap_or(nested);
-            let mut level = &repl;
-            for name in structural_path.split_whitespace() {
-                level = level.find_subcommand(name).unwrap_or_else(|| {
-                    panic!("nested path `{nested}` breaks at `{name}` in the repl command tree")
-                });
-            }
+            resolve_structural_path(&repl, nested);
         }
 
         // Arguments shared between a legacy spelling and its nested leaf must agree on
@@ -1945,13 +1952,7 @@ mod tests {
             let legacy_cmd = repl
                 .find_subcommand(legacy)
                 .unwrap_or_else(|| panic!("legacy command `{legacy}` is missing"));
-            let structural_path = nested.split(" --").next().unwrap_or(nested);
-            let mut nested_cmd = &repl;
-            for name in structural_path.split_whitespace() {
-                nested_cmd = nested_cmd
-                    .find_subcommand(name)
-                    .unwrap_or_else(|| panic!("nested path `{nested}` breaks at `{name}`"));
-            }
+            let nested_cmd = resolve_structural_path(&repl, nested);
             for legacy_arg in legacy_cmd.get_arguments() {
                 let Some(nested_arg) =
                     nested_cmd.get_arguments().find(|arg| arg.get_id() == legacy_arg.get_id())
