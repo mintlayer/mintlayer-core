@@ -6421,6 +6421,7 @@ dependencies = [
  "parity-scale-codec",
  "rpc-description",
  "serde",
+ "serde_json",
  "serialization",
 ]
 

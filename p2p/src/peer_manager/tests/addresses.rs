@@ -852,3 +852,74 @@ async fn accept_outbound_connection(
 
     peer_id
 }
+
+// An inbound peer announcing an IPv4-mapped IPv6 form of a non-routable address must be
+// rejected exactly like the plain IPv4 form, and a mapped routable address must be stored
+// in its IPv4 form.
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn announce_mapped_ipv4_address_follows_ipv4_rules(#[case] seed: Seed) {
+    type TestNetworkingService = DefaultNetworkingService<MpscChannelTransport>;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let bind_address = TestTransportChannel::make_address();
+    let config = Arc::new(config::create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config());
+    let time_getter = BasicTestTimeGetter::new();
+    let (mut pm, _peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager_custom::<TestNetworkingService>(
+            TestTransportChannel::make_transport(),
+            bind_address.into(),
+            Arc::clone(&config),
+            p2p_config,
+            time_getter.get_time_getter(),
+            make_seedable_rng(rng.random()),
+        )
+        .await;
+
+    let peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let peer_id = PeerId::new();
+    let peer_info = PeerInfo {
+        peer_id,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *config.magic_bytes(),
+        software_version: *config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
+    };
+    pm.accept_connection(
+        peer_address.into(),
+        bind_address.into(),
+        ConnectionDirection::Inbound,
+        peer_info,
+        None,
+    );
+    assert_eq!(pm.peers.len(), 1);
+
+    let mapped = crate::peer_manager::tests::utils::mapped_v6_peer_address;
+
+    // Non-routable embedded IPv4 addresses are rejected like their plain form; nothing
+    // must enter the known address table.
+    for ip in [
+        std::net::Ipv4Addr::LOCALHOST,
+        std::net::Ipv4Addr::new(10, 0, 0, 1),
+        std::net::Ipv4Addr::new(192, 168, 1, 1),
+        std::net::Ipv4Addr::new(169, 254, 1, 1),
+    ] {
+        pm.handle_announce_addr_request(peer_id, mapped(ip, 12345));
+    }
+    assert_eq!(pm.peerdb.known_addresses_count(), 0);
+
+    // A mapped routable address is accepted and stored in its IPv4 form.
+    pm.handle_announce_addr_request(peer_id, mapped(std::net::Ipv4Addr::new(8, 8, 8, 8), 12345));
+    assert_eq!(pm.peerdb.known_addresses_count(), 1);
+    let known = pm.peerdb.known_addresses().next().copied().unwrap();
+    assert_eq!(
+        known.socket_addr(),
+        "8.8.8.8:12345".parse::<std::net::SocketAddr>().unwrap()
+    );
+}

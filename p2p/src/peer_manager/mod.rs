@@ -1445,6 +1445,9 @@ where
             }
 
             let socket_addr = addr.socket_addr();
+            // SocketAddress is canonical by construction, so a mapped form
+            // (::ffff:a.b.c.d) counts towards the same per-ip connection limit as the
+            // plain ipv4 form.
             cur_conn_ip_port_to_role_map.insert((socket_addr.ip(), socket_addr.port()), role);
         }
 
@@ -2078,8 +2081,9 @@ where
     ) -> bool {
         assert!(new_peer_role.is_outbound());
 
-        let new_peer_ip = new_peer_addr.socket_addr().ip();
-        let new_peer_port = new_peer_addr.socket_addr().port();
+        let new_peer_addr_socket = new_peer_addr.socket_addr();
+        let new_peer_ip = new_peer_addr_socket.ip();
+        let new_peer_port = new_peer_addr_socket.port();
         existing_connections.range((new_peer_ip, 0)..=(new_peer_ip, u16::MAX)).all(
             |((_, existing_peer_port), existing_peer_role)| {
                 self.may_allow_outbound_connection_to_existing_ip(

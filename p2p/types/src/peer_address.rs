@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Display,
-    net::{Ipv4Addr, Ipv6Addr},
-};
+use std::fmt::Display;
 
 use serialization::{Decode, Encode};
 
@@ -51,12 +48,22 @@ pub enum PeerAddress {
 }
 
 impl PeerAddress {
+    /// The IP address in canonical form, where an IPv4-mapped IPv6 address
+    /// (`::ffff:a.b.c.d`) is reduced to the embedded IPv4 address.
+    ///
+    /// Note that the derived `Eq` still distinguishes the mapped form from the plain
+    /// form, because the wire format keeps them distinct; deduplicate or key collections
+    /// on this canonical value rather than on the address itself.
+    pub fn canonical_ip(&self) -> std::net::IpAddr {
+        crate::socket_address::canonical_ip_addr(std::net::SocketAddr::from(self).ip())
+    }
+
     pub fn is_loopback(&self) -> bool {
-        std::net::SocketAddr::from(self).ip().is_loopback()
+        self.canonical_ip().is_loopback()
     }
 
     pub fn is_global_unicast_ip(&self) -> bool {
-        std::net::SocketAddr::from(self).ip().is_global_unicast_ip()
+        self.canonical_ip().is_global_unicast_ip()
     }
 
     /// If the address is eligible for being sent to peers via AddrListResponse, return Some,
@@ -64,26 +71,21 @@ impl PeerAddress {
     ///
     /// The address is eligible if it has a public routable IP and any valid (non-zero) port.
     /// Private and local IPs are allowed if `allow_discover_private_ips` is true.
+    ///
+    /// IPv4-mapped IPv6 addresses are reduced to the embedded IPv4 form, so the eligibility
+    /// check sees the IPv4 address they represent and the returned address is the IPv4 form.
     pub fn as_discoverable_socket_address(
         &self,
         allow_discover_private_ips: bool,
     ) -> Option<SocketAddress> {
-        match self {
-            PeerAddress::Ip4(socket)
-                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip()
-                    || allow_discover_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(SocketAddress::new(self.into()))
-            }
-            PeerAddress::Ip6(socket)
-                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip()
-                    || allow_discover_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(SocketAddress::new(self.into()))
-            }
-            _ => None,
+        let std_address =
+            crate::socket_address::canonical_socket_address(std::net::SocketAddr::from(self));
+        if (std_address.ip().is_global_unicast_ip() || allow_discover_private_ips)
+            && std_address.port() != 0
+        {
+            Some(SocketAddress::new(std_address))
+        } else {
+            None
         }
     }
 }
@@ -124,5 +126,83 @@ impl From<&PeerAddress> for std::net::SocketAddr {
                 0,
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod mapped_address_tests {
+    use super::*;
+
+    fn mapped_v6(ip: std::net::Ipv4Addr, port: u16) -> PeerAddress {
+        let o = ip.octets();
+        PeerAddress::Ip6(PeerAddressIp6 {
+            ip: std::net::Ipv6Addr::new(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0xffff,
+                u16::from_be_bytes([o[0], o[1]]),
+                u16::from_be_bytes([o[2], o[3]]),
+            )
+            .into(),
+            port,
+        })
+    }
+
+    fn plain_v4(ip: std::net::Ipv4Addr, port: u16) -> PeerAddress {
+        PeerAddress::Ip4(PeerAddressIp4 {
+            ip: ip.into(),
+            port,
+        })
+    }
+
+    #[test]
+    fn mapped_non_routable_addresses_are_not_discoverable() {
+        let non_routable = [
+            std::net::Ipv4Addr::LOCALHOST,
+            std::net::Ipv4Addr::new(10, 0, 0, 1),
+            std::net::Ipv4Addr::new(192, 168, 1, 1),
+            std::net::Ipv4Addr::new(172, 16, 0, 1),
+            std::net::Ipv4Addr::new(169, 254, 1, 1),
+            std::net::Ipv4Addr::UNSPECIFIED,
+        ];
+        for ip in non_routable {
+            let address = mapped_v6(ip, 12345);
+            assert!(
+                address.as_discoverable_socket_address(false).is_none(),
+                "mapped {ip} must not pass the discoverable gate"
+            );
+            // The plain form is rejected by the same gate, both forms must agree.
+            assert!(plain_v4(ip, 12345).as_discoverable_socket_address(false).is_none());
+        }
+    }
+
+    #[test]
+    fn mapped_routable_address_is_discoverable_in_the_ipv4_form() {
+        let address = mapped_v6(std::net::Ipv4Addr::new(8, 8, 8, 8), 12345);
+        let socket_address = address
+            .as_discoverable_socket_address(false)
+            .expect("mapped global address must pass the discoverable gate");
+        assert_eq!(
+            socket_address.socket_addr(),
+            std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+                std::net::Ipv4Addr::new(8, 8, 8, 8),
+                12345
+            ))
+        );
+    }
+
+    #[test]
+    fn zero_port_is_rejected_in_the_mapped_form() {
+        let address = mapped_v6(std::net::Ipv4Addr::new(8, 8, 8, 8), 0);
+        assert!(address.as_discoverable_socket_address(false).is_none());
+    }
+
+    #[test]
+    fn mapped_loopback_is_detected_by_is_loopback() {
+        assert!(mapped_v6(std::net::Ipv4Addr::LOCALHOST, 12345).is_loopback());
+        assert!(!mapped_v6(std::net::Ipv4Addr::new(8, 8, 8, 8), 12345).is_loopback());
     }
 }
