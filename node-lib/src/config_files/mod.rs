@@ -33,7 +33,7 @@ use std::{fs, path::Path};
 
 use ::chainstate_launcher::ChainConfig;
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::RunOptions;
 
@@ -45,7 +45,7 @@ use self::{
 
 /// The node configuration.
 #[must_use]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NodeConfigFile {
     // Subsystems configurations.

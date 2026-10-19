@@ -173,8 +173,8 @@ fn read_config_override_values() {
         max_tip_age: Some(max_tip_age),
         rpc_bind_address: Some(rpc_bind_address),
         rpc_enabled: Some(true),
-        rpc_username: Some(rpc_username.to_owned()),
-        rpc_password: Some(rpc_password.to_owned()),
+        rpc_username: Some(rpc_username.to_owned().into()),
+        rpc_password: Some(rpc_password.to_owned().into()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
@@ -325,11 +325,11 @@ fn read_config_override_values() {
     assert!(config.rpc.clone().unwrap().rpc_enabled.unwrap());
 
     assert_eq!(
-        config.rpc.as_ref().unwrap().username.as_deref(),
+        config.rpc.as_ref().unwrap().username.as_ref().map(|v| v.as_ref().as_str()),
         Some(rpc_username)
     );
     assert_eq!(
-        config.rpc.as_ref().unwrap().password.as_deref(),
+        config.rpc.as_ref().unwrap().password.as_ref().map(|v| v.as_ref().as_str()),
         Some(rpc_password)
     );
     assert_eq!(

@@ -18,6 +18,7 @@ storage-lmdb = { path = "../storage/lmdb" }
 subsystem = { path = "../subsystem" }
 test-rpc-functions = { path = "../test-rpc-functions" }
 utils = { path = "../utils" }
+zeroize.workspace = true
 utils-networking = { path = "../utils/networking" }
 
 anyhow.workspace = true
@@ -36,6 +37,7 @@ toml.workspace = true
 
 [dev-dependencies]
 crypto = { path = "../crypto" }
+utils = { path = "../utils", features = ["test-util"] }
 randomness = { path = "../randomness" }
 
 ctor.workspace = true

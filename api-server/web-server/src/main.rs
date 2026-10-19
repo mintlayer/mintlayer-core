@@ -14,9 +14,9 @@
 // limitations under the License.
 
 mod api;
-mod config;
 mod error;
 
+use api_server_common::RedactedSummary;
 use api_server_common::storage::impls::postgres::{
     PostgresStreamEventSource, TransactionalApiServerPostgresStorage,
 };
@@ -25,7 +25,6 @@ use api_web_server::{
     ApiServerWebServerState, CachedValues, MempoolQueryClient, StreamEventsHandle, TxSubmitClient,
     api::web_server, config::ApiServerWebServerConfig, streaming, tx_dependency_ordering,
 };
-use clap::Parser;
 use common::{
     chain::config::{Builder, ChainType},
     primitives::time::Time,
@@ -64,8 +63,14 @@ fn supervise(name: &'static str, handle: tokio::task::JoinHandle<()>) {
 async fn main() -> Result<(), ApiServerWebServerInitError> {
     logging::init_logging();
 
-    let args = ApiServerWebServerConfig::parse();
-    log::info!("Command line options: {args:?}");
+    // Parse errors are not echoed because they can repeat secret-bearing command line tokens.
+    let args = api_server_common::parse_args_or_exit::<ApiServerWebServerConfig>();
+    // The command line contains secrets (RPC credentials, database password), so the summary
+    // logged here omits them; see ApiServerWebServerConfig::redacted_summary.
+    log::info!(
+        "Command line options (secrets omitted): {}",
+        args.redacted_summary(),
+    );
 
     let chain_type: ChainType = args.network.into();
     let chain_config = Arc::new(Builder::new(chain_type).build());
