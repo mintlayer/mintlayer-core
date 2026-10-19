@@ -70,8 +70,10 @@ use super::{
 };
 use crate::{
     AccountGroupSubCommand, AddressGroupSubCommand, CliPublicKeyFormat, DataGroupSubCommand,
-    ManageableWalletCommand, OpenWalletSubCommand, StandaloneGroupSubCommand,
-    WalletGroupSubCommand, WalletManagementCommand,
+    DelegationGroupSubCommand, HtlcGroupSubCommand, ManageableWalletCommand, NftGroupSubCommand,
+    OpenWalletSubCommand, OrderGroupSubCommand, StakingGroupSubCommand, StandaloneGroupSubCommand,
+    TokenGroupSubCommand, TransactionGroupSubCommand, WalletGroupSubCommand,
+    WalletManagementCommand,
     errors::WalletCliCommandError,
     helper_types::{
         CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
@@ -902,7 +904,13 @@ where
             command @ (WalletCommand::Account { .. }
             | WalletCommand::Address { .. }
             | WalletCommand::Send { .. }
-            | WalletCommand::Data { .. }) => {
+            | WalletCommand::Data { .. }
+            | WalletCommand::Staking { .. }
+            | WalletCommand::Delegation { .. }
+            | WalletCommand::Token { .. }
+            | WalletCommand::Order { .. }
+            | WalletCommand::Htlc { .. }
+            | WalletCommand::Transaction { .. }) => {
                 // Nested groups translate to their flat equivalents. The recursive call
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
@@ -2484,6 +2492,12 @@ fn is_nested_wallet_command(command: &WalletCommand) -> bool {
             | WalletCommand::Address { .. }
             | WalletCommand::Send { .. }
             | WalletCommand::Data { .. }
+            | WalletCommand::Staking { .. }
+            | WalletCommand::Delegation { .. }
+            | WalletCommand::Token { .. }
+            | WalletCommand::Order { .. }
+            | WalletCommand::Htlc { .. }
+            | WalletCommand::Transaction { .. }
     )
 }
 
@@ -2612,6 +2626,264 @@ fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
         },
         WalletCommand::Data { command } => match command {
             DataGroupSubCommand::Deposit { hex_data } => WalletCommand::DepositData { hex_data },
+        },
+        WalletCommand::Staking { command } => match command {
+            StakingGroupSubCommand::CreatePool {
+                amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
+                decommission_address,
+                staker_address,
+                vrf_public_key,
+            } => WalletCommand::CreateStakePool {
+                amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
+                decommission_address,
+                staker_address,
+                vrf_public_key,
+            },
+            StakingGroupSubCommand::DecommissionPool {
+                pool_id,
+                output_address,
+            } => WalletCommand::DecommissionStakePool {
+                pool_id,
+                output_address,
+            },
+            StakingGroupSubCommand::DecommissionPoolRequest {
+                pool_id,
+                output_address,
+            } => WalletCommand::DecommissionStakePoolRequest {
+                pool_id,
+                output_address,
+            },
+            StakingGroupSubCommand::Start => WalletCommand::StartStaking,
+            StakingGroupSubCommand::Stop => WalletCommand::StopStaking,
+            StakingGroupSubCommand::Status => WalletCommand::StakingStatus,
+            StakingGroupSubCommand::ListPools => WalletCommand::ListPools,
+            StakingGroupSubCommand::ListOwnedPoolsForDecommission => {
+                WalletCommand::ListOwnedPoolsForDecommission
+            }
+            StakingGroupSubCommand::ListCreatedBlocks => WalletCommand::ListCreatedBlocksIds,
+            StakingGroupSubCommand::PoolBalance { pool_id } => {
+                WalletCommand::StakePoolBalance { pool_id }
+            }
+        },
+        WalletCommand::Delegation { command } => match command {
+            DelegationGroupSubCommand::Create { owner, pool_id } => {
+                WalletCommand::CreateDelegation { owner, pool_id }
+            }
+            DelegationGroupSubCommand::List => WalletCommand::ListDelegationIds,
+            DelegationGroupSubCommand::Stake {
+                amount,
+                delegation_id,
+            } => WalletCommand::DelegateStaking {
+                amount,
+                delegation_id,
+            },
+            DelegationGroupSubCommand::Withdraw {
+                address,
+                amount,
+                delegation_id,
+            } => WalletCommand::WithdrawFromDelegation {
+                address,
+                amount,
+                delegation_id,
+            },
+            DelegationGroupSubCommand::Sweep {
+                destination_address,
+                delegation_id,
+            } => WalletCommand::SweepFromDelegation {
+                destination_address,
+                delegation_id,
+            },
+        },
+        WalletCommand::Token { command } => match command {
+            TokenGroupSubCommand::Issue {
+                token_ticker,
+                number_of_decimals,
+                metadata_uri,
+                authority_address,
+                token_supply,
+                is_freezable,
+            } => WalletCommand::IssueNewToken {
+                token_ticker,
+                number_of_decimals,
+                metadata_uri,
+                authority_address,
+                token_supply,
+                is_freezable,
+            },
+            TokenGroupSubCommand::Nft {
+                command:
+                    NftGroupSubCommand::Issue {
+                        destination_address,
+                        media_hash,
+                        name,
+                        description,
+                        ticker,
+                        creator,
+                        icon_uri,
+                        media_uri,
+                        additional_metadata_uri,
+                    },
+            } => WalletCommand::IssueNewNft {
+                destination_address,
+                media_hash,
+                name,
+                description,
+                ticker,
+                creator,
+                icon_uri,
+                media_uri,
+                additional_metadata_uri,
+            },
+            TokenGroupSubCommand::ChangeAuthority { token_id, address } => {
+                WalletCommand::ChangeTokenAuthority { token_id, address }
+            }
+            TokenGroupSubCommand::ChangeMetadataUri {
+                token_id,
+                metadata_uri,
+            } => WalletCommand::ChangeTokenMetadataUri {
+                token_id,
+                metadata_uri,
+            },
+            TokenGroupSubCommand::Mint {
+                token_id,
+                address,
+                amount,
+            } => WalletCommand::MintTokens {
+                token_id,
+                address,
+                amount,
+            },
+            TokenGroupSubCommand::Unmint { token_id, amount } => {
+                WalletCommand::UnmintTokens { token_id, amount }
+            }
+            TokenGroupSubCommand::LockSupply { token_id } => {
+                WalletCommand::LockTokenSupply { token_id }
+            }
+            TokenGroupSubCommand::Freeze {
+                token_id,
+                is_unfreezable,
+            } => WalletCommand::FreezeToken {
+                token_id,
+                is_unfreezable,
+            },
+            TokenGroupSubCommand::Unfreeze { token_id } => {
+                WalletCommand::UnfreezeToken { token_id }
+            }
+            TokenGroupSubCommand::Send {
+                token_id,
+                address,
+                amount,
+            } => WalletCommand::SendTokensToAddress {
+                token_id,
+                address,
+                amount,
+            },
+        },
+        WalletCommand::Order { command } => match command {
+            OrderGroupSubCommand::Create {
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+            } => WalletCommand::CreateOrder {
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+            },
+            OrderGroupSubCommand::Fill {
+                order_id,
+                amount,
+                output_address,
+            } => WalletCommand::FillOrder {
+                order_id,
+                amount,
+                output_address,
+            },
+            OrderGroupSubCommand::Freeze { order_id } => WalletCommand::FreezeOrder { order_id },
+            OrderGroupSubCommand::Conclude {
+                order_id,
+                output_address,
+            } => WalletCommand::ConcludeOrder {
+                order_id,
+                output_address,
+            },
+            OrderGroupSubCommand::ListOwn => WalletCommand::ListOwnOrders,
+            OrderGroupSubCommand::ListAllActive {
+                ask_currency,
+                give_currency,
+            } => WalletCommand::ListActiveOrders {
+                ask_currency,
+                give_currency,
+            },
+        },
+        WalletCommand::Htlc { command } => match command {
+            HtlcGroupSubCommand::Create {
+                currency,
+                amount,
+                secret_hash,
+                spend_address,
+                refund_timelock,
+                refund_address,
+            } => WalletCommand::CreateHtlcTx {
+                currency,
+                amount,
+                secret_hash,
+                spend_address,
+                refund_timelock,
+                refund_address,
+            },
+            HtlcGroupSubCommand::GenerateSecret => WalletCommand::GenerateHtlcSecret,
+            HtlcGroupSubCommand::CalcSecretHash { secret } => {
+                WalletCommand::CalcHtlcSecretHash { secret }
+            }
+        },
+        WalletCommand::Transaction { command } => match command {
+            TransactionGroupSubCommand::Compose {
+                outputs,
+                utxos,
+                only_transaction,
+            } => WalletCommand::TransactionCompose {
+                outputs,
+                utxos,
+                only_transaction,
+            },
+            TransactionGroupSubCommand::CreateFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            } => WalletCommand::CreateTxFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            },
+            TransactionGroupSubCommand::Inspect { transaction } => {
+                WalletCommand::InspectTransaction { transaction }
+            }
+            TransactionGroupSubCommand::Abandon { transaction_id } => {
+                WalletCommand::AbandonTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::ListPending => WalletCommand::ListPendingTransactions,
+            TransactionGroupSubCommand::ListByAddress { address, limit } => {
+                WalletCommand::ListMainchainTransactions { address, limit }
+            }
+            TransactionGroupSubCommand::Get { transaction_id } => {
+                WalletCommand::GetTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::GetRaw { transaction_id } => {
+                WalletCommand::GetRawTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::GetSignedRaw { transaction_id } => {
+                WalletCommand::GetRawSignedTransaction { transaction_id }
+            }
         },
         command => command,
     }
@@ -2805,6 +3077,12 @@ mod nested_translation_tests {
     fn nested_spellings_translate_to_the_legacy_flat_commands() {
         const HEX_PRIVATE_KEY: &str =
             "001111111111111111111111111111111111111111111111111111111111111111";
+        const HEX_TXID: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        const HEX_UTXO: &str = concat!(
+            "tx(",
+            "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+            ",1)"
+        );
 
         let cases: &[(&[&str], &[&str])] = &[
             (
@@ -2905,6 +3183,238 @@ mod nested_translation_tests {
             (
                 &["repl", "data", "deposit", "deadbeef"],
                 &["repl", "address-deposit-data", "deadbeef"],
+            ),
+            (
+                &[
+                    "repl",
+                    "staking",
+                    "create-pool",
+                    "1000",
+                    "0.01",
+                    "0.1",
+                    "decomm_addr",
+                    "staker_addr",
+                ],
+                &[
+                    "repl",
+                    "staking-create-pool",
+                    "1000",
+                    "0.01",
+                    "0.1",
+                    "decomm_addr",
+                    "staker_addr",
+                ],
+            ),
+            (
+                &["repl", "staking", "decommission-pool", "pool1", "out_addr"],
+                &["repl", "staking-decommission-pool", "pool1", "out_addr"],
+            ),
+            (
+                &["repl", "staking", "decommission-pool-request", "pool1", "out_addr"],
+                &["repl", "staking-decommission-pool-request", "pool1", "out_addr"],
+            ),
+            (&["repl", "staking", "start"], &["repl", "staking-start"]),
+            (&["repl", "staking", "stop"], &["repl", "staking-stop"]),
+            (&["repl", "staking", "status"], &["repl", "staking-status"]),
+            (
+                &["repl", "staking", "list-pools"],
+                &["repl", "staking-list-pools"],
+            ),
+            (
+                &["repl", "staking", "list-owned-pools-for-decommission"],
+                &["repl", "staking-list-owned-pools-for-decommission"],
+            ),
+            (
+                &["repl", "staking", "list-created-blocks"],
+                &["repl", "staking-list-created-block-ids"],
+            ),
+            (
+                &["repl", "staking", "pool-balance", "pool1"],
+                &["repl", "staking-pool-balance", "pool1"],
+            ),
+            (
+                &["repl", "delegation", "create", "owner_addr", "pool1"],
+                &["repl", "delegation-create", "owner_addr", "pool1"],
+            ),
+            (
+                &["repl", "delegation", "list"],
+                &["repl", "delegation-list-ids"],
+            ),
+            (
+                &["repl", "delegation", "stake", "1.0", "deleg1"],
+                &["repl", "delegation-stake", "1.0", "deleg1"],
+            ),
+            (
+                &["repl", "delegation", "withdraw", "addr", "1.0", "deleg1"],
+                &["repl", "delegation-withdraw", "addr", "1.0", "deleg1"],
+            ),
+            (
+                &["repl", "delegation", "sweep", "dest", "deleg1"],
+                &["repl", "staking-sweep-delegation", "dest", "deleg1"],
+            ),
+            (
+                &[
+                    "repl",
+                    "token",
+                    "issue",
+                    "TKN",
+                    "4",
+                    "https://meta",
+                    "authority_addr",
+                    "unlimited",
+                    "freezable",
+                ],
+                &[
+                    "repl",
+                    "token-issue-new",
+                    "TKN",
+                    "4",
+                    "https://meta",
+                    "authority_addr",
+                    "unlimited",
+                    "freezable",
+                ],
+            ),
+            (
+                &["repl", "token", "nft", "issue", "dest", "abcd", "name", "descr", "NFT"],
+                &["repl", "token-nft-issue-new", "dest", "abcd", "name", "descr", "NFT"],
+            ),
+            (
+                &["repl", "token", "change-authority", "tid", "addr"],
+                &["repl", "token-change-authority", "tid", "addr"],
+            ),
+            (
+                &["repl", "token", "change-metadata-uri", "tid", "uri"],
+                &["repl", "token-change-metadata-uri", "tid", "uri"],
+            ),
+            (
+                &["repl", "token", "mint", "tid", "addr", "1.0"],
+                &["repl", "token-mint", "tid", "addr", "1.0"],
+            ),
+            (
+                &["repl", "token", "unmint", "tid", "1.0"],
+                &["repl", "token-unmint", "tid", "1.0"],
+            ),
+            (
+                &["repl", "token", "lock-supply", "tid"],
+                &["repl", "token-lock-supply", "tid"],
+            ),
+            (
+                &["repl", "token", "freeze", "tid", "unfreezable"],
+                &["repl", "token-freeze", "tid", "unfreezable"],
+            ),
+            (
+                &["repl", "token", "unfreeze", "tid"],
+                &["repl", "token-unfreeze", "tid"],
+            ),
+            (
+                &["repl", "token", "send", "tid", "addr", "1.0"],
+                &["repl", "token-send", "tid", "addr", "1.0"],
+            ),
+            (
+                &["repl", "order", "create", "coin", "1.0", "coin", "2.0", "concl_addr"],
+                &["repl", "order-create", "coin", "1.0", "coin", "2.0", "concl_addr"],
+            ),
+            (
+                &["repl", "order", "fill", "ord1", "1.0", "out_addr"],
+                &["repl", "order-fill", "ord1", "1.0", "out_addr"],
+            ),
+            (
+                &["repl", "order", "freeze", "ord1"],
+                &["repl", "order-freeze", "ord1"],
+            ),
+            (
+                &["repl", "order", "conclude", "ord1", "out_addr"],
+                &["repl", "order-conclude", "ord1", "out_addr"],
+            ),
+            (&["repl", "order", "list-own"], &["repl", "order-list-own"]),
+            (
+                &["repl", "order", "list-all-active", "--ask-currency", "coin"],
+                &["repl", "order-list-all-active", "--ask-currency", "coin"],
+            ),
+            (
+                &[
+                    "repl",
+                    "htlc",
+                    "create",
+                    "coin",
+                    "1.0",
+                    "secret_hash",
+                    "spend_addr",
+                    "block_count(720)",
+                    "refund_addr",
+                ],
+                &[
+                    "repl",
+                    "htlc-create-transaction",
+                    "coin",
+                    "1.0",
+                    "secret_hash",
+                    "spend_addr",
+                    "block_count(720)",
+                    "refund_addr",
+                ],
+            ),
+            (
+                &["repl", "htlc", "generate-secret"],
+                &["repl", "htlc-generate-secret"],
+            ),
+            (
+                &["repl", "htlc", "calc-secret-hash", "s3cret"],
+                &["repl", "htlc-calc-secret-hash", "s3cret"],
+            ),
+            (
+                &["repl", "transaction", "compose", "transfer(addr,1.0)"],
+                &["repl", "transaction-compose", "transfer(addr,1.0)"],
+            ),
+            (
+                &[
+                    "repl",
+                    "transaction",
+                    "create-from-cold-input",
+                    "addr",
+                    "1.0",
+                    HEX_UTXO,
+                    "--change",
+                    "chg",
+                ],
+                &[
+                    "repl",
+                    "transaction-create-from-cold-input",
+                    "addr",
+                    "1.0",
+                    HEX_UTXO,
+                    "--change",
+                    "chg",
+                ],
+            ),
+            (
+                &["repl", "transaction", "inspect", "deadbeef"],
+                &["repl", "transaction-inspect", "deadbeef"],
+            ),
+            (
+                &["repl", "transaction", "abandon", HEX_TXID],
+                &["repl", "transaction-abandon", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "list-pending"],
+                &["repl", "transaction-list-pending"],
+            ),
+            (
+                &["repl", "transaction", "list-by-address", "addr", "--limit", "5"],
+                &["repl", "transaction-list-by-address", "addr", "--limit", "5"],
+            ),
+            (
+                &["repl", "transaction", "get", HEX_TXID],
+                &["repl", "transaction-get", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "get-raw", HEX_TXID],
+                &["repl", "transaction-get-raw", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "get-signed-raw", HEX_TXID],
+                &["repl", "transaction-get-signed-raw", HEX_TXID],
             ),
         ];
 

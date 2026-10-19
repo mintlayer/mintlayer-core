@@ -476,6 +476,245 @@ pub enum DataGroupSubCommand {
     },
 }
 
+/// The nested staking grammar: `staking create-pool|decommission-pool|...`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum StakingGroupSubCommand {
+    /// Create a new staking pool
+    CreatePool {
+        amount: DecimalAmount,
+        cost_per_block: DecimalAmount,
+        margin_ratio_per_thousand: String,
+        decommission_address: String,
+        staker_address: Option<String>,
+        vrf_public_key: Option<String>,
+    },
+    /// Decommission a staking pool owned by the selected account
+    DecommissionPool {
+        pool_id: String,
+        output_address: String,
+    },
+    /// Create a decommission request transaction without broadcasting it
+    DecommissionPoolRequest {
+        pool_id: String,
+        output_address: String,
+    },
+    /// Start staking with the selected account
+    Start,
+    /// Stop staking with the selected account
+    Stop,
+    /// Show the staking status of the selected account
+    Status,
+    /// List all staking pools
+    ListPools,
+    /// List the pools owned by the selected account that can be decommissioned
+    ListOwnedPoolsForDecommission,
+    /// List the block ids created by the selected account
+    ListCreatedBlocks,
+    /// Show the balance of a staking pool
+    PoolBalance { pool_id: String },
+}
+
+/// The nested delegation grammar: `delegation create|list|stake|withdraw|sweep`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum DelegationGroupSubCommand {
+    /// Create a delegation to a staking pool
+    Create { owner: String, pool_id: String },
+    /// List the delegation ids of the selected account
+    List,
+    /// Add coins to a delegation
+    Stake {
+        amount: DecimalAmount,
+        delegation_id: String,
+    },
+    /// Withdraw coins from a delegation
+    Withdraw {
+        address: String,
+        amount: DecimalAmount,
+        delegation_id: String,
+    },
+    /// Move all spendable delegation coins to an address
+    Sweep {
+        destination_address: String,
+        delegation_id: String,
+    },
+}
+
+/// The nested NFT grammar: `token nft issue`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum NftGroupSubCommand {
+    /// Issue a new NFT
+    Issue {
+        destination_address: String,
+        media_hash: String,
+        name: String,
+        description: String,
+        ticker: String,
+        creator: Option<HexEncoded<PublicKey>>,
+        icon_uri: Option<String>,
+        media_uri: Option<String>,
+        additional_metadata_uri: Option<String>,
+    },
+}
+
+/// The nested token grammar: `token issue|nft|change-authority|mint|...`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum TokenGroupSubCommand {
+    /// Issue a new token
+    Issue {
+        token_ticker: String,
+        number_of_decimals: u8,
+        metadata_uri: String,
+        authority_address: String,
+        token_supply: CliTokenTotalSupply,
+        is_freezable: CliIsFreezable,
+    },
+    /// NFT operations
+    Nft {
+        #[command(subcommand)]
+        command: NftGroupSubCommand,
+    },
+    /// Change the authority of a token
+    ChangeAuthority { token_id: String, address: String },
+    /// Change the metadata uri of a token
+    ChangeMetadataUri {
+        token_id: String,
+        metadata_uri: String,
+    },
+    /// Mint tokens
+    Mint {
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+    },
+    /// Unmint tokens
+    Unmint {
+        token_id: String,
+        amount: DecimalAmount,
+    },
+    /// Lock the supply of a token
+    LockSupply { token_id: String },
+    /// Freeze a token
+    Freeze {
+        token_id: String,
+        is_unfreezable: CliIsUnfreezable,
+    },
+    /// Unfreeze a token
+    Unfreeze { token_id: String },
+    /// Send tokens to an address
+    Send {
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+    },
+}
+
+/// The nested order grammar: `order create|fill|freeze|conclude|list-own|list-all-active`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum OrderGroupSubCommand {
+    /// Create an order for exchanging currencies
+    Create {
+        ask_currency: CliCurrency,
+        ask_amount: DecimalAmount,
+        give_currency: CliCurrency,
+        give_amount: DecimalAmount,
+        conclude_address: String,
+    },
+    /// Fill an order
+    Fill {
+        order_id: String,
+        amount: DecimalAmount,
+        output_address: Option<String>,
+    },
+    /// Freeze an order
+    Freeze { order_id: String },
+    /// Conclude an order
+    Conclude {
+        order_id: String,
+        output_address: Option<String>,
+    },
+    /// List orders owned by the selected account
+    ListOwn,
+    /// List all active orders
+    ListAllActive {
+        #[arg(long = "ask-currency")]
+        ask_currency: Option<CliCurrency>,
+        #[arg(long = "give-currency")]
+        give_currency: Option<CliCurrency>,
+    },
+}
+
+/// The nested htlc grammar: `htlc create|generate-secret|calc-secret-hash`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum HtlcGroupSubCommand {
+    /// Create a transaction with an HTLC output without broadcasting it
+    Create {
+        currency: CliCurrency,
+        amount: DecimalAmount,
+        secret_hash: String,
+        spend_address: String,
+        refund_timelock: CliOutputTimeLock,
+        refund_address: String,
+    },
+    /// Generate a new HTLC secret
+    GenerateSecret,
+    /// Calculate the hash of an HTLC secret
+    CalcSecretHash { secret: String },
+}
+
+/// The nested transaction grammar: `transaction compose|abandon|get|...`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum TransactionGroupSubCommand {
+    /// Compose a transaction from outputs without broadcasting it
+    Compose {
+        outputs: Vec<CliUnspecifiedCurrencyTransfer>,
+        #[arg(long = "utxos")]
+        utxos: Vec<CliUtxoOutPoint>,
+        #[arg(long = "only-transaction", default_value_t = false)]
+        only_transaction: bool,
+    },
+    /// Create a transaction from a cold wallet input
+    CreateFromColdInput {
+        address: String,
+        amount: DecimalAmount,
+        utxo: CliUtxoOutPoint,
+        #[arg(long = "change")]
+        change_address: Option<String>,
+    },
+    /// Inspect a hex-encoded transaction
+    Inspect { transaction: String },
+    /// Abandon a pending transaction
+    Abandon {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+    /// List pending transactions
+    ListPending,
+    /// List transactions by address
+    ListByAddress {
+        address: Option<String>,
+        #[arg(long = "limit", default_value_t = 100)]
+        limit: usize,
+    },
+    /// Get a transaction by id
+    Get {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+    /// Get the raw hex of a transaction
+    GetRaw {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+    /// Get the raw hex of a signed transaction
+    GetSignedRaw {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+}
+
 /// Mapping between the legacy flat command names and their nested equivalents.
 /// The flat names remain first-class commands; this manifest documents the
 /// correspondence and drives the grammar compatibility test.
@@ -520,6 +759,61 @@ pub const LEGACY_ALIASES: &[(&str, &str)] = &[
     ("standalone-address-show", "address standalone list"),
     ("standalone-address-details", "address standalone details"),
     ("standalone-multisig-utxos", "address standalone utxos"),
+    ("staking-create-pool", "staking create-pool"),
+    ("staking-decommission-pool", "staking decommission-pool"),
+    (
+        "staking-decommission-pool-request",
+        "staking decommission-pool-request",
+    ),
+    ("staking-start", "staking start"),
+    ("staking-stop", "staking stop"),
+    ("staking-status", "staking status"),
+    ("staking-list-pools", "staking list-pools"),
+    (
+        "staking-list-owned-pools-for-decommission",
+        "staking list-owned-pools-for-decommission",
+    ),
+    (
+        "staking-list-created-block-ids",
+        "staking list-created-blocks",
+    ),
+    ("staking-pool-balance", "staking pool-balance"),
+    ("delegation-create", "delegation create"),
+    ("delegation-list-ids", "delegation list"),
+    ("delegation-stake", "delegation stake"),
+    ("delegation-withdraw", "delegation withdraw"),
+    ("staking-sweep-delegation", "delegation sweep"),
+    ("token-issue-new", "token issue"),
+    ("token-nft-issue-new", "token nft issue"),
+    ("token-change-authority", "token change-authority"),
+    ("token-change-metadata-uri", "token change-metadata-uri"),
+    ("token-mint", "token mint"),
+    ("token-unmint", "token unmint"),
+    ("token-lock-supply", "token lock-supply"),
+    ("token-freeze", "token freeze"),
+    ("token-unfreeze", "token unfreeze"),
+    ("token-send", "token send"),
+    ("order-create", "order create"),
+    ("order-fill", "order fill"),
+    ("order-freeze", "order freeze"),
+    ("order-conclude", "order conclude"),
+    ("order-list-own", "order list-own"),
+    ("order-list-all-active", "order list-all-active"),
+    ("htlc-create-transaction", "htlc create"),
+    ("htlc-generate-secret", "htlc generate-secret"),
+    ("htlc-calc-secret-hash", "htlc calc-secret-hash"),
+    ("transaction-compose", "transaction compose"),
+    (
+        "transaction-create-from-cold-input",
+        "transaction create-from-cold-input",
+    ),
+    ("transaction-inspect", "transaction inspect"),
+    ("transaction-abandon", "transaction abandon"),
+    ("transaction-list-pending", "transaction list-pending"),
+    ("transaction-list-by-address", "transaction list-by-address"),
+    ("transaction-get", "transaction get"),
+    ("transaction-get-raw", "transaction get-raw"),
+    ("transaction-get-signed-raw", "transaction get-signed-raw"),
 ];
 
 #[derive(Debug, Parser)]
@@ -780,6 +1074,42 @@ pub enum WalletCommand {
     Data {
         #[command(subcommand)]
         command: DataGroupSubCommand,
+    },
+    /// Staking pool operations
+    #[clap(name = "staking")]
+    Staking {
+        #[command(subcommand)]
+        command: StakingGroupSubCommand,
+    },
+    /// Delegation operations
+    #[clap(name = "delegation")]
+    Delegation {
+        #[command(subcommand)]
+        command: DelegationGroupSubCommand,
+    },
+    /// Token operations
+    #[clap(name = "token")]
+    Token {
+        #[command(subcommand)]
+        command: TokenGroupSubCommand,
+    },
+    /// Order operations
+    #[clap(name = "order")]
+    Order {
+        #[command(subcommand)]
+        command: OrderGroupSubCommand,
+    },
+    /// HTLC operations
+    #[clap(name = "htlc")]
+    Htlc {
+        #[command(subcommand)]
+        command: HtlcGroupSubCommand,
+    },
+    /// Transaction operations
+    #[clap(name = "transaction")]
+    Transaction {
+        #[command(subcommand)]
+        command: TransactionGroupSubCommand,
     },
 
     #[clap(name = "account-create")]
