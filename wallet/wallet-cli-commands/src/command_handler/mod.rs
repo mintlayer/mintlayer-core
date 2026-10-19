@@ -59,14 +59,6 @@ use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 #[cfg(feature = "trezor")]
 use crate::{CreateWalletDeviceSelectMenu, OpenWalletDeviceSelectMenu};
 
-use crate::{
-    ManageableWalletCommand, OpenWalletSubCommand, WalletManagementCommand,
-    errors::WalletCliCommandError,
-    helper_types::{
-        CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
-    },
-};
-
 use self::local_state::WalletWithState;
 
 use super::{
@@ -74,6 +66,15 @@ use super::{
     helper_types::{
         CliForceReduceLookaheadSize, CliUtxoState, format_active_order_info,
         format_delegation_info, format_own_order_info, format_pool_info,
+    },
+};
+use crate::{
+    AccountGroupSubCommand, AddressGroupSubCommand, CliPublicKeyFormat, DataGroupSubCommand,
+    ManageableWalletCommand, OpenWalletSubCommand, StandaloneGroupSubCommand,
+    WalletGroupSubCommand, WalletManagementCommand,
+    errors::WalletCliCommandError,
+    helper_types::{
+        CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
     },
 };
 
@@ -882,6 +883,36 @@ where
         match command {
             WalletCommand::ColdCommands(command) => {
                 self.handle_cold_wallet_command(command, chain_config).await
+            }
+            WalletCommand::Wallet { command } => {
+                let management = match command {
+                    WalletGroupSubCommand::Create { wallet } => {
+                        WalletManagementCommand::CreateWallet { wallet }
+                    }
+                    WalletGroupSubCommand::Recover { wallet } => {
+                        WalletManagementCommand::RecoverWallet { wallet }
+                    }
+                    WalletGroupSubCommand::Open { wallet } => {
+                        WalletManagementCommand::OpenWallet { wallet }
+                    }
+                    WalletGroupSubCommand::Close => WalletManagementCommand::CloseWallet,
+                };
+                self.handle_wallet_management_command(management).await
+            }
+            command @ (WalletCommand::Account { .. }
+            | WalletCommand::Address { .. }
+            | WalletCommand::Send { .. }
+            | WalletCommand::Data { .. }) => {
+                // Nested groups translate to their flat equivalents. The recursive call
+                // is boxed to keep the future size finite; translation always produces a
+                // flat command, so the recursion never goes deeper than one level.
+                Box::pin(
+                    self.handle_wallet_command(
+                        chain_config,
+                        normalize_nested_wallet_command(command),
+                    ),
+                )
+                .await
             }
 
             WalletCommand::ConfigBroadcast { broadcast } => {
@@ -2438,6 +2469,136 @@ where
                 self.handle_wallet_management_command(command).await
             }
         }
+    }
+}
+
+/// Translate the nested command grammar (`account select`, `address qr`, `send`, ...)
+/// into the flat commands that drive the implementation, so every command has exactly
+/// one implementation regardless of how it was spelled. The `wallet` group is handled
+/// at the dispatch site because it maps onto the wallet management commands.
+fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
+    match command {
+        WalletCommand::Account { command } => match command {
+            AccountGroupSubCommand::Create { name } => WalletCommand::CreateNewAccount { name },
+            AccountGroupSubCommand::Rename { name } => WalletCommand::RenameAccount { name },
+            AccountGroupSubCommand::Select { account_index } => {
+                WalletCommand::SelectAccount { account_index }
+            }
+            AccountGroupSubCommand::Utxos {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            } => WalletCommand::ListUtxo {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            },
+            AccountGroupSubCommand::Balance {
+                with_locked,
+                utxo_states,
+            } => WalletCommand::GetBalance {
+                with_locked,
+                utxo_states,
+            },
+            AccountGroupSubCommand::ShowXpub => {
+                WalletCommand::ColdCommands(ColdWalletCommand::AccountExtendedPublicKey)
+            }
+        },
+        WalletCommand::Address { command } => {
+            match command {
+                AddressGroupSubCommand::New => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::NewAddress)
+                }
+                AddressGroupSubCommand::List { include_change } => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::ShowAddresses { include_change })
+                }
+                AddressGroupSubCommand::Qr { address } => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::AddressQRCode { address })
+                }
+                AddressGroupSubCommand::RevealPublicKey {
+                    public_key_hash,
+                    format,
+                } => WalletCommand::ColdCommands(match format {
+                    CliPublicKeyFormat::Hex => {
+                        ColdWalletCommand::RevealPublicKeyHex { public_key_hash }
+                    }
+                    CliPublicKeyFormat::Address => {
+                        ColdWalletCommand::RevealPublicKey { public_key_hash }
+                    }
+                }),
+                AddressGroupSubCommand::Sweep {
+                    destination_address,
+                    addresses,
+                    all,
+                } => WalletCommand::SweepFromAddress {
+                    destination_address,
+                    addresses,
+                    all,
+                },
+                AddressGroupSubCommand::Standalone { command } => match command {
+                    StandaloneGroupSubCommand::RenameLabel { address, label } => {
+                        WalletCommand::StandaloneAddressLabelRename { address, label }
+                    }
+                    StandaloneGroupSubCommand::Add {
+                        address,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandaloneKey {
+                        address,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::AddPrivateKey {
+                        hex_private_key,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandalonePrivateKey {
+                        hex_private_key,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::AddMultisig {
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandaloneMultisig {
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::List => {
+                        WalletCommand::ColdCommands(ColdWalletCommand::ShowStandaloneAddresses)
+                    }
+                    StandaloneGroupSubCommand::Details { address } => WalletCommand::ColdCommands(
+                        ColdWalletCommand::ShowStandaloneAddressDetails { address },
+                    ),
+                    StandaloneGroupSubCommand::Utxos {
+                        utxo_type,
+                        with_locked,
+                        utxo_states,
+                    } => WalletCommand::ListMultisigUtxo {
+                        utxo_type,
+                        with_locked,
+                        utxo_states,
+                    },
+                },
+            }
+        }
+        WalletCommand::Send {
+            address,
+            amount,
+            utxos,
+        } => WalletCommand::SendToAddress {
+            address,
+            amount,
+            utxos,
+        },
+        WalletCommand::Data { command } => match command {
+            DataGroupSubCommand::Deposit { hex_data } => WalletCommand::DepositData { hex_data },
+        },
+        command => command,
     }
 }
 

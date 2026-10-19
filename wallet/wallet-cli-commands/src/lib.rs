@@ -20,7 +20,7 @@ pub mod output;
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
-use clap::{Command, FromArgMatches, Parser, Subcommand};
+use clap::{Command, FromArgMatches, Parser, Subcommand, ValueEnum};
 use dyn_clone::DynClone;
 use regex::Regex;
 
@@ -282,6 +282,246 @@ pub enum OpenWalletSubCommand {
     },
 }
 
+/// The nested wallet management grammar: `wallet create|recover|open|close`.
+/// Each subcommand delegates to the same implementation as its flat legacy
+/// counterpart (`wallet-create`, `wallet-recover`, ...).
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum WalletGroupSubCommand {
+    /// Create a new wallet. This will create a new file without scanning the blockchain.
+    Create {
+        #[command(subcommand)]
+        wallet: CreateWalletSubCommand,
+    },
+    /// Recover a wallet. This will create a new wallet file and scan the blockchain for
+    /// associated transactions.
+    Recover {
+        #[command(subcommand)]
+        wallet: RecoverWalletSubCommand,
+    },
+    /// Open an existing wallet file.
+    Open {
+        #[command(subcommand)]
+        wallet: OpenWalletSubCommand,
+    },
+    /// Close the wallet.
+    Close,
+}
+
+/// The nested account grammar: `account create|rename|select|utxos|balance|show-xpub`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum AccountGroupSubCommand {
+    /// Create a new account.
+    Create { name: Option<String> },
+    /// Rename the selected account.
+    Rename { name: Option<String> },
+    /// Switch to a given wallet account.
+    Select { account_index: U31 },
+    /// List the utxos of the selected account.
+    Utxos {
+        /// The type of utxos to be listed.
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+        /// Whether to include locked outputs.
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of the utxos.
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+    /// Show the balance of the selected account.
+    Balance {
+        /// Whether to include locked outputs (outputs that cannot be spend and need time to
+        /// mature)
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of utxos to be included (confirmed, unconfirmed, etc)
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+    /// Show the extended public key of the selected account as hex.
+    ShowXpub,
+}
+
+/// The encoding of a revealed public key.
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
+pub enum CliPublicKeyFormat {
+    Hex,
+    Address,
+}
+
+/// The nested standalone address grammar:
+/// `address standalone rename-label|add|add-private-key|add-multisig|list|details|utxos`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum StandaloneGroupSubCommand {
+    /// Rename the label of an existing standalone address; omitting --label removes it.
+    RenameLabel {
+        /// The existing standalone address
+        address: String,
+        /// Optionally specify a new label, not specifying a label will remove the existing one
+        #[arg(long = "label")]
+        label: Option<String>,
+    },
+    /// Add a new standalone watch only address to the selected account.
+    Add {
+        /// The new standalone watch only address to be added to the selected account
+        address: String,
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+    /// Add a new hex-encoded standalone private key to the selected account.
+    AddPrivateKey {
+        /// The new hex-encoded standalone private key to be added to the selected account
+        hex_private_key: HexEncoded<PrivateKey>,
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+    /// Create a new standalone multisig address.
+    AddMultisig {
+        /// The minimum required signatures out of the specified public keys
+        min_required_signatures: u8,
+        /// Public keys from which to create the multisig challenge
+        public_keys: Vec<String>,
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+    /// List the standalone addresses of the selected account.
+    List,
+    /// Show the details of a standalone address.
+    Details {
+        /// The standalone address to inspect
+        address: String,
+    },
+    /// List the utxos owned by the standalone multisig addresses.
+    Utxos {
+        /// The type of utxos to be listed.
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+        /// Whether to include locked outputs.
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of the utxos.
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+}
+
+/// The nested address grammar:
+/// `address new|list|qr|reveal-public-key|sweep|standalone`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum AddressGroupSubCommand {
+    /// Generate a new address.
+    New,
+    /// List the wallet addresses.
+    List {
+        /// Include the change addresses along with the receiving addresses
+        #[arg(long = "include-change")]
+        include_change: bool,
+    },
+    /// Show a QR code of the provided address.
+    Qr { address: String },
+    /// Reveal the public key behind the specified "public key hash" address.
+    RevealPublicKey {
+        public_key_hash: String,
+        /// The encoding of the revealed key (default: address).
+        /// Note that the address encoding isn't a normal address to be used in transactions.
+        /// It's preferred to take the address from `address list`.
+        #[arg(long = "format", value_enum, default_value_t = CliPublicKeyFormat::Address)]
+        format: CliPublicKeyFormat,
+    },
+    /// Sweep all spendable coins or tokens from the specified (or all) addresses to the
+    /// given destination address.
+    Sweep {
+        /// The receiving address of the coins or tokens
+        destination_address: String,
+        /// The addresses to be swept. Mutually exclusive with --all.
+        ///
+        /// If --all is not specified, this has to contain at least one address.
+        #[arg(required_unless_present("all"))]
+        addresses: Vec<String>,
+        /// Sweep all addresses
+        #[arg(long = "all", default_value_t = false, conflicts_with_all(["addresses"]))]
+        all: bool,
+    },
+    /// Manage standalone (non-account) addresses.
+    Standalone {
+        #[command(subcommand)]
+        command: StandaloneGroupSubCommand,
+    },
+}
+
+/// The nested data carrier grammar: `data deposit`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum DataGroupSubCommand {
+    /// Deposit arbitrary data on the blockchain.
+    Deposit {
+        /// The data to be deposited on the blockchain as hex. DO NOT start the data with 0x.
+        hex_data: String,
+    },
+}
+
+/// Mapping between the legacy flat command names and their nested equivalents.
+/// The flat names remain first-class commands; this manifest documents the
+/// correspondence and drives the grammar compatibility test.
+pub const LEGACY_ALIASES: &[(&str, &str)] = &[
+    ("wallet-create", "wallet create"),
+    ("wallet-recover", "wallet recover"),
+    ("wallet-open", "wallet open"),
+    ("wallet-close", "wallet close"),
+    ("account-create", "account create"),
+    ("account-rename", "account rename"),
+    ("account-select", "account select"),
+    ("account-utxos", "account utxos"),
+    ("account-balance", "account balance"),
+    ("account-extended-public-key-as-hex", "account show-xpub"),
+    ("address-new", "address new"),
+    ("address-show", "address list"),
+    ("address-qrcode", "address qr"),
+    (
+        "address-reveal-public-key-as-hex",
+        "address reveal-public-key --format hex",
+    ),
+    (
+        "address-reveal-public-key-as-address",
+        "address reveal-public-key",
+    ),
+    ("address-send", "send"),
+    ("address-sweep-spendable", "address sweep"),
+    ("address-deposit-data", "data deposit"),
+    (
+        "standalone-address-label-rename",
+        "address standalone rename-label",
+    ),
+    (
+        "standalone-add-watch-only-address",
+        "address standalone add",
+    ),
+    (
+        "standalone-add-private-key-from-hex",
+        "address standalone add-private-key",
+    ),
+    ("standalone-add-multisig", "address standalone add-multisig"),
+    ("standalone-address-show", "address standalone list"),
+    ("standalone-address-details", "address standalone details"),
+    ("standalone-multisig-utxos", "address standalone utxos"),
+];
+
 #[derive(Debug, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum WalletManagementCommand {
@@ -325,6 +565,7 @@ pub enum WalletManagementCommand {
     RpcShutdownAndExit,
 
     /// Exit the wallet
+    #[clap(visible_alias = "shutdown")]
     Exit,
 }
 
@@ -494,6 +735,51 @@ pub enum WalletCommand {
     ConfigBroadcast {
         #[arg(value_enum)]
         broadcast: CliYesNo,
+    },
+
+    /// Wallet management commands (create, recover, open, close).
+    /// The flat commands (`wallet-create`, `wallet-recover`, ...) remain available.
+    #[clap(name = "wallet")]
+    Wallet {
+        #[command(subcommand)]
+        command: WalletGroupSubCommand,
+    },
+
+    /// Account commands (create, rename, select, utxos, balance, show-xpub).
+    /// The flat commands (`account-create`, `account-utxos`, ...) remain available.
+    #[clap(name = "account")]
+    Account {
+        #[command(subcommand)]
+        command: AccountGroupSubCommand,
+    },
+
+    /// Address commands (new, list, qr, reveal-public-key, sweep, standalone).
+    /// The flat commands (`address-new`, `address-show`, ...) remain available.
+    #[clap(name = "address")]
+    Address {
+        #[command(subcommand)]
+        command: AddressGroupSubCommand,
+    },
+
+    /// Send coins to an address (same as `address-send`).
+    #[clap(name = "send")]
+    Send {
+        /// The receiving address of the coins
+        address: String,
+        /// The amount to be sent, in decimal format
+        amount: DecimalAmount,
+        /// You can choose what utxos to spend (space separated as additional arguments).
+        /// A utxo can be from a transaction output or a block reward output:
+        /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
+        /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
+        utxos: Vec<CliUtxoOutPoint>,
+    },
+
+    /// Data carrier commands (deposit).
+    #[clap(name = "data")]
+    Data {
+        #[command(subcommand)]
+        command: DataGroupSubCommand,
     },
 
     #[clap(name = "account-create")]
@@ -1623,6 +1909,33 @@ mod tests {
     #[ctor::ctor]
     fn init() {
         logging::init_logging();
+    }
+
+    #[test]
+    fn legacy_command_names_and_group_grammar_coexist() {
+        let mut repl = get_repl_command(false, true);
+        repl.build();
+
+        // Every legacy flat command must still exist at the top level.
+        for (legacy, _nested) in LEGACY_ALIASES {
+            assert!(
+                repl.find_subcommand(legacy).is_some(),
+                "legacy command `{legacy}` is missing from the repl command tree"
+            );
+        }
+
+        // Every nested path must exist under its groups. Options inside a nested path
+        // are not part of the structural check, so everything from the first option on
+        // is dropped before the walk.
+        for (_legacy, nested) in LEGACY_ALIASES {
+            let structural_path = nested.split(" --").next().unwrap_or(nested);
+            let mut level = &repl;
+            for name in structural_path.split_whitespace() {
+                level = level.find_subcommand(name).unwrap_or_else(|| {
+                    panic!("nested path `{nested}` breaks at `{name}` in the repl command tree")
+                });
+            }
+        }
     }
 
     #[rstest]
