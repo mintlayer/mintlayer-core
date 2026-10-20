@@ -84,7 +84,15 @@ pub fn run<N: NodeInterface>(
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
 ) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
-        let res = res_rx.blocking_recv().expect("Channel must be open")?;
+        let res = match res_rx.blocking_recv() {
+            Ok(inner) => inner?,
+            Err(_recv_error) => {
+                return Err(WalletCliError::<N>::InvalidInput(
+                    "the wallet event loop shut down before the startup commands finished"
+                        .to_owned(),
+                ));
+            }
+        };
         // The startup command output is the wallet opening report; keep it off
         // standard output so the requested output format stays machine-parseable.
         let line_out = to_startup_text(res);

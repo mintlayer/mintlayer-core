@@ -38,6 +38,16 @@ impl WalletCompletions {
         let mut root = root.into();
         if let Some(root) = Arc::get_mut(&mut root) {
             root.build();
+        } else {
+            // A shared command cannot be built here; callers holding a shared
+            // Arc must pass an already-built tree (as `build_repl_command`
+            // does). Walking an unbuilt tree silently yields no candidates.
+            // `build()` is what injects the help flag, so its presence is the
+            // cheapest proxy for "this tree was built".
+            debug_assert!(
+                root.get_arguments().any(|arg| arg.get_long() == Some("help")),
+                "a shared clap Command must already be built"
+            );
         }
         Self { root }
     }
