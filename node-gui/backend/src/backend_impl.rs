@@ -1221,7 +1221,9 @@ impl Backend {
             if e.is_panic() {
                 // An internal panic from the grammar build or parse thread is
                 // not a user input problem; resume unwinding so it is reported
-                // as such instead of as an invalid console command.
+                // as such instead of as an invalid console command. (With the
+                // workspace default of panic = "abort" this arm is mostly
+                // relevant for unwind builds and tests.)
                 std::panic::resume_unwind(e.into_panic());
             }
             // Cancellation (runtime shutdown) is not a user input problem either.

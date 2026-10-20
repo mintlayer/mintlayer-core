@@ -74,8 +74,10 @@ impl CliArgs {
             (self.rpc_username.clone(), self.rpc_password.clone())
         {
             RpcAuthData::Basic { username, password }
-        } else {
+        } else if self.rpc_no_auth {
             RpcAuthData::None
+        } else {
+            unreachable!("clap's `auth` arg group guarantees exactly one auth source")
         }
     }
 }
@@ -163,6 +165,12 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
             break;
         }
         if let Some(pos) = available.iter().position(|&byte| byte == b'\n') {
+            if buffer.len() + pos > MAX_MESSAGE_BYTES {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "message exceeds the maximum size",
+                ));
+            }
             buffer.extend_from_slice(&available[..pos]);
             reader.consume(pos + 1);
             let line = String::from_utf8_lossy(buffer).into_owned();

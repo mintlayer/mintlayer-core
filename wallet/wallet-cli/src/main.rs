@@ -24,7 +24,8 @@ utils::enable_rust_backtrace!();
 /// Emit a shell completion script for the wallet CLI binary.
 ///
 /// This verb is handled by the binary before the main argument parser runs, so
-/// it does not appear in the command grammar or in the generated completions.
+/// it does not appear in the command grammar or in the generated completions;
+/// run `wallet-cli --help` to discover it.
 #[derive(Parser, Debug)]
 struct CompletionsArgs {
     /// Shell to generate the completion script for

@@ -85,11 +85,10 @@ pub fn run<N: NodeInterface>(
 ) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open")?;
-        // The startup command output is the wallet opening report; render it
-        // as text regardless of the requested format so the JSON stream on
-        // standard output carries only the requested command's result.
+        // The startup command output is the wallet opening report; keep it off
+        // standard output so the requested output format stays machine-parseable.
         let line_out = to_startup_text(res);
-        output.print_line(&line_out);
+        eprintln!("{line_out}");
     }
 
     // The REPL thread is sized for grammar construction, so build the

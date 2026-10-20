@@ -187,12 +187,17 @@ async fn call_tool<W: ReadonlyWallet>(name: &str, arguments: Value, wallet: &W) 
                 Ok(states) => states,
                 Err(err) => return tool_result(err, true),
             };
-            let with_locked = match arguments.get("with_locked").and_then(Value::as_str) {
-                Some(name) => match WithLockedSelector::parse(name) {
+            let with_locked = match arguments.get("with_locked") {
+                None | Some(Value::Null) => WithLockedSelector::Unlocked,
+                Some(value) => match value.as_str().and_then(WithLockedSelector::parse) {
                     Some(selector) => selector,
-                    None => return tool_result(format!("Unknown locked filter: {name}"), true),
+                    None => {
+                        return tool_result(
+                            format!("Invalid locked filter: {value}"),
+                            true,
+                        )
+                    }
                 },
-                None => WithLockedSelector::Unlocked,
             };
             wallet.balance(account_index, states, with_locked).await
         }
@@ -430,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn notifications_and_malformed_payloads_get_no_response() {
+    fn notifications_get_no_response_while_malformed_requests_get_an_error() {
         let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
         let notification = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
         assert_eq!(

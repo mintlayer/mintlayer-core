@@ -142,6 +142,9 @@ fn process_line<N: NodeInterface>(
     if let Some(one_liner) = run_wizard_for_line::<N>(&line)? {
         let command_opt = parse_input(&one_liner, repl_command)?;
         let command = command_opt.expect("wizard output must re-parse as a command");
+        if !confirm_or_abort(&command, assume_yes)? {
+            return Ok(None);
+        }
         return super::run_command_blocking(event_tx, command).map(Option::Some);
     }
 

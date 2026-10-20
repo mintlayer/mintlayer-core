@@ -169,10 +169,12 @@ pub struct CliArgs {
     /// The command is spelled exactly as in the interactive wallet, e.g.
     /// `--exec "account create name"`. The exit status is 0 when the command
     /// succeeded and 1 when it failed.
-    #[clap(long)]
+    #[clap(long, conflicts_with = "commands_file")]
     pub exec: Option<String>,
 
     /// Output format for `--exec`: human-readable text or a single JSON object.
+    /// Startup reports go to standard error either way, so JSON output on
+    /// standard output stays machine-parseable.
     #[clap(long, value_enum, default_value_t = CliOutputFormat::Text)]
     pub output: CliOutputFormat,
 
