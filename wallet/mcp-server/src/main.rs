@@ -174,8 +174,12 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
             }
             buffer.extend_from_slice(&available[..pos]);
             reader.consume(pos + 1);
-            let line = String::from_utf8_lossy(buffer).into_owned();
-            buffer.clear();
+            let bytes: Vec<u8> = std::mem::take(buffer);
+            // A protocol boundary must reject, not repair: lossy decoding could
+            // silently turn a truncated request into a different valid one.
+            let line = String::from_utf8(bytes).map_err(|err| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, err)
+            })?;
             return Ok(Some(line));
         }
         if buffer.len() + available.len() > MAX_MESSAGE_BYTES {
@@ -191,8 +195,9 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     if buffer.is_empty() {
         return Ok(None);
     }
-    let line = String::from_utf8_lossy(buffer).into_owned();
-    buffer.clear();
+    let bytes = std::mem::take(buffer);
+    let line = String::from_utf8(bytes)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
     Ok(Some(line))
 }
 
@@ -204,7 +209,27 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
     let mut message_buffer = Vec::with_capacity(1024);
     let mut stdout = tokio::io::stdout();
 
-    while let Some(line) = next_message(&mut reader, &mut message_buffer).await? {
+    while let Some(line) = match next_message(&mut reader, &mut message_buffer).await {
+        Ok(line) => line,
+        // Malformed bytes and oversized messages are failures of the single
+        // message, not of the stream: answer with a parse error and keep
+        // serving instead of tearing the session down.
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidData => {
+            let encoded = serde_json::to_string(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": {
+                    "code": -32700,
+                    "message": format!("Parse error: {err}")
+                }
+            }))?
+                + "\n";
+            stdout.write_all(encoded.as_bytes()).await?;
+            stdout.flush().await?;
+            continue;
+        }
+        Err(err) => return Err(err.into()),
+    } {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;

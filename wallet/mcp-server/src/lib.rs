@@ -141,6 +141,9 @@ pub fn tool_definitions() -> Value {
 /// and otherwise falls back to the newest one.
 const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05"];
 
+/// The JSON-RPC envelope version this server speaks (MCP transport).
+const JSONRPC_VERSION: &str = "2.0";
+
 pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> Option<Value> {
     // Anything that is not a single request/notification object (a batched
     // array, a bare value) is not supported by this server; the advertised MCP
@@ -156,6 +159,14 @@ pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> O
     let id = message.get("id").cloned();
     // Notifications carry no id and never get a response.
     id.as_ref()?;
+    if message.get("jsonrpc").and_then(Value::as_str) != Some(JSONRPC_VERSION) {
+        // JSON-RPC 2.0 requires the version member on every request.
+        return Some(error_response(
+            id,
+            -32600,
+            "Invalid Request: jsonrpc must be \"2.0\"".to_owned(),
+        ));
+    }
     let Some(method) = message.get("method").and_then(Value::as_str) else {
         // Requests must always be answered, even when malformed (JSON-RPC 2.0: -32600).
         return Some(error_response(
