@@ -13,13 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ColdWalletCommand, ManageableWalletCommand, WalletCommand, helper_types::CliCurrency};
+use crate::{
+    ColdWalletCommand, ManageableWalletCommand, WalletCommand, WalletGroupSubCommand,
+    helper_types::CliCurrency,
+};
 
 /// Returns the confirmation question for a state-changing command, or `None`
 /// when the command can run without asking.
 pub fn confirmation_prompt(command: &ManageableWalletCommand) -> Option<String> {
     match command {
-        ManageableWalletCommand::WalletCommands(command) => wallet_confirmation(command),
+        ManageableWalletCommand::WalletCommands(command) => {
+            // The gate must not depend on the spelling: translate the nested
+            // groups to their legacy forms first, so `send 1 addr` and
+            // `address-send 1 addr` classify identically.
+            let normalized =
+                crate::command_handler::normalize_nested_wallet_command(command.clone());
+            wallet_confirmation(&normalized)
+        }
         ManageableWalletCommand::ManagementCommands(_) => None,
     }
 }
@@ -176,6 +186,38 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
                 "Submit the given transaction to the node {destination}?"
             ))
         }
+        WalletCommand::Wallet { command } => match command {
+            WalletGroupSubCommand::PurgeSeedPhrase => {
+                cold_wallet_confirmation(&ColdWalletCommand::PurgeSeedPhrase)
+            }
+            WalletGroupSubCommand::Decrypt => {
+                cold_wallet_confirmation(&ColdWalletCommand::RemovePrivateKeysEncryption)
+            }
+            WalletGroupSubCommand::Encrypt { password_file: _ } => {
+                Some(encrypt_private_keys_question())
+            }
+            WalletGroupSubCommand::Unlock { password_file: _ } => {
+                Some(unlock_private_keys_question())
+            }
+            WalletGroupSubCommand::SetLookaheadSize { .. } => Some(set_lookahead_size_question()),
+            WalletGroupSubCommand::Info
+            | WalletGroupSubCommand::Lock
+            | WalletGroupSubCommand::ShowSeedPhrase
+            | WalletGroupSubCommand::Create { .. }
+            | WalletGroupSubCommand::Recover { .. }
+            | WalletGroupSubCommand::Open { .. }
+            | WalletGroupSubCommand::Close => None,
+        },
+        WalletCommand::CreateDelegation { owner: _, pool_id } => {
+            Some(format!("Delegate to stake pool {pool_id}?"))
+        }
+        WalletCommand::SpendUtxo {
+            utxo,
+            address,
+            htlc_secret: _,
+        } => Some(format!(
+            "Spend the outpoint {utxo:?} (source and output index) to {address}?"
+        )),
         WalletCommand::ColdCommands(command) => cold_wallet_confirmation(command),
         _ => None,
     }
@@ -186,6 +228,20 @@ fn describe_currency(currency: &CliCurrency) -> String {
         CliCurrency::Coin => "coins".to_owned(),
         CliCurrency::Token(token_id) => format!("token {token_id}"),
     }
+}
+
+fn encrypt_private_keys_question() -> String {
+    "Encrypt the private keys stored in this wallet file?".to_owned()
+}
+
+fn unlock_private_keys_question() -> String {
+    "Decrypt the private keys in memory so they can sign transactions?".to_owned()
+}
+
+fn set_lookahead_size_question() -> String {
+    "Change the lookahead size? Reducing it can make addresses beyond the new size \
+     invisible to this wallet."
+        .to_owned()
 }
 
 fn cold_wallet_confirmation(command: &ColdWalletCommand) -> Option<String> {
@@ -199,6 +255,16 @@ fn cold_wallet_confirmation(command: &ColdWalletCommand) -> Option<String> {
             "Disable private key encryption? The private keys will be stored in plain text."
                 .to_owned(),
         ),
+        ColdWalletCommand::EncryptPrivateKeys { password: _ } => {
+            Some(encrypt_private_keys_question())
+        }
+        ColdWalletCommand::UnlockPrivateKeys { password: _ } => {
+            Some(unlock_private_keys_question())
+        }
+        ColdWalletCommand::SetLookaheadSize {
+            lookahead_size: _,
+            i_know_what_i_am_doing: _,
+        } => Some(set_lookahead_size_question()),
         _ => None,
     }
 }
@@ -245,5 +311,41 @@ mod tests {
     fn destructive_wallet_commands_ask() {
         assert!(prompt("wallet-purge-seed-phrase").is_some());
         assert!(prompt("wallet-disable-private-keys-encryption").is_some());
+    }
+
+    #[test]
+    fn nested_spellings_are_classified_the_same_as_legacy_ones() {
+        assert_eq!(
+            prompt("send addr1 100").as_deref(),
+            prompt("address-send addr1 100").as_deref()
+        );
+        assert_eq!(
+            prompt("wallet purge-seed-phrase").as_deref(),
+            prompt("wallet-purge-seed-phrase").as_deref()
+        );
+        assert_eq!(
+            prompt("wallet decrypt").as_deref(),
+            prompt("wallet-disable-private-keys-encryption").as_deref()
+        );
+        assert!(prompt("delegation-create owner1 pool1").is_some());
+        assert!(prompt(
+            "utxo-spend tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) addr1",
+        )
+        .is_some());
+        assert!(prompt("data deposit deadbeef").is_some());
+        assert!(prompt("config broadcast no").is_some());
+        assert!(prompt("transaction abandon 1111111111111111111111111111111111111111111111111111111111111111").is_some());
+        assert_eq!(
+            prompt("wallet encrypt").as_deref(),
+            prompt("wallet-encrypt-private-keys secret").as_deref()
+        );
+        assert_eq!(
+            prompt("wallet unlock").as_deref(),
+            prompt("wallet-unlock-private-keys secret").as_deref()
+        );
+        assert_eq!(
+            prompt("wallet set-lookahead-size 1000").as_deref(),
+            prompt("wallet-set-lookahead-size 1000 i-know-what-i-am-doing").as_deref()
+        );
     }
 }

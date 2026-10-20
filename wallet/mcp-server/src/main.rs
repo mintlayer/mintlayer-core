@@ -55,6 +55,7 @@ struct CliArgs {
     #[clap(
         long,
         env = "WALLET_MCP_RPC_PASSWORD",
+        hide_env_values = true,
         requires = "rpc_username",
         conflicts_with_all = &["rpc_cookie_file", "rpc_no_auth"]
     )]

@@ -141,7 +141,17 @@ fn process_line<N: NodeInterface>(
 
     if let Some(one_liner) = run_wizard_for_line::<N>(&line)? {
         let command_opt = parse_input(&one_liner, repl_command)?;
-        let command = command_opt.expect("wizard output must re-parse as a command");
+        let command = match command_opt {
+            Some(command) => command,
+            // Wizard output is machine-generated and re-checked by tests, but
+            // an unexpected grammar drift must never crash the wallet.
+            None => {
+                return Err(WalletCliError::InvalidInput(format!(
+                    "the wizard produced a command that failed to parse; please report this: \
+                     {one_liner}"
+                )));
+            }
+        };
         if !confirm_or_abort(&command, assume_yes)? {
             return Ok(None);
         }

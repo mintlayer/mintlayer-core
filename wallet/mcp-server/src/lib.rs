@@ -137,6 +137,17 @@ pub fn tool_definitions() -> Value {
 /// Handles one decoded JSON-RPC message. Returns the response value for
 /// requests and `None` for notifications.
 pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> Option<Value> {
+    // Anything that is not a single request/notification object (a batched
+    // array, a bare value) is not supported by this server; the advertised MCP
+    // protocol version still permits batching, so answer with a single error
+    // instead of leaving a conforming client waiting forever.
+    if !message.is_object() {
+        return Some(error_response(
+            None,
+            -32600,
+            "Invalid Request: only single request objects are supported".to_owned(),
+        ));
+    }
     let id = message.get("id").cloned();
     // Notifications carry no id and never get a response.
     id.as_ref()?;
@@ -191,12 +202,7 @@ async fn call_tool<W: ReadonlyWallet>(name: &str, arguments: Value, wallet: &W) 
                 None | Some(Value::Null) => WithLockedSelector::Unlocked,
                 Some(value) => match value.as_str().and_then(WithLockedSelector::parse) {
                     Some(selector) => selector,
-                    None => {
-                        return tool_result(
-                            format!("Invalid locked filter: {value}"),
-                            true,
-                        )
-                    }
+                    None => return tool_result(format!("Invalid locked filter: {value}"), true),
                 },
             };
             wallet.balance(account_index, states, with_locked).await
@@ -446,6 +452,17 @@ mod tests {
         let response =
             rt.block_on(handle_message(&bogus, &StubWallet)).expect("requests are answered");
         assert_eq!(response["error"]["code"], -32600);
+    }
+
+    #[test]
+    fn batched_and_non_object_requests_are_rejected_with_an_error() {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for message in [json!([request("ping", json!({}))]), json!(42)] {
+            let response = rt
+                .block_on(handle_message(&message, &StubWallet))
+                .expect("non-object messages are answered");
+            assert_eq!(response["error"]["code"], -32600);
+        }
     }
 
     #[test]

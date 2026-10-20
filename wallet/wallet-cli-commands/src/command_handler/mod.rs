@@ -2822,7 +2822,7 @@ fn is_nested_wallet_command(command: &WalletCommand) -> bool {
 /// into the flat commands that drive the implementation, so every command has exactly
 /// one implementation regardless of how it was spelled. The `wallet` group is handled
 /// at the dispatch site because it maps onto the wallet management commands.
-fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
+pub(crate) fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
     match command {
         WalletCommand::Account { command } => match command {
             AccountGroupSubCommand::Create { name } => WalletCommand::CreateNewAccount { name },

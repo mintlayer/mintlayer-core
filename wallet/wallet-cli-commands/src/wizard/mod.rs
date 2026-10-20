@@ -82,7 +82,7 @@ impl PromptBackend for DialoguerBackend {
     }
 
     fn confirm(&mut self, prompt: &str) -> Result<bool, WizardError> {
-        Ok(dialoguer::Confirm::new().with_prompt(prompt).default(true).interact()?)
+        Ok(dialoguer::Confirm::new().with_prompt(prompt).default(false).interact()?)
     }
 }
 
@@ -149,10 +149,19 @@ fn require_non_empty(field: &str, answer: &str) -> Result<String, WizardError> {
     }
 }
 
+use std::str::FromStr;
+
 /// Shell-quotes a value so the produced one-liner round-trips through the
-/// same word splitting the REPL uses.
-fn quote(value: &str) -> String {
-    shlex::try_quote(value).map_or_else(|_| value.to_owned(), std::borrow::Cow::into_owned)
+/// same word splitting the REPL uses. Fails instead of splicing an unquoted
+/// value into the line when the value cannot be quoted at all.
+fn quote(value: &str) -> Result<String, WizardError> {
+    shlex::try_quote(value)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|_| {
+        WizardError::InvalidInput(format!(
+            "{value:?} cannot be quoted because it contains a NUL byte, which command lines cannot carry"
+        ))
+    })
 }
 
 fn optional_field(answer: &str) -> Option<String> {
@@ -198,6 +207,11 @@ pub fn token_issue(backend: &mut impl PromptBackend) -> Result<String, WizardErr
         1 => "lockable".to_owned(),
         _ => {
             let amount = require_non_empty("amount", &backend.text("Fixed supply amount:", None)?)?;
+            if common::primitives::DecimalAmount::from_str(&amount).is_err() {
+                return Err(WizardError::InvalidInput(format!(
+                    "the fixed supply amount must be a valid decimal amount, got {amount:?}"
+                )));
+            }
             format!("fixed({amount})")
         }
     };
@@ -221,9 +235,9 @@ pub fn token_issue(backend: &mut impl PromptBackend) -> Result<String, WizardErr
     )?;
     Ok(format!(
         "token issue {} {decimals} {} {} {supply} {freezable}",
-        quote(&ticker),
-        quote(&metadata_uri),
-        quote(&authority)
+        quote(&ticker)?,
+        quote(&metadata_uri)?,
+        quote(&authority)?
     ))
 }
 
@@ -276,15 +290,15 @@ pub fn token_nft_issue(backend: &mut impl PromptBackend) -> Result<String, Wizar
     )?;
     let mut line = format!(
         "token nft issue {} {} {} {} {}",
-        quote(&destination),
-        quote(&media_hash),
-        quote(&name),
-        quote(description.trim()),
-        quote(&ticker)
+        quote(&destination)?,
+        quote(&media_hash)?,
+        quote(&name)?,
+        quote(description.trim())?,
+        quote(&ticker)?
     );
     for optional in rendered_optionals {
         line.push(' ');
-        line.push_str(&quote(&optional));
+        line.push_str(&quote(&optional)?);
     }
     Ok(line)
 }
@@ -325,17 +339,17 @@ pub fn staking_pool_create(backend: &mut impl PromptBackend) -> Result<String, W
     )?;
     let mut line = format!(
         "staking create-pool {} {} {} {}",
-        quote(&amount),
-        quote(&cost_per_block),
-        quote(&margin_ratio),
-        quote(&decommission)
+        quote(&amount)?,
+        quote(&cost_per_block)?,
+        quote(&margin_ratio)?,
+        quote(&decommission)?
     );
     if let Some(staker) = optional_field(&staker) {
         line.push(' ');
-        line.push_str(&staker);
+        line.push_str(&quote(&staker)?);
         if let Some(vrf) = optional_field(&vrf) {
             line.push(' ');
-            line.push_str(&vrf);
+            line.push_str(&quote(&vrf)?);
         }
     } else if optional_field(&vrf).is_some() {
         return Err(WizardError::InvalidInput(
@@ -372,9 +386,9 @@ pub fn order_create(backend: &mut impl PromptBackend) -> Result<String, WizardEr
     )?;
     Ok(format!(
         "order create {ask_currency} {} {give_currency} {} {}",
-        quote(&ask_amount),
-        quote(&give_amount),
-        quote(&conclude)
+        quote(&ask_amount)?,
+        quote(&give_amount)?,
+        quote(&conclude)?
     ))
 }
 
@@ -424,11 +438,11 @@ pub fn htlc_create(backend: &mut impl PromptBackend) -> Result<String, WizardErr
     )?;
     Ok(format!(
         "htlc create {currency} {} {} {} {timelock_name}({}) {}",
-        quote(&amount),
-        quote(&secret_hash),
-        quote(&spend),
-        quote(&timelock_value),
-        quote(&refund)
+        quote(&amount)?,
+        quote(&secret_hash)?,
+        quote(&spend)?,
+        quote(&timelock_value)?,
+        quote(&refund)?
     ))
 }
 

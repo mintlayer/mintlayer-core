@@ -85,6 +85,20 @@ mod confirmation_gate_tests {
     }
 
     #[test]
+    fn nested_spellings_hit_the_gate_too() {
+        let command = parse("send addr1 100");
+        assert!(matches!(
+            confirmation_gate::<Client>(&command, false, "exec mode"),
+            Err(WalletCliError::ConfirmationRequired(_))
+        ));
+        let command = parse("wallet purge-seed-phrase");
+        assert!(matches!(
+            confirmation_gate::<Client>(&command, false, "exec mode"),
+            Err(WalletCliError::ConfirmationRequired(_))
+        ));
+    }
+
+    #[test]
     fn read_only_command_never_needs_confirmation() {
         let command = parse("account-balance");
         confirmation_gate::<Client>(&command, false, "exec mode")

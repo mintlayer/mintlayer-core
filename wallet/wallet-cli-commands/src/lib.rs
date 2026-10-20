@@ -1259,7 +1259,7 @@ pub enum WalletManagementCommand {
     Exit,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum ColdWalletCommand {
     #[clap(name = "wallet-info")]
@@ -1435,7 +1435,7 @@ pub enum ColdWalletCommand {
     Version,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum WalletCommand {
     #[command(flatten)]

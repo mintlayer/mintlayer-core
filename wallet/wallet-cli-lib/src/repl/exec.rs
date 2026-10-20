@@ -65,9 +65,9 @@ fn process_line<N: NodeInterface>(
         ConsoleCommand::ClearScreen
         | ConsoleCommand::PrintHistory
         | ConsoleCommand::ChoiceMenu(_)
-        | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(
-            "Unsupported command in exec mode: {line}",
-        ))),
+        | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(
+            "Unsupported command in exec mode".to_owned(),
+        )),
         ConsoleCommand::Exit => Ok(ExecOutput::Nothing),
     }
 }

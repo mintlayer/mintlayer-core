@@ -51,12 +51,11 @@ fn process_line<N: NodeInterface>(
 
     let command_output = super::run_command_blocking(event_tx, command)?;
 
-    to_line_output(command_output, line)
+    to_line_output(command_output)
 }
 
 fn to_line_output<N: NodeInterface>(
     command_output: ConsoleCommand,
-    line: &str,
 ) -> Result<LineOutput, WalletCliError<N>> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
@@ -77,10 +76,9 @@ fn to_line_output<N: NodeInterface>(
         ConsoleCommand::ClearScreen
         | ConsoleCommand::PrintHistory
         | ConsoleCommand::ChoiceMenu(_)
-        | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(
-            "Unsupported command in non-interactive mode: {}",
-            line,
-        ))),
+        | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(
+            "Unsupported command in non-interactive mode".to_owned(),
+        )),
         ConsoleCommand::Exit => Ok(LineOutput::Exit),
     }
 }
@@ -96,7 +94,7 @@ pub fn run<N: NodeInterface>(
 ) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open")?;
-        let line_out = to_line_output(res, "startup command");
+        let line_out = to_line_output(res);
         if let Some(value) = handle_response(line_out, &mut output, true) {
             return value;
         }
@@ -169,9 +167,8 @@ mod rendering_tests {
     }
 
     fn render(command: ConsoleCommand) -> CapturingOutput {
-        let line_output =
-            to_line_output::<node_comm::node_traits::MockNodeInterface>(command, "test command")
-                .expect("rendering must not fail");
+        let line_output = to_line_output::<node_comm::node_traits::MockNodeInterface>(command)
+            .expect("rendering must not fail");
         let mut output = CapturingOutput::default();
         let exit = handle_response::<node_comm::node_traits::MockNodeInterface>(
             Ok(line_output),
