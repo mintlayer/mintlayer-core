@@ -32,6 +32,7 @@ chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true
 derive_more.workspace = true
+dialoguer.workspace = true
 directories.workspace = true
 dyn-clone.workspace = true
 futures.workspace = true

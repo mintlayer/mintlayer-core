@@ -1169,6 +1169,11 @@ where
                 };
                 self.handle_wallet_management_command(management).await
             }
+            WalletCommand::Wizard { .. } => Err(WalletCliCommandError::<N>::InvalidInput(
+                "the wizard is only available on an interactive terminal; type the command \
+                 directly instead"
+                    .to_owned(),
+            )),
             // Keep this or-pattern in sync with `is_nested_wallet_command` and the
             // translation arms in `normalize_nested_wallet_command`: a group added here
             // needs a variant in the predicate, a translation arm, and a LEGACY_ALIASES

@@ -17,6 +17,7 @@ mod command_handler;
 mod errors;
 mod helper_types;
 pub mod output;
+pub mod wizard;
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
@@ -1042,6 +1043,22 @@ pub enum ConfigGroupSubCommand {
     },
 }
 
+/// The commands that offer interactive argument collection through `wizard`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum WizardGroupSubCommand {
+    /// Interactively create the `token issue` command line.
+    TokenIssue,
+    /// Interactively create the `token nft issue` command line.
+    NftIssue,
+    /// Interactively create the `staking create-pool` command line.
+    PoolCreate,
+    /// Interactively create the `order create` command line.
+    OrderCreate,
+    /// Interactively create the `htlc create` command line.
+    HtlcCreate,
+}
+
 /// Mapping between the legacy flat command names and their nested equivalents.
 /// The flat names remain first-class commands; this manifest documents the
 /// correspondence and drives the grammar compatibility test.
@@ -1440,6 +1457,13 @@ pub enum WalletCommand {
     Config {
         #[command(subcommand)]
         command: ConfigGroupSubCommand,
+    },
+
+    /// Collect the arguments of a complex command interactively.
+    #[clap(name = "wizard")]
+    Wizard {
+        #[command(subcommand)]
+        command: WizardGroupSubCommand,
     },
 
     /// Wallet management commands (create, recover, open, close).

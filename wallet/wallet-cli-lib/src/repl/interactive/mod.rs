@@ -34,6 +34,7 @@ use tokio::sync::{mpsc, oneshot};
 use utils::once_destructor::OnceDestructor;
 use wallet_cli_commands::{
     ChoiceMenu, ConsoleCommand, ManageableWalletCommand, build_repl_command, parse_input,
+    wizard::{DialoguerBackend, WizardError, WizardKind},
 };
 use wallet_rpc_lib::types::NodeInterface;
 
@@ -95,6 +96,32 @@ fn create_line_editor(
     line_editor.with_edit_mode(edit_mode)
 }
 
+/// Runs the wizard for a recognized command line, echoing the generated
+/// one-liner. `None` means the line is not a wizard invocation.
+fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<Option<String>, WalletCliError<N>> {
+    let Some(tokens) = shlex::split(line) else {
+        return Ok(None);
+    };
+    let token_refs: Vec<&str> = tokens.iter().map(String::as_str).collect();
+    let Some(kind) = WizardKind::parse_from_tokens(&token_refs) else {
+        return Ok(None);
+    };
+    match kind.run(&mut DialoguerBackend) {
+        Ok(one_liner) => {
+            println!("You could also have run: {one_liner}");
+            Ok(Some(one_liner))
+        }
+        Err(WizardError::Cancelled) => {
+            println!("Wizard cancelled.");
+            Ok(None)
+        }
+        Err(WizardError::InvalidInput(message)) => Err(WalletCliError::InvalidInput(message)),
+        Err(WizardError::Io(err)) => Err(WalletCliError::InvalidInput(format!(
+            "the wizard could not read the answer: {err}"
+        ))),
+    }
+}
+
 fn process_line<N: NodeInterface>(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event<N>>,
@@ -110,6 +137,12 @@ fn process_line<N: NodeInterface>(
             return Ok(Some(ConsoleCommand::Exit));
         }
     };
+
+    if let Some(one_liner) = run_wizard_for_line::<N>(&line)? {
+        let command_opt = parse_input(&one_liner, repl_command)?;
+        let command = command_opt.expect("wizard output must re-parse as a command");
+        return super::run_command_blocking(event_tx, command).map(Option::Some);
+    }
 
     let command_opt = parse_input(&line, repl_command)?;
 
