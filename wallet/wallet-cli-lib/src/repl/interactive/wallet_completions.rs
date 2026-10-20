@@ -15,6 +15,8 @@
 
 use std::collections::BTreeSet;
 
+use std::sync::Arc;
+
 use clap::{Arg, ArgAction, Command};
 use reedline::{Completer, Hinter, Span, Suggestion};
 
@@ -22,15 +24,22 @@ use reedline::{Completer, Hinter, Span, Suggestion};
 /// long flags, and enumeration values for the token in front of the cursor.
 #[derive(Clone)]
 pub struct WalletCompletions {
-    root: std::sync::Arc<Command>,
+    root: Arc<Command>,
 }
 
 impl WalletCompletions {
-    pub fn new(mut root: Command) -> Self {
-        root.build();
-        Self {
-            root: std::sync::Arc::new(root),
+    /// Share the grammar.
+    ///
+    /// [`Command::build`] runs only when the caller passes an owned
+    /// [`Command`] or an unshared [`std::sync::Arc`]; callers sharing an
+    /// already-wrapped [`std::sync::Arc`] must pass a built tree (as
+    /// `build_repl_command` does).
+    pub fn new(root: impl Into<Arc<Command>>) -> Self {
+        let mut root = root.into();
+        if let Some(root) = Arc::get_mut(&mut root) {
+            root.build();
         }
+        Self { root }
     }
 
     /// A completer without any candidates, used where completion is not
@@ -87,12 +96,15 @@ fn subcommand_candidates(cmd: &Command) -> Vec<Candidate> {
         if sub.is_hide_set() {
             continue;
         }
-        let description = sub.get_about().map(|about| about.to_string());
+        // `build_repl_command` appends a trailing EOL to each top-level
+        // command's `about` for help formatting; trim it so completion menu
+        // entries do not carry a stray newline.
+        let description = sub.get_about().map(|about| about.to_string().trim().to_owned());
         candidates.push(Candidate {
             value: sub.get_name().to_owned(),
             description: description.clone(),
         });
-        for alias in sub.get_all_aliases() {
+        for alias in sub.get_visible_aliases() {
             candidates.push(Candidate {
                 value: alias.to_owned(),
                 description: description.clone(),
@@ -117,21 +129,20 @@ fn positional_candidates(cmd: &Command, index: usize) -> Vec<Candidate> {
     let Some(arg) = arg else {
         return Vec::new();
     };
-    arg.get_possible_values()
-        .into_iter()
-        .map(|value| Candidate {
-            value: value.get_name().to_owned(),
-            description: value.get_help().map(|help| help.to_string()),
-        })
-        .collect()
+    possible_value_candidates(arg.get_possible_values())
 }
 
 fn value_candidates(pending_value_flag: Option<&Arg>) -> Vec<Candidate> {
     let Some(arg) = pending_value_flag else {
         return Vec::new();
     };
-    arg.get_possible_values()
+    possible_value_candidates(arg.get_possible_values())
+}
+
+fn possible_value_candidates(values: Vec<clap::builder::PossibleValue>) -> Vec<Candidate> {
+    values
         .into_iter()
+        .filter(|value| !value.is_hide_set())
         .map(|value| Candidate {
             value: value.get_name().to_owned(),
             description: value.get_help().map(|help| help.to_string()),
@@ -142,6 +153,9 @@ fn value_candidates(pending_value_flag: Option<&Arg>) -> Vec<Candidate> {
 /// Walk the tokenized prefix of the line and return the command level the
 /// cursor sits at, the long flags already given at that level, the number of
 /// positional values consumed, and a flag whose value is still missing.
+///
+/// The walk assumes the grammar has no lone `--` separator and no values that
+/// start with a hyphen; the wallet grammar has neither.
 struct Level<'a> {
     cmd: &'a Command,
     taken_flags: BTreeSet<String>,
@@ -183,6 +197,10 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
                 .get_arguments()
                 .find(|arg| arg.get_short().is_some_and(|s| Some(s) == short))
             {
+                let repeatable = matches!(arg.get_action(), ArgAction::Append);
+                if !repeatable && let Some(long) = arg.get_long() {
+                    taken_flags.insert(long.to_owned());
+                }
                 let takes_value = arg.get_num_args().is_some_and(|range| range.takes_values());
                 let value_attached = token.chars().count() > 2;
                 if takes_value && !value_attached {
@@ -196,7 +214,9 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
         if pending_value_flag.take().is_some() {
             continue;
         }
-        if let Some(sub) = cmd.find_subcommand(token).filter(|sub| !sub.is_hide_set()) {
+        // Hidden subcommands are still accepted by clap, so resolve them when
+        // typed; `subcommand_candidates` keeps them out of the offered menu.
+        if let Some(sub) = cmd.find_subcommand(token) {
             cmd = sub;
             taken_flags.clear();
             positional_index = 0;
@@ -215,7 +235,9 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
 
 impl Completer for WalletCompletions {
     fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
-        let prefix = line.get(..pos).unwrap_or(line);
+        let Some(prefix) = line.get(..pos) else {
+            return Vec::new();
+        };
         let ends_with_space = prefix.ends_with(char::is_whitespace);
         let tokens: Vec<&str> = prefix.split_whitespace().collect();
         let (tokens, current): (Vec<&str>, &str) = if ends_with_space || tokens.is_empty() {
@@ -228,20 +250,42 @@ impl Completer for WalletCompletions {
         };
 
         let level = resolve_level(&self.root, &tokens);
-        let candidates = if current.starts_with("--") {
+        // A flag whose value is being typed after `=` completes that flag's
+        // values instead of flag names.
+        let inline_value_flag =
+            current.strip_prefix("--").and_then(|rest| rest.split_once('=')).and_then(
+                |(flag, _)| level.cmd.get_arguments().find(|arg| arg.get_long() == Some(flag)),
+            );
+        let mut candidates = if let Some(arg) = inline_value_flag {
+            value_candidates(Some(arg))
+        } else if let Some(arg) = level.pending_value_flag {
+            // clap would consume any `--`-prefixed token as this flag's value
+            // (and reject it), so complete the flag's values instead of
+            // offering flag names.
+            value_candidates(Some(arg))
+        } else if current.starts_with("--") {
             flag_candidates(level.cmd, &level.taken_flags)
-        } else if level.pending_value_flag.is_some() {
-            value_candidates(level.pending_value_flag)
         } else {
             let mut candidates = subcommand_candidates(level.cmd);
             candidates.extend(positional_candidates(level.cmd, level.positional_index));
             candidates
         };
 
-        let start = pos.saturating_sub(current.len());
+        // Keep the menu alphabetical, matching the grammar's help ordering.
+        candidates.sort_by(|lhs, rhs| lhs.value.cmp(&rhs.value));
+
+        // For the inline `--flag=<typed>` form, match and replace only the
+        // typed part after `=`; otherwise match and replace the whole token.
+        let (match_prefix, typed_len): (&str, usize) = if inline_value_flag.is_some() {
+            let value_part = current.split_once('=').map_or("", |(_, value)| value);
+            (value_part, value_part.len())
+        } else {
+            (current, current.len())
+        };
+        let start = pos.saturating_sub(typed_len);
         candidates
             .into_iter()
-            .filter(|candidate| candidate.value.starts_with(current))
+            .filter(|candidate| candidate.value.starts_with(match_prefix))
             .map(|candidate| Suggestion {
                 value: candidate.value,
                 description: candidate.description,
@@ -259,6 +303,7 @@ impl Completer for WalletCompletions {
 pub struct WalletHinter {
     completer: WalletCompletions,
     current_hint: String,
+    last_input: Option<(String, usize)>,
 }
 
 impl WalletHinter {
@@ -266,6 +311,7 @@ impl WalletHinter {
         Self {
             completer,
             current_hint: String::new(),
+            last_input: None,
         }
     }
 }
@@ -279,15 +325,24 @@ impl Hinter for WalletHinter {
         use_ansi_coloring: bool,
         _cwd: &str,
     ) -> String {
-        self.current_hint = self
-            .completer
-            .complete(line, pos)
-            .first()
-            .map(|suggestion| {
-                let typed = pos.saturating_sub(suggestion.span.start);
-                suggestion.value.get(typed..).unwrap_or_default().to_owned()
-            })
-            .unwrap_or_default();
+        // The completion walk is pure, so repeat calls with the same input can
+        // reuse the previous result instead of re-walking the grammar.
+        if self
+            .last_input
+            .as_ref()
+            .is_none_or(|(last_line, last_pos)| last_line != line || *last_pos != pos)
+        {
+            self.last_input = Some((line.to_owned(), pos));
+            self.current_hint = self
+                .completer
+                .complete(line, pos)
+                .first()
+                .map(|suggestion| {
+                    let typed = pos.saturating_sub(suggestion.span.start);
+                    suggestion.value.get(typed..).unwrap_or_default().to_owned()
+                })
+                .unwrap_or_default();
+        }
         if use_ansi_coloring && !self.current_hint.is_empty() {
             format!("\x1b[2m{}\x1b[0m", self.current_hint)
         } else {
@@ -330,6 +385,12 @@ mod tests {
             #[clap(subcommand)]
             command: GroupSubCommand,
         },
+        /// Internal maintenance command
+        #[clap(hide = true)]
+        Sweep {
+            /// Whether to sweep
+            broadcast: YesNo,
+        },
     }
 
     #[derive(clap::Subcommand, Debug)]
@@ -368,14 +429,14 @@ mod tests {
         let mut completer = completer();
         let suggestions = completer.complete("", 0);
         let values = values(&suggestions);
-        assert_eq!(values, vec!["send", "broadcast", "group", "help"]);
+        assert_eq!(values, vec!["broadcast", "group", "help", "send"]);
     }
 
     #[test]
     fn nested_subcommands_are_offered_after_the_group() {
         let mut completer = completer();
         let suggestions = completer.complete("group ", 6);
-        assert_eq!(values(&suggestions), vec!["status", "help"]);
+        assert_eq!(values(&suggestions), vec!["help", "status"]);
     }
 
     #[test]
@@ -394,7 +455,7 @@ mod tests {
         let mut completer = completer();
         let suggestions = completer.complete("broadcast --broadcast ", 22);
         let after_flag = values(&suggestions);
-        assert_eq!(after_flag, vec!["yes", "no"]);
+        assert_eq!(after_flag, vec!["no", "yes"]);
         let suggestions = completer.complete("group status ", 13);
         let positional = values(&suggestions);
         assert_eq!(positional, vec!["full", "short"]);
@@ -418,6 +479,24 @@ mod tests {
     }
 
     #[test]
+    fn partial_inline_values_complete_after_the_equals_sign() {
+        let mut completer = completer();
+        let suggestions = completer.complete("broadcast --broadcast=y", 23);
+        assert_eq!(values(&suggestions), vec!["yes"]);
+        assert_eq!(suggestions[0].span, Span::new(22, 23));
+    }
+
+    #[test]
+    fn hidden_subcommands_resolve_when_typed() {
+        let mut completer = completer();
+        // Hidden commands are not offered in the menu...
+        assert!(!values(&completer.complete("", 0)).contains(&"sweep"));
+        // ...but resolve once typed.
+        let suggestions = completer.complete("sweep ", 6);
+        assert_eq!(values(&suggestions), vec!["no", "yes"]);
+    }
+
+    #[test]
     fn descriptions_carry_the_help_text() {
         let mut completer = completer();
         let suggestions = completer.complete("group status ", 13);
@@ -427,13 +506,18 @@ mod tests {
     #[test]
     fn hinter_shows_the_untyped_remainder() {
         let mut hinter = WalletHinter::new(completer());
+        // `with_file` opens (and therefore creates) the file eagerly; use a
+        // process-unique path and remove it afterwards.
         let history_file = std::env::temp_dir().join(format!(
-            "wallet-completions-test-history-{}",
-            std::process::id()
+            "wallet-completions-test-history-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id(),
         ));
         let history: Box<dyn History> =
-            Box::new(reedline::FileBackedHistory::with_file(100, history_file).unwrap());
+            Box::new(reedline::FileBackedHistory::with_file(100, history_file.clone()).unwrap());
         let hint = hinter.handle("se", 2, history.as_ref(), false, "");
+        drop(history);
+        let _ = std::fs::remove_file(history_file);
         assert_eq!(hint, "nd");
         assert_eq!(hinter.complete_hint(), "nd");
         assert_eq!(hinter.next_hint_token(), "nd");

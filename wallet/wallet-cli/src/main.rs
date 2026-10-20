@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use wallet_cli_lib::{
     config::WalletCliArgs,
     console::{StdioInputConsole, StdioOutputConsole},
@@ -21,8 +21,56 @@ use wallet_cli_lib::{
 
 utils::enable_rust_backtrace!();
 
+/// Emit a shell completion script for the wallet CLI binary.
+///
+/// This verb is handled by the binary before the main argument parser runs, so
+/// it does not appear in the command grammar or in the generated completions.
+#[derive(Parser, Debug)]
+struct CompletionsArgs {
+    /// Shell to generate the completion script for
+    #[clap(long)]
+    shell: clap_complete::Shell,
+}
+
+/// The name completions should bind to: the invoked file name, falling back
+/// to the package name when it cannot be determined.
+fn binary_name() -> String {
+    std::env::args_os()
+        .next()
+        .as_deref()
+        .map(std::path::Path::new)
+        // `file_stem` drops a Windows executable extension; completion script
+        // identifiers must not contain a dot.
+        .and_then(|path| path.file_stem())
+        .and_then(|name| name.to_str())
+        .map_or_else(|| env!("CARGO_PKG_NAME").to_owned(), str::to_owned)
+}
+
+fn generate_completions() {
+    let bin_name = binary_name();
+    // Name the parser after the real binary; the intercepted `completions`
+    // verb is not part of this parser's arguments.
+    let mut argv: Vec<std::ffi::OsString> = vec![bin_name.as_str().into()];
+    argv.extend(std::env::args_os().skip(2));
+    let args = CompletionsArgs::parse_from(argv);
+    // Buffer the script so a failed write (closed pipe, full disk) is
+    // observable: clap_complete discards write errors internally.
+    let mut script = Vec::new();
+    let mut command = WalletCliArgs::command();
+    clap_complete::generate(args.shell, &mut command, bin_name, &mut script);
+    use std::io::Write;
+    std::io::stdout().write_all(&script).unwrap_or_else(|err| {
+        eprintln!("failed to write completions: {err}");
+        std::process::exit(1);
+    });
+}
+
 #[tokio::main]
 async fn main() {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("completions")) {
+        generate_completions();
+        return;
+    }
     let args = WalletCliArgs::parse();
     wallet_cli_lib::run(StdioInputConsole, StdioOutputConsole, args, None)
         .await

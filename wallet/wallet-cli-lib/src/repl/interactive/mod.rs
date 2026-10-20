@@ -22,6 +22,8 @@ use std::path::PathBuf;
 
 use clap::Command;
 use itertools::Itertools;
+use std::sync::Arc;
+
 use reedline::{
     ColumnarMenu, DefaultPrompt, DefaultValidator, EditMode, Emacs, FileBackedHistory, History,
     ListMenu, MenuBuilder, Reedline, ReedlineMenu, Signal, Vi, default_emacs_keybindings,
@@ -132,7 +134,7 @@ pub fn run<N: NodeInterface>(
 ) -> Result<(), WalletCliError<N>> {
     // The REPL thread is sized for grammar construction, so build the
     // grammar directly instead of nesting another large-stack spawn.
-    let repl_command = build_repl_command(cold_wallet, true);
+    let repl_command = Arc::new(build_repl_command(cold_wallet, true));
 
     let history = if let Some(file_name) = history_file {
         let h: Box<dyn History> = Box::new(
@@ -146,7 +148,7 @@ pub fn run<N: NodeInterface>(
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),
-        wallet_completions::WalletCompletions::new(repl_command.clone()),
+        wallet_completions::WalletCompletions::new(Arc::clone(&repl_command)),
         history,
         vi_mode,
     );
