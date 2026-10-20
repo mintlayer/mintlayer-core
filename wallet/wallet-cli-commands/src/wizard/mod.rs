@@ -492,6 +492,7 @@ impl WizardKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::WalletCommand;
 
     fn backend(answers: impl IntoIterator<Item = CannedAnswer>) -> CannedBackend {
         CannedBackend::new(answers)
@@ -601,5 +602,69 @@ mod tests {
             line,
             "htlc create coin 50 abcd spend block_count(720) refund"
         );
+    }
+
+    /// The wizard renders `seconds(n)`, `until_height(n)`, `until_time(rfc3339)`
+    /// and `fixed(amount)`; pin every spelling by round-tripping a generated
+    /// one-liner through the real grammar.
+    #[test]
+    fn htlc_and_fixed_supply_spellings_round_trip_through_the_parser() {
+        let cases = [
+            (
+                "htlc create coin 50 abcd spend seconds(86400) refund",
+                "ForSeconds(86400)",
+            ),
+            (
+                "htlc create coin 50 abcd spend until_height(500000) refund",
+                "UntilHeight(",
+            ),
+            (
+                "htlc create coin 50 abcd spend until_time(2026-02-26T12:30:00Z) refund",
+                "UntilTime",
+            ),
+        ];
+        for (line, expected) in cases {
+            let command = round_trip_flat_variant(line).expect("one-liner must parse");
+            let WalletCommand::CreateHtlcTx {
+                refund_timelock, ..
+            } = command
+            else {
+                panic!("{line} did not normalize to CreateHtlcTx");
+            };
+            let rendered = format!("{refund_timelock:?}");
+            assert!(
+                rendered.starts_with(expected),
+                "{line} parsed as {rendered}, expected {expected}"
+            );
+        }
+        let command = round_trip_flat_variant(
+            "token issue GOLD 8 https://example.com 7Utx1 fixed(100) freezable",
+        )
+        .expect("one-liner must parse");
+        let WalletCommand::IssueNewToken { token_supply, .. } = command else {
+            panic!("token issue did not normalize to IssueNewToken");
+        };
+        assert!(
+            format!("{token_supply:?}").contains("Fixed"),
+            "supply parsed as {token_supply:?}"
+        );
+    }
+
+    fn round_trip_flat_variant(line: &'static str) -> Option<WalletCommand> {
+        crate::run_with_large_stack(move || {
+            let command = crate::parse_input::<node_comm::node_traits::MockNodeInterface>(
+                line,
+                &crate::build_repl_command(false, true),
+            )
+            .ok()
+            .flatten()?;
+            let manageable = match &command {
+                crate::ManageableWalletCommand::WalletCommands(cmd) => cmd.clone(),
+                _ => return None,
+            };
+            Some(crate::command_handler::normalize_nested_wallet_command(
+                manageable,
+            ))
+        })
     }
 }

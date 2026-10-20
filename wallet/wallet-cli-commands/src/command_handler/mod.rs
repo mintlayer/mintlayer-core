@@ -450,13 +450,14 @@ where
                 .map_err(|err| WalletCliCommandError::InvalidInput(format!("{label}: {err}")))
         }
 
-        // One trailing line terminator (`\n` or `\r\n`) is stripped; any other
-        // whitespace is kept.
+        // Trailing line terminators (`\n` or `\r\n`, however many) are
+        // stripped; any other whitespace is kept.
         fn strip_line_terminator(password: &str) -> &str {
-            password
-                .strip_suffix("\r\n")
-                .or_else(|| password.strip_suffix('\n'))
-                .unwrap_or(password)
+            // Files edited by hand often end in more than one line terminator
+            // (a trailing blank line is a common editor artifact); every
+            // trailing terminator is stripped so the password stays exactly
+            // what the file's last non-empty line holds.
+            password.trim_end_matches(['\r', '\n'])
         }
 
         let password = match source {

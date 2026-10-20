@@ -70,10 +70,19 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         } => Some(format!(
             "Sweep delegation {delegation_id} to {destination_address}?"
         )),
-        WalletCommand::DepositData { hex_data } => Some(format!(
-            "Store {} bytes of data on the chain?",
-            hex_data.len() / 2
-        )),
+        WalletCommand::DepositData { hex_data } => {
+            // Report the decoded size so the prompt matches what the handler
+            // will store; odd-length or prefixed input falls back to a note
+            // instead of a wrong number.
+            let rendered = hex_data.clone();
+            let payload = rendered.strip_prefix("0x").unwrap_or(&rendered);
+            let size = if payload.len() % 2 == 0 {
+                format!("{} bytes", payload.len() / 2)
+            } else {
+                "an invalid amount of data (the hex input is malformed)".to_owned()
+            };
+            Some(format!("Store {size} on the chain?"))
+        }
         WalletCommand::IssueNewNft {
             destination_address: _,
             media_hash: _,
@@ -219,7 +228,99 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
             "Spend the outpoint {utxo:?} (source and output index) to {address}?"
         )),
         WalletCommand::ColdCommands(command) => cold_wallet_confirmation(command),
-        _ => None,
+        WalletCommand::SelectAccount { account_index } => Some(format!(
+            "Select account {account_index} for subsequent commands?"
+        )),
+        WalletCommand::AddStandaloneKey { .. } => {
+            Some("Add a standalone watch-only address to this wallet?".to_owned())
+        }
+        WalletCommand::AddStandalonePrivateKey { .. } => Some(
+            "Import a private key into this wallet? It will be able to sign \
+             for its addresses."
+                .to_owned(),
+        ),
+        WalletCommand::AddStandaloneMultisig { .. } => {
+            Some("Add a standalone multisig address to this wallet?".to_owned())
+        }
+        WalletCommand::SubmitBlock { .. } => Some("Submit the given block to the node?".to_owned()),
+        WalletCommand::NodeShutdown => Some("Shut down the connected node?".to_owned()),
+        WalletCommand::NodeEnableNetworking { enable } => Some(format!(
+            "Set P2P networking on the node to {}?",
+            if enable.is_enable() {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        )),
+        // Group spellings and the wizard are translated before this match
+        // runs; read-only commands never need a confirmation. The list is
+        // exhaustive so a newly added variant fails to compile until it is
+        // classified here.
+        WalletCommand::Config { .. }
+        | WalletCommand::Wizard { .. }
+        | WalletCommand::CreateNewAccount { .. }
+        | WalletCommand::RenameAccount { .. }
+        | WalletCommand::ListUtxo { .. }
+        | WalletCommand::GetBalance { .. }
+        | WalletCommand::StandaloneAddressLabelRename { .. }
+        | WalletCommand::ListMultisigUtxo { .. }
+        | WalletCommand::MakeTxToSendTokensToAddressWithIntent { .. }
+        | WalletCommand::MakeTxToSendTokensFromMultisigAddress { .. }
+        | WalletCommand::InspectTransaction { .. }
+        | WalletCommand::ListDelegationIds
+        | WalletCommand::ListPools
+        | WalletCommand::ListOwnedPoolsForDecommission
+        | WalletCommand::StakingStatus
+        | WalletCommand::StakePoolBalance { .. }
+        | WalletCommand::ListCreatedBlocksIds
+        | WalletCommand::Rescan
+        | WalletCommand::SyncWallet
+        | WalletCommand::NodeVersion
+        | WalletCommand::Connect { .. }
+        | WalletCommand::Disconnect { .. }
+        | WalletCommand::ListBanned
+        | WalletCommand::Ban { .. }
+        | WalletCommand::Unban { .. }
+        | WalletCommand::ListDiscouraged
+        | WalletCommand::Undiscourage { .. }
+        | WalletCommand::PeerCount
+        | WalletCommand::ConnectedPeers
+        | WalletCommand::ConnectedPeersJson
+        | WalletCommand::ReservedPeers
+        | WalletCommand::AddReservedPeer { .. }
+        | WalletCommand::RemoveReservedPeer { .. }
+        | WalletCommand::ChainstateInfo
+        | WalletCommand::BestBlock
+        | WalletCommand::NodeBestBlock { .. }
+        | WalletCommand::BestBlockHeight
+        | WalletCommand::BestBlockTimestamp
+        | WalletCommand::BlockId { .. }
+        | WalletCommand::GetBlock { .. }
+        | WalletCommand::GenerateBlock { .. }
+        | WalletCommand::GenerateBlocks { .. }
+        | WalletCommand::FindTimestampsForStaking { .. }
+        | WalletCommand::GetBlockIdsAsCheckpoints { .. }
+        | WalletCommand::ListPendingTransactions
+        | WalletCommand::ListMainchainTransactions { .. }
+        | WalletCommand::GetTransaction { .. }
+        | WalletCommand::GetRawTransaction { .. }
+        | WalletCommand::GetRawSignedTransaction { .. }
+        | WalletCommand::ListOwnOrders
+        | WalletCommand::ListActiveOrders { .. }
+        | WalletCommand::GenerateHtlcSecret
+        | WalletCommand::CalcHtlcSecretHash { .. }
+        | WalletCommand::Account { .. }
+        | WalletCommand::Address { .. }
+        | WalletCommand::Send { .. }
+        | WalletCommand::Data { .. }
+        | WalletCommand::Staking { .. }
+        | WalletCommand::Delegation { .. }
+        | WalletCommand::Token { .. }
+        | WalletCommand::Order { .. }
+        | WalletCommand::Htlc { .. }
+        | WalletCommand::Node { .. }
+        | WalletCommand::Peer { .. }
+        | WalletCommand::Transaction { .. } => None,
     }
 }
 
@@ -298,6 +399,26 @@ mod tests {
         assert!(prompt("staking-create-pool 100 0 10 cold").is_some());
         assert!(prompt("delegation-stake 100 0x22").is_some());
         assert!(prompt("order-create coin 1 coin 2 addr").is_some());
+    }
+
+    #[test]
+    fn node_and_wallet_state_changes_ask() {
+        assert_eq!(
+            prompt("node-shutdown").as_deref(),
+            Some("Shut down the connected node?")
+        );
+        assert_eq!(
+            prompt("node-enable-p2p-networking disable").as_deref(),
+            Some("Set P2P networking on the node to disabled?")
+        );
+        assert!(prompt("account-select 3").is_some());
+        assert!(prompt(
+            "standalone-add-private-key-from-hex 000000000000000000000000000000000000000000000000000000000000000001"
+        )
+        .is_some());
+        // The same commands through the nested grammar classify identically.
+        assert_eq!(prompt("node shutdown"), prompt("node-shutdown"));
+        assert_eq!(prompt("account select 3"), prompt("account-select 3"));
     }
 
     #[test]
