@@ -124,7 +124,7 @@ impl CliTestFramework {
                     remote_rpc_wallet_password: None,
                     remote_rpc_wallet_cookie_file: None,
                     remote_rpc_wallet_no_authentication: true,
-                    no_qr: false,
+                    qr: false,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -157,7 +157,7 @@ impl CliTestFramework {
                 remote_rpc_wallet_password: None,
                 remote_rpc_wallet_cookie_file: None,
                 remote_rpc_wallet_no_authentication: true,
-                no_qr: false,
+                qr: false,
             },
         };
 

@@ -97,18 +97,18 @@ pub struct CommandHandler<W> {
 
     wallet: WalletWithState<W>,
 
-    no_qr: bool,
+    qr: bool,
 }
 
 impl<W, E> CommandHandler<W>
 where
     W: WalletInterface<Error = E> + Send + Sync + 'static,
 {
-    pub async fn new(config: ControllerConfig, wallet: W, no_qr: Option<bool>) -> Self {
+    pub async fn new(config: ControllerConfig, wallet: W, qr: Option<bool>) -> Self {
         CommandHandler {
             config,
             wallet: WalletWithState::new(wallet).await,
-            no_qr: no_qr.unwrap_or(false),
+            qr: qr.unwrap_or(false),
         }
     }
 
@@ -739,7 +739,7 @@ where
                 let hex_chain_code = key.chain_code.to_string();
 
                 let extended_public_key = format!("{hex_public_key}{hex_chain_code}");
-                let qr_code = if !self.no_qr {
+                let qr_code = if self.qr {
                     let qr_code = qrcode_or_error_string(&extended_public_key);
                     format!("\nOr contained in the QR code:\n{qr_code}")
                 } else {
@@ -925,7 +925,7 @@ where
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code_string = if self.no_qr {
+                        let qr_code_string = if !self.qr {
                             String::new()
                         } else {
                             let qr_code = qrcode_or_error_string(&result_hex.to_string());
@@ -943,7 +943,7 @@ where
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
                             partially_signed_tx.into();
 
-                        let qr_code_string = if self.no_qr {
+                        let qr_code_string = if !self.qr {
                             String::new()
                         } else {
                             let qr_code = qrcode_or_error_string(&result_hex.to_string());
@@ -984,7 +984,7 @@ where
                 let result =
                     wallet.sign_challenge_hex(selected_account, challenge, address).await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
@@ -1005,7 +1005,7 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let result = wallet.sign_challenge(selected_account, challenge, address).await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
@@ -1932,7 +1932,7 @@ where
 
                 let summary = tx.tx().text_summary(chain_config);
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&hex);
@@ -2232,7 +2232,7 @@ where
                     )
                     .await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result_hex.to_string());
