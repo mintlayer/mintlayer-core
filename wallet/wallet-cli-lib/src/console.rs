@@ -51,27 +51,6 @@ impl ConsoleInput for StdioInputConsole {
     }
 }
 
-/// A console input that yields a single fixed line, used by `--exec`.
-pub struct OneShotInput {
-    line: Option<String>,
-}
-
-impl OneShotInput {
-    pub fn new(line: String) -> Self {
-        Self { line: Some(line) }
-    }
-}
-
-impl ConsoleInput for OneShotInput {
-    fn is_tty(&self) -> bool {
-        false
-    }
-
-    fn read_line(&mut self) -> Option<String> {
-        self.line.take()
-    }
-}
-
 pub struct StdioOutputConsole;
 
 impl ConsoleOutput for StdioOutputConsole {

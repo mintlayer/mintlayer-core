@@ -24,8 +24,8 @@ utils::enable_rust_backtrace!();
 /// Emit a shell completion script for the wallet CLI binary.
 ///
 /// This verb is handled by the binary before the main argument parser runs, so
-/// it does not appear in the command grammar or in the generated completions;
-/// run `wallet-cli --help` to discover it.
+/// it does not appear in the command grammar, in the help output, or in the
+/// generated completions.
 #[derive(Parser, Debug)]
 struct CompletionsArgs {
     /// Shell to generate the completion script for
@@ -40,8 +40,8 @@ fn binary_name() -> String {
         .next()
         .as_deref()
         .map(std::path::Path::new)
-        // `file_stem` drops a Windows executable extension; completion script
-        // identifiers must not contain a dot.
+        // `file_stem` drops any extension (e.g. `.exe` on Windows); completion
+        // script identifiers must not contain a dot.
         .and_then(|path| path.file_stem())
         .and_then(|name| name.to_str())
         .map_or_else(|| env!("CARGO_PKG_NAME").to_owned(), str::to_owned)

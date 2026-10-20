@@ -24,7 +24,10 @@ use crate::{
 
 enum ExecOutput {
     Text(String),
-    Json(serde_json::Value),
+    Json {
+        text: Option<String>,
+        value: serde_json::Value,
+    },
     Nothing,
 }
 
@@ -45,10 +48,7 @@ fn process_line<N: NodeInterface>(
 
     match super::run_command_blocking(event_tx, command)? {
         ConsoleCommand::Print(text) => Ok(ExecOutput::Text(text)),
-        ConsoleCommand::Json { text, value } => Ok(match text {
-            Some(text) => ExecOutput::Json(serde_json::json!({ "text": text, "value": value })),
-            None => ExecOutput::Json(value),
-        }),
+        ConsoleCommand::Json { text, value } => Ok(ExecOutput::Json { text, value }),
         ConsoleCommand::Warn(message) => Ok(ExecOutput::Text(message)),
         ConsoleCommand::PaginatedPrint { header, body } => {
             let rendered = match (header.is_empty(), body.is_empty()) {
@@ -100,21 +100,33 @@ pub fn run<N: NodeInterface>(
     match (output_format, result) {
         (_, ExecOutput::Nothing) => {}
         (CliOutputFormat::Text, ExecOutput::Text(text)) => output.print_line(&text),
-        (CliOutputFormat::Text, ExecOutput::Json(value)) => {
+        (CliOutputFormat::Text, ExecOutput::Json { text, value }) => {
             output.print_line(&wallet_cli_commands::output::json_display_text(
-                None, &value,
+                text, &value,
             ));
         }
         (CliOutputFormat::Json, ExecOutput::Text(text)) => output.print_line(
             &serde_json::to_string(&serde_json::json!({ "output": text }))
                 .map_err(WalletCliError::SerdeJsonFormatError)?,
         ),
-        (CliOutputFormat::Json, ExecOutput::Json(value)) => output.print_line(
-            &serde_json::to_string(&value).map_err(WalletCliError::SerdeJsonFormatError)?,
+        (CliOutputFormat::Json, ExecOutput::Json { text, value }) => output.print_line(
+            &serde_json::to_string(&json_payload(text, value))
+                .map_err(WalletCliError::SerdeJsonFormatError)?,
         ),
     }
 
     Ok(())
+}
+
+/// The machine-readable payload for a `ConsoleCommand::Json`. A text-less
+/// payload stays the raw value so existing `--output json` consumers that read
+/// the command value directly keep working; the `text` key is added only when
+/// the command carries human-readable text.
+fn json_payload(text: Option<String>, value: serde_json::Value) -> serde_json::Value {
+    match text {
+        Some(text) => serde_json::json!({ "text": text, "value": value }),
+        None => value,
+    }
 }
 
 fn to_startup_text(command_output: ConsoleCommand) -> String {
@@ -147,12 +159,26 @@ fn to_startup_text(command_output: ConsoleCommand) -> String {
 mod tests {
     use super::*;
 
-    fn parse_line(line: &str, cold: bool) -> Option<serde_json::Value> {
-        // Parse-only probe: build the grammar and reuse the shared parse path.
-        let repl_command = build_repl_command(cold, true);
-        parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl_command)
-            .expect("grammar parse must not fail")
-            .map(|_| serde_json::json!("parsed"))
+    fn parse_line(line: &'static str, cold: bool) -> Option<serde_json::Value> {
+        // Grammar construction overflows the default 2 MiB test-thread stack,
+        // so build it on a large-stack thread like the sibling test modules do.
+        wallet_cli_commands::run_with_large_stack(move || {
+            // Parse-only probe: build the grammar and reuse the shared parse path.
+            let repl_command = build_repl_command(cold, true);
+            parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl_command)
+                .expect("grammar parse must not fail")
+                .map(|_| serde_json::json!("parsed"))
+        })
+    }
+
+    #[test]
+    fn json_payload_keeps_textless_values_raw() {
+        let value = serde_json::json!({ "peer_count": 3 });
+        assert_eq!(json_payload(None, value.clone()), value);
+        assert_eq!(
+            json_payload(Some("peers".to_owned()), value.clone()),
+            serde_json::json!({ "text": "peers", "value": value })
+        );
     }
 
     #[test]

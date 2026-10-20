@@ -136,6 +136,11 @@ pub fn tool_definitions() -> Value {
 
 /// Handles one decoded JSON-RPC message. Returns the response value for
 /// requests and `None` for notifications.
+/// The MCP protocol revisions this server implements, newest last; the
+/// initialize handshake echoes a requested version only when it is listed here
+/// and otherwise falls back to the newest one.
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05"];
+
 pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> Option<Value> {
     // Anything that is not a single request/notification object (a batched
     // array, a bare value) is not supported by this server; the advertised MCP
@@ -161,17 +166,28 @@ pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> O
     };
     let params = message.get("params").cloned().unwrap_or_else(|| json!({}));
     let response = match method {
-        "initialize" => result_response(
-            id,
-            json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": { "tools": {} },
-                "serverInfo": {
-                    "name": "mintlayer-wallet-mcp",
-                    "version": env!("CARGO_PKG_VERSION")
-                }
-            }),
-        ),
+        "initialize" => {
+            // Echo the client's requested protocol version only when this
+            // server actually supports it; unknown or missing versions fall
+            // back to the newest supported entry, per the MCP initialize
+            // handshake.
+            let protocol_version = params
+                .get("protocolVersion")
+                .and_then(Value::as_str)
+                .filter(|requested| SUPPORTED_PROTOCOL_VERSIONS.contains(requested))
+                .unwrap_or(SUPPORTED_PROTOCOL_VERSIONS.last().copied().unwrap_or("2024-11-05"));
+            result_response(
+                id,
+                json!({
+                    "protocolVersion": protocol_version,
+                    "capabilities": { "tools": {} },
+                    "serverInfo": {
+                        "name": "mintlayer-wallet-mcp",
+                        "version": env!("CARGO_PKG_VERSION")
+                    }
+                }),
+            )
+        }
         "ping" => result_response(id, json!({})),
         "tools/list" => result_response(id, tool_definitions()),
         "tools/call" => {
@@ -463,6 +479,46 @@ mod tests {
                 .expect("non-object messages are answered");
             assert_eq!(response["error"]["code"], -32600);
         }
+    }
+
+    #[test]
+    fn initialize_echoes_only_supported_protocol_versions() {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let unsupported = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": { "protocolVersion": "1999-01-01" }
+        });
+        let response = rt
+            .block_on(handle_message(&unsupported, &StubWallet))
+            .expect("initialize is answered");
+        assert_eq!(response["result"]["protocolVersion"], "2024-11-05");
+
+        let non_string_version = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "initialize",
+            "params": { "protocolVersion": 2024 }
+        });
+        let response = rt
+            .block_on(handle_message(&non_string_version, &StubWallet))
+            .expect("initialize is answered");
+        assert_eq!(
+            response["result"]["protocolVersion"],
+            SUPPORTED_PROTOCOL_VERSIONS.last().copied().unwrap()
+        );
+
+        let supported = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "initialize",
+            "params": { "protocolVersion": "2024-11-05" }
+        });
+        let response = rt
+            .block_on(handle_message(&supported, &StubWallet))
+            .expect("initialize is answered");
+        assert_eq!(response["result"]["protocolVersion"], "2024-11-05");
     }
 
     #[test]
