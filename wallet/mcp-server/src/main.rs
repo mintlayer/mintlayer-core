@@ -153,6 +153,34 @@ fn with_locked_filter(selector: WithLockedSelector) -> WithLocked {
 /// make the server buffer unbounded input.
 const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 
+/// Discards bytes up to and including the next newline. Gives up on the
+/// stream if the line turns out to be endless.
+async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<()> {
+    use tokio::io::AsyncBufReadExt;
+
+    let mut discarded: usize = 0;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(()); // EOF mid-line
+        }
+        if let Some(pos) = available.iter().position(|&byte| byte == b'\n') {
+            reader.consume(pos + 1);
+            return Ok(());
+        }
+        discarded += available.len();
+        if discarded > MAX_MESSAGE_BYTES * 4 {
+            return Err(std::io::Error::other(
+                "peer streamed an oversized message without a newline",
+            ));
+        }
+        let len = available.len();
+        reader.consume(len);
+    }
+}
+
 async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     reader: &mut R,
     buffer: &mut Vec<u8>,
@@ -160,7 +188,7 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     use tokio::io::AsyncBufReadExt;
 
     loop {
-        let mut available = reader.fill_buf().await?;
+        let available = reader.fill_buf().await?;
         if available.is_empty() {
             // End of stream: deliver a trailing message without a newline, if any.
             break;
@@ -189,28 +217,10 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
             // The rejected line has no newline in this chunk; drain chunks
             // until its newline so exactly one error is reported per message.
             buffer.clear();
-            loop {
-                match available.iter().position(|&byte| byte == b'\n') {
-                    Some(pos) => {
-                        reader.consume(pos + 1);
-                        break;
-                    }
-                    None => {
-                        let drained = available.len();
-                        reader.consume(drained);
-                        let next = reader.fill_buf().await?;
-                        if next.is_empty() {
-                            break; // EOF mid-line
-                        }
-                        // `available` borrows from the reader and is refreshed
-                        // by fill_buf; rebind it for the next iteration.
-                        available = next;
-                    }
-                }
-            }
+            skip_rest_of_line(reader).await?;
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "protocol message exceeds the size limit",
+                "message exceeds the maximum size",
             ));
         }
         buffer.extend_from_slice(available);
@@ -295,5 +305,65 @@ async fn main() {
     if let Err(err) = serve(wallet).await {
         eprintln!("MCP server stopped: {err}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn next_n_messages(
+        input: &str,
+        count: usize,
+        capacity: usize,
+    ) -> Vec<Result<Option<String>, std::io::Error>> {
+        let mut reader = tokio::io::BufReader::with_capacity(capacity, input.as_bytes());
+        let mut buffer = Vec::new();
+        let mut results = Vec::new();
+        for _ in 0..count {
+            results.push(next_message(&mut reader, &mut buffer).await);
+        }
+        results
+    }
+
+    #[tokio::test]
+    async fn oversized_message_is_skipped_and_stream_stays_usable() {
+        let input = format!(
+            "{}\n{{\"method\":\"ping\"}}\n",
+            "x".repeat(MAX_MESSAGE_BYTES + 1)
+        );
+        let results = next_n_messages(&input, 2, 8192).await;
+        let err = results[0].as_ref().unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(
+            results[1].as_ref().unwrap().as_deref(),
+            Some("{\"method\":\"ping\"}")
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_message_spanning_chunks_resyncs() {
+        let input = format!(
+            "{}\n{{\"method\":\"ping\"}}\n",
+            "y".repeat(MAX_MESSAGE_BYTES + 1)
+        );
+        // A tiny read buffer forces the oversized line through many chunks.
+        let results = next_n_messages(&input, 2, 64).await;
+        assert_eq!(
+            results[0].as_ref().unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert!(results[1].as_ref().unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn oversized_message_without_newline_reports_once_at_eof() {
+        let input = "z".repeat(MAX_MESSAGE_BYTES + 1);
+        let results = next_n_messages(&input, 2, 8192).await;
+        assert_eq!(
+            results[0].as_ref().unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert_eq!(results[1].as_ref().unwrap(), &None);
     }
 }
