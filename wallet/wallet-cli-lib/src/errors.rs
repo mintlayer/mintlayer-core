@@ -36,6 +36,9 @@ pub enum WalletCliError<N: NodeInterface> {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("Confirmation required: {0}")]
+    ConfirmationRequired(String),
+
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
 

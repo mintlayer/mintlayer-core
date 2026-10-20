@@ -38,6 +38,7 @@ fn process_line<N: NodeInterface>(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event<N>>,
     line: &str,
+    assume_yes: bool,
 ) -> Result<LineOutput, WalletCliError<N>> {
     let command_opt = parse_input(line, repl_command)?;
 
@@ -45,6 +46,14 @@ fn process_line<N: NodeInterface>(
         Some(command) => command,
         None => return Ok(LineOutput::None),
     };
+
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(&command) {
+        if !assume_yes {
+            return Err(WalletCliError::ConfirmationRequired(format!(
+                "{question}\nPass --yes to run state-changing commands in non-interactive mode."
+            )));
+        }
+    }
 
     let command_output = super::run_command_blocking(event_tx, command)?;
 
@@ -88,6 +97,7 @@ pub fn run<N: NodeInterface>(
     event_tx: mpsc::UnboundedSender<Event<N>>,
     exit_on_error: bool,
     cold_wallet: bool,
+    assume_yes: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
 ) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
@@ -103,7 +113,7 @@ pub fn run<N: NodeInterface>(
     let repl_command = build_repl_command(cold_wallet, true);
 
     while let Some(line) = input.read_line() {
-        let res = process_line(&repl_command, &event_tx, &line);
+        let res = process_line(&repl_command, &event_tx, &line, assume_yes);
 
         if let Some(value) = handle_response(res, &mut output, exit_on_error) {
             return value;

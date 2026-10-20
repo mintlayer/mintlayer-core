@@ -126,6 +126,7 @@ fn process_line<N: NodeInterface>(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event<N>>,
     sig: reedline::Signal,
+    assume_yes: bool,
 ) -> Result<Option<ConsoleCommand>, WalletCliError<N>> {
     let line = match sig {
         Signal::Success(line) => line,
@@ -151,7 +152,7 @@ fn process_line<N: NodeInterface>(
         None => return Ok(None),
     };
 
-    if !confirm_or_abort(&command)? {
+    if !confirm_or_abort(&command, assume_yes)? {
         return Ok(None);
     }
 
@@ -162,8 +163,12 @@ fn process_line<N: NodeInterface>(
 /// `false` when the user declined and the command must not run.
 fn confirm_or_abort<N: NodeInterface>(
     command: &ManageableWalletCommand,
+    assume_yes: bool,
 ) -> Result<bool, WalletCliError<N>> {
     if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command) {
+        if assume_yes {
+            return Ok(true);
+        }
         println!();
         println!("{question}");
         let confirmed = dialoguer::Confirm::new()
@@ -191,6 +196,7 @@ pub fn run<N: NodeInterface>(
     vi_mode: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
     cold_wallet: bool,
+    assume_yes: bool,
 ) -> Result<(), WalletCliError<N>> {
     // The REPL thread is sized for grammar construction, so build the
     // grammar directly instead of nesting another large-stack spawn.
@@ -248,7 +254,7 @@ pub fn run<N: NodeInterface>(
             let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
             logger.set_print_directly(true);
 
-            process_line(&repl_command, &event_tx, sig)
+            process_line(&repl_command, &event_tx, sig, assume_yes)
         };
 
         match handle_response(

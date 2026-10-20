@@ -37,7 +37,7 @@ fn process_line<N: NodeInterface>(
 
     if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(&command) {
         if !assume_yes {
-            return Err(WalletCliError::InvalidInput(format!(
+            return Err(WalletCliError::ConfirmationRequired(format!(
                 "{question}\nPass --yes to run state-changing commands in exec mode."
             )));
         }
