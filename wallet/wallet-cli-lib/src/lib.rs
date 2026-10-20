@@ -51,6 +51,10 @@ enum Mode {
     CommandsList {
         file_input: console::FileInput,
     },
+    Exec {
+        line: String,
+        output_format: config::CliOutputFormat,
+    },
 }
 
 pub async fn run(
@@ -74,7 +78,13 @@ pub async fn run(
 
     let cli_args = args.cli_args();
 
-    let mode = if let Some(file_path) = &cli_args.commands_file {
+    let mode = if let Some(line) = &cli_args.exec {
+        repl::non_interactive::log::init();
+        Mode::Exec {
+            line: line.clone(),
+            output_format: cli_args.output,
+        }
+    } else if let Some(file_path) = &cli_args.commands_file {
         repl::non_interactive::log::init();
         let file_input = console::FileInput::new::<ColdWalletClient>(file_path.clone())?;
         Mode::CommandsList { file_input }
@@ -397,6 +407,17 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                     output,
                     event_tx,
                     args.exit_on_error.unwrap_or(true),
+                    args.cold_wallet,
+                    startup_command_futures,
+                ),
+                Mode::Exec {
+                    line,
+                    output_format,
+                } => repl::exec::run(
+                    line,
+                    output_format,
+                    output,
+                    event_tx,
                     args.cold_wallet,
                     startup_command_futures,
                 ),

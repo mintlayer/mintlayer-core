@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use common::chain::config::{ChainType, regtest_options::ChainConfigOptions};
 use crypto::key::hdkd::u31::U31;
@@ -100,6 +100,16 @@ impl WalletCliArgs {
     }
 }
 
+/// Output format for one-shot (`--exec`) runs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum CliOutputFormat {
+    /// Human-readable text.
+    #[default]
+    Text,
+    /// A single JSON object on standard output.
+    Json,
+}
+
 #[derive(Args, Clone, Debug)]
 #[command(
     group(
@@ -153,6 +163,18 @@ pub struct CliArgs {
     /// Run commands from the file
     #[clap(long)]
     pub commands_file: Option<PathBuf>,
+
+    /// Run a single wallet command and exit.
+    ///
+    /// The command is spelled exactly as in the interactive wallet, e.g.
+    /// `--exec "account create name"`. The exit status is 0 when the command
+    /// succeeded and 1 when it failed.
+    #[clap(long)]
+    pub exec: Option<String>,
+
+    /// Output format for `--exec`: human-readable text or a single JSON object.
+    #[clap(long, value_enum, default_value_t = CliOutputFormat::Text)]
+    pub output: CliOutputFormat,
 
     /// Preserve history file between application runs.
     /// This can be very insecure as it also stores things like the seed-phrase, use at your own risk!
