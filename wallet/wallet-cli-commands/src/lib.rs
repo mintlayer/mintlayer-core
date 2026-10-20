@@ -311,7 +311,9 @@ pub enum WalletGroupSubCommand {
     /// Encrypt the private keys of the wallet with a password.
     ///
     /// The password is read from the file given by `--password-file` (`-` for
-    /// standard input); it is never passed as a command line argument.
+    /// standard input); it is never passed as a command line argument. When
+    /// the option is omitted on a terminal, the password is read with a
+    /// hidden prompt and must be entered twice.
     Encrypt {
         /// File containing the new encryption password, or `-` for standard input.
         #[arg(long = "password-file")]
@@ -320,7 +322,9 @@ pub enum WalletGroupSubCommand {
     /// Unlock the encrypted private keys of the wallet with the encryption password.
     ///
     /// The password is read from the file given by `--password-file` (`-` for
-    /// standard input); it is never passed as a command line argument.
+    /// standard input); it is never passed as a command line argument. When
+    /// the option is omitted on a terminal, the password is read with a
+    /// hidden prompt.
     Unlock {
         /// File containing the current encryption password, or `-` for standard input.
         #[arg(long = "password-file")]
@@ -1531,6 +1535,11 @@ pub enum WalletCommand {
         command: TransactionGroupSubCommand,
     },
 
+    /// Create a new account in the wallet.
+    ///
+    /// When no name is given the account stays unnamed; listings show it as
+    /// `Account index: <n>, Name: None` and the status line as
+    /// `(Account No. <n>)` until it is renamed.
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
 

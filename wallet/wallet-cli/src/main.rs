@@ -47,6 +47,7 @@ fn binary_name() -> String {
 }
 
 fn generate_completions() {
+    use std::io::Write;
     let bin_name = binary_name();
     // Name the parser after the real binary; the intercepted `completions`
     // verb is not part of this parser's arguments.
@@ -58,7 +59,6 @@ fn generate_completions() {
     let mut script = Vec::new();
     let mut command = WalletCliArgs::command();
     clap_complete::generate(args.shell, &mut command, bin_name, &mut script);
-    use std::io::Write;
     std::io::stdout().write_all(&script).unwrap_or_else(|err| {
         eprintln!("failed to write completions: {err}");
         std::process::exit(1);

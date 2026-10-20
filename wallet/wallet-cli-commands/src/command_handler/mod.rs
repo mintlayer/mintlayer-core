@@ -15,7 +15,7 @@
 
 mod local_state;
 
-use std::{collections::BTreeMap, fmt::Write, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, io::IsTerminal, str::FromStr};
 
 use bigdecimal::BigDecimal;
 use itertools::Itertools;
@@ -83,6 +83,14 @@ use crate::{
         CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
     },
 };
+
+/// How the hidden terminal password prompt behaves: `Create` asks for the
+/// password twice (typo guard for wallet encryption), `Enter` asks once.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PromptMode {
+    Create,
+    Enter,
+}
 
 pub struct CommandHandler<W> {
     config: ControllerConfig,
@@ -379,12 +387,40 @@ where
     }
 
     /// Read a password from `--password-file`, where `-` means standard input.
-    /// The trailing line terminator is stripped; any other whitespace is kept.
+    /// When no source is given and standard input is a terminal, the password
+    /// is read with a hidden prompt on the controlling terminal instead; in
+    /// [`PromptMode::Create`] mode the prompt asks for the password twice. The trailing line
+    /// terminator is stripped; any other whitespace is kept.
     async fn read_password_from_source<N: NodeInterface>(
         source: Option<&str>,
+        prompt_mode: PromptMode,
     ) -> Result<String, WalletCliCommandError<N>> {
-        // Standard input is read with terminal echo enabled; a hidden interactive
-        // prompt does not exist yet.
+        // The password can also come from a hidden terminal prompt; see the
+        // function documentation above.
+
+        // Reads a password from the terminal with echo disabled. In `Create`
+        // mode (password creation) the password must be repeated; a typo would
+        // otherwise lock the wallet with an unknown password.
+        fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<String> {
+            // The prompt and the hidden read go to the controlling terminal
+            // (/dev/tty), so redirected standard error does not matter.
+            let password = rpassword::prompt_password(if prompt_mode == PromptMode::Create {
+                "New password: "
+            } else {
+                "Password: "
+            })?;
+            if prompt_mode == PromptMode::Create {
+                let confirmed = rpassword::prompt_password("Confirm password: ")?;
+                if password != confirmed {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the two passwords do not match",
+                    ));
+                }
+            }
+            Ok(password)
+        }
+
         fn read_password_from_stdin() -> std::io::Result<String> {
             let mut password = String::new();
             let bytes_read = std::io::stdin().read_line(&mut password)?;
@@ -395,6 +431,23 @@ where
                 ));
             }
             Ok(password)
+        }
+
+        // Joins a blocking password read and labels the two failure layers
+        // (task join vs read) distinctly.
+        async fn label_password_errors<N: NodeInterface, T>(
+            fut: impl std::future::Future<
+                Output = Result<Result<T, std::io::Error>, tokio::task::JoinError>,
+            >,
+            label: String,
+        ) -> Result<T, WalletCliCommandError<N>> {
+            fut.await
+                .map_err(|err| {
+                    WalletCliCommandError::InvalidInput(format!(
+                        "Internal error - failed to join the password read task: {err}"
+                    ))
+                })?
+                .map_err(|err| WalletCliCommandError::InvalidInput(format!("{label}: {err}")))
         }
 
         // One trailing line terminator (`\n` or `\r\n`) is stripped; any other
@@ -408,41 +461,39 @@ where
 
         let password = match source {
             None => {
-                return Err(WalletCliCommandError::InvalidInput(
-                    "a password is required: pass --password-file <file> (or \
-                     --password-file - for standard input); an interactive password \
-                     prompt is not available yet"
-                        .to_owned(),
-                ));
+                // The hidden prompt goes to the controlling terminal
+                // (/dev/tty); scripted callers get an error instead.
+                if std::io::stdin().is_terminal() {
+                    label_password_errors(
+                        tokio::task::spawn_blocking(move || prompt_password_hidden(prompt_mode)),
+                        "Failed to read the password from the terminal".to_owned(),
+                    )
+                    .await?
+                } else {
+                    return Err(WalletCliCommandError::InvalidInput(
+                        "a password is required: pass --password-file <file> (or \
+                         --password-file - for standard input); interactive input \
+                         requires a terminal on standard input"
+                            .to_owned(),
+                    ));
+                }
             }
-            Some("-") => tokio::task::spawn_blocking(read_password_from_stdin)
-                .await
-                .map_err(|err| {
-                    WalletCliCommandError::InvalidInput(format!(
-                        "Failed to read the password from standard input: {err}"
-                    ))
-                })?
-                .map_err(|err| {
-                    WalletCliCommandError::InvalidInput(format!(
-                        "Failed to read the password from standard input: {err}"
-                    ))
-                })?,
+            Some("-") => {
+                label_password_errors(
+                    tokio::task::spawn_blocking(read_password_from_stdin),
+                    "Failed to read the password from standard input".to_owned(),
+                )
+                .await?
+            }
             Some(path) => {
                 let path = path.to_owned();
                 let read_path = path.clone();
                 let read = move || std::fs::read_to_string(read_path);
-                tokio::task::spawn_blocking(read)
-                    .await
-                    .map_err(|err| {
-                        WalletCliCommandError::InvalidInput(format!(
-                            "Failed to read the password from {path}: {err}"
-                        ))
-                    })?
-                    .map_err(|err| {
-                        WalletCliCommandError::InvalidInput(format!(
-                            "Failed to read the password from {path}: {err}"
-                        ))
-                    })?
+                label_password_errors(
+                    tokio::task::spawn_blocking(read),
+                    format!("Failed to read the password from {path}"),
+                )
+                .await?
             }
         };
         Ok(strip_line_terminator(&password).to_owned())
@@ -1029,8 +1080,11 @@ where
                             .await;
                     }
                     WalletGroupSubCommand::Encrypt { password_file } => {
-                        let password =
-                            Self::read_password_from_source::<N>(password_file.as_deref()).await?;
+                        let password = Self::read_password_from_source::<N>(
+                            password_file.as_deref(),
+                            PromptMode::Create,
+                        )
+                        .await?;
                         return self
                             .handle_cold_wallet_command(
                                 ColdWalletCommand::EncryptPrivateKeys { password },
@@ -1039,8 +1093,11 @@ where
                             .await;
                     }
                     WalletGroupSubCommand::Unlock { password_file } => {
-                        let password =
-                            Self::read_password_from_source::<N>(password_file.as_deref()).await?;
+                        let password = Self::read_password_from_source::<N>(
+                            password_file.as_deref(),
+                            PromptMode::Enter,
+                        )
+                        .await?;
                         return self
                             .handle_cold_wallet_command(
                                 ColdWalletCommand::UnlockPrivateKeys { password },

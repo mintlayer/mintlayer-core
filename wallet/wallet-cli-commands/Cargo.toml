@@ -42,6 +42,7 @@ lazy_static.workspace = true
 prettytable-rs = "0.10"
 reedline = { workspace = true, features = ["external_printer"] }
 regex.workspace = true
+rpassword.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 shlex.workspace = true

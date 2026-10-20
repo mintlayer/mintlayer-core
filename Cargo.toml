@@ -233,6 +233,7 @@ reqwest = "0.12"
 rfd = { version = "0.15", default-features = false }
 ripemd = "0.1"
 rlimit = "0.10"
+rpassword = "7.2"
 rstest = "0.24"
 rstest_reuse = "0.7"
 rusqlite = "0.34"
