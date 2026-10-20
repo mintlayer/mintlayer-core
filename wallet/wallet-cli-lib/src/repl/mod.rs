@@ -30,14 +30,27 @@ pub(crate) fn confirmation_gate<N: NodeInterface>(
     assume_yes: bool,
     mode_name: &str,
 ) -> Result<(), WalletCliError<N>> {
-    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command) {
-        if !assume_yes {
-            return Err(WalletCliError::ConfirmationRequired(format!(
-                "{question}\nPass --yes to run state-changing commands in {mode_name}."
-            )));
-        }
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command)
+        && !assume_yes
+    {
+        return Err(WalletCliError::ConfirmationRequired(format!(
+            "{question}\nPass --yes to run state-changing commands in {mode_name}."
+        )));
     }
     Ok(())
+}
+
+fn run_command_blocking<N: NodeInterface>(
+    event_tx: &mpsc::UnboundedSender<Event<N>>,
+    command: ManageableWalletCommand,
+) -> Result<ConsoleCommand, WalletCliError<N>> {
+    let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+    // channel is closed so exit
+    if event_tx.send(Event::HandleCommand { command, res_tx }).is_err() {
+        return Ok(ConsoleCommand::Exit);
+    }
+
+    res_rx.blocking_recv().expect("Channel must be open")
 }
 
 #[cfg(test)]
@@ -77,17 +90,4 @@ mod confirmation_gate_tests {
         confirmation_gate::<Client>(&command, false, "exec mode")
             .expect("read-only commands must not be gated");
     }
-}
-
-fn run_command_blocking<N: NodeInterface>(
-    event_tx: &mpsc::UnboundedSender<Event<N>>,
-    command: ManageableWalletCommand,
-) -> Result<ConsoleCommand, WalletCliError<N>> {
-    let (res_tx, res_rx) = tokio::sync::oneshot::channel();
-    // channel is closed so exit
-    if event_tx.send(Event::HandleCommand { command, res_tx }).is_err() {
-        return Ok(ConsoleCommand::Exit);
-    }
-
-    res_rx.blocking_recv().expect("Channel must be open")
 }

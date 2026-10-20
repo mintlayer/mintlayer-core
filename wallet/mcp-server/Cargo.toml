@@ -1,0 +1,15 @@
+[package]
+name = "wallet-mcp-server"
+license.workspace = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+crypto = { path = "../../crypto" }
+rpc = { path = "../../rpc" }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "rt-multi-thread"] }
+wallet-rpc-client = { path = "../wallet-rpc-client" }
+wallet-types = { path = "../types" }

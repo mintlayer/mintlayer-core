@@ -75,6 +75,7 @@ members = [
   "wallet/wallet-address-generator",     # Wallet address generator binary.
   "wallet/wallet-address-generator-lib", # Wallet address generator lib.
   "wallet/wallet-rpc-client",            # Wallet RPC communication.
+  "wallet/mcp-server",                   # Read-only MCP server on top of the wallet RPC daemon.
   "wallet/wallet-rpc-daemon",            # Wallet RPC daemon binary.
   "wallet/wallet-rpc-lib",               # Wallet RPC definitions library.
   "wallet/wallet-test-node",             # Node for wallet testing as a library.

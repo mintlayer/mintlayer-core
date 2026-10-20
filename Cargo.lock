@@ -10244,6 +10244,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wallet-mcp-server"
+version = "1.4.1"
+dependencies = [
+ "clap",
+ "crypto",
+ "rpc",
+ "serde_json",
+ "tokio",
+ "wallet-rpc-client",
+ "wallet-types",
+]
+
+[[package]]
 name = "wallet-rpc-client"
 version = "1.4.1"
 dependencies = [

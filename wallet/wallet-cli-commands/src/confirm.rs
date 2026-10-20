@@ -3,13 +3,15 @@
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
 // https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
-// Confirmation prompts for state-changing wallet commands.
-//
-// The interactive wallet and `--exec` mode ask for confirmation before a
-// command that moves funds, changes on-chain state, or destroys secrets.
-// `--yes` skips the prompt.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::{ColdWalletCommand, ManageableWalletCommand, WalletCommand, helper_types::CliCurrency};
 
@@ -108,8 +110,8 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         } => Some(format!(
             "Withdraw {amount} from delegation {delegation_id} to {address}?"
         )),
-        WalletCommand::StartStaking { .. } => Some("Start staking?".to_owned()),
-        WalletCommand::StopStaking { .. } => Some("Stop staking?".to_owned()),
+        WalletCommand::StartStaking => Some("Start staking?".to_owned()),
+        WalletCommand::StopStaking => Some("Stop staking?".to_owned()),
         WalletCommand::CreateStakePool { amount, .. } => {
             Some(format!("Create a stake pool pledging {amount}?"))
         }

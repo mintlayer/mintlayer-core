@@ -1,25 +1,17 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://opensource.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//! Interactive collection of command arguments ("wizards").
-//!
-//! A wizard asks the same questions the command line would, validates every
-//! answer, shows a summary, and produces the equivalent one-liner command. The
-//! one-liner is fed back through the regular command parser, so a wizard is
-//! only a different way to type the same command, never a second execution
-//! path.
 
 use std::collections::VecDeque;
 
@@ -370,17 +362,12 @@ pub fn order_create(backend: &mut impl PromptBackend) -> Result<String, WizardEr
         &backend.text("Conclude address:", None)?,
     )?;
 
-    let implied_price = match (ask_amount.parse::<f64>(), give_amount.parse::<f64>()) {
-        (Ok(ask), Ok(give)) if give != 0.0 => (ask / give).to_string(),
-        _ => "?".to_owned(),
-    };
     confirm_summary(
         backend,
         &[
             format!("Ask: {ask_amount} {ask_currency}"),
             format!("Give: {give_amount} {give_currency}"),
             format!("Conclude address: {conclude}"),
-            format!("Implied price: 1 {give_currency} = {implied_price} {ask_currency}"),
         ],
     )?;
     Ok(format!(
@@ -572,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn order_create_renders_the_implied_rate() {
+    fn order_create_builds_the_one_liner() {
         let mut backend = backend(
             [CannedAnswer::Select(1)]
                 .into_iter()
