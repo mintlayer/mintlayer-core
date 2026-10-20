@@ -306,6 +306,43 @@ pub enum WalletGroupSubCommand {
     },
     /// Close the wallet.
     Close,
+    /// Show info about the currently open wallet.
+    Info,
+    /// Encrypt the private keys of the wallet with a password.
+    ///
+    /// The password is read from the file given by `--password-file` (`-` for
+    /// standard input); it is never passed as a command line argument.
+    Encrypt {
+        /// File containing the new encryption password, or `-` for standard input.
+        #[arg(long = "password-file")]
+        password_file: Option<String>,
+    },
+    /// Unlock the encrypted private keys of the wallet with the encryption password.
+    ///
+    /// The password is read from the file given by `--password-file` (`-` for
+    /// standard input); it is never passed as a command line argument.
+    Unlock {
+        /// File containing the current encryption password, or `-` for standard input.
+        #[arg(long = "password-file")]
+        password_file: Option<String>,
+    },
+    /// Remove the encryption from the private keys of the wallet.
+    Decrypt,
+    /// Lock the encrypted private keys of the wallet again.
+    Lock,
+    /// Show the seed phrase of the wallet.
+    ShowSeedPhrase,
+    /// Remove the seed phrase from the wallet permanently.
+    PurgeSeedPhrase,
+    /// Set the lookahead size of the wallet.
+    SetLookaheadSize {
+        /// The new lookahead size
+        lookahead_size: u32,
+        /// Force the reduction of the lookahead size even below the last used address;
+        /// this may cause the wallet to lose track of used addresses and its actual balance.
+        #[arg(long = "force")]
+        force: bool,
+    },
 }
 
 /// The nested account grammar: `account create|rename|select|utxos|balance|show-xpub`.
@@ -781,6 +818,14 @@ pub enum TransactionGroupSubCommand {
         #[arg(long = "change")]
         change_address: Option<String>,
     },
+    /// Sign a raw transaction or partially signed transaction with the wallet's keys.
+    ///
+    /// Intended for cold wallets; on a hot wallet this maps onto the cold wallet
+    /// sign command and is rejected by the mode check.
+    Sign {
+        /// Hex-encoded transaction or PartiallySignedTransaction.
+        transaction: String,
+    },
     /// Inspect a hex-encoded transaction
     Inspect {
         /// Hex-encoded transaction or PartiallySignedTransaction.
@@ -938,6 +983,61 @@ pub enum ReservedPeerGroupSubCommand {
     },
 }
 
+/// The challenge grammar: `challenge sign|verify`, merging the hex and plain legacy
+/// spellings behind a `--hex` flag.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum ChallengeGroupSubCommand {
+    /// Sign a message with the private key of an address.
+    Sign {
+        /// The message to be signed (hex-encoded with `--hex`)
+        message: String,
+        /// Address with whose private key to sign the challenge
+        address: String,
+        /// Treat the message as hex-encoded instead of plain text
+        #[arg(long = "hex")]
+        hex: bool,
+    },
+    /// Verify a signed challenge against an address.
+    Verify {
+        /// The message that was signed (hex-encoded with `--hex`)
+        message: String,
+        /// Hex-encoded signed challenge
+        signed_challenge: String,
+        /// Address with whose private key the challenge was signed with
+        address: String,
+        /// Treat the message as hex-encoded instead of plain text
+        #[arg(long = "hex")]
+        hex: bool,
+    },
+}
+
+/// The history grammar: `history print|clear`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum HistoryGroupSubCommand {
+    /// Print command history for this execution.
+    Print,
+    /// Clear command history for this execution.
+    Clear,
+}
+
+/// The configuration grammar: `config broadcast`.
+#[derive(Debug, Subcommand, Clone)]
+#[clap(rename_all = "kebab-case")]
+pub enum ConfigGroupSubCommand {
+    /// Configure broadcasting to Mempool to yes or no.
+    ///
+    /// If set to no, any command that creates a transaction will return it to the user
+    /// and not submit it automatically. The transaction will need to be submitted
+    /// manually with the command `node-submit-transaction`. The effect of this is not
+    /// preserved when the CLI wallet is closed.
+    Broadcast {
+        #[arg(value_enum)]
+        broadcast: CliYesNo,
+    },
+}
+
 /// Mapping between the legacy flat command names and their nested equivalents.
 /// The flat names remain first-class commands; this manifest documents the
 /// correspondence and drives the grammar compatibility test.
@@ -1053,6 +1153,26 @@ pub const LEGACY_ALIASES: &[(&str, &str)] = &[
     ("node-best-block-id", "node best-block --id"),
     ("node-best-block-height", "node best-block --height"),
     ("node-best-block-timestamp", "node best-block --timestamp"),
+    ("wallet-info", "wallet info"),
+    // wallet encrypt / unlock read the password from --password-file or stdin; the
+    // legacy spellings keep the positional password (legacy parse shape).
+    ("wallet-encrypt-private-keys", "wallet encrypt"),
+    ("wallet-unlock-private-keys", "wallet unlock"),
+    ("wallet-disable-private-keys-encryption", "wallet decrypt"),
+    ("wallet-lock-private-keys", "wallet lock"),
+    ("wallet-show-seed-phrase", "wallet show-seed-phrase"),
+    ("wallet-purge-seed-phrase", "wallet purge-seed-phrase"),
+    // The legacy set-lookahead-size consent enum maps to the --force flag.
+    ("wallet-set-lookahead-size", "wallet set-lookahead-size"),
+    ("account-sign-raw-transaction", "transaction sign"),
+    ("challenge-sign-plain", "challenge sign"),
+    ("challenge-sign-hex", "challenge sign --hex"),
+    ("challenge-verify-plain", "challenge verify"),
+    ("challenge-verify-hex", "challenge verify --hex"),
+    ("history-print", "history print"),
+    ("history-clear", "history clear"),
+    ("screen-clear", "clear"),
+    ("config-broadcast", "config broadcast"),
     ("node-block-id", "node block-id"),
     ("node-get-block", "node block"),
     ("node-generate-block", "node generate-block"),
@@ -1126,6 +1246,10 @@ pub enum ColdWalletCommand {
     #[clap(name = "wallet-encrypt-private-keys")]
     EncryptPrivateKeys {
         /// The new encryption password
+        ///
+        /// Passing the password on the command line is insecure; the nested
+        /// `wallet encrypt --password-file <file>` spelling reads it from a file
+        /// instead.
         password: String,
     },
 
@@ -1135,6 +1259,10 @@ pub enum ColdWalletCommand {
     #[clap(name = "wallet-unlock-private-keys")]
     UnlockPrivateKeys {
         /// The current encryption password.
+        ///
+        /// Passing the password on the command line is insecure; the nested
+        /// `wallet unlock --password-file <file>` spelling reads it from a file
+        /// instead.
         password: String,
     },
 
@@ -1264,6 +1392,24 @@ pub enum ColdWalletCommand {
     #[clap(name = "screen-clear")]
     ClearScreen,
 
+    /// Challenge signing and verification.
+    #[clap(name = "challenge")]
+    Challenge {
+        #[command(subcommand)]
+        command: ChallengeGroupSubCommand,
+    },
+
+    /// Command history.
+    #[clap(name = "history")]
+    History {
+        #[command(subcommand)]
+        command: HistoryGroupSubCommand,
+    },
+
+    /// Clear screen.
+    #[clap(name = "clear")]
+    Clear,
+
     Version,
 }
 
@@ -1283,6 +1429,13 @@ pub enum WalletCommand {
     ConfigBroadcast {
         #[arg(value_enum)]
         broadcast: CliYesNo,
+    },
+
+    /// Configuration commands (broadcast).
+    #[clap(name = "config")]
+    Config {
+        #[command(subcommand)]
+        command: ConfigGroupSubCommand,
     },
 
     /// Wallet management commands (create, recover, open, close).
@@ -2360,6 +2513,42 @@ const COMMAND_HELP_TEMPLATE: &str = "\
 ";
 
 pub fn get_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
+    run_with_large_stack(move || build_repl_command(cold_wallet, mutable_wallet))
+}
+
+/// Stack size for threads that build or parse against the REPL grammar; the
+/// clap-generated `augment_subcommands` frames the nested grammar produces are
+/// large and overflow default 2 MiB thread stacks in debug builds.
+pub const LARGE_STACK_SIZE: usize = 64 * 1024 * 1024;
+
+/// Run `task` on a dedicated thread whose stack is large enough for the
+/// clap-generated grammar construction.
+///
+/// The `augment_subcommands` frames the nested grammar produces are large; on
+/// the default 2 MiB thread stacks used by the CLI REPL thread, GUI workers,
+/// and test threads, building or parsing against the grammar can overflow the
+/// stack in debug builds.
+pub fn run_with_large_stack<T: Send + 'static>(task: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(LARGE_STACK_SIZE)
+        .spawn(task)
+        .expect("failed to spawn the grammar thread")
+        .join()
+        .unwrap_or_else(|payload| {
+            let message = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("<non-string panic payload>");
+            panic!("the grammar thread panicked: {message}")
+        })
+}
+
+/// Build the REPL command tree on the calling thread.
+///
+/// Prefer [`get_repl_command`], which runs this on a large-stack thread; call
+/// this directly only when already running on one.
+pub fn build_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
     const COLD_WALLET_DESC: &Module = &ColdWalletRpcDescription::DESCRIPTION;
     const WALLET_DESC: &Module = &WalletRpcDescription::DESCRIPTION;
 
@@ -2378,16 +2567,23 @@ pub fn get_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
         WalletCommand::augment_subcommands(repl_command)
     };
 
-    // The nested `wallet` group maps onto the management commands, so it is only
-    // available for mutable wallets, matching the flat `wallet-create` etc. commands.
-    // `subcommands` only appends, so the group is replaced with a childless stub.
+    // The nested `wallet` group carries the management commands, so for
+    // non-mutable wallets the group is rebuilt without `create`, `recover`,
+    // `open` and `close`; the remaining spellings stay available and match the
+    // flat commands, which are gated the same way below.
     if !cold_wallet && !mutable_wallet {
         repl_command = repl_command.mut_subcommand("wallet", |wallet| {
-            let mut stub = Command::new(wallet.get_name().to_owned());
+            const MANAGEMENT_COMMANDS: [&str; 4] = ["create", "recover", "open", "close"];
+            let mut group = Command::new(wallet.get_name().to_owned());
             if let Some(about) = wallet.get_about() {
-                stub = stub.about(about.clone());
+                group = group.about(about.clone());
             }
-            stub
+            for subcommand in wallet.get_subcommands() {
+                if !MANAGEMENT_COMMANDS.contains(&subcommand.get_name()) {
+                    group = group.subcommand(subcommand.clone());
+                }
+            }
+            group
         });
     }
 
@@ -2548,10 +2744,18 @@ mod tests {
         level
     }
 
+    // The clap-generated `augment_subcommands` frames of the nested grammar are large;
+    // test threads default to a 2 MiB stack, so grammar construction runs on a dedicated
+    // thread with a bigger one.
+    // `get_repl_command` builds the grammar on a large-stack thread internally,
+    // so the tests can call it directly.
+    fn grammar_with_large_stack(cold_wallet: bool, mutable_wallet: bool) -> Command {
+        get_repl_command(cold_wallet, mutable_wallet)
+    }
+
     #[test]
     fn legacy_command_names_and_group_grammar_coexist() {
-        let mut repl = get_repl_command(false, true);
-        repl.build();
+        let repl = grammar_with_large_stack(false, true);
 
         // Every legacy flat command must still exist at the top level.
         for (legacy, _nested) in LEGACY_ALIASES {
@@ -2603,8 +2807,7 @@ mod tests {
     fn non_mutable_grammar_excludes_wallet_management() {
         // Hot wallet without management: neither the flat management commands nor the
         // nested `wallet` group may be available.
-        let mut repl = get_repl_command(false, false);
-        repl.build();
+        let repl = grammar_with_large_stack(false, false);
         assert!(repl.find_subcommand("wallet-create").is_none());
         let wallet_group = repl
             .find_subcommand("wallet")
@@ -2615,8 +2818,7 @@ mod tests {
 
     #[test]
     fn mutable_grammar_includes_the_wallet_group() {
-        let mut repl = get_repl_command(false, true);
-        repl.build();
+        let repl = grammar_with_large_stack(false, true);
         let wallet_group = repl
             .find_subcommand("wallet")
             .expect("the wallet group is part of the hot wallet grammar");
@@ -2629,7 +2831,7 @@ mod tests {
         #[values(false, true)] cold_wallet: bool,
         #[values(false, true)] mutable_wallet: bool,
     ) {
-        let repl_command = get_repl_command(cold_wallet, mutable_wallet);
+        let repl_command = grammar_with_large_stack(cold_wallet, mutable_wallet);
 
         let command_names_without_descr = repl_command
             .get_subcommands()

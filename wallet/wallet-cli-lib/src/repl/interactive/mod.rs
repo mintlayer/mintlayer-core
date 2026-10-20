@@ -31,7 +31,7 @@ use reedline::{
 use tokio::sync::{mpsc, oneshot};
 use utils::once_destructor::OnceDestructor;
 use wallet_cli_commands::{
-    ChoiceMenu, ConsoleCommand, ManageableWalletCommand, get_repl_command, parse_input,
+    ChoiceMenu, ConsoleCommand, ManageableWalletCommand, build_repl_command, parse_input,
 };
 use wallet_rpc_lib::types::NodeInterface;
 
@@ -129,7 +129,9 @@ pub fn run<N: NodeInterface>(
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
     cold_wallet: bool,
 ) -> Result<(), WalletCliError<N>> {
-    let repl_command = get_repl_command(cold_wallet, true);
+    // The REPL thread is sized for grammar construction, so build the
+        // grammar directly instead of nesting another large-stack spawn.
+        let repl_command = build_repl_command(cold_wallet, true);
 
     let commands = repl_command
         .get_subcommands()

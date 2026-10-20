@@ -17,7 +17,7 @@ pub mod log;
 
 use clap::Command;
 use tokio::sync::{mpsc, oneshot};
-use wallet_cli_commands::{ConsoleCommand, get_repl_command, parse_input};
+use wallet_cli_commands::{ConsoleCommand, build_repl_command, parse_input};
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{ConsoleInput, cli_event_loop::Event, console::ConsoleOutput, errors::WalletCliError};
@@ -98,7 +98,9 @@ pub fn run<N: NodeInterface>(
         }
     }
 
-    let repl_command = get_repl_command(cold_wallet, true);
+    // The REPL thread is sized for grammar construction, so build the
+        // grammar directly instead of nesting another large-stack spawn.
+        let repl_command = build_repl_command(cold_wallet, true);
 
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);

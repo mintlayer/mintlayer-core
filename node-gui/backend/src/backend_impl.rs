@@ -34,8 +34,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils::tokio_spawn;
 use wallet::{WalletError, account::transaction_list::TransactionList, wallet::Error};
 use wallet_cli_commands::{
-    CommandHandler, ConsoleCommand, ManageableWalletCommand, WalletCommand, get_repl_command,
-    parse_input,
+    CommandHandler, ConsoleCommand, ManageableWalletCommand, WalletCommand, parse_input,
 };
 use wallet_controller::{
     ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient, make_cold_wallet_rpc_client,
@@ -1205,10 +1204,31 @@ impl Backend {
         account_id: AccountId,
         command: String,
     ) -> Result<ConsoleCommand, BackendError> {
-        let repl_command = get_repl_command(self.controller.is_cold(), false);
-        let command = parse_input::<ColdWalletClient>(&command, &repl_command)
-            .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))?
-            .ok_or(BackendError::EmptyConsoleCommand)?;
+        let cold_wallet = self.controller.is_cold();
+        // The grammar build and the input parse both construct large augment
+        // frames; run them on a sized thread without blocking the backend loop.
+        let command = tokio::task::spawn_blocking(move || {
+            wallet_cli_commands::run_with_large_stack(move || {
+                // Already on a large-stack thread, so build the grammar directly
+                // instead of nesting another spawn inside `get_repl_command`.
+                let repl_command = wallet_cli_commands::build_repl_command(cold_wallet, false);
+                parse_input::<ColdWalletClient>(&command, &repl_command)
+                    .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))
+            })
+        })
+        .await
+        .map_err(|e| {
+            if e.is_panic() {
+                // An internal panic from the grammar build or parse thread is
+                // not a user input problem; resume unwinding so it is reported
+                // as such instead of as an invalid console command.
+                std::panic::resume_unwind(e.into_panic());
+            }
+            // Cancellation (runtime shutdown) is not a user input problem either.
+            log::warn!("Console command parse task did not complete: {e}");
+            BackendError::ConsoleCommandInterrupted(e.to_string())
+        })??
+        .ok_or(BackendError::EmptyConsoleCommand)?;
 
         let wallet = self
             .wallets

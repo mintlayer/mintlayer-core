@@ -38,7 +38,8 @@ use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
 use wallet_cli_commands::{
-    ManageableWalletCommand, OpenWalletSubCommand, WalletCommand, WalletManagementCommand,
+    LARGE_STACK_SIZE, ManageableWalletCommand, OpenWalletSubCommand, WalletCommand,
+    WalletManagementCommand,
 };
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig, types::NodeInterface};
 
@@ -367,35 +368,41 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
         None
     };
 
-    // Run a blocking loop in a separate thread
-    let repl = std::thread::spawn(move || match mode {
-        Mode::Interactive { logger } => repl::interactive::run(
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(false),
-            logger,
-            args.history_file,
-            args.vi_mode,
-            startup_command_futures,
-            args.cold_wallet,
-        ),
-        Mode::NonInteractive => repl::non_interactive::run(
-            input,
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(false),
-            args.cold_wallet,
-            startup_command_futures,
-        ),
-        Mode::CommandsList { file_input } => repl::non_interactive::run(
-            file_input,
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(true),
-            args.cold_wallet,
-            startup_command_futures,
-        ),
-    });
+    // Run a blocking loop in a separate thread; the stack is sized for the
+    // clap-generated grammar construction, whose augment frames are large.
+    let repl = {
+        let builder = std::thread::Builder::new().stack_size(LARGE_STACK_SIZE);
+        builder
+            .spawn(move || match mode {
+                Mode::Interactive { logger } => repl::interactive::run(
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(false),
+                    logger,
+                    args.history_file,
+                    args.vi_mode,
+                    startup_command_futures,
+                    args.cold_wallet,
+                ),
+                Mode::NonInteractive => repl::non_interactive::run(
+                    input,
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(false),
+                    args.cold_wallet,
+                    startup_command_futures,
+                ),
+                Mode::CommandsList { file_input } => repl::non_interactive::run(
+                    file_input,
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(true),
+                    args.cold_wallet,
+                    startup_command_futures,
+                ),
+            })
+            .map_err(Box::<dyn std::error::Error>::from)?
+    };
 
     Ok((repl, wallet_rpc_config))
 }

@@ -57,15 +57,18 @@ use wallet_rpc_lib::types::{
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 #[cfg(feature = "trezor")]
-use crate::{CreateWalletDeviceSelectMenu, OpenWalletDeviceSelectMenu};
+use crate::{
+    ChallengeGroupSubCommand, ConfigGroupSubCommand, CreateWalletDeviceSelectMenu,
+    HistoryGroupSubCommand, OpenWalletDeviceSelectMenu, helper_types::CliForceReduceLookaheadSize,
+};
 
 use self::local_state::WalletWithState;
 
 use super::{
     ColdWalletCommand, ConsoleCommand, WalletCommand,
     helper_types::{
-        CliForceReduceLookaheadSize, CliUtxoState, format_active_order_info,
-        format_delegation_info, format_own_order_info, format_pool_info,
+        CliUtxoState, format_active_order_info, format_delegation_info, format_own_order_info,
+        format_pool_info,
     },
 };
 use crate::{
@@ -375,6 +378,76 @@ where
         }
     }
 
+    /// Read a password from `--password-file`, where `-` means standard input.
+    /// The trailing line terminator is stripped; any other whitespace is kept.
+    async fn read_password_from_source<N: NodeInterface>(
+        source: Option<&str>,
+    ) -> Result<String, WalletCliCommandError<N>> {
+        // Standard input is read with terminal echo enabled; a hidden interactive
+        // prompt does not exist yet.
+        fn read_password_from_stdin() -> std::io::Result<String> {
+            let mut password = String::new();
+            let bytes_read = std::io::stdin().read_line(&mut password)?;
+            if bytes_read == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "no password was provided on standard input",
+                ));
+            }
+            Ok(password)
+        }
+
+        // One trailing line terminator (`\n` or `\r\n`) is stripped; any other
+        // whitespace is kept.
+        fn strip_line_terminator(password: &str) -> &str {
+            password
+                .strip_suffix("\r\n")
+                .or_else(|| password.strip_suffix('\n'))
+                .unwrap_or(password)
+        }
+
+        let password = match source {
+            None => {
+                return Err(WalletCliCommandError::InvalidInput(
+                    "a password is required: pass --password-file <file> (or \
+                     --password-file - for standard input); an interactive password \
+                     prompt is not available yet"
+                        .to_owned(),
+                ));
+            }
+            Some("-") => tokio::task::spawn_blocking(read_password_from_stdin)
+                .await
+                .map_err(|err| {
+                    WalletCliCommandError::InvalidInput(format!(
+                        "Failed to read the password from standard input: {err}"
+                    ))
+                })?
+                .map_err(|err| {
+                    WalletCliCommandError::InvalidInput(format!(
+                        "Failed to read the password from standard input: {err}"
+                    ))
+                })?,
+            Some(path) => {
+                let path = path.to_owned();
+                let read_path = path.clone();
+                let read = move || std::fs::read_to_string(read_path);
+                tokio::task::spawn_blocking(read)
+                    .await
+                    .map_err(|err| {
+                        WalletCliCommandError::InvalidInput(format!(
+                            "Failed to read the password from {path}: {err}"
+                        ))
+                    })?
+                    .map_err(|err| {
+                        WalletCliCommandError::InvalidInput(format!(
+                            "Failed to read the password from {path}: {err}"
+                        ))
+                    })?
+            }
+        };
+        Ok(strip_line_terminator(&password).to_owned())
+    }
+
     async fn handle_cold_wallet_command<N: NodeInterface>(
         &mut self,
         command: ColdWalletCommand,
@@ -384,6 +457,57 @@ where
         WalletCliCommandError<N>: From<E>,
     {
         match command {
+            // The grouped spellings translate one level down into their flat
+            // variants; recursing once keeps both spellings on the same behavior.
+            ColdWalletCommand::Challenge { command } => {
+                let flat = match command {
+                    ChallengeGroupSubCommand::Sign {
+                        message,
+                        address,
+                        hex,
+                    } => {
+                        if hex {
+                            ColdWalletCommand::SignChallegeHex { message, address }
+                        } else {
+                            ColdWalletCommand::SignChallege { message, address }
+                        }
+                    }
+                    ChallengeGroupSubCommand::Verify {
+                        message,
+                        signed_challenge,
+                        address,
+                        hex,
+                    } => {
+                        if hex {
+                            ColdWalletCommand::VerifyChallengeHex {
+                                message,
+                                signed_challenge,
+                                address,
+                            }
+                        } else {
+                            ColdWalletCommand::VerifyChallenge {
+                                message,
+                                signed_challenge,
+                                address,
+                            }
+                        }
+                    }
+                };
+                Box::pin(self.handle_cold_wallet_command(flat, chain_config)).await
+            }
+            ColdWalletCommand::History { command } => {
+                let flat = match command {
+                    HistoryGroupSubCommand::Print => ColdWalletCommand::PrintHistory,
+                    HistoryGroupSubCommand::Clear => ColdWalletCommand::ClearHistory,
+                };
+                Box::pin(self.handle_cold_wallet_command(flat, chain_config)).await
+            }
+            ColdWalletCommand::Clear => {
+                Box::pin(
+                    self.handle_cold_wallet_command(ColdWalletCommand::ClearScreen, chain_config),
+                )
+                .await
+            }
             ColdWalletCommand::WalletInfo => {
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
                 let wallet_description = match info.extra_info {
@@ -421,6 +545,10 @@ where
             }
 
             ColdWalletCommand::EncryptPrivateKeys { password } => {
+                logging::log::warn!(
+                    "The password was passed on the command line, which is insecure; \
+                     prefer `wallet encrypt --password-file <file>`"
+                );
                 self.non_empty_wallet().await?.encrypt_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -437,6 +565,10 @@ where
             }
 
             ColdWalletCommand::UnlockPrivateKeys { password } => {
+                logging::log::warn!(
+                    "The password was passed on the command line, which is insecure; \
+                     prefer `wallet unlock --password-file <file>`"
+                );
                 self.non_empty_wallet().await?.unlock_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -888,16 +1020,94 @@ where
                 self.handle_cold_wallet_command(command, chain_config).await
             }
             WalletCommand::Wallet { command } => {
-                let management = match command {
+                // The cold wallet subcommands reuse the cold wallet handlers, so
+                // their behavior is identical to the legacy flat spellings.
+                let management = match &command {
+                    WalletGroupSubCommand::Info => {
+                        return self
+                            .handle_cold_wallet_command(ColdWalletCommand::WalletInfo, chain_config)
+                            .await;
+                    }
+                    WalletGroupSubCommand::Encrypt { password_file } => {
+                        let password =
+                            Self::read_password_from_source::<N>(password_file.as_deref()).await?;
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::EncryptPrivateKeys { password },
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Unlock { password_file } => {
+                        let password =
+                            Self::read_password_from_source::<N>(password_file.as_deref()).await?;
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::UnlockPrivateKeys { password },
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Decrypt => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::RemovePrivateKeysEncryption,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Lock => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::LockPrivateKeys,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::ShowSeedPhrase => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::ShowSeedPhrase,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::PurgeSeedPhrase => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::PurgeSeedPhrase,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::SetLookaheadSize {
+                        lookahead_size,
+                        force,
+                    } => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::SetLookaheadSize {
+                                    lookahead_size: *lookahead_size,
+                                    i_know_what_i_am_doing: force
+                                        .then_some(CliForceReduceLookaheadSize::IKnowWhatIAmDoing),
+                                },
+                                chain_config,
+                            )
+                            .await;
+                    }
                     WalletGroupSubCommand::Create { wallet } => {
-                        WalletManagementCommand::CreateWallet { wallet }
+                        WalletManagementCommand::CreateWallet {
+                            wallet: wallet.clone(),
+                        }
                     }
                     WalletGroupSubCommand::Recover { wallet } => {
-                        WalletManagementCommand::RecoverWallet { wallet }
+                        WalletManagementCommand::RecoverWallet {
+                            wallet: wallet.clone(),
+                        }
                     }
-                    WalletGroupSubCommand::Open { wallet } => {
-                        WalletManagementCommand::OpenWallet { wallet }
-                    }
+                    WalletGroupSubCommand::Open { wallet } => WalletManagementCommand::OpenWallet {
+                        wallet: wallet.clone(),
+                    },
                     WalletGroupSubCommand::Close => WalletManagementCommand::CloseWallet,
                 };
                 self.handle_wallet_management_command(management).await
@@ -917,7 +1127,8 @@ where
             | WalletCommand::Htlc { .. }
             | WalletCommand::Transaction { .. }
             | WalletCommand::Node { .. }
-            | WalletCommand::Peer { .. }) => {
+            | WalletCommand::Peer { .. }
+            | WalletCommand::Config { .. }) => {
                 // Nested groups translate to their flat equivalents. The recursive call
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
@@ -2973,6 +3184,9 @@ fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
             TransactionGroupSubCommand::Inspect { transaction } => {
                 WalletCommand::InspectTransaction { transaction }
             }
+            TransactionGroupSubCommand::Sign { transaction } => {
+                WalletCommand::ColdCommands(ColdWalletCommand::SignRawTransaction { transaction })
+            }
             TransactionGroupSubCommand::Abandon { transaction_id } => {
                 WalletCommand::AbandonTransaction { transaction_id }
             }
@@ -2990,6 +3204,9 @@ fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
                 WalletCommand::GetRawSignedTransaction { transaction_id }
             }
         },
+        WalletCommand::Config {
+            command: ConfigGroupSubCommand::Broadcast { broadcast },
+        } => WalletCommand::ConfigBroadcast { broadcast },
         command => command,
     }
 }
@@ -3222,8 +3439,17 @@ mod nested_translation_tests {
     use super::*;
     use clap::Parser;
 
+    // Parsing builds and augments the whole grammar tree on the calling
+    // thread, so it runs through `run_with_large_stack`.
+    fn parse_with_large_stack(argv: &[&str]) -> WalletCommand {
+        let owned: Vec<String> = argv.iter().map(|arg| arg.to_string()).collect();
+        crate::run_with_large_stack(move || {
+            WalletCommand::try_parse_from(owned).expect("argv must parse")
+        })
+    }
+
     fn flat_debug(argv: &[&str]) -> String {
-        let command = WalletCommand::try_parse_from(argv).expect("argv must parse");
+        let command = parse_with_large_stack(argv);
         let flat = normalize_nested_wallet_command(command);
         assert!(
             !is_nested_wallet_command(&flat),
