@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod command_handler;
+pub mod confirm;
 mod errors;
 mod helper_types;
 pub mod output;

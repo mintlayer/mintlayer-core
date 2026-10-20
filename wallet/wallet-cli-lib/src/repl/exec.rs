@@ -26,6 +26,7 @@ fn process_line<N: NodeInterface>(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event<N>>,
     line: &str,
+    assume_yes: bool,
 ) -> Result<ExecOutput, WalletCliError<N>> {
     let command_opt = parse_input(line, repl_command)?;
 
@@ -33,6 +34,14 @@ fn process_line<N: NodeInterface>(
         Some(command) => command,
         None => return Ok(ExecOutput::Nothing),
     };
+
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(&command) {
+        if !assume_yes {
+            return Err(WalletCliError::InvalidInput(format!(
+                "{question}\nPass --yes to run state-changing commands in exec mode."
+            )));
+        }
+    }
 
     match super::run_command_blocking(event_tx, command)? {
         ConsoleCommand::Print(text) => Ok(ExecOutput::Text(text)),
@@ -68,6 +77,7 @@ fn process_line<N: NodeInterface>(
 pub fn run<N: NodeInterface>(
     line: String,
     output_format: CliOutputFormat,
+    assume_yes: bool,
     mut output: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event<N>>,
     cold_wallet: bool,
@@ -86,7 +96,7 @@ pub fn run<N: NodeInterface>(
     // grammar directly instead of nesting another large-stack spawn.
     let repl_command = build_repl_command(cold_wallet, true);
 
-    let result = process_line(&repl_command, &event_tx, &line)?;
+    let result = process_line(&repl_command, &event_tx, &line, assume_yes)?;
 
     match (output_format, result) {
         (_, ExecOutput::Nothing) => {}

@@ -176,6 +176,13 @@ pub struct CliArgs {
     #[clap(long, value_enum, default_value_t = CliOutputFormat::Text)]
     pub output: CliOutputFormat,
 
+    /// Answer "yes" to every confirmation prompt.
+    ///
+    /// State-changing commands ask for confirmation; in non-interactive runs
+    /// (`--exec`, `--commands-file`) they abort unless this flag is passed.
+    #[clap(long)]
+    pub yes: bool,
+
     /// Preserve history file between application runs.
     /// This can be very insecure as it also stores things like the seed-phrase, use at your own risk!
     #[clap(long)]

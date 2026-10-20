@@ -54,6 +54,7 @@ enum Mode {
     Exec {
         line: String,
         output_format: config::CliOutputFormat,
+        assume_yes: bool,
     },
 }
 
@@ -83,6 +84,7 @@ pub async fn run(
         Mode::Exec {
             line: line.clone(),
             output_format: cli_args.output,
+            assume_yes: cli_args.yes,
         }
     } else if let Some(file_path) = &cli_args.commands_file {
         repl::non_interactive::log::init();
@@ -413,9 +415,11 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                 Mode::Exec {
                     line,
                     output_format,
+                    assume_yes,
                 } => repl::exec::run(
                     line,
                     output_format,
+                    assume_yes,
                     output,
                     event_tx,
                     args.cold_wallet,

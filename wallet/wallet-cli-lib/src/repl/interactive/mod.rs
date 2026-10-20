@@ -151,7 +151,34 @@ fn process_line<N: NodeInterface>(
         None => return Ok(None),
     };
 
+    if !confirm_or_abort(&command)? {
+        return Ok(None);
+    }
+
     super::run_command_blocking(event_tx, command).map(Option::Some)
+}
+
+/// Ask for confirmation before running a state-changing command. Returns
+/// `false` when the user declined and the command must not run.
+fn confirm_or_abort<N: NodeInterface>(
+    command: &ManageableWalletCommand,
+) -> Result<bool, WalletCliError<N>> {
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command) {
+        println!();
+        println!("{question}");
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt("Proceed [y/N]?")
+            .default(false)
+            .interact()
+            .map_err(|err| {
+                WalletCliError::InvalidInput(format!("the confirmation could not be read: {err}"))
+            })?;
+        if !confirmed {
+            println!("Aborted.");
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 #[allow(clippy::too_many_arguments)]

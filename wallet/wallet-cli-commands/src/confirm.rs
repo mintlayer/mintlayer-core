@@ -11,28 +11,25 @@
 // command that moves funds, changes on-chain state, or destroys secrets.
 // `--yes` skips the prompt.
 
-use crate::{
-    ColdWalletCommand, ManageableWalletCommand, WalletCommand, WalletManagementCommand,
-};
+use crate::{ColdWalletCommand, ManageableWalletCommand, WalletCommand, helper_types::CliCurrency};
 
 /// Returns the confirmation question for a state-changing command, or `None`
 /// when the command can run without asking.
 pub fn confirmation_prompt(command: &ManageableWalletCommand) -> Option<String> {
     match command {
         ManageableWalletCommand::WalletCommands(command) => wallet_confirmation(command),
-        ManageableWalletCommand::ManagementCommands(WalletManagementCommand::CloseWallet) => {
-            None
-        }
         ManageableWalletCommand::ManagementCommands(_) => None,
-        _ => None,
     }
 }
 
 fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
     match command {
-        WalletCommand::ConfigBroadcast { broadcast } => Some(format!(
-            "Set automatic broadcasting of created transactions to {broadcast}?"
-        )),
+        WalletCommand::ConfigBroadcast { broadcast } => {
+            let broadcast = broadcast.to_bool();
+            Some(format!(
+                "Set automatic broadcasting of created transactions to {broadcast}?"
+            ))
+        }
         WalletCommand::SendToAddress {
             address,
             amount,
@@ -61,18 +58,18 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         } => Some(format!(
             "Sweep delegation {delegation_id} to {destination_address}?"
         )),
-        WalletCommand::DepositData { data } => Some(format!(
+        WalletCommand::DepositData { hex_data } => Some(format!(
             "Store {} bytes of data on the chain?",
-            data.len() / 2
+            hex_data.len() / 2
         )),
         WalletCommand::IssueNewNft {
-            destination: _,
+            destination_address: _,
             media_hash: _,
             name,
             ..
         } => Some(format!("Issue the NFT \"{name}\"?")),
-        WalletCommand::IssueNewToken { ticker, .. } => {
-            Some(format!("Issue the token {ticker}?"))
+        WalletCommand::IssueNewToken { token_ticker, .. } => {
+            Some(format!("Issue the token {token_ticker}?"))
         }
         WalletCommand::ChangeTokenAuthority { token_id, address } => Some(format!(
             "Change the authority of token {token_id} to {address}?"
@@ -135,46 +132,57 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
             give_amount,
             conclude_address: _,
         } => Some(format!(
-            "Create an order asking {ask_amount} {ask_currency} for {give_amount} {give_currency}?"
+            "Create an order asking {ask_amount} {} for {give_amount} {}?",
+            describe_currency(ask_currency),
+            describe_currency(give_currency)
         )),
-        WalletCommand::FillOrder { order_id, amount, .. } => {
-            Some(format!("Fill order {order_id} with {amount}?"))
-        }
-        WalletCommand::FreezeOrder { order_id } => {
-            Some(format!("Freeze order {order_id}?"))
-        }
+        WalletCommand::FillOrder {
+            order_id, amount, ..
+        } => Some(format!("Fill order {order_id} with {amount}?")),
+        WalletCommand::FreezeOrder { order_id } => Some(format!("Freeze order {order_id}?")),
         WalletCommand::ConcludeOrder { order_id, .. } => {
             Some(format!("Conclude order {order_id}?"))
         }
         WalletCommand::CreateHtlcTx {
-            currency,
-            amount,
-            ..
-        } => Some(format!("Create an HTLC locking {amount} {currency}?")),
+            currency, amount, ..
+        } => Some(format!(
+            "Create an HTLC locking {amount} {}?",
+            describe_currency(currency)
+        )),
         WalletCommand::TransactionCompose { outputs, .. } => Some(format!(
             "Compose a transaction with {} output(s)?",
             outputs.len()
         )),
         WalletCommand::CreateTxFromColdInput {
-            address,
-            amount,
-            ..
+            address, amount, ..
         } => Some(format!(
             "Compose a cold-input transaction sending {amount} to {address}? The result is not broadcast."
         )),
         WalletCommand::AbandonTransaction { transaction_id } => {
             Some(format!("Abandon transaction {transaction_id}?"))
         }
-        WalletCommand::SubmitTransaction { transaction: _, do_not_store } => {
+        WalletCommand::SubmitTransaction {
+            transaction: _,
+            do_not_store,
+        } => {
             let destination = if *do_not_store {
                 "without storing it"
             } else {
                 "and store it in the local mempool"
             };
-            Some(format!("Submit the given transaction to the node {destination}?"))
+            Some(format!(
+                "Submit the given transaction to the node {destination}?"
+            ))
         }
         WalletCommand::ColdCommands(command) => cold_wallet_confirmation(command),
         _ => None,
+    }
+}
+
+fn describe_currency(currency: &CliCurrency) -> String {
+    match currency {
+        CliCurrency::Coin => "coins".to_owned(),
+        CliCurrency::Token(token_id) => format!("token {token_id}"),
     }
 }
 
@@ -199,13 +207,14 @@ mod tests {
 
     type Client = node_comm::node_traits::MockNodeInterface;
 
-    fn prompt(line: &str) -> Option<String> {
-        let command = crate::parse_input::<Client>(
-            line,
-            &crate::build_repl_command(false, true),
-        )
-        .expect("grammar parse must not fail");
-        confirmation_prompt(&command)
+    fn prompt(line: &'static str) -> Option<String> {
+        crate::run_with_large_stack(move || {
+            let command =
+                crate::parse_input::<Client>(line, &crate::build_repl_command(false, true))
+                    .expect("grammar parse must not fail")
+                    .expect("test lines parse to a command");
+            confirmation_prompt(&command)
+        })
     }
 
     #[test]

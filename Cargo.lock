@@ -10165,6 +10165,7 @@ dependencies = [
  "crossterm",
  "crypto",
  "derive_more 1.0.0",
+ "dialoguer",
  "directories",
  "futures",
  "hex",
