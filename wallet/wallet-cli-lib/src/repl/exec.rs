@@ -87,9 +87,8 @@ pub fn run<N: NodeInterface>(
         let res = match res_rx.blocking_recv() {
             Ok(inner) => inner?,
             Err(_recv_error) => {
-                return Err(WalletCliError::<N>::InvalidInput(
-                    "the wallet event loop shut down before the startup commands finished"
-                        .to_owned(),
+                return Err(WalletCliError::<N>::EventLoopShutdown(
+                    "startup commands did not finish".to_owned(),
                 ));
             }
         };

@@ -72,14 +72,11 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         )),
         WalletCommand::DepositData { hex_data } => {
             // Report the decoded size so the prompt matches what the handler
-            // will store; odd-length or prefixed input falls back to a note
-            // instead of a wrong number.
-            let rendered = hex_data.clone();
-            let payload = rendered.strip_prefix("0x").unwrap_or(&rendered);
-            let size = if payload.len() % 2 == 0 {
-                format!("{} bytes", payload.len() / 2)
-            } else {
-                "an invalid amount of data (the hex input is malformed)".to_owned()
+            // will store; anything hex::decode rejects (a 0x/0X prefix, odd
+            // length, invalid characters) falls back to a note.
+            let size = match hex::decode(hex_data) {
+                Ok(data) => format!("{} bytes", data.len()),
+                Err(_) => "an invalid amount of data (the hex input is malformed)".to_owned(),
             };
             Some(format!("Store {size} on the chain?"))
         }

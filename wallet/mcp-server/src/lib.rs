@@ -501,6 +501,21 @@ mod tests {
     }
 
     #[test]
+    fn requests_with_missing_or_wrong_jsonrpc_version_are_rejected() {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for message in [
+            serde_json::json!({ "id": 1, "method": "ping" }),
+            serde_json::json!({ "jsonrpc": "1.0", "id": 2, "method": "ping" }),
+        ] {
+            let response = rt
+                .block_on(handle_message(&message, &StubWallet))
+                .expect("requests are answered");
+            assert_eq!(response["error"]["code"], -32600);
+            assert_eq!(response["id"], message["id"]);
+        }
+    }
+
+    #[test]
     fn notifications_get_no_response_while_malformed_requests_get_an_error() {
         let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
         let notification = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });

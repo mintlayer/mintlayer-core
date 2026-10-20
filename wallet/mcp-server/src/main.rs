@@ -160,13 +160,17 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     use tokio::io::AsyncBufReadExt;
 
     loop {
-        let available = reader.fill_buf().await?;
+        let mut available = reader.fill_buf().await?;
         if available.is_empty() {
             // End of stream: deliver a trailing message without a newline, if any.
             break;
         }
         if let Some(pos) = available.iter().position(|&byte| byte == b'\n') {
             if buffer.len() + pos > MAX_MESSAGE_BYTES {
+                // Discard the rejected message so the stream stays usable;
+                // leaving the bytes in place would trip this error forever.
+                buffer.clear();
+                reader.consume(pos + 1);
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "message exceeds the maximum size",
@@ -177,12 +181,33 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
             let bytes: Vec<u8> = std::mem::take(buffer);
             // A protocol boundary must reject, not repair: lossy decoding could
             // silently turn a truncated request into a different valid one.
-            let line = String::from_utf8(bytes).map_err(|err| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, err)
-            })?;
+            let line = String::from_utf8(bytes)
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
             return Ok(Some(line));
         }
         if buffer.len() + available.len() > MAX_MESSAGE_BYTES {
+            // The rejected line has no newline in this chunk; drain chunks
+            // until its newline so exactly one error is reported per message.
+            buffer.clear();
+            loop {
+                match available.iter().position(|&byte| byte == b'\n') {
+                    Some(pos) => {
+                        reader.consume(pos + 1);
+                        break;
+                    }
+                    None => {
+                        let drained = available.len();
+                        reader.consume(drained);
+                        let next = reader.fill_buf().await?;
+                        if next.is_empty() {
+                            break; // EOF mid-line
+                        }
+                        // `available` borrows from the reader and is refreshed
+                        // by fill_buf; rebind it for the next iteration.
+                        available = next;
+                    }
+                }
+            }
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "protocol message exceeds the size limit",
@@ -209,27 +234,30 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
     let mut message_buffer = Vec::with_capacity(1024);
     let mut stdout = tokio::io::stdout();
 
-    while let Some(line) = match next_message(&mut reader, &mut message_buffer).await {
-        Ok(line) => line,
+    loop {
         // Malformed bytes and oversized messages are failures of the single
         // message, not of the stream: answer with a parse error and keep
         // serving instead of tearing the session down.
-        Err(err) if err.kind() == std::io::ErrorKind::InvalidData => {
-            let encoded = serde_json::to_string(&serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": null,
-                "error": {
-                    "code": -32700,
-                    "message": format!("Parse error: {err}")
-                }
-            }))?
-                + "\n";
-            stdout.write_all(encoded.as_bytes()).await?;
-            stdout.flush().await?;
-            continue;
-        }
-        Err(err) => return Err(err.into()),
-    } {
+        let line = match next_message(&mut reader, &mut message_buffer).await {
+            Ok(line) => line,
+            Err(err) if err.kind() == std::io::ErrorKind::InvalidData => {
+                let encoded = serde_json::to_string(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": {
+                        "code": -32700,
+                        "message": format!("Parse error: {err}")
+                    }
+                }))? + "\n";
+                stdout.write_all(encoded.as_bytes()).await?;
+                stdout.flush().await?;
+                continue;
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let Some(line) = line else {
+            break;
+        };
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;

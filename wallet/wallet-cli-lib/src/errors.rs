@@ -39,6 +39,9 @@ pub enum WalletCliError<N: NodeInterface> {
     #[error("Confirmation required: {0}")]
     ConfirmationRequired(String),
 
+    #[error("The wallet event loop shut down before the command finished: {0}")]
+    EventLoopShutdown(String),
+
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
 
