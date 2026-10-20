@@ -142,7 +142,7 @@ pub fn tool_definitions() -> Value {
 const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05"];
 
 /// The JSON-RPC envelope version this server speaks (MCP transport).
-const JSONRPC_VERSION: &str = "2.0";
+pub const JSONRPC_VERSION: &str = "2.0";
 
 pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> Option<Value> {
     // Anything that is not a single request/notification object (a batched

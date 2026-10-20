@@ -19,7 +19,9 @@ use clap::Parser;
 use crypto::key::hdkd::u31::U31;
 use rpc::RpcAuthData;
 use serde_json::Value;
-use wallet_mcp_server::{ReadonlyWallet, UtxoStateSelector, WithLockedSelector, handle_message};
+use wallet_mcp_server::{
+    JSONRPC_VERSION, ReadonlyWallet, UtxoStateSelector, WithLockedSelector, handle_message,
+};
 use wallet_rpc_client::rpc_client::ClientWalletRpc;
 use wallet_rpc_client::wallet_rpc_traits::WalletInterface;
 use wallet_types::utxo_types::UtxoState;
@@ -153,6 +155,10 @@ fn with_locked_filter(selector: WithLockedSelector) -> WithLocked {
 /// make the server buffer unbounded input.
 const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 
+/// Upper bound on bytes discarded while resyncing after an oversized
+/// message without a newline; past this the session is torn down.
+const RESYNC_DRAIN_BUDGET: usize = MAX_MESSAGE_BYTES * 4;
+
 /// Discards bytes up to and including the next newline. Gives up on the
 /// stream if the line turns out to be endless.
 async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
@@ -171,7 +177,7 @@ async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
             return Ok(());
         }
         discarded += available.len();
-        if discarded > MAX_MESSAGE_BYTES * 4 {
+        if discarded > RESYNC_DRAIN_BUDGET {
             return Err(std::io::Error::other(
                 "peer streamed an oversized message without a newline",
             ));
@@ -248,11 +254,18 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
         // Malformed bytes and oversized messages are failures of the single
         // message, not of the stream: answer with a parse error and keep
         // serving instead of tearing the session down.
+        // Recovery contract: every InvalidData from next_message has already
+        // consumed or discarded the offending line (or hit EOF), so the next
+        // iteration never re-reads the same bytes. The one error that must
+        // NOT be recovered from — skip_rest_of_line's endless-line give-up —
+        // uses io::Error::other on purpose; reclassifying it to InvalidData,
+        // or adding an InvalidData path that does not resync, would spin
+        // this loop forever.
         let line = match next_message(&mut reader, &mut message_buffer).await {
             Ok(line) => line,
             Err(err) if err.kind() == std::io::ErrorKind::InvalidData => {
                 let encoded = serde_json::to_string(&serde_json::json!({
-                    "jsonrpc": "2.0",
+                    "jsonrpc": JSONRPC_VERSION,
                     "id": null,
                     "error": {
                         "code": -32700,
@@ -275,7 +288,7 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
         let response = match serde_json::from_str::<Value>(trimmed) {
             Ok(message) => handle_message(&message, &wallet).await,
             Err(err) => Some(serde_json::json!({
-                "jsonrpc": "2.0",
+                "jsonrpc": JSONRPC_VERSION,
                 "id": null,
                 "error": { "code": -32700, "message": format!("Parse error: {err}") }
             })),
