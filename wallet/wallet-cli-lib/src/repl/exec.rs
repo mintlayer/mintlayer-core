@@ -35,13 +35,7 @@ fn process_line<N: NodeInterface>(
         None => return Ok(ExecOutput::Nothing),
     };
 
-    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(&command) {
-        if !assume_yes {
-            return Err(WalletCliError::ConfirmationRequired(format!(
-                "{question}\nPass --yes to run state-changing commands in exec mode."
-            )));
-        }
-    }
+    super::confirmation_gate(&command, assume_yes, "exec mode")?;
 
     match super::run_command_blocking(event_tx, command)? {
         ConsoleCommand::Print(text) => Ok(ExecOutput::Text(text)),

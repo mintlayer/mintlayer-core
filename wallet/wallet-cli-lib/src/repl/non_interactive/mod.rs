@@ -47,13 +47,7 @@ fn process_line<N: NodeInterface>(
         None => return Ok(LineOutput::None),
     };
 
-    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(&command) {
-        if !assume_yes {
-            return Err(WalletCliError::ConfirmationRequired(format!(
-                "{question}\nPass --yes to run state-changing commands in non-interactive mode."
-            )));
-        }
-    }
+    super::confirmation_gate(&command, assume_yes, "non-interactive mode")?;
 
     let command_output = super::run_command_blocking(event_tx, command)?;
 

@@ -54,7 +54,6 @@ enum Mode {
     Exec {
         line: String,
         output_format: config::CliOutputFormat,
-        assume_yes: bool,
     },
 }
 
@@ -84,7 +83,6 @@ pub async fn run(
         Mode::Exec {
             line: line.clone(),
             output_format: cli_args.output,
-            assume_yes: cli_args.yes,
         }
     } else if let Some(file_path) = &cli_args.commands_file {
         repl::non_interactive::log::init();
@@ -171,10 +169,8 @@ async fn start_hot_wallet(
     };
 
     let qr = cli_args.qr;
-    let assume_yes = cli_args.yes;
-    let (repl_handle, wallet_rpc_config) = setup_events_and_repl(
-        cli_args, mode, assume_yes, output, input, event_tx, chain_type,
-    )?;
+    let (repl_handle, wallet_rpc_config) =
+        setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
     let node_rpc = make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth).await?;
     cli_event_loop::run(
@@ -203,11 +199,9 @@ async fn start_cold_wallet(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     let qr = cli_args.qr;
-    let assume_yes = cli_args.yes;
     let (repl_handle, wallet_rpc_config) = setup_events_and_repl(
         cli_args,
         mode,
-        assume_yes,
         output,
         input,
         event_tx,
@@ -266,10 +260,8 @@ async fn connect_to_rpc_wallet(
 
     let qr = cli_args.qr;
     let remote_socket_address = cli_args.remote_rpc_wallet_address.clone().expect("checked");
-    let assume_yes = cli_args.yes;
-    let (repl_handle, _wallet_rpc_config) = setup_events_and_repl(
-        cli_args, mode, assume_yes, output, input, event_tx, chain_type,
-    )?;
+    let (repl_handle, _wallet_rpc_config) =
+        setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
     cli_event_loop::run(
         &chain_config.clone(),
@@ -290,7 +282,6 @@ async fn connect_to_rpc_wallet(
 fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
     args: CliArgs,
     mode: Mode,
-    assume_yes: bool,
     output: impl ConsoleOutput,
     input: impl ConsoleInput,
     event_tx: mpsc::UnboundedSender<Event<N>>,
@@ -402,7 +393,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                     args.vi_mode,
                     startup_command_futures,
                     args.cold_wallet,
-                    assume_yes,
+                    args.yes,
                 ),
                 Mode::NonInteractive => repl::non_interactive::run(
                     input,
@@ -410,7 +401,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                     event_tx,
                     args.exit_on_error.unwrap_or(false),
                     args.cold_wallet,
-                    assume_yes,
+                    args.yes,
                     startup_command_futures,
                 ),
                 Mode::CommandsList { file_input } => repl::non_interactive::run(
@@ -419,17 +410,16 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                     event_tx,
                     args.exit_on_error.unwrap_or(true),
                     args.cold_wallet,
-                    assume_yes,
+                    args.yes,
                     startup_command_futures,
                 ),
                 Mode::Exec {
                     line,
                     output_format,
-                    assume_yes,
                 } => repl::exec::run(
                     line,
                     output_format,
-                    assume_yes,
+                    args.yes,
                     output,
                     event_tx,
                     args.cold_wallet,
