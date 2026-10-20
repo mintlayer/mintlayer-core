@@ -188,24 +188,24 @@ impl<T: backend::TxRw> backend::TxRw for TxRw<'_, T> {
     }
 }
 
-impl<T: backend::ReadOps> backend::ReadOps for TxRw<'_, T> {
+impl<'tx, T: backend::ReadOps> backend::ReadOps for TxRw<'tx, T> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<'_, [u8]>>> {
         self.inner.get(map_id, key)
     }
 
-    fn prefix_iter(
-        &self,
+    fn prefix_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        prefix: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        prefix: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
         self.inner.prefix_iter(map_id, prefix)
     }
 
-    fn greater_equal_iter(
-        &self,
+    fn greater_equal_iter<'a>(
+        &'a self,
         map_id: DbMapId,
-        key: Data,
-    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        key: &[u8],
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + use<'a, 'tx, T>> {
         self.inner.greater_equal_iter(map_id, key)
     }
 }

@@ -228,7 +228,8 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
+        let prefix = prefix.encode();
+        internal::prefix_iter(self.dbtx, self.map_id, &prefix)
     }
 
     /// Iterator over keys starting with given prefix
@@ -240,7 +241,8 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter_keys::<DbMap, _>(self.dbtx, self.map_id, prefix.encode())
+        let prefix = prefix.encode();
+        internal::prefix_iter_keys::<DbMap, _>(self.dbtx, self.map_id, &prefix)
     }
 
     /// Iterator over decoded entries with key starting with given prefix
@@ -268,7 +270,8 @@ where
         &self,
         key: &DbMap::Key,
     ) -> crate::Result<impl EntryIterator<DbMap> + 'tx> {
-        internal::greater_equal_iter(self.dbtx, self.map_id, key.encode())
+        let key = key.encode();
+        internal::greater_equal_iter(self.dbtx, self.map_id, &key)
     }
 
     /// Same as `greater_equal_iter`, but only the keys are returned.
@@ -276,7 +279,8 @@ where
         &self,
         key: &DbMap::Key,
     ) -> crate::Result<impl Iterator<Item = DbMap::Key> + 'tx> {
-        internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, key.encode())
+        let key = key.encode();
+        internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, &key)
     }
 
     /// Same as `greater_equal_iter`, but already decoded valued are returned.
@@ -325,7 +329,8 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
+        let prefix = prefix.encode();
+        internal::prefix_iter(self.dbtx, self.map_id, &prefix)
     }
 }
 
