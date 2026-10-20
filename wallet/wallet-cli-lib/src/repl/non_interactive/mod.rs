@@ -99,8 +99,8 @@ pub fn run<N: NodeInterface>(
     }
 
     // The REPL thread is sized for grammar construction, so build the
-        // grammar directly instead of nesting another large-stack spawn.
-        let repl_command = build_repl_command(cold_wallet, true);
+    // grammar directly instead of nesting another large-stack spawn.
+    let repl_command = build_repl_command(cold_wallet, true);
 
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);

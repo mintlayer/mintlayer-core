@@ -47,15 +47,16 @@ const COMPLETION_MENU_NAME: &str = "completion_menu";
 
 fn create_line_editor(
     printer: reedline::ExternalPrinter<String>,
-    commands: Vec<String>,
+    completer: wallet_completions::WalletCompletions,
     history: Option<Box<dyn History>>,
     vi_mode: bool,
 ) -> Reedline {
-    let completer = Box::new(wallet_completions::WalletCompletions::new(commands));
+    let hinter = wallet_completions::WalletHinter::new(completer.clone());
 
     let mut line_editor = Reedline::create()
         .with_external_printer(printer)
-        .with_completer(completer)
+        .with_completer(Box::new(completer))
+        .with_hinter(Box::new(hinter))
         .with_quick_completions(false)
         .with_partial_completions(true)
         .with_validator(Box::new(DefaultValidator))
@@ -130,14 +131,8 @@ pub fn run<N: NodeInterface>(
     cold_wallet: bool,
 ) -> Result<(), WalletCliError<N>> {
     // The REPL thread is sized for grammar construction, so build the
-        // grammar directly instead of nesting another large-stack spawn.
-        let repl_command = build_repl_command(cold_wallet, true);
-
-    let commands = repl_command
-        .get_subcommands()
-        .filter(|command| !command.is_hide_set())
-        .map(|command| command.get_name().to_owned())
-        .collect::<Vec<_>>();
+    // grammar directly instead of nesting another large-stack spawn.
+    let repl_command = build_repl_command(cold_wallet, true);
 
     let history = if let Some(file_name) = history_file {
         let h: Box<dyn History> = Box::new(
@@ -149,7 +144,12 @@ pub fn run<N: NodeInterface>(
         None
     };
 
-    let mut line_editor = create_line_editor(logger.printer().clone(), commands, history, vi_mode);
+    let mut line_editor = create_line_editor(
+        logger.printer().clone(),
+        wallet_completions::WalletCompletions::new(repl_command.clone()),
+        history,
+        vi_mode,
+    );
 
     let mut prompt = wallet_prompt::WalletPrompt::new();
 
@@ -256,8 +256,12 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Exit)) => return CommandResponse::Exit,
 
         Ok(Some(ConsoleCommand::ChoiceMenu(choice))) => {
-            let line_editor_helper =
-                create_line_editor(logger.printer().clone(), vec![], None, vi_mode);
+            let line_editor_helper = create_line_editor(
+                logger.printer().clone(),
+                wallet_completions::WalletCompletions::empty(),
+                None,
+                vi_mode,
+            );
             let cmd = handle_choice_menu(choice.as_ref(), line_editor_helper);
             if let Some(cmd) = cmd {
                 return CommandResponse::Command(Box::new(cmd));
