@@ -191,56 +191,92 @@ pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> O
         "ping" => result_response(id, json!({})),
         "tools/list" => result_response(id, tool_definitions()),
         "tools/call" => {
-            let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+            let Some(name) = params.get("name").and_then(Value::as_str) else {
+                return Some(error_response(
+                    id,
+                    -32602,
+                    "Invalid params: `name` must be a string naming a tool".to_owned(),
+                ));
+            };
             let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
-            result_response(id, call_tool(name, arguments, wallet).await)
+            if !arguments.is_object() {
+                return Some(error_response(
+                    id,
+                    -32602,
+                    "Invalid params: `arguments` must be an object".to_owned(),
+                ));
+            }
+            match call_tool(name, arguments, wallet).await {
+                Ok(value) => match serde_json::to_string_pretty(&value) {
+                    Ok(text) => result_response(id, tool_result(text, false)),
+                    Err(err) => result_response(
+                        id,
+                        tool_result(format!("Failed to render the result: {err}"), true),
+                    ),
+                },
+                // Argument and naming problems are protocol errors; only
+                // failures of the wallet RPC itself are `isError` results.
+                Err(ToolCallError::Protocol { code, message }) => error_response(id, code, message),
+                Err(ToolCallError::Execution(message)) => {
+                    result_response(id, tool_result(message, true))
+                }
+            }
         }
         other => error_response(id, -32601, format!("Method not found: {other}")),
     };
     Some(response)
 }
 
-async fn call_tool<W: ReadonlyWallet>(name: &str, arguments: Value, wallet: &W) -> Value {
-    let outcome: Result<Value, String> = match name {
-        "version" => wallet.version().await.map(Value::String),
-        "wallet_info" => wallet.wallet_info().await,
-        "best_block" => wallet.best_block().await,
+/// A failed tool call: either a protocol-level problem (unknown tool,
+/// malformed arguments) that must surface as a JSON-RPC error, or a failure of
+/// the wallet RPC itself, which the MCP spec reports as an `isError` result.
+enum ToolCallError {
+    Protocol { code: i64, message: String },
+    Execution(String),
+}
+
+impl ToolCallError {
+    fn protocol(message: String) -> Self {
+        Self::Protocol {
+            code: -32602,
+            message,
+        }
+    }
+}
+
+async fn call_tool<W: ReadonlyWallet>(
+    name: &str,
+    arguments: Value,
+    wallet: &W,
+) -> Result<Value, ToolCallError> {
+    match name {
+        "version" => wallet.version().await.map(Value::String).map_err(ToolCallError::Execution),
+        "wallet_info" => wallet.wallet_info().await.map_err(ToolCallError::Execution),
+        "best_block" => wallet.best_block().await.map_err(ToolCallError::Execution),
         "balance" => {
-            let account_index = match parse_account_index(&arguments) {
-                Ok(index) => index,
-                Err(err) => return tool_result(err, true),
-            };
-            let states = match parse_utxo_states(&arguments) {
-                Ok(states) => states,
-                Err(err) => return tool_result(err, true),
-            };
+            let account_index = parse_account_index(&arguments).map_err(ToolCallError::protocol)?;
+            let states = parse_utxo_states(&arguments).map_err(ToolCallError::protocol)?;
             let with_locked = match arguments.get("with_locked") {
                 None | Some(Value::Null) => WithLockedSelector::Unlocked,
-                Some(value) => match value.as_str().and_then(WithLockedSelector::parse) {
-                    Some(selector) => selector,
-                    None => return tool_result(format!("Invalid locked filter: {value}"), true),
-                },
+                Some(value) => {
+                    value.as_str().and_then(WithLockedSelector::parse).ok_or_else(|| {
+                        ToolCallError::protocol(format!("Invalid locked filter: {value}"))
+                    })?
+                }
             };
-            wallet.balance(account_index, states, with_locked).await
+            wallet
+                .balance(account_index, states, with_locked)
+                .await
+                .map_err(ToolCallError::Execution)
         }
         "standalone_addresses" => {
-            let account_index = match parse_account_index(&arguments) {
-                Ok(index) => index,
-                Err(err) => return tool_result(err, true),
-            };
-            wallet.standalone_addresses(account_index).await
+            let account_index = parse_account_index(&arguments).map_err(ToolCallError::protocol)?;
+            wallet
+                .standalone_addresses(account_index)
+                .await
+                .map_err(ToolCallError::Execution)
         }
-        other => {
-            return tool_result(format!("Unknown tool: {other}"), true);
-        }
-    };
-
-    match outcome {
-        Ok(value) => match serde_json::to_string_pretty(&value) {
-            Ok(text) => tool_result(text, false),
-            Err(err) => tool_result(format!("Failed to render the result: {err}"), true),
-        },
-        Err(err) => tool_result(err, true),
+        other => Err(ToolCallError::protocol(format!("Unknown tool: {other}"))),
     }
 }
 
@@ -440,12 +476,9 @@ mod tests {
                 &StubWallet,
             ))
             .expect("requests are answered");
-        assert!(
-            response["result"]["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("Unknown tool")
-        );
+        // Unknown tools are protocol errors, not tool results (MCP spec).
+        assert_eq!(response["error"]["code"], -32602);
+        assert!(response["error"]["message"].as_str().unwrap().contains("Unknown tool"));
 
         let response = rt
             .block_on(handle_message(
@@ -479,6 +512,41 @@ mod tests {
                 .expect("non-object messages are answered");
             assert_eq!(response["error"]["code"], -32600);
         }
+    }
+
+    #[test]
+    fn invalid_tool_arguments_are_protocol_errors() {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let cases = [
+            (
+                json!({ "name": "balance", "arguments": { "account_index": "one" } }),
+                "account_index",
+            ),
+            (
+                json!({ "name": "balance", "arguments": { "utxo_states": ["bogus"] } }),
+                "UTXO state",
+            ),
+            (
+                json!({ "name": "balance", "arguments": { "with_locked": "sometimes" } }),
+                "locked filter",
+            ),
+        ];
+        for (params, needle) in cases {
+            let message = request("tools/call", params);
+            let response = rt
+                .block_on(handle_message(&message, &StubWallet))
+                .expect("requests are answered");
+            assert_eq!(response["error"]["code"], -32602, "for {needle}");
+            assert!(response["error"]["message"].as_str().unwrap().contains(needle));
+        }
+        // A missing tool name is also a protocol error.
+        let response = rt
+            .block_on(handle_message(
+                &request("tools/call", json!({})),
+                &StubWallet,
+            ))
+            .expect("requests are answered");
+        assert_eq!(response["error"]["code"], -32602);
     }
 
     #[test]
