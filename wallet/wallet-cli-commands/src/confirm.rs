@@ -240,6 +240,16 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
             Some("Add a standalone multisig address to this wallet?".to_owned())
         }
         WalletCommand::SubmitBlock { .. } => Some("Submit the given block to the node?".to_owned()),
+        WalletCommand::GenerateBlock { transactions } => Some(format!(
+            "Generate and submit a block with {} transaction(s)?",
+            transactions.len()
+        )),
+        WalletCommand::GenerateBlocks { block_count } => {
+            Some(format!("Generate and submit {block_count} block(s)?"))
+        }
+        // Banning and reserving peers are reversible, node-local admin
+        // actions (their counterparts unban/undiscourage/remove undo them),
+        // so they stay prompt-free on purpose.
         WalletCommand::NodeShutdown => Some("Shut down the connected node?".to_owned()),
         WalletCommand::NodeEnableNetworking { enable } => Some(format!(
             "Set P2P networking on the node to {}?",
@@ -293,8 +303,6 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         | WalletCommand::BestBlockTimestamp
         | WalletCommand::BlockId { .. }
         | WalletCommand::GetBlock { .. }
-        | WalletCommand::GenerateBlock { .. }
-        | WalletCommand::GenerateBlocks { .. }
         | WalletCommand::FindTimestampsForStaking { .. }
         | WalletCommand::GetBlockIdsAsCheckpoints { .. }
         | WalletCommand::ListPendingTransactions
@@ -409,6 +417,14 @@ mod tests {
             Some("Set P2P networking on the node to disabled?")
         );
         assert!(prompt("account-select 3").is_some());
+        // Hidden dev commands that write to the chain ask too.
+        assert_eq!(
+            prompt("node-generate-blocks 5").as_deref(),
+            Some("Generate and submit 5 block(s)?")
+        );
+        // `node-generate-block <tx>` also prompts, but parsing it needs a
+        // fully encoded signed-transaction fixture, so only the block-count
+        // variant is pinned here.
         assert!(prompt(
             "standalone-add-private-key-from-hex 000000000000000000000000000000000000000000000000000000000000000001"
         )
