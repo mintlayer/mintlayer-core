@@ -644,12 +644,25 @@ impl MainWindow {
                         status: _,
                         print_message: out,
                     }
-                    | ConsoleCommand::Print(out) => self
+                    | ConsoleCommand::Print(out)
+                    | ConsoleCommand::Warn(out) => self
                         .main_widget
                         .update(
                             MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
                                 wallet_id,
                                 WalletMessage::ConsoleOutput(out),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::Json { text, value } => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(
+                                    wallet_cli_commands::output::json_display_text(text, &value),
+                                ),
                             )),
                             backend_sender,
                         )

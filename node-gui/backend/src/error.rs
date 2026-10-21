@@ -50,6 +50,8 @@ pub enum BackendError {
     HardwareWalletNotSupportedInColdMode,
     #[error("Invalid console command: {0}")]
     InvalidConsoleCommand(String),
+    #[error("Console command did not complete: {0}")]
+    ConsoleCommandInterrupted(String),
     #[error("Empty console command")]
     EmptyConsoleCommand,
 

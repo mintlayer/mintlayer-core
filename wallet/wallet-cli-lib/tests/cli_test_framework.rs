@@ -77,7 +77,18 @@ pub struct CliTestFramework {
 }
 
 impl CliTestFramework {
+    /// Boots the wallet with confirmation prompts skipped (`--yes`), which is
+    /// what nearly all tests want. Tests that exercise the gate itself pass
+    /// `assume_yes: false` and expect [`WalletCliError`] rejections.
     pub async fn setup(rng: &mut impl Rng) -> Self {
+        Self::setup_with(rng, true).await
+    }
+
+    /// Same as [`CliTestFramework::setup`], but with explicit control over the
+    /// confirmation-skip behavior: `assume_yes: true` is equivalent to `setup`,
+    /// while `assume_yes: false` boots without `--yes`, so confirmation-gated
+    /// commands are rejected instead of run.
+    pub async fn setup_with(rng: &mut impl Rng, assume_yes: bool) -> Self {
         logging::init_logging();
 
         let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
@@ -106,6 +117,9 @@ impl CliTestFramework {
                     node_rpc_username: Some(RPC_USERNAME.to_owned()),
                     node_rpc_password: Some(RPC_PASSWORD.to_owned()),
                     commands_file: None,
+                    exec: None,
+                    output: wallet_cli_lib::config::CliOutputFormat::Text,
+                    yes: assume_yes,
                     history_file: None,
                     exit_on_error: None,
                     vi_mode: false,
@@ -122,7 +136,7 @@ impl CliTestFramework {
                     remote_rpc_wallet_password: None,
                     remote_rpc_wallet_cookie_file: None,
                     remote_rpc_wallet_no_authentication: true,
-                    no_qr: false,
+                    qr: false,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -137,6 +151,9 @@ impl CliTestFramework {
                 node_rpc_username: Some(RPC_USERNAME.to_owned()),
                 node_rpc_password: Some(RPC_PASSWORD.to_owned()),
                 commands_file: None,
+                exec: None,
+                output: wallet_cli_lib::config::CliOutputFormat::Text,
+                yes: assume_yes,
                 history_file: None,
                 exit_on_error: None,
                 vi_mode: false,
@@ -153,7 +170,7 @@ impl CliTestFramework {
                 remote_rpc_wallet_password: None,
                 remote_rpc_wallet_cookie_file: None,
                 remote_rpc_wallet_no_authentication: true,
-                no_qr: false,
+                qr: false,
             },
         };
 

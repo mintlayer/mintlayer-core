@@ -63,7 +63,10 @@ jobs:
 
       - name: Compile the tests
         working-directory: ./wasm-wrappers
-        run: tsc --project js-bindings-test/tsconfig.json
+        # Invoke the binary installed at the repository root directly: this
+        # does not depend on how runner images compose PATH and fails with a
+        # clear "not found" error instead of resolving through the registry.
+        run: '"$GITHUB_WORKSPACE/node_modules/.bin/tsc" --project js-bindings-test/tsconfig.json'
 
       - name: Run the tests
         working-directory: ./wasm-wrappers
@@ -71,7 +74,7 @@ jobs:
 
       - name: Run Knip
         working-directory: ./wasm-wrappers/js-bindings-test
-        run: npx knip
+        run: '"$GITHUB_WORKSPACE/node_modules/.bin/knip"'
 
   wasm_artifacts:
     runs-on: ubuntu-latest

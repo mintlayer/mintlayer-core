@@ -15,26 +15,28 @@
 
 mod local_state;
 
-use std::{collections::BTreeMap, fmt::Write, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, io::IsTerminal, str::FromStr};
 
 use bigdecimal::BigDecimal;
 use itertools::Itertools;
 
+use chainstate::ChainInfo;
 use chainstate::rpc::RpcOutputValueOut;
 use common::{
     address::{Address, RpcAddress},
     chain::{
-        ChainConfig, Destination, RpcCurrency, SignedTransaction,
+        ChainConfig, Destination, RpcCurrency, SignedTransaction, block::timestamp::BlockTimestamp,
         config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, htlc::HtlcSecret,
-        tokens::TokenId,
+        tokens::TokenId, transaction::Transaction,
     },
-    primitives::{H256, Idable as _},
+    primitives::{BlockHeight, H256, Id, Idable as _},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
+use p2p_types::socket_address::SocketAddress;
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::{
@@ -42,7 +44,7 @@ use utils::{
     qrcode::{QrCode, QrCodeError},
     sorted::Sorted as _,
 };
-use wallet_controller::types::WalletExtraInfo;
+use wallet_controller::{ConnectedPeer, types::WalletExtraInfo};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 #[cfg(any(feature = "trezor", feature = "ledger"))]
 use wallet_rpc_lib::types::HardwareWalletType;
@@ -53,16 +55,12 @@ use wallet_rpc_lib::types::{
     RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
 };
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+use zeroize::Zeroizing;
 
 #[cfg(feature = "trezor")]
-use crate::{CreateWalletDeviceSelectMenu, OpenWalletDeviceSelectMenu};
-
 use crate::{
-    ManageableWalletCommand, OpenWalletSubCommand, WalletManagementCommand,
-    errors::WalletCliCommandError,
-    helper_types::{
-        CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
-    },
+    ChallengeGroupSubCommand, ConfigGroupSubCommand, CreateWalletDeviceSelectMenu,
+    HistoryGroupSubCommand, OpenWalletDeviceSelectMenu, helper_types::CliForceReduceLookaheadSize,
 };
 
 use self::local_state::WalletWithState;
@@ -70,28 +68,270 @@ use self::local_state::WalletWithState;
 use super::{
     ColdWalletCommand, ConsoleCommand, WalletCommand,
     helper_types::{
-        CliForceReduceLookaheadSize, CliUtxoState, format_active_order_info,
-        format_delegation_info, format_own_order_info, format_pool_info,
+        CliUtxoState, format_active_order_info, format_delegation_info, format_own_order_info,
+        format_pool_info,
     },
 };
+use crate::{
+    AccountGroupSubCommand, AddressGroupSubCommand, CliPublicKeyFormat, DataGroupSubCommand,
+    DelegationGroupSubCommand, HtlcGroupSubCommand, ManageableWalletCommand, NftGroupSubCommand,
+    NodeGroupSubCommand, OpenWalletSubCommand, OrderGroupSubCommand, PeerGroupSubCommand,
+    ReservedPeerGroupSubCommand, StakingGroupSubCommand, StandaloneGroupSubCommand,
+    TokenGroupSubCommand, TransactionGroupSubCommand, WalletGroupSubCommand,
+    WalletManagementCommand,
+    errors::WalletCliCommandError,
+    helper_types::{
+        CliCurrency, active_order_infos_header, format_token_name, token_ticker_from_rpc_token_info,
+    },
+};
+
+/// How the hidden terminal password prompt behaves: `Create` asks for the
+/// password twice (typo guard for wallet encryption), `Enter` asks once.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PromptMode {
+    Create,
+    Enter,
+}
+
+/// Read a password from `--password-file`, where `-` means standard input.
+/// When no source is given and standard input is a terminal, the password
+/// is read with a hidden prompt on the controlling terminal instead; in
+/// [`PromptMode::Create`] mode the prompt asks for the password twice.
+/// The file and standard-input sources are read exactly once, so the
+/// double-entry typo guard exists only on the interactive prompt. The
+/// trailing line terminator is stripped; any other whitespace is kept.
+async fn read_password_from_source<N: NodeInterface>(
+    source: Option<&str>,
+    prompt_mode: PromptMode,
+) -> Result<Zeroizing<String>, WalletCliCommandError<N>> {
+    // A password file that is not tiny is almost certainly the wrong file.
+    const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
+    // Shared by the pre-open and post-open password-file checks so both fail
+    // with the same message. Declared before any statement so the lint that
+    // flags items after statements stays quiet.
+    fn not_regular_file() -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "the password file is not a regular file",
+        )
+    }
+    // The password can also come from a hidden terminal prompt; see the
+    // function documentation above.
+
+    // Reads a password from the terminal with echo disabled. In `Create`
+    // mode (password creation) the password must be repeated; a typo would
+    // otherwise lock the wallet with an unknown password.
+    //
+    // The prompt is only offered when standard input is a terminal. The
+    // hidden prompt itself reads from the controlling terminal, but gating
+    // on stdin keeps piped automation (commands files, `--exec`) failing
+    // fast with an explicit error instead of hanging on an unseen prompt.
+    fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<Zeroizing<String>> {
+        // The prompt and the hidden read go to the controlling terminal
+        // (/dev/tty), so redirected standard error does not matter. Both
+        // entries are returned as wiping buffers so a mismatch wipes both.
+        let password = Zeroizing::new(rpassword::prompt_password(
+            if prompt_mode == PromptMode::Create {
+                "New password: "
+            } else {
+                "Password: "
+            },
+        )?);
+        if prompt_mode == PromptMode::Create {
+            let confirmed = Zeroizing::new(rpassword::prompt_password("Confirm password: ")?);
+            if *password != *confirmed {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "the two passwords do not match",
+                ));
+            }
+        }
+        Ok(password)
+    }
+
+    fn read_password_from_stdin() -> std::io::Result<Zeroizing<String>> {
+        let mut password = Zeroizing::default();
+        let bytes_read = std::io::stdin().read_line(&mut password)?;
+        if bytes_read == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "no password was provided on standard input",
+            ));
+        }
+        Ok(password)
+    }
+
+    // Joins a blocking password read and labels the two failure layers
+    // (task join vs read) distinctly.
+    async fn label_password_errors<N: NodeInterface, T>(
+        fut: impl std::future::Future<
+            Output = Result<Result<T, std::io::Error>, tokio::task::JoinError>,
+        >,
+        label: String,
+    ) -> Result<T, WalletCliCommandError<N>> {
+        fut.await
+            .map_err(|err| {
+                WalletCliCommandError::InvalidInput(format!(
+                    "Internal error - failed to join the password read task: {err}"
+                ))
+            })?
+            .map_err(|err| WalletCliCommandError::InvalidInput(format!("{label}: {err}")))
+    }
+
+    // Trailing line terminators (`\n` or `\r\n`, however many) are
+    // stripped; any other whitespace is kept.
+    fn strip_line_terminator(password: &str) -> &str {
+        // Files edited by hand often end in more than one line terminator
+        // (a trailing blank line is a common editor artifact); every
+        // trailing terminator is stripped so the password stays exactly
+        // what the file's last non-empty line holds.
+        password.trim_end_matches(['\r', '\n'])
+    }
+
+    let password = match source {
+        None => {
+            // The hidden prompt goes to the controlling terminal
+            // (/dev/tty); scripted callers get an error instead.
+            if std::io::stdin().is_terminal() {
+                label_password_errors(
+                    tokio::task::spawn_blocking(move || prompt_password_hidden(prompt_mode)),
+                    "Failed to read the password from the terminal".to_owned(),
+                )
+                .await?
+            } else {
+                return Err(WalletCliCommandError::InvalidInput(
+                    "a password is required: pass --password-file <file> (or \
+                     --password-file - for standard input); interactive input \
+                     requires a terminal on standard input"
+                        .to_owned(),
+                ));
+            }
+        }
+        Some("-") => {
+            label_password_errors(
+                tokio::task::spawn_blocking(read_password_from_stdin),
+                "Failed to read the password from standard input".to_owned(),
+            )
+            .await?
+        }
+        Some(path) => {
+            let read_path = path.to_owned();
+            let read = move || -> std::io::Result<Zeroizing<String>> {
+                use std::io::Read;
+
+                // Cheap pre-open check: open(2) itself blocks on a writer-less
+                // FIFO, so refuse non-regular files before opening. The check
+                // is racy, but the post-open check on the opened handle below
+                // stays authoritative.
+                if let Ok(pre) = std::fs::metadata(&read_path)
+                    && !pre.is_file()
+                {
+                    return Err(not_regular_file());
+                }
+                // Open first, then check the mode of the opened handle: a
+                // separate metadata() call would leave a window where the
+                // check and the read see different files.
+                let file = std::fs::File::open(&read_path)?;
+                let metadata = file.metadata()?;
+                if !metadata.is_file() {
+                    return Err(not_regular_file());
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mode = metadata.permissions().mode();
+                    if mode & 0o077 != 0 {
+                        // Warn instead of failing: the wallet must stay
+                        // usable, but a group/other-accessible password
+                        // file is almost always a mistake.
+                        log::warn!(
+                            "The password file {} is accessible by group or others; \
+                             restrict it with chmod 600",
+                            read_path
+                        );
+                    }
+                }
+                // A password file that is not tiny is almost certainly the
+                // wrong file; refuse rather than encrypt the wallet with
+                // an unintended password it could never be unlocked with.
+                let too_large = || {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
+                            "the password file is larger than {MAX_PASSWORD_FILE_BYTES} \
+                             bytes; this does not look like a password file"
+                        ),
+                    )
+                };
+                if metadata.len() > MAX_PASSWORD_FILE_BYTES {
+                    return Err(too_large());
+                }
+                // Read one byte past the cap so a file that grows (or is
+                // swapped) after the metadata check is detected here instead
+                // of being silently truncated into a prefix password.
+                let mut password = Zeroizing::default();
+                file.take(MAX_PASSWORD_FILE_BYTES + 1).read_to_string(&mut password)?;
+                if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
+                    return Err(too_large());
+                }
+                if password.contains('\0') {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the password file contains a null byte; this does not \
+                         look like a password file",
+                    ));
+                }
+                Ok(password)
+            };
+            label_password_errors(
+                tokio::task::spawn_blocking(read),
+                format!("Failed to read the password from {path}"),
+            )
+            .await?
+        }
+    };
+    // `password` is a wiping buffer on every path, so the early
+    // validation-error returns below wipe it too.
+    let stripped = strip_line_terminator(&password);
+    if stripped.is_empty() {
+        return Err(WalletCliCommandError::InvalidInput(
+            "the password is empty; expected a non-empty password".to_owned(),
+        ));
+    }
+    if stripped.contains(['\r', '\n']) {
+        // An interior line terminator means the file holds more than one
+        // line; using only the first would silently lock the wallet.
+        return Err(WalletCliCommandError::InvalidInput(
+            "the password file contains more than one line; expected a \
+             single-line password file"
+                .to_owned(),
+        ));
+    }
+    // Every copy this function made wipes itself: the returned value and
+    // the source buffer are both `Zeroizing`. The value handed to the
+    // command enum remains a plain copy on purpose (its grammar type is
+    // `String`), so the dispatch site below makes the one deliberate,
+    // documented copy.
+    Ok(Zeroizing::new(stripped.to_owned()))
+}
 
 pub struct CommandHandler<W> {
     config: ControllerConfig,
 
     wallet: WalletWithState<W>,
 
-    no_qr: bool,
+    qr: bool,
 }
 
 impl<W, E> CommandHandler<W>
 where
     W: WalletInterface<Error = E> + Send + Sync + 'static,
 {
-    pub async fn new(config: ControllerConfig, wallet: W, no_qr: Option<bool>) -> Self {
+    pub async fn new(config: ControllerConfig, wallet: W, qr: Option<bool>) -> Self {
         CommandHandler {
             config,
             wallet: WalletWithState::new(wallet).await,
-            no_qr: no_qr.unwrap_or(false),
+            qr: qr.unwrap_or(false),
         }
     }
 
@@ -378,6 +618,57 @@ where
         WalletCliCommandError<N>: From<E>,
     {
         match command {
+            // The grouped spellings translate one level down into their flat
+            // variants; recursing once keeps both spellings on the same behavior.
+            ColdWalletCommand::Challenge { command } => {
+                let flat = match command {
+                    ChallengeGroupSubCommand::Sign {
+                        message,
+                        address,
+                        hex,
+                    } => {
+                        if hex {
+                            ColdWalletCommand::SignChallegeHex { message, address }
+                        } else {
+                            ColdWalletCommand::SignChallege { message, address }
+                        }
+                    }
+                    ChallengeGroupSubCommand::Verify {
+                        message,
+                        signed_challenge,
+                        address,
+                        hex,
+                    } => {
+                        if hex {
+                            ColdWalletCommand::VerifyChallengeHex {
+                                message,
+                                signed_challenge,
+                                address,
+                            }
+                        } else {
+                            ColdWalletCommand::VerifyChallenge {
+                                message,
+                                signed_challenge,
+                                address,
+                            }
+                        }
+                    }
+                };
+                Box::pin(self.handle_cold_wallet_command(flat, chain_config)).await
+            }
+            ColdWalletCommand::History { command } => {
+                let flat = match command {
+                    HistoryGroupSubCommand::Print => ColdWalletCommand::PrintHistory,
+                    HistoryGroupSubCommand::Clear => ColdWalletCommand::ClearHistory,
+                };
+                Box::pin(self.handle_cold_wallet_command(flat, chain_config)).await
+            }
+            ColdWalletCommand::Clear => {
+                Box::pin(
+                    self.handle_cold_wallet_command(ColdWalletCommand::ClearScreen, chain_config),
+                )
+                .await
+            }
             ColdWalletCommand::WalletInfo => {
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
                 let wallet_description = match info.extra_info {
@@ -415,6 +706,10 @@ where
             }
 
             ColdWalletCommand::EncryptPrivateKeys { password } => {
+                logging::log::warn!(
+                    "The password was passed on the command line, which is insecure; \
+                     prefer `wallet encrypt --password-file <file>`"
+                );
                 self.non_empty_wallet().await?.encrypt_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -431,6 +726,10 @@ where
             }
 
             ColdWalletCommand::UnlockPrivateKeys { password } => {
+                logging::log::warn!(
+                    "The password was passed on the command line, which is insecure; \
+                     prefer `wallet unlock --password-file <file>`"
+                );
                 self.non_empty_wallet().await?.unlock_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -550,7 +849,7 @@ where
                 let hex_chain_code = key.chain_code.to_string();
 
                 let extended_public_key = format!("{hex_public_key}{hex_chain_code}");
-                let qr_code = if !self.no_qr {
+                let qr_code = if self.qr {
                     let qr_code = qrcode_or_error_string(&extended_public_key);
                     format!("\nOr contained in the QR code:\n{qr_code}")
                 } else {
@@ -736,7 +1035,7 @@ where
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code_string = if self.no_qr {
+                        let qr_code_string = if !self.qr {
                             String::new()
                         } else {
                             let qr_code = qrcode_or_error_string(&result_hex.to_string());
@@ -754,7 +1053,7 @@ where
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
                             partially_signed_tx.into();
 
-                        let qr_code_string = if self.no_qr {
+                        let qr_code_string = if !self.qr {
                             String::new()
                         } else {
                             let qr_code = qrcode_or_error_string(&result_hex.to_string());
@@ -795,7 +1094,7 @@ where
                 let result =
                     wallet.sign_challenge_hex(selected_account, challenge, address).await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
@@ -816,7 +1115,7 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let result = wallet.sign_challenge(selected_account, challenge, address).await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result);
@@ -881,6 +1180,153 @@ where
             WalletCommand::ColdCommands(command) => {
                 self.handle_cold_wallet_command(command, chain_config).await
             }
+            WalletCommand::Wallet { command } => {
+                // The cold wallet subcommands reuse the cold wallet handlers, so
+                // their behavior is identical to the legacy flat spellings.
+                let management = match &command {
+                    WalletGroupSubCommand::Info => {
+                        return self
+                            .handle_cold_wallet_command(ColdWalletCommand::WalletInfo, chain_config)
+                            .await;
+                    }
+                    WalletGroupSubCommand::Encrypt { password_file } => {
+                        let password = read_password_from_source::<N>(
+                            password_file.as_deref(),
+                            PromptMode::Create,
+                        )
+                        .await?;
+                        return self
+                            .handle_cold_wallet_command(
+                                // The grammar field is `String`, so this is
+                                // the one deliberate plain copy of the
+                                // password; wiping it would require a
+                                // zeroizing-aware grammar type.
+                                ColdWalletCommand::EncryptPrivateKeys {
+                                    password: password.to_string(),
+                                },
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Unlock { password_file } => {
+                        let password = read_password_from_source::<N>(
+                            password_file.as_deref(),
+                            PromptMode::Enter,
+                        )
+                        .await?;
+                        return self
+                            .handle_cold_wallet_command(
+                                // See the note on the encrypt arm: one
+                                // deliberate plain copy for the grammar type.
+                                ColdWalletCommand::UnlockPrivateKeys {
+                                    password: password.to_string(),
+                                },
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Decrypt => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::RemovePrivateKeysEncryption,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Lock => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::LockPrivateKeys,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::ShowSeedPhrase => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::ShowSeedPhrase,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::PurgeSeedPhrase => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::PurgeSeedPhrase,
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::SetLookaheadSize {
+                        lookahead_size,
+                        force,
+                    } => {
+                        return self
+                            .handle_cold_wallet_command(
+                                ColdWalletCommand::SetLookaheadSize {
+                                    lookahead_size: *lookahead_size,
+                                    i_know_what_i_am_doing: force
+                                        .then_some(CliForceReduceLookaheadSize::IKnowWhatIAmDoing),
+                                },
+                                chain_config,
+                            )
+                            .await;
+                    }
+                    WalletGroupSubCommand::Create { wallet } => {
+                        WalletManagementCommand::CreateWallet {
+                            wallet: wallet.clone(),
+                        }
+                    }
+                    WalletGroupSubCommand::Recover { wallet } => {
+                        WalletManagementCommand::RecoverWallet {
+                            wallet: wallet.clone(),
+                        }
+                    }
+                    WalletGroupSubCommand::Open { wallet } => WalletManagementCommand::OpenWallet {
+                        wallet: wallet.clone(),
+                    },
+                    WalletGroupSubCommand::Close => WalletManagementCommand::CloseWallet,
+                };
+                self.handle_wallet_management_command(management).await
+            }
+            WalletCommand::Wizard { .. } => Err(WalletCliCommandError::<N>::InvalidInput(
+                "the wizard is only available on an interactive terminal; type the command \
+                 directly instead"
+                    .to_owned(),
+            )),
+            // Keep this or-pattern in sync with `is_nested_wallet_command` and the
+            // translation arms in `normalize_nested_wallet_command`: a group added here
+            // needs a variant in the predicate, a translation arm, and a LEGACY_ALIASES
+            // entry so the coexistence and translation tests pin all three sites.
+            command @ (WalletCommand::Account { .. }
+            | WalletCommand::Address { .. }
+            | WalletCommand::Send { .. }
+            | WalletCommand::Data { .. }
+            | WalletCommand::Staking { .. }
+            | WalletCommand::Delegation { .. }
+            | WalletCommand::Token { .. }
+            | WalletCommand::Order { .. }
+            | WalletCommand::Htlc { .. }
+            | WalletCommand::Transaction { .. }
+            | WalletCommand::Node { .. }
+            | WalletCommand::Peer { .. }
+            | WalletCommand::Config { .. }) => {
+                // Nested groups translate to their flat equivalents. The recursive call
+                // is boxed to keep the future size finite; translation always produces a
+                // flat command, so the recursion never goes deeper than one level.
+                let normalized = normalize_nested_wallet_command(command);
+                // Translation must terminate: a nested command fed back into this
+                // handler would recurse unboundedly through the boxed call. A
+                // group variant that is missing a translation arm is reported
+                // instead of asserted, so adding a group cannot turn into a
+                // runtime panic here.
+                if is_nested_wallet_command(&normalized) {
+                    return Err(WalletCliCommandError::<N>::InvalidInput(format!(
+                        "the command {normalized:?} has no flat translation"
+                    )));
+                }
+                Box::pin(self.handle_wallet_command(chain_config, normalized)).await
+            }
 
             WalletCommand::ConfigBroadcast { broadcast } => {
                 self.config.broadcast_to_mempool = broadcast.to_bool();
@@ -891,7 +1337,7 @@ where
 
             WalletCommand::ChainstateInfo => {
                 let info = self.wallet().await?.chainstate_info().await?;
-                Ok(ConsoleCommand::Print(format!("{info:#?}")))
+                Ok(ConsoleCommand::Print(format_chainstate_info(&info)))
             }
 
             WalletCommand::BestBlock => {
@@ -904,13 +1350,81 @@ where
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
+            WalletCommand::NodeBestBlock {
+                id,
+                height,
+                timestamp,
+            } => {
+                // Single-flag runs reuse the legacy RPCs per value so error behavior
+                // (including on cold wallets) matches the flat commands. When more
+                // than one value is requested, everything is read from one
+                // chainstate snapshot so the printed tuple describes a real block
+                // instead of values straddling a block boundary. No flags means all
+                // three, mirroring the formatter's show-all rule.
+                let wallet = self.wallet().await?;
+                let requested: usize = [id, height, timestamp].iter().filter(|flag| **flag).count();
+                let show_all = requested == 0;
+                let consistent_snapshot = requested > 1 || show_all;
+                // TODO(test): cover the consistent-snapshot path with a mock node:
+                // - per-value RPCs error while chainstate_info succeeds (cold wallet)
+                //   => the command must error, never print the fabricated genesis values;
+                // - multi-flag output must equal the values from one chainstate_info call.
+                let (best_block_id, best_block_height, best_block_timestamp) =
+                    if consistent_snapshot {
+                        // A cold wallet cannot serve a combined snapshot:
+                        // `chainstate_info()` fabricates genesis values there while
+                        // the per-value RPCs fail. Probe the node first so the error
+                        // behavior matches the flat commands, then read every
+                        // displayed value from one snapshot.
+                        if id || show_all {
+                            wallet.node_best_block_id().await?;
+                        }
+                        if height || show_all {
+                            wallet.node_best_block_height().await?;
+                        }
+                        let info = wallet.chainstate_info().await?;
+                        (
+                            (id || show_all).then(|| info.best_block_id.hex_encode()),
+                            (height || show_all).then(|| info.best_block_height.to_string()),
+                            (timestamp || show_all)
+                                .then(|| format_block_timestamp(info.best_block_timestamp)),
+                        )
+                    } else {
+                        (
+                            if id {
+                                Some(wallet.node_best_block_id().await?.hex_encode())
+                            } else {
+                                None
+                            },
+                            if height {
+                                Some(wallet.node_best_block_height().await?.to_string())
+                            } else {
+                                None
+                            },
+                            if timestamp {
+                                // Probe the node first so a cold wallet errors
+                                // here exactly like the --id and --height arms,
+                                // instead of chainstate_info quietly reporting
+                                // its genesis stub.
+                                wallet.node_best_block_id().await?;
+                                Some(format_block_timestamp(
+                                    wallet.chainstate_info().await?.best_block_timestamp,
+                                ))
+                            } else {
+                                None
+                            },
+                        )
+                    };
+                Ok(ConsoleCommand::Print(format_best_block(
+                    best_block_id,
+                    best_block_height,
+                    best_block_timestamp,
+                )))
+            }
+
             WalletCommand::BestBlockTimestamp => {
                 let timestamp = self.wallet().await?.chainstate_info().await?.best_block_timestamp;
-                Ok(ConsoleCommand::Print(format!(
-                    "{} ({})",
-                    timestamp,
-                    timestamp.into_time()
-                )))
+                Ok(ConsoleCommand::Print(format_block_timestamp(timestamp)))
             }
 
             WalletCommand::BlockId { height } => {
@@ -959,7 +1473,9 @@ where
                         check_all_timestamps_between_blocks.to_bool(),
                     )
                     .await?;
-                Ok(ConsoleCommand::Print(format!("{timestamp_map:#?}")))
+                Ok(ConsoleCommand::Print(format_staking_timestamps(
+                    &timestamp_map,
+                )))
             }
 
             WalletCommand::GetBlockIdsAsCheckpoints {
@@ -1435,10 +1951,10 @@ where
 
             WalletCommand::ListPendingTransactions => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let utxos = wallet.list_pending_transactions(selected_account).await?;
+                let transactions = wallet.list_pending_transactions(selected_account).await?;
                 Ok(ConsoleCommand::PaginatedPrint {
-                    header: "Pending Transactions".to_owned(),
-                    body: format!("{utxos:#?}"),
+                    header: "Pending transactions".to_owned(),
+                    body: format_pending_transaction_ids(&transactions),
                 })
             }
 
@@ -1576,7 +2092,7 @@ where
 
                 let summary = tx.tx().text_summary(chain_config);
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&hex);
@@ -1876,7 +2392,7 @@ where
                     )
                     .await?;
 
-                let qr_code_string = if self.no_qr {
+                let qr_code_string = if !self.qr {
                     String::new()
                 } else {
                     let qr_code = qrcode_or_error_string(&result_hex.to_string());
@@ -2019,11 +2535,16 @@ where
 
             WalletCommand::PeerCount => {
                 let peer_count = self.wallet().await?.peer_count().await?;
-                Ok(ConsoleCommand::Print(peer_count.to_string()))
+                Ok(ConsoleCommand::from(
+                    crate::output::CommandOutput::with_payload(
+                        peer_count.to_string(),
+                        serde_json::json!({ "peer_count": peer_count }),
+                    ),
+                ))
             }
             WalletCommand::ConnectedPeers => {
                 let peers = self.wallet().await?.connected_peers().await?;
-                Ok(ConsoleCommand::Print(format!("{peers:#?}")))
+                Ok(ConsoleCommand::Print(format_connected_peers(&peers)))
             }
             WalletCommand::ConnectedPeersJson => {
                 let peers = self.wallet().await?.connected_peers().await?;
@@ -2032,7 +2553,7 @@ where
             }
             WalletCommand::ReservedPeers => {
                 let peers = self.wallet().await?.reserved_peers().await?;
-                Ok(ConsoleCommand::Print(format!("{peers:#?}")))
+                Ok(ConsoleCommand::Print(format_reserved_peers(&peers)))
             }
             WalletCommand::AddReservedPeer { address } => {
                 self.wallet().await?.add_reserved_peer(address).await?;
@@ -2432,6 +2953,487 @@ where
     }
 }
 
+/// Whether the command still carries a nested group that must be translated before
+/// dispatch. Shared by the dispatch guard and the translation tests so both stay in
+/// sync when new groups are added.
+pub(crate) fn is_nested_wallet_command(command: &WalletCommand) -> bool {
+    // Keep in sync with the dispatch or-pattern in `handle_wallet_command` and the
+    // translation arms in `normalize_nested_wallet_command`; the LEGACY_ALIASES
+    // coexistence test and the translation test pin the three sites together.
+    matches!(
+        command,
+        WalletCommand::Wallet { .. }
+            | WalletCommand::Account { .. }
+            | WalletCommand::Address { .. }
+            | WalletCommand::Send { .. }
+            | WalletCommand::Data { .. }
+            | WalletCommand::Staking { .. }
+            | WalletCommand::Delegation { .. }
+            | WalletCommand::Token { .. }
+            | WalletCommand::Order { .. }
+            | WalletCommand::Htlc { .. }
+            | WalletCommand::Transaction { .. }
+            | WalletCommand::Node { .. }
+            | WalletCommand::Peer { .. }
+            | WalletCommand::Config { .. }
+    )
+}
+
+/// Translate the nested command grammar (`account select`, `address qr`, `send`, ...)
+/// into the flat commands that drive the implementation, so every command has exactly
+/// one implementation regardless of how it was spelled. The `wallet` group is handled
+/// at the dispatch site because it maps onto the wallet management commands.
+pub(crate) fn normalize_nested_wallet_command(command: WalletCommand) -> WalletCommand {
+    match command {
+        WalletCommand::Account { command } => match command {
+            AccountGroupSubCommand::Create { name } => WalletCommand::CreateNewAccount { name },
+            AccountGroupSubCommand::Rename { name } => WalletCommand::RenameAccount { name },
+            AccountGroupSubCommand::Select { account_index } => {
+                WalletCommand::SelectAccount { account_index }
+            }
+            AccountGroupSubCommand::Utxos {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            } => WalletCommand::ListUtxo {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            },
+            AccountGroupSubCommand::Balance {
+                with_locked,
+                utxo_states,
+            } => WalletCommand::GetBalance {
+                with_locked,
+                utxo_states,
+            },
+            AccountGroupSubCommand::ShowXpub => {
+                WalletCommand::ColdCommands(ColdWalletCommand::AccountExtendedPublicKey)
+            }
+        },
+        WalletCommand::Address { command } => {
+            match command {
+                AddressGroupSubCommand::New => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::NewAddress)
+                }
+                AddressGroupSubCommand::List { include_change } => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::ShowAddresses { include_change })
+                }
+                AddressGroupSubCommand::Qr { address } => {
+                    WalletCommand::ColdCommands(ColdWalletCommand::AddressQRCode { address })
+                }
+                AddressGroupSubCommand::RevealPublicKey {
+                    public_key_hash,
+                    format,
+                } => WalletCommand::ColdCommands(match format {
+                    CliPublicKeyFormat::Hex => {
+                        ColdWalletCommand::RevealPublicKeyHex { public_key_hash }
+                    }
+                    CliPublicKeyFormat::Address => {
+                        ColdWalletCommand::RevealPublicKey { public_key_hash }
+                    }
+                }),
+                AddressGroupSubCommand::Sweep {
+                    destination_address,
+                    addresses,
+                    all,
+                } => WalletCommand::SweepFromAddress {
+                    destination_address,
+                    addresses,
+                    all,
+                },
+                AddressGroupSubCommand::Standalone { command } => match command {
+                    StandaloneGroupSubCommand::RenameLabel { address, label } => {
+                        WalletCommand::StandaloneAddressLabelRename { address, label }
+                    }
+                    StandaloneGroupSubCommand::Add {
+                        address,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandaloneKey {
+                        address,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::AddPrivateKey {
+                        hex_private_key,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandalonePrivateKey {
+                        hex_private_key,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::AddMultisig {
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                        no_rescan,
+                    } => WalletCommand::AddStandaloneMultisig {
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                        no_rescan,
+                    },
+                    StandaloneGroupSubCommand::List => {
+                        WalletCommand::ColdCommands(ColdWalletCommand::ShowStandaloneAddresses)
+                    }
+                    StandaloneGroupSubCommand::Details { address } => WalletCommand::ColdCommands(
+                        ColdWalletCommand::ShowStandaloneAddressDetails { address },
+                    ),
+                    StandaloneGroupSubCommand::Utxos {
+                        utxo_type,
+                        with_locked,
+                        utxo_states,
+                    } => WalletCommand::ListMultisigUtxo {
+                        utxo_type,
+                        with_locked,
+                        utxo_states,
+                    },
+                },
+            }
+        }
+        WalletCommand::Send {
+            address,
+            amount,
+            utxos,
+        } => WalletCommand::SendToAddress {
+            address,
+            amount,
+            utxos,
+        },
+        WalletCommand::Data { command } => match command {
+            DataGroupSubCommand::Deposit { hex_data } => WalletCommand::DepositData { hex_data },
+        },
+        WalletCommand::Staking { command } => match command {
+            StakingGroupSubCommand::CreatePool {
+                amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
+                decommission_address,
+                staker_address,
+                vrf_public_key,
+            } => WalletCommand::CreateStakePool {
+                amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
+                decommission_address,
+                staker_address,
+                vrf_public_key,
+            },
+            StakingGroupSubCommand::DecommissionPool {
+                pool_id,
+                output_address,
+            } => WalletCommand::DecommissionStakePool {
+                pool_id,
+                output_address,
+            },
+            StakingGroupSubCommand::DecommissionPoolRequest {
+                pool_id,
+                output_address,
+            } => WalletCommand::DecommissionStakePoolRequest {
+                pool_id,
+                output_address,
+            },
+            StakingGroupSubCommand::NewVrfPublicKey => {
+                WalletCommand::ColdCommands(ColdWalletCommand::NewVrfPublicKey)
+            }
+            StakingGroupSubCommand::ShowVrfPublicKeys => {
+                WalletCommand::ColdCommands(ColdWalletCommand::GetVrfPublicKey)
+            }
+            StakingGroupSubCommand::ShowLegacyVrfKey => {
+                WalletCommand::ColdCommands(ColdWalletCommand::GetLegacyVrfPublicKey)
+            }
+            StakingGroupSubCommand::Start => WalletCommand::StartStaking,
+            StakingGroupSubCommand::Stop => WalletCommand::StopStaking,
+            StakingGroupSubCommand::Status => WalletCommand::StakingStatus,
+            StakingGroupSubCommand::ListPools => WalletCommand::ListPools,
+            StakingGroupSubCommand::ListOwnedPoolsForDecommission => {
+                WalletCommand::ListOwnedPoolsForDecommission
+            }
+            StakingGroupSubCommand::ListCreatedBlocks => WalletCommand::ListCreatedBlocksIds,
+            StakingGroupSubCommand::PoolBalance { pool_id } => {
+                WalletCommand::StakePoolBalance { pool_id }
+            }
+        },
+        WalletCommand::Delegation { command } => match command {
+            DelegationGroupSubCommand::Create { owner, pool_id } => {
+                WalletCommand::CreateDelegation { owner, pool_id }
+            }
+            DelegationGroupSubCommand::List => WalletCommand::ListDelegationIds,
+            DelegationGroupSubCommand::Stake {
+                amount,
+                delegation_id,
+            } => WalletCommand::DelegateStaking {
+                amount,
+                delegation_id,
+            },
+            DelegationGroupSubCommand::Withdraw {
+                address,
+                amount,
+                delegation_id,
+            } => WalletCommand::WithdrawFromDelegation {
+                address,
+                amount,
+                delegation_id,
+            },
+            DelegationGroupSubCommand::Sweep {
+                destination_address,
+                delegation_id,
+            } => WalletCommand::SweepFromDelegation {
+                destination_address,
+                delegation_id,
+            },
+        },
+        WalletCommand::Token { command } => match command {
+            TokenGroupSubCommand::Issue {
+                token_ticker,
+                number_of_decimals,
+                metadata_uri,
+                authority_address,
+                token_supply,
+                is_freezable,
+            } => WalletCommand::IssueNewToken {
+                token_ticker,
+                number_of_decimals,
+                metadata_uri,
+                authority_address,
+                token_supply,
+                is_freezable,
+            },
+            TokenGroupSubCommand::Nft {
+                command:
+                    NftGroupSubCommand::Issue {
+                        destination_address,
+                        media_hash,
+                        name,
+                        description,
+                        ticker,
+                        creator,
+                        icon_uri,
+                        media_uri,
+                        additional_metadata_uri,
+                    },
+            } => WalletCommand::IssueNewNft {
+                destination_address,
+                media_hash,
+                name,
+                description,
+                ticker,
+                creator,
+                icon_uri,
+                media_uri,
+                additional_metadata_uri,
+            },
+            TokenGroupSubCommand::ChangeAuthority { token_id, address } => {
+                WalletCommand::ChangeTokenAuthority { token_id, address }
+            }
+            TokenGroupSubCommand::ChangeMetadataUri {
+                token_id,
+                metadata_uri,
+            } => WalletCommand::ChangeTokenMetadataUri {
+                token_id,
+                metadata_uri,
+            },
+            TokenGroupSubCommand::Mint {
+                token_id,
+                address,
+                amount,
+            } => WalletCommand::MintTokens {
+                token_id,
+                address,
+                amount,
+            },
+            TokenGroupSubCommand::Unmint { token_id, amount } => {
+                WalletCommand::UnmintTokens { token_id, amount }
+            }
+            TokenGroupSubCommand::LockSupply { token_id } => {
+                WalletCommand::LockTokenSupply { token_id }
+            }
+            TokenGroupSubCommand::Freeze {
+                token_id,
+                is_unfreezable,
+            } => WalletCommand::FreezeToken {
+                token_id,
+                is_unfreezable,
+            },
+            TokenGroupSubCommand::Unfreeze { token_id } => {
+                WalletCommand::UnfreezeToken { token_id }
+            }
+            TokenGroupSubCommand::Send {
+                token_id,
+                address,
+                amount,
+            } => WalletCommand::SendTokensToAddress {
+                token_id,
+                address,
+                amount,
+            },
+        },
+        WalletCommand::Order { command } => match command {
+            OrderGroupSubCommand::Create {
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+            } => WalletCommand::CreateOrder {
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+            },
+            OrderGroupSubCommand::Fill {
+                order_id,
+                amount,
+                output_address,
+            } => WalletCommand::FillOrder {
+                order_id,
+                amount,
+                output_address,
+            },
+            OrderGroupSubCommand::Freeze { order_id } => WalletCommand::FreezeOrder { order_id },
+            OrderGroupSubCommand::Conclude {
+                order_id,
+                output_address,
+            } => WalletCommand::ConcludeOrder {
+                order_id,
+                output_address,
+            },
+            OrderGroupSubCommand::ListOwn => WalletCommand::ListOwnOrders,
+            OrderGroupSubCommand::ListAllActive {
+                ask_currency,
+                give_currency,
+            } => WalletCommand::ListActiveOrders {
+                ask_currency,
+                give_currency,
+            },
+        },
+        WalletCommand::Htlc { command } => match command {
+            HtlcGroupSubCommand::Create {
+                currency,
+                amount,
+                secret_hash,
+                spend_address,
+                refund_timelock,
+                refund_address,
+            } => WalletCommand::CreateHtlcTx {
+                currency,
+                amount,
+                secret_hash,
+                spend_address,
+                refund_timelock,
+                refund_address,
+            },
+            HtlcGroupSubCommand::GenerateSecret => WalletCommand::GenerateHtlcSecret,
+            HtlcGroupSubCommand::CalcSecretHash { secret } => {
+                WalletCommand::CalcHtlcSecretHash { secret }
+            }
+        },
+        WalletCommand::Node { command } => match command {
+            NodeGroupSubCommand::Version => WalletCommand::NodeVersion,
+            NodeGroupSubCommand::Shutdown => WalletCommand::NodeShutdown,
+            NodeGroupSubCommand::P2p { enable } => WalletCommand::NodeEnableNetworking { enable },
+            NodeGroupSubCommand::SubmitBlock { block } => WalletCommand::SubmitBlock { block },
+            NodeGroupSubCommand::SubmitTransaction {
+                transaction,
+                do_not_store,
+            } => WalletCommand::SubmitTransaction {
+                transaction,
+                do_not_store,
+            },
+            NodeGroupSubCommand::ChainstateInfo => WalletCommand::ChainstateInfo,
+            NodeGroupSubCommand::BestBlock {
+                id,
+                height,
+                timestamp,
+            } => WalletCommand::NodeBestBlock {
+                id,
+                height,
+                timestamp,
+            },
+            NodeGroupSubCommand::BlockId { height } => WalletCommand::BlockId { height },
+            NodeGroupSubCommand::Block { id } => WalletCommand::GetBlock { id },
+            NodeGroupSubCommand::GenerateBlock { transactions } => {
+                WalletCommand::GenerateBlock { transactions }
+            }
+        },
+        WalletCommand::Peer { command } => match command {
+            PeerGroupSubCommand::Connect { address } => WalletCommand::Connect { address },
+            PeerGroupSubCommand::Disconnect { peer_id } => WalletCommand::Disconnect { peer_id },
+            PeerGroupSubCommand::Ban { address, duration } => {
+                WalletCommand::Ban { address, duration }
+            }
+            PeerGroupSubCommand::Unban { address } => WalletCommand::Unban { address },
+            PeerGroupSubCommand::Banned => WalletCommand::ListBanned,
+            PeerGroupSubCommand::Discouraged => WalletCommand::ListDiscouraged,
+            PeerGroupSubCommand::Undiscourage { address } => {
+                WalletCommand::Undiscourage { address }
+            }
+            PeerGroupSubCommand::Count => WalletCommand::PeerCount,
+            PeerGroupSubCommand::List => WalletCommand::ConnectedPeers,
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::List,
+            } => WalletCommand::ReservedPeers,
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::Add { address },
+            } => WalletCommand::AddReservedPeer { address },
+            PeerGroupSubCommand::Reserved {
+                command: ReservedPeerGroupSubCommand::Remove { address },
+            } => WalletCommand::RemoveReservedPeer { address },
+        },
+        WalletCommand::Transaction { command } => match command {
+            TransactionGroupSubCommand::Compose {
+                outputs,
+                utxos,
+                only_transaction,
+            } => WalletCommand::TransactionCompose {
+                outputs,
+                utxos,
+                only_transaction,
+            },
+            TransactionGroupSubCommand::CreateFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            } => WalletCommand::CreateTxFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            },
+            TransactionGroupSubCommand::Inspect { transaction } => {
+                WalletCommand::InspectTransaction { transaction }
+            }
+            TransactionGroupSubCommand::Sign { transaction } => {
+                WalletCommand::ColdCommands(ColdWalletCommand::SignRawTransaction { transaction })
+            }
+            TransactionGroupSubCommand::Abandon { transaction_id } => {
+                WalletCommand::AbandonTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::ListPending => WalletCommand::ListPendingTransactions,
+            TransactionGroupSubCommand::ListByAddress { address, limit } => {
+                WalletCommand::ListMainchainTransactions { address, limit }
+            }
+            TransactionGroupSubCommand::Get { transaction_id } => {
+                WalletCommand::GetTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::GetRaw { transaction_id } => {
+                WalletCommand::GetRawTransaction { transaction_id }
+            }
+            TransactionGroupSubCommand::GetSignedRaw { transaction_id } => {
+                WalletCommand::GetRawSignedTransaction { transaction_id }
+            }
+        },
+        WalletCommand::Config {
+            command: ConfigGroupSubCommand::Broadcast { broadcast },
+        } => WalletCommand::ConfigBroadcast { broadcast },
+        command => command,
+    }
+}
+
 fn format_tx_to_be_broadcasted(
     tx: HexEncoded<SignedTransaction>,
     fees: &Balances,
@@ -2516,4 +3518,821 @@ fn get_token_ids_from_order_infos_as_str<'a>(
     get_token_ids_from_order_infos(initial_balances_iter)
         .map(|rpc_addr| rpc_addr.as_str().to_owned())
         .collect_vec()
+}
+
+/// Format best-block values with labels only when more than one value is shown.
+/// Values the caller did not fetch are passed as `None`; the caller must always
+/// fetch at least one value (its no-flags rule fetches all three), a single fetched
+/// value is shown bare, byte-identical to the legacy single-value commands (the
+/// unit test pins those shapes), and an all-`None` input renders an empty string.
+fn format_best_block(
+    best_block_id: Option<String>,
+    best_block_height: Option<String>,
+    best_block_timestamp: Option<String>,
+) -> String {
+    let selected = [
+        best_block_id.as_ref(),
+        best_block_height.as_ref(),
+        best_block_timestamp.as_ref(),
+    ]
+    .into_iter()
+    .filter(|value| value.is_some())
+    .count();
+    debug_assert!(
+        selected > 0,
+        "format_best_block requires at least one fetched value; \
+         all-None input renders as an empty string"
+    );
+    let labeled = selected != 1;
+    let mut lines = Vec::new();
+    if let Some(value) = best_block_id {
+        lines.push(if labeled {
+            format!("Best block id: {value}")
+        } else {
+            value
+        });
+    }
+    if let Some(value) = best_block_height {
+        lines.push(if labeled {
+            format!("Best block height: {value}")
+        } else {
+            value
+        });
+    }
+    if let Some(value) = best_block_timestamp {
+        lines.push(if labeled {
+            format!("Best block timestamp: {value}")
+        } else {
+            value
+        });
+    }
+    lines.join("\n")
+}
+
+/// Render a block timestamp the way the best-block commands print it.
+fn format_block_timestamp(timestamp: BlockTimestamp) -> String {
+    format!("{} ({})", timestamp, timestamp.into_time())
+}
+
+fn format_chainstate_info(info: &ChainInfo) -> String {
+    format!(
+        "Chainstate info:\n\
+         \x20 Best block height: {}\n\
+         \x20 Best block id: {}\n\
+         \x20 Best block timestamp: {} ({})\n\
+         \x20 Median time: {} ({})\n\
+         \x20 Initial block download: {}",
+        info.best_block_height,
+        info.best_block_id,
+        info.best_block_timestamp,
+        info.best_block_timestamp.into_time(),
+        info.median_time,
+        info.median_time.into_time(),
+        info.is_initial_block_download,
+    )
+}
+
+fn format_staking_timestamps(timestamps: &BTreeMap<BlockHeight, Vec<BlockTimestamp>>) -> String {
+    if timestamps.is_empty() {
+        return "No staking timestamps found".to_owned();
+    }
+
+    let mut output = String::from("Staking timestamps by block height:");
+    for (height, block_timestamps) in timestamps {
+        let rendered = block_timestamps
+            .iter()
+            .map(|timestamp| format!("{} ({})", timestamp, timestamp.into_time()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(output, "\n  {}: {}", height, rendered).expect("writing to a string cannot fail");
+    }
+    output
+}
+
+fn format_pending_transaction_ids(transactions: &[Id<Transaction>]) -> String {
+    if transactions.is_empty() {
+        return "No pending transactions".to_owned();
+    }
+
+    transactions
+        .iter()
+        .map(|id| format!("  {}", id_to_hex_string(*id.as_hash())))
+        .join("\n")
+}
+
+fn format_connected_peers(peers: &[ConnectedPeer]) -> String {
+    if peers.is_empty() {
+        return "No connected peers".to_owned();
+    }
+
+    let mut table = prettytable::Table::new();
+    table.set_titles(prettytable::row![
+        "Peer id",
+        "Address",
+        "Role",
+        "Ban score",
+        "User agent",
+    ]);
+    table.extend(peers.iter().map(|peer| {
+        prettytable::row![
+            peer.peer_id,
+            peer.address,
+            format!("{:?}", peer.peer_role),
+            peer.ban_score,
+            peer.user_agent,
+        ]
+    }));
+    table.to_string()
+}
+
+fn format_reserved_peers(peers: &[SocketAddress]) -> String {
+    if peers.is_empty() {
+        return "No reserved peers".to_owned();
+    }
+
+    let mut output = String::from("Reserved peers:");
+    for (index, address) in peers.iter().enumerate() {
+        write!(output, "\n  {}. {}", index + 1, address).expect("writing to a string cannot fail");
+    }
+    output
+}
+
+#[cfg(test)]
+mod nested_translation_tests {
+    use super::*;
+    use clap::Parser;
+
+    // Parsing builds and augments the whole grammar tree on the calling
+    // thread, so it runs through `run_with_large_stack`.
+    fn parse_with_large_stack(argv: &[&str]) -> WalletCommand {
+        let owned: Vec<String> = argv.iter().map(|arg| arg.to_string()).collect();
+        crate::run_with_large_stack(move || {
+            WalletCommand::try_parse_from(owned).expect("argv must parse")
+        })
+    }
+
+    fn flat_debug(argv: &[&str]) -> String {
+        let command = parse_with_large_stack(argv);
+        let flat = normalize_nested_wallet_command(command);
+        assert!(
+            !is_nested_wallet_command(&flat),
+            "translation must produce a flat command"
+        );
+        format!("{flat:?}")
+    }
+
+    #[test]
+    fn best_block_formatter_matches_the_legacy_single_value_shapes() {
+        // Literal renderings the legacy flat commands produce; the single-flag
+        // shapes must stay byte-identical to them.
+        const ZERO_ID_HEX: &str =
+            "0000000000000000000000000000000000000000000000000000000000000000";
+        const GENESIS_TIMESTAMP_RENDERING: &str = "42 (1970-01-01 00:00:42 UTC)";
+
+        let rendered = (
+            ZERO_ID_HEX.to_owned(),
+            "7".to_owned(),
+            GENESIS_TIMESTAMP_RENDERING.to_owned(),
+        );
+
+        // Exactly one value: bare, byte-identical to the legacy commands.
+        assert_eq!(
+            format_best_block(Some(rendered.0.clone()), None, None),
+            ZERO_ID_HEX
+        );
+        assert_eq!(format_best_block(None, Some(rendered.1.clone()), None), "7");
+        assert_eq!(
+            format_best_block(None, None, Some(rendered.2.clone())),
+            GENESIS_TIMESTAMP_RENDERING
+        );
+
+        // Two values: labeled subset.
+        assert_eq!(
+            format_best_block(Some(rendered.0.clone()), Some(rendered.1.clone()), None),
+            format!("Best block id: {ZERO_ID_HEX}\nBest block height: 7")
+        );
+
+        // No values fetched: all three, labeled.
+        let all = format_best_block(Some(rendered.0), Some(rendered.1), Some(rendered.2));
+        assert_eq!(all.lines().count(), 3);
+        assert!(all.starts_with("Best block id: "));
+        assert!(all.contains("Best block height: 7"));
+        assert!(all.contains("Best block timestamp: "));
+    }
+
+    #[test]
+    fn nested_spellings_translate_to_the_legacy_flat_commands() {
+        const HEX_PRIVATE_KEY: &str =
+            "001111111111111111111111111111111111111111111111111111111111111111";
+        const HEX_TXID: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        const UTXO_OUT_POINT_ARG: &str = concat!(
+            "tx(",
+            "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+            ",1)"
+        );
+
+        let cases: &[(&[&str], &[&str])] = &[
+            (
+                &["repl", "account", "create", "acc"],
+                &["repl", "account-create", "acc"],
+            ),
+            (
+                &["repl", "account", "rename", "acc"],
+                &["repl", "account-rename", "acc"],
+            ),
+            (
+                &["repl", "account", "select", "1"],
+                &["repl", "account-select", "1"],
+            ),
+            (&["repl", "account", "utxos"], &["repl", "account-utxos"]),
+            (
+                &["repl", "account", "balance"],
+                &["repl", "account-balance"],
+            ),
+            (
+                &["repl", "account", "show-xpub"],
+                &["repl", "account-extended-public-key-as-hex"],
+            ),
+            (&["repl", "address", "new"], &["repl", "address-new"]),
+            (&["repl", "address", "list"], &["repl", "address-show"]),
+            (
+                &["repl", "address", "qr", "addr"],
+                &["repl", "address-qrcode", "addr"],
+            ),
+            (
+                &["repl", "address", "reveal-public-key", "pkh", "--format", "hex"],
+                &["repl", "address-reveal-public-key-as-hex", "pkh"],
+            ),
+            (
+                &["repl", "address", "reveal-public-key", "pkh"],
+                &["repl", "address-reveal-public-key-as-address", "pkh"],
+            ),
+            (
+                &["repl", "address", "sweep", "dest", "--all"],
+                &["repl", "address-sweep-spendable", "dest", "--all"],
+            ),
+            (
+                &["repl", "address", "standalone", "rename-label", "addr", "--label", "l"],
+                &["repl", "standalone-address-label-rename", "addr", "--label", "l"],
+            ),
+            (
+                &["repl", "address", "standalone", "add", "addr", "--no-rescan", "true"],
+                &["repl", "standalone-add-watch-only-address", "addr", "--no-rescan", "true"],
+            ),
+            (
+                &[
+                    "repl",
+                    "address",
+                    "standalone",
+                    "add-private-key",
+                    HEX_PRIVATE_KEY,
+                    "--no-rescan",
+                    "true",
+                ],
+                &[
+                    "repl",
+                    "standalone-add-private-key-from-hex",
+                    HEX_PRIVATE_KEY,
+                    "--no-rescan",
+                    "true",
+                ],
+            ),
+            (
+                &[
+                    "repl",
+                    "address",
+                    "standalone",
+                    "add-multisig",
+                    "2",
+                    "pk1",
+                    "pk2",
+                    "--no-rescan",
+                    "true",
+                ],
+                &["repl", "standalone-add-multisig", "2", "pk1", "pk2", "--no-rescan", "true"],
+            ),
+            (
+                &["repl", "address", "standalone", "list"],
+                &["repl", "standalone-address-show"],
+            ),
+            (
+                &["repl", "address", "standalone", "details", "addr"],
+                &["repl", "standalone-address-details", "addr"],
+            ),
+            (
+                &["repl", "address", "standalone", "utxos"],
+                &["repl", "standalone-multisig-utxos"],
+            ),
+            (
+                &["repl", "send", "dest", "1.0"],
+                &["repl", "address-send", "dest", "1.0"],
+            ),
+            (
+                &["repl", "data", "deposit", "deadbeef"],
+                &["repl", "address-deposit-data", "deadbeef"],
+            ),
+            (
+                &["repl", "staking", "new-vrf-public-key"],
+                &["repl", "staking-new-vrf-public-key"],
+            ),
+            (
+                &["repl", "staking", "show-vrf-public-keys"],
+                &["repl", "staking-show-vrf-public-keys"],
+            ),
+            (
+                &["repl", "staking", "show-legacy-vrf-key"],
+                &["repl", "staking-show-legacy-vrf-key"],
+            ),
+            (
+                &[
+                    "repl",
+                    "staking",
+                    "create-pool",
+                    "1000",
+                    "0.01",
+                    "0.1",
+                    "decomm_addr",
+                    "staker_addr",
+                    "vrf_key",
+                ],
+                &[
+                    "repl",
+                    "staking-create-pool",
+                    "1000",
+                    "0.01",
+                    "0.1",
+                    "decomm_addr",
+                    "staker_addr",
+                    "vrf_key",
+                ],
+            ),
+            (
+                &["repl", "staking", "decommission-pool", "pool1", "out_addr"],
+                &["repl", "staking-decommission-pool", "pool1", "out_addr"],
+            ),
+            (
+                &["repl", "staking", "decommission-pool-request", "pool1", "out_addr"],
+                &["repl", "staking-decommission-pool-request", "pool1", "out_addr"],
+            ),
+            (&["repl", "staking", "start"], &["repl", "staking-start"]),
+            (&["repl", "staking", "stop"], &["repl", "staking-stop"]),
+            (&["repl", "staking", "status"], &["repl", "staking-status"]),
+            (
+                &["repl", "staking", "list-pools"],
+                &["repl", "staking-list-pools"],
+            ),
+            (
+                &["repl", "staking", "list-owned-pools-for-decommission"],
+                &["repl", "staking-list-owned-pools-for-decommission"],
+            ),
+            (
+                &["repl", "staking", "list-created-blocks"],
+                &["repl", "staking-list-created-block-ids"],
+            ),
+            (
+                &["repl", "staking", "pool-balance", "pool1"],
+                &["repl", "staking-pool-balance", "pool1"],
+            ),
+            (
+                &["repl", "delegation", "create", "owner_addr", "pool1"],
+                &["repl", "delegation-create", "owner_addr", "pool1"],
+            ),
+            (
+                &["repl", "delegation", "list"],
+                &["repl", "delegation-list-ids"],
+            ),
+            (
+                &["repl", "delegation", "stake", "1.0", "deleg1"],
+                &["repl", "delegation-stake", "1.0", "deleg1"],
+            ),
+            (
+                &["repl", "delegation", "withdraw", "addr", "1.0", "deleg1"],
+                &["repl", "delegation-withdraw", "addr", "1.0", "deleg1"],
+            ),
+            (
+                &["repl", "delegation", "sweep", "dest", "deleg1"],
+                &["repl", "staking-sweep-delegation", "dest", "deleg1"],
+            ),
+            (
+                &[
+                    "repl",
+                    "token",
+                    "issue",
+                    "TKN",
+                    "4",
+                    "https://meta",
+                    "authority_addr",
+                    "unlimited",
+                    "freezable",
+                ],
+                &[
+                    "repl",
+                    "token-issue-new",
+                    "TKN",
+                    "4",
+                    "https://meta",
+                    "authority_addr",
+                    "unlimited",
+                    "freezable",
+                ],
+            ),
+            (
+                &["repl", "token", "nft", "issue", "dest", "abcd", "name", "descr", "NFT"],
+                &["repl", "token-nft-issue-new", "dest", "abcd", "name", "descr", "NFT"],
+            ),
+            (
+                &["repl", "token", "change-authority", "tid", "addr"],
+                &["repl", "token-change-authority", "tid", "addr"],
+            ),
+            (
+                &["repl", "token", "change-metadata-uri", "tid", "uri"],
+                &["repl", "token-change-metadata-uri", "tid", "uri"],
+            ),
+            (
+                &["repl", "token", "mint", "tid", "addr", "1.0"],
+                &["repl", "token-mint", "tid", "addr", "1.0"],
+            ),
+            (
+                &["repl", "token", "unmint", "tid", "1.0"],
+                &["repl", "token-unmint", "tid", "1.0"],
+            ),
+            (
+                &["repl", "token", "lock-supply", "tid"],
+                &["repl", "token-lock-supply", "tid"],
+            ),
+            (
+                &["repl", "token", "freeze", "tid", "unfreezable"],
+                &["repl", "token-freeze", "tid", "unfreezable"],
+            ),
+            (
+                &["repl", "token", "unfreeze", "tid"],
+                &["repl", "token-unfreeze", "tid"],
+            ),
+            (
+                &["repl", "token", "send", "tid", "addr", "1.0"],
+                &["repl", "token-send", "tid", "addr", "1.0"],
+            ),
+            (
+                &["repl", "order", "create", "coin", "1.0", "coin", "2.0", "concl_addr"],
+                &["repl", "order-create", "coin", "1.0", "coin", "2.0", "concl_addr"],
+            ),
+            (
+                &["repl", "order", "fill", "ord1", "1.0", "out_addr"],
+                &["repl", "order-fill", "ord1", "1.0", "out_addr"],
+            ),
+            (
+                &["repl", "order", "freeze", "ord1"],
+                &["repl", "order-freeze", "ord1"],
+            ),
+            (
+                &["repl", "order", "conclude", "ord1", "out_addr"],
+                &["repl", "order-conclude", "ord1", "out_addr"],
+            ),
+            (&["repl", "order", "list-own"], &["repl", "order-list-own"]),
+            (
+                &["repl", "order", "list-all-active", "--ask-currency", "coin"],
+                &["repl", "order-list-all-active", "--ask-currency", "coin"],
+            ),
+            (
+                &[
+                    "repl",
+                    "htlc",
+                    "create",
+                    "coin",
+                    "1.0",
+                    "secret_hash",
+                    "spend_addr",
+                    "block_count(720)",
+                    "refund_addr",
+                ],
+                &[
+                    "repl",
+                    "htlc-create-transaction",
+                    "coin",
+                    "1.0",
+                    "secret_hash",
+                    "spend_addr",
+                    "block_count(720)",
+                    "refund_addr",
+                ],
+            ),
+            (
+                &["repl", "htlc", "generate-secret"],
+                &["repl", "htlc-generate-secret"],
+            ),
+            (
+                &["repl", "htlc", "calc-secret-hash", "s3cret"],
+                &["repl", "htlc-calc-secret-hash", "s3cret"],
+            ),
+            (
+                &["repl", "transaction", "compose", "transfer(addr,1.0)"],
+                &["repl", "transaction-compose", "transfer(addr,1.0)"],
+            ),
+            (
+                &[
+                    "repl",
+                    "transaction",
+                    "create-from-cold-input",
+                    "addr",
+                    "1.0",
+                    UTXO_OUT_POINT_ARG,
+                    "--change",
+                    "chg",
+                ],
+                &[
+                    "repl",
+                    "transaction-create-from-cold-input",
+                    "addr",
+                    "1.0",
+                    UTXO_OUT_POINT_ARG,
+                    "--change",
+                    "chg",
+                ],
+            ),
+            (
+                &["repl", "transaction", "inspect", "deadbeef"],
+                &["repl", "transaction-inspect", "deadbeef"],
+            ),
+            (
+                &["repl", "transaction", "abandon", HEX_TXID],
+                &["repl", "transaction-abandon", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "list-pending"],
+                &["repl", "transaction-list-pending"],
+            ),
+            (
+                &["repl", "transaction", "list-by-address", "addr", "--limit", "5"],
+                &["repl", "transaction-list-by-address", "addr", "--limit", "5"],
+            ),
+            (
+                &["repl", "transaction", "get", HEX_TXID],
+                &["repl", "transaction-get", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "get-raw", HEX_TXID],
+                &["repl", "transaction-get-raw", HEX_TXID],
+            ),
+            (
+                &["repl", "transaction", "get-signed-raw", HEX_TXID],
+                &["repl", "transaction-get-signed-raw", HEX_TXID],
+            ),
+            (
+                &[
+                    "repl",
+                    "token",
+                    "nft",
+                    "issue",
+                    "dest",
+                    "abcd",
+                    "name",
+                    "descr",
+                    "NFT",
+                    "000279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                    "https://icon",
+                    "https://media",
+                    "https://extra",
+                ],
+                &[
+                    "repl",
+                    "token-nft-issue-new",
+                    "dest",
+                    "abcd",
+                    "name",
+                    "descr",
+                    "NFT",
+                    "000279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                    "https://icon",
+                    "https://media",
+                    "https://extra",
+                ],
+            ),
+            (
+                &[
+                    "repl",
+                    "order",
+                    "list-all-active",
+                    "--ask-currency",
+                    "coin",
+                    "--give-currency",
+                    "token",
+                ],
+                &[
+                    "repl",
+                    "order-list-all-active",
+                    "--ask-currency",
+                    "coin",
+                    "--give-currency",
+                    "token",
+                ],
+            ),
+            (
+                &[
+                    "repl",
+                    "transaction",
+                    "compose",
+                    "transfer(addr,1.0)",
+                    "--utxos",
+                    UTXO_OUT_POINT_ARG,
+                    "--only-transaction",
+                ],
+                &[
+                    "repl",
+                    "transaction-compose",
+                    "transfer(addr,1.0)",
+                    "--utxos",
+                    UTXO_OUT_POINT_ARG,
+                    "--only-transaction",
+                ],
+            ),
+            (&["repl", "node", "version"], &["repl", "node-version"]),
+            (&["repl", "node", "shutdown"], &["repl", "node-shutdown"]),
+            (
+                &["repl", "node", "p2p", "enable"],
+                &["repl", "node-enable-p2p-networking", "enable"],
+            ),
+            // submit-block / submit-transaction rows are omitted from this table:
+            // their HexEncoded payloads need valid SCALE encodings to parse from
+            // argv. Existence and argument agreement are covered by the
+            // LEGACY_ALIASES walk in lib.rs, and the translation arms destructure
+            // with field shorthand, so a dropped field is a compile error.
+            (
+                &["repl", "node", "chainstate-info"],
+                &["repl", "node-chainstate-info"],
+            ),
+            (
+                &["repl", "node", "best-block", "--id"],
+                &["repl", "node-best-block", "--id"],
+            ),
+            (
+                &["repl", "node", "best-block"],
+                &["repl", "node-best-block"],
+            ),
+            (
+                &["repl", "node", "best-block", "--height"],
+                &["repl", "node-best-block", "--height"],
+            ),
+            (
+                &["repl", "node", "best-block", "--timestamp"],
+                &["repl", "node-best-block", "--timestamp"],
+            ),
+            (
+                &["repl", "node", "block-id", "7"],
+                &["repl", "node-block-id", "7"],
+            ),
+            (
+                &["repl", "node", "block", "abc"],
+                &["repl", "node-get-block", "abc"],
+            ),
+            (
+                &["repl", "node", "generate-block"],
+                &["repl", "node-generate-block"],
+            ),
+            (
+                &["repl", "peer", "connect", "10.0.0.1:3000"],
+                &["repl", "node-connect-to-peer", "10.0.0.1:3000"],
+            ),
+            (
+                &["repl", "peer", "disconnect", "12345"],
+                &["repl", "node-disconnect-peer", "12345"],
+            ),
+            (
+                &["repl", "peer", "ban", "1.2.3.4", "1h"],
+                &["repl", "node-ban-peer-address", "1.2.3.4", "1h"],
+            ),
+            (
+                &["repl", "peer", "unban", "1.2.3.4"],
+                &["repl", "node-unban-peer-address", "1.2.3.4"],
+            ),
+            (
+                &["repl", "peer", "banned"],
+                &["repl", "node-list-banned-peers"],
+            ),
+            (
+                &["repl", "peer", "discouraged"],
+                &["repl", "node-list-discouraged-peers"],
+            ),
+            (
+                &["repl", "peer", "undiscourage", "1.2.3.4"],
+                &["repl", "node-undiscourage-peer-address", "1.2.3.4"],
+            ),
+            (&["repl", "peer", "count"], &["repl", "node-peer-count"]),
+            (
+                &["repl", "peer", "list"],
+                &["repl", "node-list-connected-peers"],
+            ),
+            (
+                &["repl", "peer", "reserved", "list"],
+                &["repl", "node-list-reserved-peers"],
+            ),
+            (
+                &["repl", "peer", "reserved", "add", "10.0.0.2:3000"],
+                &["repl", "node-add-reserved-peer", "10.0.0.2:3000"],
+            ),
+            (
+                &["repl", "peer", "reserved", "remove", "10.0.0.2:3000"],
+                &["repl", "node-remove-reserved-peer", "10.0.0.2:3000"],
+            ),
+        ];
+
+        for (nested, legacy) in cases {
+            assert_eq!(
+                flat_debug(nested),
+                flat_debug(legacy),
+                "nested {nested:?} must translate to legacy {legacy:?}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod password_source_tests {
+    use super::*;
+    use node_comm::node_traits::MockNodeInterface;
+
+    async fn read_from_file(
+        content: &[u8],
+    ) -> Result<Zeroizing<String>, WalletCliCommandError<MockNodeInterface>> {
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "ml-cli-password-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        {
+            struct TempFile(std::path::PathBuf);
+            impl Drop for TempFile {
+                fn drop(&mut self) {
+                    std::fs::remove_file(&self.0).ok();
+                }
+            }
+            let temp = TempFile(path.clone());
+            std::fs::write(&temp.0, content).expect("temp file must write");
+            let result = read_password_from_source::<MockNodeInterface>(
+                Some(path.to_str().expect("utf-8 path")),
+                PromptMode::Enter,
+            )
+            .await;
+            drop(temp);
+            result
+        }
+    }
+
+    #[tokio::test]
+    async fn single_line_passwords_are_read_with_the_terminator_stripped() {
+        let password = read_from_file(b"hunter2\n").await.expect("must read");
+        assert_eq!(password.as_str(), "hunter2");
+    }
+
+    #[tokio::test]
+    async fn multi_line_password_files_are_rejected() {
+        let err = read_from_file(b"first\nsecond\n")
+            .await
+            .expect_err("multi-line files are rejected");
+        assert!(
+            format!("{err}").contains("more than one line"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn password_files_with_null_bytes_are_rejected() {
+        let err = read_from_file(b"pass\0word").await.expect_err("null bytes are rejected");
+        assert!(
+            format!("{err}").contains("null byte"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_password_files_are_rejected() {
+        let err = read_from_file(&[b'x'; 5 * 1024])
+            .await
+            .expect_err("oversized files are rejected");
+        assert!(
+            format!("{err}").contains("larger than 4096 bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_regular_password_files_are_rejected() {
+        let dir = std::env::temp_dir().join(format!(
+            "ml-cli-password-test-dir-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = read_password_from_source::<MockNodeInterface>(
+            Some(dir.to_str().unwrap()),
+            PromptMode::Enter,
+        )
+        .await;
+        std::fs::remove_dir(&dir).unwrap();
+        let err = result.expect_err("a directory must be rejected as a password file");
+        assert!(
+            err.to_string().contains("not a regular file"),
+            "unexpected error: {err}"
+        );
+    }
 }

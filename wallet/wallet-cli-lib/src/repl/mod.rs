@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod exec;
 pub mod interactive;
 pub mod non_interactive;
 
@@ -21,6 +22,23 @@ use wallet_cli_commands::{ConsoleCommand, ManageableWalletCommand};
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{cli_event_loop::Event, errors::WalletCliError};
+
+/// Refuse state-changing commands in non-interactive modes unless the user
+/// passed `--yes`. The mode name is embedded in the error message.
+pub(crate) fn confirmation_gate<N: NodeInterface>(
+    command: &ManageableWalletCommand,
+    assume_yes: bool,
+    mode_name: &str,
+) -> Result<(), WalletCliError<N>> {
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command)
+        && !assume_yes
+    {
+        return Err(WalletCliError::ConfirmationRequired(format!(
+            "{question}\nPass --yes to run state-changing commands in {mode_name}."
+        )));
+    }
+    Ok(())
+}
 
 fn run_command_blocking<N: NodeInterface>(
     event_tx: &mpsc::UnboundedSender<Event<N>>,
@@ -32,5 +50,60 @@ fn run_command_blocking<N: NodeInterface>(
         return Ok(ConsoleCommand::Exit);
     }
 
-    res_rx.blocking_recv().expect("Channel must be open")
+    res_rx.blocking_recv().map_err(|_recv_error| {
+        WalletCliError::<N>::EventLoopShutdown("while waiting for the command result".to_owned())
+    })?
+}
+
+#[cfg(test)]
+mod confirmation_gate_tests {
+    use super::*;
+    use wallet_cli_commands::build_repl_command;
+
+    type Client = node_comm::node_traits::MockNodeInterface;
+
+    // Grammar construction overflows small test stacks (see
+    // wallet_cli_commands::run_with_large_stack), so run it on a large one.
+    fn parse(line: &'static str) -> wallet_cli_commands::ManageableWalletCommand {
+        wallet_cli_commands::run_with_large_stack(move || {
+            wallet_cli_commands::parse_input::<node_comm::node_traits::MockNodeInterface>(
+                line,
+                &build_repl_command(false, true),
+            )
+            .expect("grammar parse must not fail")
+            .expect("test lines parse to a command")
+        })
+    }
+
+    #[test]
+    fn state_changing_command_is_rejected_without_assume_yes() {
+        let command = parse("address-send addr1 100");
+        assert!(matches!(
+            confirmation_gate::<Client>(&command, false, "exec mode"),
+            Err(WalletCliError::ConfirmationRequired(_))
+        ));
+        confirmation_gate::<Client>(&command, true, "exec mode")
+            .expect("assume_yes must let the command through");
+    }
+
+    #[test]
+    fn nested_spellings_hit_the_gate_too() {
+        let command = parse("send addr1 100");
+        assert!(matches!(
+            confirmation_gate::<Client>(&command, false, "exec mode"),
+            Err(WalletCliError::ConfirmationRequired(_))
+        ));
+        let command = parse("wallet purge-seed-phrase");
+        assert!(matches!(
+            confirmation_gate::<Client>(&command, false, "exec mode"),
+            Err(WalletCliError::ConfirmationRequired(_))
+        ));
+    }
+
+    #[test]
+    fn read_only_command_never_needs_confirmation() {
+        let command = parse("account-balance");
+        confirmation_gate::<Client>(&command, false, "exec mode")
+            .expect("read-only commands must not be gated");
+    }
 }

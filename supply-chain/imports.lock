@@ -1401,11 +1401,11 @@ user-login = "cpu"
 user-name = "Daniel McCarney"
 
 [[publisher.rustls-webpki]]
-version = "0.103.15"
-when = "2026-08-21"
-user-id = 209038
-user-login = "cpu"
-user-name = "Daniel McCarney"
+version = "0.103.16"
+when = "2026-10-20"
+user-id = 2751
+user-login = "ctz"
+user-name = "Joe Birr-Pixton"
 
 [[publisher.rustversion]]
 version = "1.0.22"
@@ -1855,6 +1855,13 @@ user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
+[[publisher.unicode-width]]
+version = "0.2.2"
+when = "2025-10-06"
+user-id = 1139
+user-login = "Manishearth"
+user-name = "Manish Goregaokar"
+
 [[publisher.unicode-xid]]
 version = "0.2.6"
 when = "2024-09-19"
@@ -1949,11 +1956,11 @@ user-login = "ctz"
 user-name = "Joe Birr-Pixton"
 
 [[publisher.webpki-root-certs]]
-version = "1.0.6"
-when = "2026-02-03"
-user-id = 2751
-user-login = "ctz"
-user-name = "Joe Birr-Pixton"
+version = "1.0.10"
+when = "2026-10-19"
+user-id = 209038
+user-login = "cpu"
+user-name = "Daniel McCarney"
 
 [[publisher.winapi-util]]
 version = "0.1.11"

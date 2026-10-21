@@ -82,9 +82,9 @@ class WalletCliController(WalletCliControllerBase):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
         # if it is a cold wallet or wallet connecting to an RPC wallet no need to specify node address and cookie
         if "--remote-rpc-wallet-address" in self.wallet_args or "--cold-wallet" in self.wallet_args:
-            wallet_args = ["regtest" ] + self.wallet_args + self.chain_config_args
+            wallet_args = ["regtest", "--yes"] + self.wallet_args + self.chain_config_args
         else:
-            wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args
+            wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file, "--yes"] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 
@@ -555,8 +555,15 @@ class WalletCliController(WalletCliControllerBase):
 
     async def list_pending_transactions(self) -> List[str]:
         output = await self._write_command("transaction-list-pending\n")
-        pattern = r'Id<Transaction>\{([^}]*)\}'
-        return re.findall(pattern, output)
+        # Non-interactive mode prints only command results (never the line
+        # echo), so scope the ids to the section after the last
+        # "Pending transactions" header; stray 64-hex lines from earlier
+        # output are then ignored.
+        headers = [m.end() for m in re.finditer(r'^Pending transactions\s*$', output, re.MULTILINE)]
+        if headers:
+            tail = output[headers[-1]:]
+            return re.findall(r'^\s*([0-9a-f]{64})\s*$', tail, re.MULTILINE)
+        return re.findall(r'^\s*([0-9a-f]{64})\s*$', output, re.MULTILINE)
 
     async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:
         address = address if address else ''

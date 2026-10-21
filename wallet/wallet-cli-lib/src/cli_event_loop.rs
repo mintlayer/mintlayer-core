@@ -58,7 +58,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
     in_top_x_mb: usize,
     wallet_type: WalletType<N>,
     cold_wallet: bool,
-    no_qr: bool,
+    qr: bool,
 ) -> Result<(), WalletCliError<N>> {
     let wallet_cli_version = parse_version_without_metadata(app_version_with_git_info!().version);
 
@@ -117,7 +117,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                     broadcast_to_mempool: true,
                 },
                 wallet,
-                Some(no_qr),
+                Some(qr),
             )
             .await;
 
@@ -167,7 +167,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                     broadcast_to_mempool: true,
                 },
                 wallet,
-                Some(no_qr),
+                Some(qr),
             )
             .await;
 
