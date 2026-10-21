@@ -92,6 +92,183 @@ enum PromptMode {
     Enter,
 }
 
+/// Read a password from `--password-file`, where `-` means standard input.
+/// When no source is given and standard input is a terminal, the password
+/// is read with a hidden prompt on the controlling terminal instead; in
+/// [`PromptMode::Create`] mode the prompt asks for the password twice. The
+/// trailing line terminator is stripped; any other whitespace is kept.
+async fn read_password_from_source<N: NodeInterface>(
+    source: Option<&str>,
+    prompt_mode: PromptMode,
+) -> Result<String, WalletCliCommandError<N>> {
+    // The password can also come from a hidden terminal prompt; see the
+    // function documentation above.
+
+    // Reads a password from the terminal with echo disabled. In `Create`
+    // mode (password creation) the password must be repeated; a typo would
+    // otherwise lock the wallet with an unknown password.
+    //
+    // The prompt is only offered when standard input is a terminal. The
+    // hidden prompt itself reads from the controlling terminal, but gating
+    // on stdin keeps piped automation (commands files, `--exec`) failing
+    // fast with an explicit error instead of hanging on an unseen prompt.
+    fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<String> {
+        // The prompt and the hidden read go to the controlling terminal
+        // (/dev/tty), so redirected standard error does not matter.
+        let password = rpassword::prompt_password(if prompt_mode == PromptMode::Create {
+            "New password: "
+        } else {
+            "Password: "
+        })?;
+        if prompt_mode == PromptMode::Create {
+            let confirmed = rpassword::prompt_password("Confirm password: ")?;
+            if password != confirmed {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "the two passwords do not match",
+                ));
+            }
+        }
+        Ok(password)
+    }
+
+    fn read_password_from_stdin() -> std::io::Result<String> {
+        let mut password = String::new();
+        let bytes_read = std::io::stdin().read_line(&mut password)?;
+        if bytes_read == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "no password was provided on standard input",
+            ));
+        }
+        Ok(password)
+    }
+
+    // Joins a blocking password read and labels the two failure layers
+    // (task join vs read) distinctly.
+    async fn label_password_errors<N: NodeInterface, T>(
+        fut: impl std::future::Future<
+            Output = Result<Result<T, std::io::Error>, tokio::task::JoinError>,
+        >,
+        label: String,
+    ) -> Result<T, WalletCliCommandError<N>> {
+        fut.await
+            .map_err(|err| {
+                WalletCliCommandError::InvalidInput(format!(
+                    "Internal error - failed to join the password read task: {err}"
+                ))
+            })?
+            .map_err(|err| WalletCliCommandError::InvalidInput(format!("{label}: {err}")))
+    }
+
+    // Trailing line terminators (`\n` or `\r\n`, however many) are
+    // stripped; any other whitespace is kept.
+    fn strip_line_terminator(password: &str) -> &str {
+        // Files edited by hand often end in more than one line terminator
+        // (a trailing blank line is a common editor artifact); every
+        // trailing terminator is stripped so the password stays exactly
+        // what the file's last non-empty line holds.
+        password.trim_end_matches(['\r', '\n'])
+    }
+
+    let password = match source {
+        None => {
+            // The hidden prompt goes to the controlling terminal
+            // (/dev/tty); scripted callers get an error instead.
+            if std::io::stdin().is_terminal() {
+                label_password_errors(
+                    tokio::task::spawn_blocking(move || prompt_password_hidden(prompt_mode)),
+                    "Failed to read the password from the terminal".to_owned(),
+                )
+                .await?
+            } else {
+                return Err(WalletCliCommandError::InvalidInput(
+                    "a password is required: pass --password-file <file> (or \
+                     --password-file - for standard input); interactive input \
+                     requires a terminal on standard input"
+                        .to_owned(),
+                ));
+            }
+        }
+        Some("-") => {
+            label_password_errors(
+                tokio::task::spawn_blocking(read_password_from_stdin),
+                "Failed to read the password from standard input".to_owned(),
+            )
+            .await?
+        }
+        Some(path) => {
+            let read_path = path.to_owned();
+            let read = move || -> std::io::Result<String> {
+                use std::io::Read;
+
+                // Open first, then check the mode of the opened handle: a
+                // separate metadata() call would leave a window where the
+                // check and the read see different files.
+                let file = std::fs::File::open(&read_path)?;
+                let metadata = file.metadata()?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mode = metadata.permissions().mode();
+                    if mode & 0o077 != 0 {
+                        // Warn instead of failing: the wallet must stay
+                        // usable, but a group/other-accessible password
+                        // file is almost always a mistake.
+                        log::warn!(
+                            "The password file {} is accessible by group or others; \
+                             restrict it with chmod 600",
+                            read_path
+                        );
+                    }
+                }
+                // A password file that is not tiny is almost certainly the
+                // wrong file; refuse rather than encrypt the wallet with
+                // an unintended password it could never be unlocked with.
+                const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
+                if metadata.len() > MAX_PASSWORD_FILE_BYTES {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the password file is larger than 4 KiB; this does not \
+                         look like a password file",
+                    ));
+                }
+                let mut password = String::new();
+                file.take(MAX_PASSWORD_FILE_BYTES).read_to_string(&mut password)?;
+                if password.contains('\0') {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the password file contains a null byte; this does not \
+                         look like a password file",
+                    ));
+                }
+                Ok(password)
+            };
+            label_password_errors(
+                tokio::task::spawn_blocking(read),
+                format!("Failed to read the password from {path}"),
+            )
+            .await?
+        }
+    };
+    let password = strip_line_terminator(&password);
+    if password.is_empty() {
+        return Err(WalletCliCommandError::InvalidInput(
+            "the password is empty; expected a non-empty password".to_owned(),
+        ));
+    }
+    if password.contains(['\r', '\n']) {
+        // An interior line terminator means the file holds more than one
+        // line; using only the first would silently lock the wallet.
+        return Err(WalletCliCommandError::InvalidInput(
+            "the password file contains more than one line; expected a \
+             single-line password file"
+                .to_owned(),
+        ));
+    }
+    Ok(password.to_owned())
+}
+
 pub struct CommandHandler<W> {
     config: ControllerConfig,
 
@@ -384,145 +561,6 @@ where
                 Ok(ConsoleCommand::Exit)
             }
         }
-    }
-
-    /// Read a password from `--password-file`, where `-` means standard input.
-    /// When no source is given and standard input is a terminal, the password
-    /// is read with a hidden prompt on the controlling terminal instead; in
-    /// [`PromptMode::Create`] mode the prompt asks for the password twice. The trailing line
-    /// terminator is stripped; any other whitespace is kept.
-    async fn read_password_from_source<N: NodeInterface>(
-        source: Option<&str>,
-        prompt_mode: PromptMode,
-    ) -> Result<String, WalletCliCommandError<N>> {
-        // The password can also come from a hidden terminal prompt; see the
-        // function documentation above.
-
-        // Reads a password from the terminal with echo disabled. In `Create`
-        // mode (password creation) the password must be repeated; a typo would
-        // otherwise lock the wallet with an unknown password.
-        fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<String> {
-            // The prompt and the hidden read go to the controlling terminal
-            // (/dev/tty), so redirected standard error does not matter.
-            let password = rpassword::prompt_password(if prompt_mode == PromptMode::Create {
-                "New password: "
-            } else {
-                "Password: "
-            })?;
-            if prompt_mode == PromptMode::Create {
-                let confirmed = rpassword::prompt_password("Confirm password: ")?;
-                if password != confirmed {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "the two passwords do not match",
-                    ));
-                }
-            }
-            Ok(password)
-        }
-
-        fn read_password_from_stdin() -> std::io::Result<String> {
-            let mut password = String::new();
-            let bytes_read = std::io::stdin().read_line(&mut password)?;
-            if bytes_read == 0 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "no password was provided on standard input",
-                ));
-            }
-            Ok(password)
-        }
-
-        // Joins a blocking password read and labels the two failure layers
-        // (task join vs read) distinctly.
-        async fn label_password_errors<N: NodeInterface, T>(
-            fut: impl std::future::Future<
-                Output = Result<Result<T, std::io::Error>, tokio::task::JoinError>,
-            >,
-            label: String,
-        ) -> Result<T, WalletCliCommandError<N>> {
-            fut.await
-                .map_err(|err| {
-                    WalletCliCommandError::InvalidInput(format!(
-                        "Internal error - failed to join the password read task: {err}"
-                    ))
-                })?
-                .map_err(|err| WalletCliCommandError::InvalidInput(format!("{label}: {err}")))
-        }
-
-        // Trailing line terminators (`\n` or `\r\n`, however many) are
-        // stripped; any other whitespace is kept.
-        fn strip_line_terminator(password: &str) -> &str {
-            // Files edited by hand often end in more than one line terminator
-            // (a trailing blank line is a common editor artifact); every
-            // trailing terminator is stripped so the password stays exactly
-            // what the file's last non-empty line holds.
-            password.trim_end_matches(['\r', '\n'])
-        }
-
-        let password = match source {
-            None => {
-                // The hidden prompt goes to the controlling terminal
-                // (/dev/tty); scripted callers get an error instead.
-                if std::io::stdin().is_terminal() {
-                    label_password_errors(
-                        tokio::task::spawn_blocking(move || prompt_password_hidden(prompt_mode)),
-                        "Failed to read the password from the terminal".to_owned(),
-                    )
-                    .await?
-                } else {
-                    return Err(WalletCliCommandError::InvalidInput(
-                        "a password is required: pass --password-file <file> (or \
-                         --password-file - for standard input); interactive input \
-                         requires a terminal on standard input"
-                            .to_owned(),
-                    ));
-                }
-            }
-            Some("-") => {
-                label_password_errors(
-                    tokio::task::spawn_blocking(read_password_from_stdin),
-                    "Failed to read the password from standard input".to_owned(),
-                )
-                .await?
-            }
-            Some(path) => {
-                let path = path.to_owned();
-                let read_path = path.clone();
-                let read = move || -> std::io::Result<String> {
-                    use std::io::Read;
-
-                    // Open first, then check the mode of the opened handle: a
-                    // separate metadata() call would leave a window where the
-                    // check and the read see different files.
-                    let mut file = std::fs::File::open(&read_path)?;
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let mode = file.metadata()?.permissions().mode();
-                        if mode & 0o077 != 0 {
-                            // Warn instead of failing: the wallet must stay
-                            // usable, but a group/other-accessible password
-                            // file is almost always a mistake.
-                            log::warn!(
-                                "The password file {} is accessible by group or others; \
-                                 restrict it with chmod 600",
-                                read_path
-                            );
-                        }
-                    }
-                    let mut password = String::new();
-                    file.read_to_string(&mut password)?;
-                    Ok(password)
-                };
-                label_password_errors(
-                    tokio::task::spawn_blocking(read),
-                    format!("Failed to read the password from {path}"),
-                )
-                .await?
-            }
-        };
-        Ok(strip_line_terminator(&password).to_owned())
     }
 
     async fn handle_cold_wallet_command<N: NodeInterface>(
@@ -1106,7 +1144,7 @@ where
                             .await;
                     }
                     WalletGroupSubCommand::Encrypt { password_file } => {
-                        let password = Self::read_password_from_source::<N>(
+                        let password = read_password_from_source::<N>(
                             password_file.as_deref(),
                             PromptMode::Create,
                         )
@@ -1119,7 +1157,7 @@ where
                             .await;
                     }
                     WalletGroupSubCommand::Unlock { password_file } => {
-                        let password = Self::read_password_from_source::<N>(
+                        let password = read_password_from_source::<N>(
                             password_file.as_deref(),
                             PromptMode::Enter,
                         )
@@ -4107,5 +4145,76 @@ mod nested_translation_tests {
                 "nested {nested:?} must translate to legacy {legacy:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod password_source_tests {
+    use super::*;
+    use node_comm::node_traits::MockNodeInterface;
+
+    async fn read_from_file(
+        content: &[u8],
+    ) -> Result<String, WalletCliCommandError<MockNodeInterface>> {
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "ml-cli-password-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        {
+            struct TempFile(std::path::PathBuf);
+            impl Drop for TempFile {
+                fn drop(&mut self) {
+                    std::fs::remove_file(&self.0).ok();
+                }
+            }
+            let temp = TempFile(path.clone());
+            std::fs::write(&temp.0, content).expect("temp file must write");
+            let result = read_password_from_source::<MockNodeInterface>(
+                Some(path.to_str().expect("utf-8 path")),
+                PromptMode::Enter,
+            )
+            .await;
+            drop(temp);
+            result
+        }
+    }
+
+    #[tokio::test]
+    async fn single_line_passwords_are_read_with_the_terminator_stripped() {
+        let password = read_from_file(b"hunter2\n").await.expect("must read");
+        assert_eq!(password, "hunter2");
+    }
+
+    #[tokio::test]
+    async fn multi_line_password_files_are_rejected() {
+        let err = read_from_file(b"first\nsecond\n")
+            .await
+            .expect_err("multi-line files are rejected");
+        assert!(
+            format!("{err}").contains("more than one line"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn password_files_with_null_bytes_are_rejected() {
+        let err = read_from_file(b"pass\0word").await.expect_err("null bytes are rejected");
+        assert!(
+            format!("{err}").contains("null byte"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_password_files_are_rejected() {
+        let err = read_from_file(&[b'x'; 5 * 1024])
+            .await
+            .expect_err("oversized files are rejected");
+        assert!(
+            format!("{err}").contains("larger than 4 KiB"),
+            "unexpected error: {err}"
+        );
     }
 }

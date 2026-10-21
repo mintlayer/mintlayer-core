@@ -236,7 +236,9 @@ pub fn run<N: NodeInterface>(
 
     // first wait for the results of any startup command before processing the rest
     for res_rx in startup_command_futures {
-        let res = res_rx.blocking_recv().expect("Channel must be open");
+        let res = res_rx.blocking_recv().map_err(|_recv_error| {
+            WalletCliError::<N>::EventLoopShutdown("startup commands did not finish".to_owned())
+        })?;
         match handle_response(
             res.map(Some),
             &mut console,

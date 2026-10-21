@@ -50,7 +50,9 @@ fn run_command_blocking<N: NodeInterface>(
         return Ok(ConsoleCommand::Exit);
     }
 
-    res_rx.blocking_recv().expect("Channel must be open")
+    res_rx.blocking_recv().map_err(|_recv_error| {
+        WalletCliError::<N>::EventLoopShutdown("while waiting for the command result".to_owned())
+    })?
 }
 
 #[cfg(test)]

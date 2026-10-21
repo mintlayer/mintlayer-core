@@ -93,7 +93,14 @@ pub fn run<N: NodeInterface>(
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
 ) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
-        let res = res_rx.blocking_recv().expect("Channel must be open")?;
+        let res = match res_rx.blocking_recv() {
+            Ok(inner) => inner?,
+            Err(_recv_error) => {
+                return Err(WalletCliError::<N>::EventLoopShutdown(
+                    "startup commands did not finish".to_owned(),
+                ));
+            }
+        };
         let line_out = to_line_output(res);
         if let Some(value) = handle_response(line_out, &mut output, true) {
             return value;
