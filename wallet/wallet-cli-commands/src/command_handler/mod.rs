@@ -106,6 +106,15 @@ async fn read_password_from_source<N: NodeInterface>(
 ) -> Result<Zeroizing<String>, WalletCliCommandError<N>> {
     // A password file that is not tiny is almost certainly the wrong file.
     const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
+    // Shared by the pre-open and post-open password-file checks so both fail
+    // with the same message. Declared before any statement so the lint that
+    // flags items after statements stays quiet.
+    fn not_regular_file() -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "the password file is not a regular file",
+        )
+    }
     // The password can also come from a hidden terminal prompt; see the
     // function documentation above.
 
@@ -224,14 +233,6 @@ async fn read_password_from_source<N: NodeInterface>(
                 // check and the read see different files.
                 let file = std::fs::File::open(&read_path)?;
                 let metadata = file.metadata()?;
-                // Shared so the pre-open and post-open checks fail with the
-                // same message.
-                fn not_regular_file() -> std::io::Error {
-                    std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "the password file is not a regular file",
-                    )
-                }
                 if !metadata.is_file() {
                     return Err(not_regular_file());
                 }

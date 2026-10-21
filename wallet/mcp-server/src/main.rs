@@ -187,6 +187,10 @@ const RESYNC_DRAIN_BUDGET: usize = MAX_MESSAGE_BYTES * 4;
 /// stall the protocol loop past this.
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// How many consecutive transient read interrupts are tolerated before the
+/// stream is declared unusable; real interrupt storms are bounded.
+const MAX_INTERRUPT_RETRIES: usize = 64;
+
 /// Discards bytes up to and including the next newline. Gives up on the
 /// stream if the line turns out to be endless.
 async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
@@ -195,8 +199,23 @@ async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
     use tokio::io::AsyncBufReadExt;
 
     let mut discarded: usize = 0;
+    let mut interrupted_retries = 0usize;
     loop {
-        let available = reader.fill_buf().await?;
+        let available = match reader.fill_buf().await {
+            Ok(available) => available,
+            // A transient interrupt is retried, but a reader that keeps
+            // interrupting without progress makes the stream unusable.
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {
+                interrupted_retries += 1;
+                if interrupted_retries > MAX_INTERRUPT_RETRIES {
+                    return Err(err);
+                }
+                tokio::task::yield_now().await;
+                continue;
+            }
+            Err(err) => return Err(err),
+        };
+        interrupted_retries = 0;
         if available.is_empty() {
             return Ok(()); // EOF mid-line
         }
@@ -215,14 +234,50 @@ async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
     }
 }
 
+/// The result of reading one framed message. The recovered/fatal split makes
+/// the serve-loop contract compile-enforced: a `Recovered` error guarantees
+/// the offending line was consumed or discarded, so the caller may continue;
+/// a `Fatal` error leaves the stream in an unknown state and must end the
+/// session.
+enum MessageOutcome {
+    Line(String),
+    Eof,
+    Recovered(std::io::Error),
+    Fatal(std::io::Error),
+}
+
 async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     reader: &mut R,
     buffer: &mut Vec<u8>,
-) -> Result<Option<String>, std::io::Error> {
+) -> MessageOutcome {
     use tokio::io::AsyncBufReadExt;
 
+    let oversize = || {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "message exceeds the maximum size",
+        )
+    };
+    let invalid_utf8 =
+        |err: std::string::FromUtf8Error| std::io::Error::new(std::io::ErrorKind::InvalidData, err);
+
+    let mut interrupted_retries = 0usize;
     loop {
-        let available = reader.fill_buf().await?;
+        let available = match reader.fill_buf().await {
+            Ok(available) => available,
+            // A transient interrupt is retried; a reader that keeps
+            // interrupting without progress ends the session.
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {
+                interrupted_retries += 1;
+                if interrupted_retries > MAX_INTERRUPT_RETRIES {
+                    return MessageOutcome::Fatal(err);
+                }
+                tokio::task::yield_now().await;
+                continue;
+            }
+            Err(err) => return MessageOutcome::Fatal(err),
+        };
+        interrupted_retries = 0;
         if available.is_empty() {
             // End of stream: deliver a trailing message without a newline, if any.
             break;
@@ -233,29 +288,28 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
                 // leaving the bytes in place would trip this error forever.
                 buffer.clear();
                 reader.consume(pos + 1);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "message exceeds the maximum size",
-                ));
+                return MessageOutcome::Recovered(oversize());
             }
             buffer.extend_from_slice(&available[..pos]);
             reader.consume(pos + 1);
             let bytes: Vec<u8> = std::mem::take(buffer);
             // A protocol boundary must reject, not repair: lossy decoding could
             // silently turn a truncated request into a different valid one.
-            let line = String::from_utf8(bytes)
-                .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
-            return Ok(Some(line));
+            // The line was fully consumed, so the stream stays usable.
+            return match String::from_utf8(bytes) {
+                Ok(line) => MessageOutcome::Line(line),
+                Err(err) => MessageOutcome::Recovered(invalid_utf8(err)),
+            };
         }
         if buffer.len() + available.len() > MAX_MESSAGE_BYTES {
             // The rejected line has no newline in this chunk; drain chunks
             // until its newline so exactly one error is reported per message.
             buffer.clear();
-            skip_rest_of_line(reader).await?;
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "message exceeds the maximum size",
-            ));
+            return match skip_rest_of_line(reader).await {
+                Ok(()) => MessageOutcome::Recovered(oversize()),
+                // The endless-line give-up leaves the stream unusable.
+                Err(err) => MessageOutcome::Fatal(err),
+            };
         }
         buffer.extend_from_slice(available);
         let len = available.len();
@@ -265,12 +319,13 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
     // runs before every extend, so a trailing message at EOF is already
     // bounded; no separate check is needed here.
     if buffer.is_empty() {
-        return Ok(None);
+        return MessageOutcome::Eof;
     }
     let bytes = std::mem::take(buffer);
-    let line = String::from_utf8(bytes)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
-    Ok(Some(line))
+    match String::from_utf8(bytes) {
+        Ok(line) => MessageOutcome::Line(line),
+        Err(err) => MessageOutcome::Recovered(invalid_utf8(err)),
+    }
 }
 
 async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
@@ -293,24 +348,23 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
         // or adding an InvalidData path that does not resync, would spin
         // this loop forever.
         let line = match next_message(&mut reader, &mut message_buffer).await {
-            Ok(line) => line,
-            Err(err) if err.kind() == std::io::ErrorKind::InvalidData => {
-                let encoded = serde_json::to_string(&serde_json::json!({
+            MessageOutcome::Line(line) => line,
+            MessageOutcome::Eof => break,
+            MessageOutcome::Recovered(err) => {
+                let mut encoded = serde_json::to_string(&serde_json::json!({
                     "jsonrpc": JSONRPC_VERSION,
                     "id": null,
                     "error": {
                         "code": -32700,
                         "message": format!("Parse error: {err}")
                     }
-                }))? + "\n";
+                }))?;
+                encoded.push('\n');
                 stdout.write_all(encoded.as_bytes()).await?;
                 stdout.flush().await?;
                 continue;
             }
-            Err(err) => return Err(err.into()),
-        };
-        let Some(line) = line else {
-            break;
+            MessageOutcome::Fatal(err) => return Err(err.into()),
         };
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -382,16 +436,19 @@ async fn main() {
 mod tests {
     use super::*;
 
-    async fn next_n_messages(
-        input: &str,
-        count: usize,
-        capacity: usize,
-    ) -> Vec<Result<Option<String>, std::io::Error>> {
-        let mut reader = tokio::io::BufReader::with_capacity(capacity, input.as_bytes());
+    /// Reads `count` framed messages and renders each outcome as a terse
+    /// tag: `line:<text>`, `eof`, `recovered:<message>`, or `fatal:<kind>`.
+    async fn next_n_messages(input: &[u8], count: usize, capacity: usize) -> Vec<String> {
+        let mut reader = tokio::io::BufReader::with_capacity(capacity, input);
         let mut buffer = Vec::new();
         let mut results = Vec::new();
         for _ in 0..count {
-            results.push(next_message(&mut reader, &mut buffer).await);
+            results.push(match next_message(&mut reader, &mut buffer).await {
+                MessageOutcome::Line(line) => format!("line:{line}"),
+                MessageOutcome::Eof => "eof".to_owned(),
+                MessageOutcome::Recovered(err) => format!("recovered:{:?}", err.kind()),
+                MessageOutcome::Fatal(err) => format!("fatal:{:?}", err.kind()),
+            });
         }
         results
     }
@@ -402,13 +459,9 @@ mod tests {
             "{}\n{{\"method\":\"ping\"}}\n",
             "x".repeat(MAX_MESSAGE_BYTES + 1)
         );
-        let results = next_n_messages(&input, 2, 8192).await;
-        let err = results[0].as_ref().unwrap_err();
-        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        assert_eq!(
-            results[1].as_ref().unwrap().as_deref(),
-            Some("{\"method\":\"ping\"}")
-        );
+        let results = next_n_messages(input.as_bytes(), 2, 8192).await;
+        assert_eq!(results[0], "recovered:InvalidData");
+        assert_eq!(results[1], "line:{\"method\":\"ping\"}");
     }
 
     #[tokio::test]
@@ -418,22 +471,37 @@ mod tests {
             "y".repeat(MAX_MESSAGE_BYTES + 1)
         );
         // A tiny read buffer forces the oversized line through many chunks.
-        let results = next_n_messages(&input, 2, 64).await;
-        assert_eq!(
-            results[0].as_ref().unwrap_err().kind(),
-            std::io::ErrorKind::InvalidData
-        );
-        assert!(results[1].as_ref().unwrap().is_some());
+        let results = next_n_messages(input.as_bytes(), 2, 64).await;
+        assert_eq!(results[0], "recovered:InvalidData");
+        assert!(results[1].starts_with("line:"), "{:?}", results[1]);
     }
 
     #[tokio::test]
     async fn oversized_message_without_newline_reports_once_at_eof() {
         let input = "z".repeat(MAX_MESSAGE_BYTES + 1);
+        let results = next_n_messages(input.as_bytes(), 2, 8192).await;
+        assert_eq!(results[0], "recovered:InvalidData");
+        assert_eq!(results[1], "eof");
+    }
+
+    #[tokio::test]
+    async fn newline_free_line_past_the_drain_budget_ends_the_session() {
+        // The in-loop guard trips at MAX_MESSAGE_BYTES first; the fatal
+        // give-up needs the remainder to also exceed the drain budget.
+        let input = "z".repeat(MAX_MESSAGE_BYTES + RESYNC_DRAIN_BUDGET + 1);
+        // The give-up path is fatal by contract: the stream is left mid-line,
+        // so the session must end instead of reading on.
+        let results = next_n_messages(input.as_bytes(), 1, 8192).await;
+        assert_eq!(results[0], format!("fatal:{:?}", std::io::ErrorKind::Other));
+    }
+
+    #[tokio::test]
+    async fn invalid_utf8_line_is_skipped_and_stream_stays_usable() {
+        let mut input = b"{\xff\xfe}".to_vec();
+        input.extend_from_slice(b"\n{\"method\":\"ping\"}\n");
         let results = next_n_messages(&input, 2, 8192).await;
-        assert_eq!(
-            results[0].as_ref().unwrap_err().kind(),
-            std::io::ErrorKind::InvalidData
-        );
-        assert_eq!(results[1].as_ref().unwrap(), &None);
+        // The offending line was consumed, so the next message still parses.
+        assert_eq!(results[0], "recovered:InvalidData");
+        assert_eq!(results[1], "line:{\"method\":\"ping\"}");
     }
 }
