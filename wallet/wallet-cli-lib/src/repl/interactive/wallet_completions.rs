@@ -56,6 +56,13 @@ impl WalletCompletions {
         Self { root }
     }
 
+    /// Takes an already-built grammar and trusts the caller: use this where
+    /// the [`Command`] is shared behind an [`std::sync::Arc`] and the builder
+    /// contract is known to hold (as with `build_repl_command` output).
+    pub fn from_built(root: Arc<Command>) -> Self {
+        Self { root }
+    }
+
     /// A completer without any candidates, used where completion is not
     /// meaningful (for example the choice menu).
     pub fn empty() -> Self {

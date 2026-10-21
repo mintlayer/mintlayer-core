@@ -187,7 +187,10 @@ pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> O
                 .get("protocolVersion")
                 .and_then(Value::as_str)
                 .filter(|requested| SUPPORTED_PROTOCOL_VERSIONS.contains(requested))
-                .unwrap_or(SUPPORTED_PROTOCOL_VERSIONS.last().copied().unwrap_or("2024-11-05"));
+                // The list is a non-empty const slice ordered newest last, so
+                // the newest entry is always present and no literal is
+                // duplicated here.
+                .unwrap_or(SUPPORTED_PROTOCOL_VERSIONS.last().expect("non-empty const"));
             result_response(
                 id,
                 json!({

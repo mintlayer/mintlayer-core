@@ -88,9 +88,21 @@ impl CliArgs {
 }
 
 /// Labels wallet RPC failures at the adapter boundary so tool results name
-/// their provenance instead of surfacing a bare daemon message.
+/// their provenance instead of surfacing a bare daemon message. The full
+/// daemon error is echoed to standard error for server-side diagnostics;
+/// the tool result carries the same text since the daemon and this server
+/// share a trusted local operator.
+// Diagnostics must not kill the protocol loop: a broken stderr (e.g. a
+// client that closed its end of the pipe) is not a fatal server error.
+fn log_rpc_error(message: &str) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "[wallet-mcp] {message}");
+}
+
 fn rpc_error(err: impl std::fmt::Display) -> String {
-    format!("wallet RPC failed: {err}")
+    let message = format!("wallet RPC failed: {err}");
+    log_rpc_error(&message);
+    message
 }
 
 /// Adapter that exposes only the read-only operations of the daemon client.

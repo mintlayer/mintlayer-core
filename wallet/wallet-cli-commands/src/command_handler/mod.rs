@@ -1294,12 +1294,16 @@ where
                 // is boxed to keep the future size finite; translation always produces a
                 // flat command, so the recursion never goes deeper than one level.
                 let normalized = normalize_nested_wallet_command(command);
-                // Translation must terminate: a nested command fed back into this handler
-                // would recurse unboundedly through the boxed call.
-                assert!(
-                    !is_nested_wallet_command(&normalized),
-                    "translation must produce a flat command, otherwise this recursion is unbounded"
-                );
+                // Translation must terminate: a nested command fed back into this
+                // handler would recurse unboundedly through the boxed call. A
+                // group variant that is missing a translation arm is reported
+                // instead of asserted, so adding a group cannot turn into a
+                // runtime panic here.
+                if is_nested_wallet_command(&normalized) {
+                    return Err(WalletCliCommandError::<N>::InvalidInput(format!(
+                        "the command {normalized:?} has no flat translation"
+                    )));
+                }
                 Box::pin(self.handle_wallet_command(chain_config, normalized)).await
             }
 
@@ -1377,6 +1381,11 @@ where
                                 None
                             },
                             if timestamp {
+                                // Probe the node first so a cold wallet errors
+                                // here exactly like the --id and --height arms,
+                                // instead of chainstate_info quietly reporting
+                                // its genesis stub.
+                                wallet.node_best_block_id().await?;
                                 Some(format_block_timestamp(
                                     wallet.chainstate_info().await?.best_block_timestamp,
                                 ))

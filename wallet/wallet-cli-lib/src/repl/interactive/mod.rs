@@ -114,6 +114,15 @@ fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<WizardOutcome, Wa
     let Some(kind) = WizardKind::parse_from_tokens(&token_refs) else {
         return Ok(WizardOutcome::NotAWizard);
     };
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        // The wizard dialogs read from the controlling terminal; under pipes
+        // and command files they would fail with a raw I/O error, so gate on
+        // the same condition the password prompt uses.
+        return Err(WalletCliError::<N>::InvalidInput(
+            "the wizard needs an interactive terminal; type the command directly instead"
+                .to_owned(),
+        ));
+    }
     match kind.run(&mut DialoguerBackend) {
         Ok(one_liner) => {
             println!("You could also have run: {one_liner}");
@@ -246,7 +255,8 @@ pub fn run<N: NodeInterface>(
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),
-        wallet_completions::WalletCompletions::new(Arc::clone(&repl_command)),
+        // The grammar was built above; share it through the trusted path.
+        wallet_completions::WalletCompletions::from_built(Arc::clone(&repl_command)),
         history,
         vi_mode,
     );
