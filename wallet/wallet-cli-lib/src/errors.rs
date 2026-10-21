@@ -39,6 +39,9 @@ pub enum WalletCliError<N: NodeInterface> {
     #[error("Confirmation required: {0}")]
     ConfirmationRequired(String),
 
+    #[error("Terminal I/O error: {0}")]
+    TerminalIo(#[from] std::io::Error),
+
     #[error("The wallet event loop shut down before the command finished: {0}")]
     EventLoopShutdown(String),
 

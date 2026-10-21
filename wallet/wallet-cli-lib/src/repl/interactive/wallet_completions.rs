@@ -44,10 +44,14 @@ impl WalletCompletions {
             // does). Walking an unbuilt tree silently yields no candidates.
             // `build()` is what injects the help flag, so its presence is the
             // cheapest proxy for "this tree was built".
-            debug_assert!(
-                root.get_arguments().any(|arg| arg.get_long() == Some("help")),
-                "a shared clap Command must already be built"
-            );
+            if !root.get_arguments().any(|arg| arg.get_long() == Some("help")) {
+                debug_assert!(false, "a shared clap Command must already be built");
+                // The assertion above is compiled out in release builds, so also
+                // leave a trace: the completer will produce no candidates.
+                logging::log::warn!(
+                    "WalletCompletions received an unbuilt clap command tree; completions will be empty"
+                );
+            }
         }
         Self { root }
     }

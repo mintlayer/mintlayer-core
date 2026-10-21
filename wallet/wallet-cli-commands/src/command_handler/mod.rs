@@ -1295,30 +1295,61 @@ where
                 height,
                 timestamp,
             } => {
-                // The legacy RPCs are reused per value so error behavior (including on
-                // cold wallets) matches the flat commands. Values are fetched back to
-                // back, so they can straddle a block boundary exactly like issuing the
-                // flat commands one after another. No flags means all three, mirroring
-                // the formatter's show-all rule.
+                // Single-flag runs reuse the legacy RPCs per value so error behavior
+                // (including on cold wallets) matches the flat commands. When more
+                // than one value is requested, everything is read from one
+                // chainstate snapshot so the printed tuple describes a real block
+                // instead of values straddling a block boundary. No flags means all
+                // three, mirroring the formatter's show-all rule.
                 let wallet = self.wallet().await?;
-                let show_all = !id && !height && !timestamp;
-                let best_block_id = if id || show_all {
-                    Some(wallet.node_best_block_id().await?.hex_encode())
-                } else {
-                    None
-                };
-                let best_block_height = if height || show_all {
-                    Some(wallet.node_best_block_height().await?.to_string())
-                } else {
-                    None
-                };
-                let best_block_timestamp = if timestamp || show_all {
-                    Some(format_block_timestamp(
-                        wallet.chainstate_info().await?.best_block_timestamp,
-                    ))
-                } else {
-                    None
-                };
+                let requested: usize = [id, height, timestamp].iter().filter(|flag| **flag).count();
+                let show_all = requested == 0;
+                let consistent_snapshot = requested > 1 || show_all;
+                // TODO(test): cover the consistent-snapshot path with a mock node:
+                // - per-value RPCs error while chainstate_info succeeds (cold wallet)
+                //   => the command must error, never print the fabricated genesis values;
+                // - multi-flag output must equal the values from one chainstate_info call.
+                let (best_block_id, best_block_height, best_block_timestamp) =
+                    if consistent_snapshot {
+                        // A cold wallet cannot serve a combined snapshot:
+                        // `chainstate_info()` fabricates genesis values there while
+                        // the per-value RPCs fail. Probe the node first so the error
+                        // behavior matches the flat commands, then read every
+                        // displayed value from one snapshot.
+                        if id || show_all {
+                            wallet.node_best_block_id().await?;
+                        }
+                        if height || show_all {
+                            wallet.node_best_block_height().await?;
+                        }
+                        let info = wallet.chainstate_info().await?;
+                        (
+                            (id || show_all).then(|| info.best_block_id.hex_encode()),
+                            (height || show_all).then(|| info.best_block_height.to_string()),
+                            (timestamp || show_all)
+                                .then(|| format_block_timestamp(info.best_block_timestamp)),
+                        )
+                    } else {
+                        (
+                            if id {
+                                Some(wallet.node_best_block_id().await?.hex_encode())
+                            } else {
+                                None
+                            },
+                            if height {
+                                Some(wallet.node_best_block_height().await?.to_string())
+                            } else {
+                                None
+                            },
+                            if timestamp {
+                                Some(format_block_timestamp(
+                                    wallet.chainstate_info().await?.best_block_timestamp,
+                                ))
+                            } else {
+                                None
+                            },
+                        )
+                    };
                 Ok(ConsoleCommand::Print(format_best_block(
                     best_block_id,
                     best_block_height,

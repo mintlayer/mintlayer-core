@@ -116,9 +116,9 @@ fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<Option<String>, W
             Ok(None)
         }
         Err(WizardError::InvalidInput(message)) => Err(WalletCliError::InvalidInput(message)),
-        Err(WizardError::Io(err)) => Err(WalletCliError::InvalidInput(format!(
-            "the wizard could not read the answer: {err}"
-        ))),
+        // The original io::Error (e.g. "prompt failed: not a terminal") is kept so
+        // non-TTY contexts get a precise diagnosis instead of a generic message.
+        Err(WizardError::Io(err)) => Err(WalletCliError::TerminalIo(err)),
     }
 }
 
@@ -188,9 +188,10 @@ fn confirm_or_abort<N: NodeInterface>(
             .with_prompt("Proceed [y/N]?")
             .default(false)
             .interact()
-            .map_err(|err| {
-                WalletCliError::InvalidInput(format!("the confirmation could not be read: {err}"))
-            })?;
+            // dialoguer errors are io errors underneath; keep them typed so
+            // non-TTY contexts get a precise diagnosis instead of a generic
+            // "invalid input" message.
+            .map_err(|err| WalletCliError::TerminalIo(std::io::Error::other(err.to_string())))?;
         if !confirmed {
             println!("Aborted.");
             return Ok(false);
