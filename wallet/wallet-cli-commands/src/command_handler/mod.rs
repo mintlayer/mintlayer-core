@@ -227,14 +227,17 @@ async fn read_password_from_source<N: NodeInterface>(
                 // A password file that is not tiny is almost certainly the
                 // wrong file; refuse rather than encrypt the wallet with
                 // an unintended password it could never be unlocked with.
-                if metadata.len() > MAX_PASSWORD_FILE_BYTES {
-                    return Err(std::io::Error::new(
+                let too_large = || {
+                    std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         format!(
                             "the password file is larger than {MAX_PASSWORD_FILE_BYTES} \
                              bytes; this does not look like a password file"
                         ),
-                    ));
+                    )
+                };
+                if metadata.len() > MAX_PASSWORD_FILE_BYTES {
+                    return Err(too_large());
                 }
                 // Read one byte past the cap so a file that grows (or is
                 // swapped) after the metadata check is detected here instead
@@ -242,13 +245,7 @@ async fn read_password_from_source<N: NodeInterface>(
                 let mut password = String::new();
                 file.take(MAX_PASSWORD_FILE_BYTES + 1).read_to_string(&mut password)?;
                 if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!(
-                            "the password file is larger than {MAX_PASSWORD_FILE_BYTES} \
-                             bytes; this does not look like a password file"
-                        ),
-                    ));
+                    return Err(too_large());
                 }
                 if password.contains('\0') {
                     return Err(std::io::Error::new(

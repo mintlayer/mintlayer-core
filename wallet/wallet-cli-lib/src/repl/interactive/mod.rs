@@ -193,7 +193,7 @@ fn confirm_or_abort<N: NodeInterface>(
             // A prompt that cannot be shown (for example piped input driving
             // the REPL) cannot receive consent; treat that as a decline for
             // this command instead of tearing down the whole session.
-            Err(dialoguer::Error::IO(err)) => {
+            Err(err) => {
                 println!("The confirmation prompt is unavailable ({err}); treating as declined.");
                 false
             }
