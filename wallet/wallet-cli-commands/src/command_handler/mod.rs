@@ -101,6 +101,8 @@ async fn read_password_from_source<N: NodeInterface>(
     source: Option<&str>,
     prompt_mode: PromptMode,
 ) -> Result<String, WalletCliCommandError<N>> {
+    // A password file that is not tiny is almost certainly the wrong file.
+    const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
     // The password can also come from a hidden terminal prompt; see the
     // function documentation above.
 
@@ -225,7 +227,6 @@ async fn read_password_from_source<N: NodeInterface>(
                 // A password file that is not tiny is almost certainly the
                 // wrong file; refuse rather than encrypt the wallet with
                 // an unintended password it could never be unlocked with.
-                const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
                 if metadata.len() > MAX_PASSWORD_FILE_BYTES {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
