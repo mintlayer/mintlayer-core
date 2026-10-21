@@ -210,11 +210,31 @@ async fn read_password_from_source<N: NodeInterface>(
             let read = move || -> std::io::Result<Zeroizing<String>> {
                 use std::io::Read;
 
+                // Cheap pre-open check: open(2) itself blocks on a writer-less
+                // FIFO, so refuse non-regular files before opening. The check
+                // is racy, but the post-open check on the opened handle below
+                // stays authoritative.
+                if let Ok(pre) = std::fs::metadata(&read_path)
+                    && !pre.is_file()
+                {
+                    return Err(not_regular_file());
+                }
                 // Open first, then check the mode of the opened handle: a
                 // separate metadata() call would leave a window where the
                 // check and the read see different files.
                 let file = std::fs::File::open(&read_path)?;
                 let metadata = file.metadata()?;
+                // Shared so the pre-open and post-open checks fail with the
+                // same message.
+                fn not_regular_file() -> std::io::Error {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the password file is not a regular file",
+                    )
+                }
+                if !metadata.is_file() {
+                    return Err(not_regular_file());
+                }
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
@@ -4290,6 +4310,27 @@ mod password_source_tests {
             .expect_err("oversized files are rejected");
         assert!(
             format!("{err}").contains("larger than 4096 bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_regular_password_files_are_rejected() {
+        let dir = std::env::temp_dir().join(format!(
+            "ml-cli-password-test-dir-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = read_password_from_source::<MockNodeInterface>(
+            Some(dir.to_str().unwrap()),
+            PromptMode::Enter,
+        )
+        .await;
+        std::fs::remove_dir(&dir).unwrap();
+        let err = result.expect_err("a directory must be rejected as a password file");
+        assert!(
+            err.to_string().contains("not a regular file"),
             "unexpected error: {err}"
         );
     }

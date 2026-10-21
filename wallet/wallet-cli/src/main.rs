@@ -25,7 +25,9 @@ utils::enable_rust_backtrace!();
 ///
 /// This verb is handled by the binary before the main argument parser runs, so
 /// it does not appear in the command grammar, in the help output, or in the
-/// generated completions.
+/// generated completions. The trade-off is that a future first-position word
+/// named `completions` would be claimed by this handler; the top-level grammar
+/// has no such positional and the behavior is pinned by a test.
 #[derive(Parser, Debug)]
 struct CompletionsArgs {
     /// Shell to generate the completion script for
@@ -79,4 +81,23 @@ async fn main() {
             eprintln!("{err}");
             std::process::exit(1);
         })
+}
+
+#[cfg(test)]
+mod completions_tests {
+    use clap::CommandFactory as _;
+
+    /// Pins the interception contract: `completions` is claimed by the binary
+    /// before the grammar parser runs, so the top-level grammar must NOT
+    /// accept a `completions` subcommand — otherwise the two would fight over
+    /// the first positional word.
+    #[test]
+    fn grammar_has_no_completions_verb() {
+        assert!(
+            wallet_cli_lib::config::WalletCliArgs::command()
+                .find_subcommand("completions")
+                .is_none(),
+            "the top-level grammar claims the `completions` verb"
+        );
+    }
 }

@@ -304,7 +304,14 @@ fn parse_account_index(arguments: &Value) -> Result<u32, String> {
             let raw = value.as_u64().ok_or_else(|| {
                 format!("account_index must be a non-negative integer, got: {value}")
             })?;
-            u32::try_from(raw).map_err(|_| format!("account_index out of range: {raw}"))
+            let index =
+                u32::try_from(raw).map_err(|_| format!("account_index out of range: {raw}"))?;
+            // Mirror the U31 account bound here so an out-of-range index is a
+            // protocol error, not a tool execution failure.
+            if index >= crypto::key::hdkd::u31::MSB_BIT {
+                return Err(format!("account_index out of range: {index}"));
+            }
+            Ok(index)
         }
     }
 }

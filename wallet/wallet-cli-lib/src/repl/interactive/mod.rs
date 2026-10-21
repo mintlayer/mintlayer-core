@@ -211,10 +211,23 @@ fn confirm_or_abort<N: NodeInterface>(
             .interact()
         {
             Ok(confirmed) => confirmed,
-            // A prompt that cannot be shown (for example piped input driving
-            // the REPL) cannot receive consent; treat that as a decline for
-            // this command instead of tearing down the whole session.
+            // A prompt that cannot be shown cannot receive consent. On a real
+            // terminal treat the failure as a decline for this command instead
+            // of tearing down the whole session; without a terminal there is
+            // no interactive session to preserve, so fail the command with a
+            // distinct error instead of silently skipping the mutation.
             Err(err) => {
+                // The prompt renders on standard error (dialoguer's default
+                // terminal target); without a prompt-capable terminal there is
+                // no way to obtain consent, so fail the command with a
+                // distinct error instead of silently skipping the mutation.
+                if !std::io::IsTerminal::is_terminal(&std::io::stdin())
+                    || !std::io::IsTerminal::is_terminal(&std::io::stderr())
+                {
+                    return Err(WalletCliError::ConfirmationRequired(format!(
+                        "cannot show the confirmation prompt ({err}); pass --yes or run interactively"
+                    )));
+                }
                 println!("The confirmation prompt is unavailable ({err}); treating as declined.");
                 false
             }
