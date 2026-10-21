@@ -2568,14 +2568,9 @@ pub fn run_with_large_stack<T: Send + 'static>(task: impl FnOnce() -> T + Send +
         .spawn(task)
         .expect("failed to spawn the grammar thread")
         .join()
-        .unwrap_or_else(|payload| {
-            let message = payload
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("<non-string panic payload>");
-            panic!("the grammar thread panicked: {message}")
-        })
+        // Resume the original panic so its payload, location, and backtrace
+        // are preserved instead of being flattened into a new panic here.
+        .unwrap_or_else(|payload| std::panic::resume_unwind(payload))
 }
 
 /// Build the REPL command tree on the calling thread.

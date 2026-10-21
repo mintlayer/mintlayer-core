@@ -74,6 +74,13 @@ fn process_line<N: NodeInterface>(
 
 /// Runs one command line and renders its result. Errors propagate to the
 /// caller, which maps them to a non-zero exit status.
+///
+/// `--output json` contract:
+/// - migrated commands that emit structured data print their raw JSON value
+///   (or `{"text": ..., "value": ...}` when they also carry a text line);
+/// - commands that emit plain text print `{"output": "<text>"}`;
+/// - failures are reported as plain text on standard error with a non-zero
+///   exit status and no JSON envelope.
 pub fn run<N: NodeInterface>(
     line: String,
     output_format: CliOutputFormat,
