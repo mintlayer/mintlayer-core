@@ -183,6 +183,10 @@ const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 /// message without a newline; past this the session is torn down.
 const RESYNC_DRAIN_BUDGET: usize = MAX_MESSAGE_BYTES * 4;
 
+/// Upper bound for one wallet RPC round trip; a daemon that hangs must not
+/// stall the protocol loop past this.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Discards bytes up to and including the next newline. Gives up on the
 /// stream if the line turns out to be endless.
 async fn skip_rest_of_line<R: tokio::io::AsyncBufRead + Unpin>(
@@ -313,7 +317,27 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         let response = match serde_json::from_str::<Value>(trimmed) {
-            Ok(message) => handle_message(&message, &wallet).await,
+            Ok(message) => {
+                // Bound each request so a hung wallet daemon cannot stall the
+                // protocol loop; the client gets a JSON-RPC error instead of
+                // silence.
+                match tokio::time::timeout(REQUEST_TIMEOUT, handle_message(&message, &wallet)).await
+                {
+                    Ok(response) => response,
+                    Err(_elapsed) => {
+                        log_rpc_error(&format!(
+                            "wallet request timed out after {REQUEST_TIMEOUT:?}"
+                        ));
+                        message.get("id").cloned().map(|id| {
+                            serde_json::json!({
+                                "jsonrpc": JSONRPC_VERSION,
+                                "id": id,
+                                "error": { "code": -32000, "message": "wallet request timed out" }
+                            })
+                        })
+                    }
+                }
+            }
             Err(err) => Some(serde_json::json!({
                 "jsonrpc": JSONRPC_VERSION,
                 "id": null,
