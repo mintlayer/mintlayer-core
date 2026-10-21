@@ -184,14 +184,20 @@ fn confirm_or_abort<N: NodeInterface>(
         }
         println!();
         println!("{question}");
-        let confirmed = dialoguer::Confirm::new()
+        let confirmed = match dialoguer::Confirm::new()
             .with_prompt("Proceed [y/N]?")
             .default(false)
             .interact()
-            // dialoguer errors are io errors underneath; keep them typed so
-            // non-TTY contexts get a precise diagnosis instead of a generic
-            // "invalid input" message.
-            .map_err(|err| WalletCliError::TerminalIo(std::io::Error::other(err.to_string())))?;
+        {
+            Ok(confirmed) => confirmed,
+            // A prompt that cannot be shown (for example piped input driving
+            // the REPL) cannot receive consent; treat that as a decline for
+            // this command instead of tearing down the whole session.
+            Err(dialoguer::Error::IO(err)) => {
+                println!("The confirmation prompt is unavailable ({err}); treating as declined.");
+                false
+            }
+        };
         if !confirmed {
             println!("Aborted.");
             return Ok(false);

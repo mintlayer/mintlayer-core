@@ -230,12 +230,26 @@ async fn read_password_from_source<N: NodeInterface>(
                 if metadata.len() > MAX_PASSWORD_FILE_BYTES {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
-                        "the password file is larger than 4 KiB; this does not \
-                         look like a password file",
+                        format!(
+                            "the password file is larger than {MAX_PASSWORD_FILE_BYTES} \
+                             bytes; this does not look like a password file"
+                        ),
                     ));
                 }
+                // Read one byte past the cap so a file that grows (or is
+                // swapped) after the metadata check is detected here instead
+                // of being silently truncated into a prefix password.
                 let mut password = String::new();
-                file.take(MAX_PASSWORD_FILE_BYTES).read_to_string(&mut password)?;
+                file.take(MAX_PASSWORD_FILE_BYTES + 1).read_to_string(&mut password)?;
+                if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
+                            "the password file is larger than {MAX_PASSWORD_FILE_BYTES} \
+                             bytes; this does not look like a password file"
+                        ),
+                    ));
+                }
                 if password.contains('\0') {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
@@ -2911,6 +2925,7 @@ fn is_nested_wallet_command(command: &WalletCommand) -> bool {
             | WalletCommand::Transaction { .. }
             | WalletCommand::Node { .. }
             | WalletCommand::Peer { .. }
+            | WalletCommand::Config { .. }
     )
 }
 
@@ -4245,7 +4260,7 @@ mod password_source_tests {
             .await
             .expect_err("oversized files are rejected");
         assert!(
-            format!("{err}").contains("larger than 4 KiB"),
+            format!("{err}").contains("larger than 4096 bytes"),
             "unexpected error: {err}"
         );
     }
