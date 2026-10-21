@@ -489,7 +489,32 @@ where
             Some(path) => {
                 let path = path.to_owned();
                 let read_path = path.clone();
-                let read = move || std::fs::read_to_string(read_path);
+                let read = move || -> std::io::Result<String> {
+                    use std::io::Read;
+
+                    // Open first, then check the mode of the opened handle: a
+                    // separate metadata() call would leave a window where the
+                    // check and the read see different files.
+                    let mut file = std::fs::File::open(&read_path)?;
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let mode = file.metadata()?.permissions().mode();
+                        if mode & 0o077 != 0 {
+                            // Warn instead of failing: the wallet must stay
+                            // usable, but a group/other-accessible password
+                            // file is almost always a mistake.
+                            log::warn!(
+                                "The password file {} is accessible by group or others; \
+                                 restrict it with chmod 600",
+                                read_path
+                            );
+                        }
+                    }
+                    let mut password = String::new();
+                    file.read_to_string(&mut password)?;
+                    Ok(password)
+                };
                 label_password_errors(
                     tokio::task::spawn_blocking(read),
                     format!("Failed to read the password from {path}"),

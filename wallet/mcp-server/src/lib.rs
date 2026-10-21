@@ -157,8 +157,9 @@ pub async fn handle_message<W: ReadonlyWallet>(message: &Value, wallet: &W) -> O
         ));
     }
     let id = message.get("id").cloned();
-    // Notifications carry no id and never get a response.
-    id.as_ref()?;
+    // Notifications carry no id member and never get a response. A request
+    // with an explicit null id still gets an answer, echoing the null back.
+    message.get("id")?;
     if message.get("jsonrpc").and_then(Value::as_str) != Some(JSONRPC_VERSION) {
         // JSON-RPC 2.0 requires the version member on every request.
         return Some(error_response(
@@ -527,6 +528,19 @@ mod tests {
         let response =
             rt.block_on(handle_message(&bogus, &StubWallet)).expect("requests are answered");
         assert_eq!(response["error"]["code"], -32600);
+    }
+
+    #[test]
+    fn null_id_requests_are_answered_with_a_null_id() {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let message = json!({ "jsonrpc": "2.0", "id": null, "method": "ping" });
+        let response = rt
+            .block_on(handle_message(&message, &StubWallet))
+            .expect("an explicit null id is a request, not a notification");
+        // Indexing with [] maps a missing member to Null, so use get() to
+        // prove the id member is present and null.
+        assert_eq!(response.get("id"), Some(&Value::Null));
+        assert!(response.get("result").is_some());
     }
 
     #[test]
