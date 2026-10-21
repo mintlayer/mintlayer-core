@@ -555,6 +555,14 @@ class WalletCliController(WalletCliControllerBase):
 
     async def list_pending_transactions(self) -> List[str]:
         output = await self._write_command("transaction-list-pending\n")
+        # Non-interactive mode prints only command results (never the line
+        # echo), so scope the ids to the section after the last
+        # "Pending transactions" header; stray 64-hex lines from earlier
+        # output are then ignored.
+        headers = [m.end() for m in re.finditer(r'^Pending transactions\s*$', output, re.MULTILINE)]
+        if headers:
+            tail = output[headers[-1]:]
+            return re.findall(r'^\s*([0-9a-f]{64})\s*$', tail, re.MULTILINE)
         return re.findall(r'^\s*([0-9a-f]{64})\s*$', output, re.MULTILINE)
 
     async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:

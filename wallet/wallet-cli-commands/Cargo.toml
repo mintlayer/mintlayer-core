@@ -39,6 +39,7 @@ futures.workspace = true
 humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true
+zeroize.workspace = true
 lazy_static.workspace = true
 prettytable-rs = "0.10"
 reedline = { workspace = true, features = ["external_printer"] }

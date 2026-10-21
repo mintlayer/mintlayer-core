@@ -10148,6 +10148,7 @@ dependencies = [
  "wallet-storage",
  "wallet-test-node",
  "wallet-types",
+ "zeroize",
 ]
 
 [[package]]

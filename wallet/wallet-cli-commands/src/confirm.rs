@@ -25,10 +25,15 @@ pub fn confirmation_prompt(command: &ManageableWalletCommand) -> Option<String> 
         ManageableWalletCommand::WalletCommands(command) => {
             // The gate must not depend on the spelling: translate the nested
             // groups to their legacy forms first, so `send 1 addr` and
-            // `address-send 1 addr` classify identically.
-            let normalized =
-                crate::command_handler::normalize_nested_wallet_command(command.clone());
-            wallet_confirmation(&normalized)
+            // `address-send 1 addr` classify identically. Flat spellings are
+            // classified by reference; only nested ones pay for a rebuild.
+            if crate::command_handler::is_nested_wallet_command(command) {
+                let normalized =
+                    crate::command_handler::normalize_nested_wallet_command(command.clone());
+                wallet_confirmation(&normalized)
+            } else {
+                wallet_confirmation(command)
+            }
         }
         ManageableWalletCommand::ManagementCommands(_) => None,
     }
@@ -45,8 +50,24 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
         WalletCommand::SendToAddress {
             address,
             amount,
-            utxos: _,
-        } => Some(format!("Send {amount} coins to {address}?")),
+            utxos,
+        } => {
+            let selection = if utxos.is_empty() {
+                String::new()
+            } else {
+                const MAX_LISTED_UTXOS: usize = 10;
+                let mut list = utxos
+                    .iter()
+                    .take(MAX_LISTED_UTXOS)
+                    .map(|utxo| utxo.to_string())
+                    .collect::<Vec<_>>();
+                if utxos.len() > MAX_LISTED_UTXOS {
+                    list.push(format!("and {} more", utxos.len() - MAX_LISTED_UTXOS));
+                }
+                format!(" using {}", list.join(", "))
+            };
+            Some(format!("Send {amount} coins to {address}{selection}?"))
+        }
         WalletCommand::SendTokensToAddress {
             token_id,
             address,
@@ -221,9 +242,7 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
             utxo,
             address,
             htlc_secret: _,
-        } => Some(format!(
-            "Spend the outpoint {utxo:?} (source and output index) to {address}?"
-        )),
+        } => Some(format!("Spend the outpoint {utxo} to {address}?")),
         WalletCommand::ColdCommands(command) => cold_wallet_confirmation(command),
         WalletCommand::SelectAccount { account_index } => Some(format!(
             "Select account {account_index} for subsequent commands?"
@@ -432,6 +451,20 @@ mod tests {
         // The same commands through the nested grammar classify identically.
         assert_eq!(prompt("node shutdown"), prompt("node-shutdown"));
         assert_eq!(prompt("account select 3"), prompt("account-select 3"));
+    }
+
+    #[test]
+    fn send_recap_lists_utxos_with_a_cap() {
+        let hash = "0000000000000000000000000000000000000000000000000000000000000001";
+        let utxos = (1..=12)
+            .map(|index| format!("tx({hash},{index})"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        // `prompt` needs a 'static line; leak the built one in the test process.
+        let line: &'static str = Box::leak(format!("address-send addr 1 {utxos}").into_boxed_str());
+        let recap = prompt(line).expect("send must ask");
+        assert!(recap.contains(&format!("tx({hash},1)")), "{recap}");
+        assert!(recap.contains("and 2 more"), "{recap}");
     }
 
     #[test]

@@ -96,24 +96,32 @@ fn create_line_editor(
     line_editor.with_edit_mode(edit_mode)
 }
 
-/// Runs the wizard for a recognized command line, echoing the generated
-/// one-liner. `None` means the line is not a wizard invocation.
-fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<Option<String>, WalletCliError<N>> {
+/// Outcome of offering a wizard for the entered line.
+enum WizardOutcome {
+    /// The line is not a wizard invocation; normal processing continues.
+    NotAWizard,
+    /// The wizard produced an equivalent one-liner to run.
+    Produced(String),
+    /// The user declined the wizard's summary; return to the prompt.
+    Cancelled,
+}
+
+fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<WizardOutcome, WalletCliError<N>> {
     let Some(tokens) = shlex::split(line) else {
-        return Ok(None);
+        return Ok(WizardOutcome::NotAWizard);
     };
     let token_refs: Vec<&str> = tokens.iter().map(String::as_str).collect();
     let Some(kind) = WizardKind::parse_from_tokens(&token_refs) else {
-        return Ok(None);
+        return Ok(WizardOutcome::NotAWizard);
     };
     match kind.run(&mut DialoguerBackend) {
         Ok(one_liner) => {
             println!("You could also have run: {one_liner}");
-            Ok(Some(one_liner))
+            Ok(WizardOutcome::Produced(one_liner))
         }
         Err(WizardError::Cancelled) => {
             println!("Wizard cancelled.");
-            Ok(None)
+            Ok(WizardOutcome::Cancelled)
         }
         Err(WizardError::InvalidInput(message)) => Err(WalletCliError::InvalidInput(message)),
         // The original io::Error (e.g. "prompt failed: not a terminal") is kept so
@@ -139,23 +147,27 @@ fn process_line<N: NodeInterface>(
         }
     };
 
-    if let Some(one_liner) = run_wizard_for_line::<N>(&line)? {
-        let command_opt = parse_input(&one_liner, repl_command)?;
-        let command = match command_opt {
-            Some(command) => command,
-            // Wizard output is machine-generated and re-checked by tests, but
-            // an unexpected grammar drift must never crash the wallet.
-            None => {
-                return Err(WalletCliError::InvalidInput(format!(
-                    "the wizard produced a command that failed to parse; please report this: \
-                     {one_liner}"
-                )));
+    match run_wizard_for_line::<N>(&line)? {
+        WizardOutcome::NotAWizard => {}
+        WizardOutcome::Cancelled => return Ok(None),
+        WizardOutcome::Produced(one_liner) => {
+            let command_opt = parse_input(&one_liner, repl_command)?;
+            let command = match command_opt {
+                Some(command) => command,
+                // Wizard output is machine-generated and re-checked by tests, but
+                // an unexpected grammar drift must never crash the wallet.
+                None => {
+                    return Err(WalletCliError::InvalidInput(format!(
+                        "the wizard produced a command that failed to parse; please report this: \
+                         {one_liner}"
+                    )));
+                }
+            };
+            if !confirm_or_abort(&command, assume_yes)? {
+                return Ok(None);
             }
-        };
-        if !confirm_or_abort(&command, assume_yes)? {
-            return Ok(None);
+            return super::run_command_blocking(event_tx, command).map(Option::Some);
         }
-        return super::run_command_blocking(event_tx, command).map(Option::Some);
     }
 
     let command_opt = parse_input(&line, repl_command)?;

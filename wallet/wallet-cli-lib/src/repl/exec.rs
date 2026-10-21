@@ -101,8 +101,24 @@ pub fn run<N: NodeInterface>(
         };
         // The startup command output is the wallet opening report; keep it off
         // standard output so the requested output format stays machine-parseable.
-        let line_out = to_startup_text(res);
-        eprintln!("{line_out}");
+        // In json mode the startup result is folded into a single JSON object
+        // (`{"text": ..., "value": ...}`) so stderr stays one parseable line,
+        // matching the payload convention of the command output on stdout.
+        match (output_format, res) {
+            (CliOutputFormat::Json, ConsoleCommand::Json { text, value }) => {
+                let envelope = json_payload(text, value);
+                match serde_json::to_string(&envelope) {
+                    Ok(rendered) => eprintln!("{rendered}"),
+                    Err(err) => {
+                        return Err(WalletCliError::<N>::SerdeJsonFormatError(err));
+                    }
+                }
+            }
+            (_, res) => {
+                let line_out = to_startup_text(res);
+                eprintln!("{line_out}");
+            }
+        }
     }
 
     // The REPL thread is sized for grammar construction, so build the

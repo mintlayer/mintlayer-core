@@ -69,20 +69,28 @@ struct CliArgs {
 }
 
 impl CliArgs {
-    fn auth_data(&self) -> RpcAuthData {
-        // The auth group is required, so exactly one branch applies.
+    fn auth_data(&self) -> Result<RpcAuthData, String> {
+        // The auth group is required, so exactly one branch applies; a new
+        // group member missing here fails with a message instead of a panic.
         if let Some(cookie_file_path) = self.rpc_cookie_file.clone() {
-            RpcAuthData::Cookie { cookie_file_path }
+            Ok(RpcAuthData::Cookie { cookie_file_path })
         } else if let (Some(username), Some(password)) =
             (self.rpc_username.clone(), self.rpc_password.clone())
         {
-            RpcAuthData::Basic { username, password }
+            Ok(RpcAuthData::Basic { username, password })
         } else if self.rpc_no_auth {
-            RpcAuthData::None
+            Ok(RpcAuthData::None)
         } else {
-            unreachable!("clap's `auth` arg group guarantees exactly one auth source")
+            Err("exactly one of --rpc-cookie-file, --rpc-username with --rpc-password, or --rpc-no-auth must be provided"
+                .to_owned())
         }
     }
+}
+
+/// Labels wallet RPC failures at the adapter boundary so tool results name
+/// their provenance instead of surfacing a bare daemon message.
+fn rpc_error(err: impl std::fmt::Display) -> String {
+    format!("wallet RPC failed: {err}")
 }
 
 /// Adapter that exposes only the read-only operations of the daemon client.
@@ -90,17 +98,19 @@ struct RpcWallet(ClientWalletRpc);
 
 impl ReadonlyWallet for RpcWallet {
     async fn version(&self) -> Result<String, String> {
-        WalletInterface::version(&self.0).await.map_err(|err| err.to_string())
+        WalletInterface::version(&self.0).await.map_err(rpc_error)
     }
 
     async fn wallet_info(&self) -> Result<Value, String> {
-        let info = WalletInterface::wallet_info(&self.0).await.map_err(|err| err.to_string())?;
-        serde_json::to_value(&info).map_err(|err| err.to_string())
+        let info = WalletInterface::wallet_info(&self.0).await.map_err(rpc_error)?;
+        serde_json::to_value(&info)
+            .map_err(|err| format!("failed to serialize the wallet info: {err}"))
     }
 
     async fn best_block(&self) -> Result<Value, String> {
-        let block = WalletInterface::best_block(&self.0).await.map_err(|err| err.to_string())?;
-        serde_json::to_value(&block).map_err(|err| err.to_string())
+        let block = WalletInterface::best_block(&self.0).await.map_err(rpc_error)?;
+        serde_json::to_value(&block)
+            .map_err(|err| format!("failed to serialize the best block: {err}"))
     }
 
     async fn balance(
@@ -119,8 +129,9 @@ impl ReadonlyWallet for RpcWallet {
             with_locked_filter(with_locked),
         )
         .await
-        .map_err(|err| err.to_string())?;
-        serde_json::to_value(&balances).map_err(|err| err.to_string())
+        .map_err(rpc_error)?;
+        serde_json::to_value(&balances)
+            .map_err(|err| format!("failed to serialize the balance: {err}"))
     }
 
     async fn standalone_addresses(&self, account_index: u32) -> Result<Value, String> {
@@ -128,8 +139,9 @@ impl ReadonlyWallet for RpcWallet {
             .ok_or_else(|| format!("Invalid account index: {account_index}"))?;
         let addresses = WalletInterface::get_standalone_addresses(&self.0, account_index)
             .await
-            .map_err(|err| err.to_string())?;
-        serde_json::to_value(&addresses).map_err(|err| err.to_string())
+            .map_err(rpc_error)?;
+        serde_json::to_value(&addresses)
+            .map_err(|err| format!("failed to serialize the addresses: {err}"))
     }
 }
 
@@ -233,6 +245,9 @@ async fn next_message<R: tokio::io::AsyncBufRead + Unpin>(
         let len = available.len();
         reader.consume(len);
     }
+    // The loop's `buffer.len() + available.len() > MAX_MESSAGE_BYTES` guard
+    // runs before every extend, so a trailing message at EOF is already
+    // bounded; no separate check is needed here.
     if buffer.is_empty() {
         return Ok(None);
     }
@@ -306,8 +321,14 @@ async fn serve(wallet: RpcWallet) -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::main]
 async fn main() {
     let args = CliArgs::parse();
-    let wallet = match ClientWalletRpc::new(args.wallet_rpc_address.clone(), args.auth_data()).await
-    {
+    let auth_data = match args.auth_data() {
+        Ok(auth_data) => auth_data,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+    let wallet = match ClientWalletRpc::new(args.wallet_rpc_address.clone(), auth_data).await {
         Ok(client) => RpcWallet(client),
         Err(err) => {
             eprintln!("Failed to connect to the wallet RPC daemon: {err}");

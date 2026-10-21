@@ -55,6 +55,7 @@ use wallet_rpc_lib::types::{
     RpcStandaloneAddressDetails, RpcValidatedSignatures, TokenMetadata,
 };
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+use zeroize::Zeroizing;
 
 #[cfg(feature = "trezor")]
 use crate::{
@@ -95,12 +96,14 @@ enum PromptMode {
 /// Read a password from `--password-file`, where `-` means standard input.
 /// When no source is given and standard input is a terminal, the password
 /// is read with a hidden prompt on the controlling terminal instead; in
-/// [`PromptMode::Create`] mode the prompt asks for the password twice. The
+/// [`PromptMode::Create`] mode the prompt asks for the password twice.
+/// The file and standard-input sources are read exactly once, so the
+/// double-entry typo guard exists only on the interactive prompt. The
 /// trailing line terminator is stripped; any other whitespace is kept.
 async fn read_password_from_source<N: NodeInterface>(
     source: Option<&str>,
     prompt_mode: PromptMode,
-) -> Result<String, WalletCliCommandError<N>> {
+) -> Result<Zeroizing<String>, WalletCliCommandError<N>> {
     // A password file that is not tiny is almost certainly the wrong file.
     const MAX_PASSWORD_FILE_BYTES: u64 = 4 * 1024;
     // The password can also come from a hidden terminal prompt; see the
@@ -114,17 +117,20 @@ async fn read_password_from_source<N: NodeInterface>(
     // hidden prompt itself reads from the controlling terminal, but gating
     // on stdin keeps piped automation (commands files, `--exec`) failing
     // fast with an explicit error instead of hanging on an unseen prompt.
-    fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<String> {
+    fn prompt_password_hidden(prompt_mode: PromptMode) -> std::io::Result<Zeroizing<String>> {
         // The prompt and the hidden read go to the controlling terminal
-        // (/dev/tty), so redirected standard error does not matter.
-        let password = rpassword::prompt_password(if prompt_mode == PromptMode::Create {
-            "New password: "
-        } else {
-            "Password: "
-        })?;
+        // (/dev/tty), so redirected standard error does not matter. Both
+        // entries are returned as wiping buffers so a mismatch wipes both.
+        let password = Zeroizing::new(rpassword::prompt_password(
+            if prompt_mode == PromptMode::Create {
+                "New password: "
+            } else {
+                "Password: "
+            },
+        )?);
         if prompt_mode == PromptMode::Create {
-            let confirmed = rpassword::prompt_password("Confirm password: ")?;
-            if password != confirmed {
+            let confirmed = Zeroizing::new(rpassword::prompt_password("Confirm password: ")?);
+            if *password != *confirmed {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     "the two passwords do not match",
@@ -134,8 +140,8 @@ async fn read_password_from_source<N: NodeInterface>(
         Ok(password)
     }
 
-    fn read_password_from_stdin() -> std::io::Result<String> {
-        let mut password = String::new();
+    fn read_password_from_stdin() -> std::io::Result<Zeroizing<String>> {
+        let mut password = Zeroizing::default();
         let bytes_read = std::io::stdin().read_line(&mut password)?;
         if bytes_read == 0 {
             return Err(std::io::Error::new(
@@ -201,7 +207,7 @@ async fn read_password_from_source<N: NodeInterface>(
         }
         Some(path) => {
             let read_path = path.to_owned();
-            let read = move || -> std::io::Result<String> {
+            let read = move || -> std::io::Result<Zeroizing<String>> {
                 use std::io::Read;
 
                 // Open first, then check the mode of the opened handle: a
@@ -242,7 +248,7 @@ async fn read_password_from_source<N: NodeInterface>(
                 // Read one byte past the cap so a file that grows (or is
                 // swapped) after the metadata check is detected here instead
                 // of being silently truncated into a prefix password.
-                let mut password = String::new();
+                let mut password = Zeroizing::default();
                 file.take(MAX_PASSWORD_FILE_BYTES + 1).read_to_string(&mut password)?;
                 if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
                     return Err(too_large());
@@ -263,13 +269,15 @@ async fn read_password_from_source<N: NodeInterface>(
             .await?
         }
     };
-    let password = strip_line_terminator(&password);
-    if password.is_empty() {
+    // `password` is a wiping buffer on every path, so the early
+    // validation-error returns below wipe it too.
+    let stripped = strip_line_terminator(&password);
+    if stripped.is_empty() {
         return Err(WalletCliCommandError::InvalidInput(
             "the password is empty; expected a non-empty password".to_owned(),
         ));
     }
-    if password.contains(['\r', '\n']) {
+    if stripped.contains(['\r', '\n']) {
         // An interior line terminator means the file holds more than one
         // line; using only the first would silently lock the wallet.
         return Err(WalletCliCommandError::InvalidInput(
@@ -278,7 +286,12 @@ async fn read_password_from_source<N: NodeInterface>(
                 .to_owned(),
         ));
     }
-    Ok(password.to_owned())
+    // Every copy this function made wipes itself: the returned value and
+    // the source buffer are both `Zeroizing`. The value handed to the
+    // command enum remains a plain copy on purpose (its grammar type is
+    // `String`), so the dispatch site below makes the one deliberate,
+    // documented copy.
+    Ok(Zeroizing::new(stripped.to_owned()))
 }
 
 pub struct CommandHandler<W> {
@@ -1163,7 +1176,13 @@ where
                         .await?;
                         return self
                             .handle_cold_wallet_command(
-                                ColdWalletCommand::EncryptPrivateKeys { password },
+                                // The grammar field is `String`, so this is
+                                // the one deliberate plain copy of the
+                                // password; wiping it would require a
+                                // zeroizing-aware grammar type.
+                                ColdWalletCommand::EncryptPrivateKeys {
+                                    password: password.to_string(),
+                                },
                                 chain_config,
                             )
                             .await;
@@ -1176,7 +1195,11 @@ where
                         .await?;
                         return self
                             .handle_cold_wallet_command(
-                                ColdWalletCommand::UnlockPrivateKeys { password },
+                                // See the note on the encrypt arm: one
+                                // deliberate plain copy for the grammar type.
+                                ColdWalletCommand::UnlockPrivateKeys {
+                                    password: password.to_string(),
+                                },
                                 chain_config,
                             )
                             .await;
@@ -2903,7 +2926,7 @@ where
 /// Whether the command still carries a nested group that must be translated before
 /// dispatch. Shared by the dispatch guard and the translation tests so both stay in
 /// sync when new groups are added.
-fn is_nested_wallet_command(command: &WalletCommand) -> bool {
+pub(crate) fn is_nested_wallet_command(command: &WalletCommand) -> bool {
     // Keep in sync with the dispatch or-pattern in `handle_wallet_command` and the
     // translation arms in `normalize_nested_wallet_command`; the LEGACY_ALIASES
     // coexistence test and the translation test pin the three sites together.
@@ -4199,7 +4222,7 @@ mod password_source_tests {
 
     async fn read_from_file(
         content: &[u8],
-    ) -> Result<String, WalletCliCommandError<MockNodeInterface>> {
+    ) -> Result<Zeroizing<String>, WalletCliCommandError<MockNodeInterface>> {
         let mut path = std::env::temp_dir();
         path.push(format!(
             "ml-cli-password-test-{}-{:?}",
@@ -4228,7 +4251,7 @@ mod password_source_tests {
     #[tokio::test]
     async fn single_line_passwords_are_read_with_the_terminator_stripped() {
         let password = read_from_file(b"hunter2\n").await.expect("must read");
-        assert_eq!(password, "hunter2");
+        assert_eq!(password.as_str(), "hunter2");
     }
 
     #[tokio::test]
