@@ -40,12 +40,14 @@ impl TimeGetterFn for FixedClock {
 
 type Pool = crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>;
 
-// The scale scenario parks one peer per unit of the inbound quota and assumes the result
-// fills the pool exactly; keep the defaults coupled or the scenario must be reworked.
+// The scale scenario parks one peer per unit of the inbound quota, each peer at that same
+// quota, and assumes the result fills the pool exactly; keep the defaults coupled (capacity
+// == quota squared) or the scenario must be reworked.
 const _: () = assert!(
     crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
-        == 10 * crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
-    "scale scenario assumes 10 peers at the default per-peer quota fill the pool exactly",
+        == crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+            * crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    "scale scenario assumes peers-at-quota x quota fills the pool exactly",
 );
 
 const HONEST_PEER: u64 = 2;
