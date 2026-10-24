@@ -413,13 +413,13 @@ fn eviction_reservation_uses_outbound_tier() {
     // An outbound origin pushed 4 entries beyond its own (larger) reservation; an inbound
     // origin 2 beyond its smaller one. Total pool target: 40 + 10 = 50.
     let mut outbound_ids = Vec::new();
-    for i in 0..44 {
+    for _i in 0..44 {
         let entry = tx_entry_with_options(&mut rng, remote_origin(1), time, true);
         outbound_ids.push(*entry.tx_id());
         assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
     }
     let mut inbound_ids = Vec::new();
-    for i in 0..12 {
+    for _i in 0..12 {
         let entry = tx_entry_with_origin(&mut rng, remote_origin(2), time);
         inbound_ids.push(*entry.tx_id());
         assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
