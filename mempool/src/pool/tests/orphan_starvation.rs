@@ -244,7 +244,10 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
                 .assert_in_orphan_pool();
         }
     }
-    assert_eq!(honest_ids.len(), crate::config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    assert_eq!(
+        honest_ids.len(),
+        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
+    );
 
     let mut accepted = 0u32;
     for i in 0..1500u32 {

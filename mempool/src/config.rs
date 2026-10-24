@@ -272,6 +272,13 @@ impl MempoolConfig {
             *self.outbound_remote_orphan_pool_capacity_per_peer > 0,
             ConfigError::OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero
         );
+        // The outbound tier is documented as the larger per-peer share; an inverted
+        // configuration would silently contradict that policy.
+        ensure!(
+            *self.outbound_remote_orphan_pool_capacity_per_peer
+                >= *self.remote_orphan_pool_capacity_per_peer,
+            ConfigError::OutboundOrphanCapacityBelowInboundCapacity
+        );
         Ok(())
     }
 }
@@ -330,6 +337,11 @@ pub enum ConfigError {
 
     #[error("Outbound remote orphan pool capacity per peer cannot be zero")]
     OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero,
+
+    #[error(
+        "Outbound remote orphan pool capacity per peer cannot be below the inbound per-peer capacity"
+    )]
+    OutboundOrphanCapacityBelowInboundCapacity,
 
     #[error("Maximum cluster size in bytes cannot be zero")]
     MaxClusterSizeBytesCannotBeZero,

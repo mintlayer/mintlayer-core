@@ -122,9 +122,15 @@ impl TxOrphanPoolMaps {
         }
 
         let stat = self.origin_stats.entry(origin).or_default();
+        let outbound = entry.options().origin_peer_is_outbound();
+        if stat.count > 0 {
+            // A peer's connection class is fixed for the connection's lifetime; a flip here
+            // would silently change the whole origin's eviction tier.
+            debug_assert_eq!(stat.outbound, outbound, "origin changed connection class");
+        }
         stat.count += 1;
         stat.size += entry.size().get();
-        stat.outbound = entry.options().origin_peer_is_outbound();
+        stat.outbound = outbound;
 
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
