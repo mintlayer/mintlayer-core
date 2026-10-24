@@ -396,6 +396,12 @@ mod mempool_rejection_classification_tests {
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Orphan(
             OrphanPoolError::LocalCapacityExceeded(1)
         )));
+        assert!(!is_deterministic_mempool_rejection(&MempoolError::Orphan(
+            OrphanPoolError::RemoteCapacityExceeded(
+                mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(1)),
+                10,
+            )
+        )));
         // Conflicts with other mempool transactions may resolve on their own.
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Policy(
             MempoolPolicyError::Conflict(MempoolConflictError::Irreplacable)
@@ -428,6 +434,10 @@ mod mempool_rejection_classification_tests {
             MempoolError::Policy(MempoolPolicyError::MempoolFull),
             MempoolError::Orphan(OrphanPoolError::Full),
             MempoolError::Orphan(OrphanPoolError::LocalCapacityExceeded(1)),
+            MempoolError::Orphan(OrphanPoolError::RemoteCapacityExceeded(
+                mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(1)),
+                10,
+            )),
             MempoolError::Orphan(OrphanPoolError::NonceGapTooLarge(3)),
             MempoolError::Orphan(OrphanPoolError::MempoolConflict),
             MempoolError::Policy(MempoolPolicyError::Conflict(
