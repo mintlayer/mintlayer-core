@@ -50,6 +50,13 @@ const _: () = assert!(
     "scale scenario assumes peers-at-quota x quota fills the pool exactly",
 );
 
+// The many-small-peers scenario derives its peer count as capacity - 1; degenerate defaults
+// would make that count zero (underflow in the derivation below) or one (modulo by zero).
+const _: () = assert!(
+    crate::config::DEFAULT_ORPHAN_POOL_CAPACITY >= 2,
+    "many-small-peers scenario needs at least two pool slots",
+);
+
 const HONEST_PEER: u64 = 2;
 const HOSTILE_PEER: u64 = 3;
 
@@ -244,11 +251,14 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
 
     // One peer per unit of the inbound quota parks one orphan per unit of that quota: every
     // peer is at its quota and the pool (default capacity = quota x peers) is exactly full.
+    // A running counter keeps every transaction id distinct regardless of the loop bounds.
     let peer_count = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32;
     let mut honest_ids = Vec::new();
+    let mut counter = 0u32;
     for peer in 0..peer_count {
         for i in 0..peer_count {
-            let tx = free_orphan_tx(peer * 1000 + i, 0xa1);
+            let tx = free_orphan_tx(counter, 0xa1);
+            counter += 1;
             honest_ids.push(tx.transaction().get_id());
             submit(&mut mempool, tx, 10 + peer as u64)
                 .expect("orphan should be parked")

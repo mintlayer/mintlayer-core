@@ -273,7 +273,13 @@ impl TxOrphanPool {
     }
 
     /// Insert a transaction entry
-    pub fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
+    ///
+    /// Crate-private: the production entry point for orphan admission is
+    /// [`crate::pool::Mempool::try_add_orphan`], which runs the per-peer admission policy
+    /// (`check_orphan_pool_policy`) before any insert. This method enforces only the
+    /// aggregate hard limit, so bypassing the policy here would admit orphans outside the
+    /// per-peer quota and shield them from eviction with their reservation.
+    pub(crate) fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
         if self.contains(&tx_id) {
             return Ok(TxStatus::InOrphanPoolDuplicate);
@@ -296,7 +302,11 @@ impl TxOrphanPool {
     /// full. Otherwise expired entries are dropped first and room is made by evicting only
     /// from origins that exceed their reservation; a still-full pool rejects the newcomer
     /// with [`OrphanPoolError::Full`] instead of displacing another peer's protected entries.
-    pub fn insert_and_enforce_limits(
+    ///
+    /// This enforces the aggregate cap (and expiry); the per-peer remote quota lives in
+    /// `TxFinalizer::check_orphan_pool_policy` (`pool/mod.rs`), which every production
+    /// caller runs before inserting.
+    pub(crate) fn insert_and_enforce_limits(
         &mut self,
         entry: TxEntry,
         cur_time: Time,
@@ -411,6 +421,11 @@ impl TxOrphanPool {
     }
 
     /// Make room for a newcomer by evicting only from origins beyond their reservation.
+    ///
+    /// Complexity is O(evictions × (origins + entries-of-origin)): each eviction rescans
+    /// `origin_stats` and range-scans the chosen origin's entries. This is acceptable at
+    /// the configured aggregate cap (100 by default) and the production path only reaches
+    /// eviction as defense-in-depth, since admission rejects before evicting.
     /// Returns false if the pool is still full, in which case no protected entry was touched.
     fn evict_over_reservation(&mut self, max_size: usize) -> bool {
         while self.len() >= max_size {
