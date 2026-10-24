@@ -29,6 +29,19 @@ use test_utils::random::{Rng, Seed, make_seedable_rng};
 
 use super::*;
 
+// Couplings the reservation scenarios below rely on; retuning a default requires reworking
+// the affected scenarios rather than silently breaking their arithmetic.
+const _: () = assert!(
+    config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+        == 4 * config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    "eviction_reservation_uses_outbound_tier assumes outbound = 4x inbound",
+);
+const _: () = assert!(
+    config::DEFAULT_ORPHAN_POOL_CAPACITY
+        == 10 * config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    "fill_to_capacity default usage assumes capacity = 10x the inbound quota",
+);
+
 fn check_integrity(orphans: &TxOrphanPool) {
     let len = orphans.len();
     assert!(len <= ORPHAN_POOL_SIZE_HARD_LIMIT);

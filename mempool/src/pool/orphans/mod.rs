@@ -315,6 +315,8 @@ impl TxOrphanPool {
 
         // Sweep expired entries before anything else so that resubmissions of stale entries
         // cannot keep them alive by perpetually short-circuiting on the duplicate check.
+        // On the production path the caller has already swept for the policy check, so this
+        // pass is a no-op there; it matters for direct callers (unit tests).
         self.remove_expired(cur_time);
         if self.contains(&tx_id) {
             return Ok(TxStatus::InOrphanPoolDuplicate);

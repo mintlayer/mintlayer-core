@@ -4,8 +4,9 @@
 // admission mean a full pool rejects a flood instead of displacing other peers' parked
 // orphans, and eviction no longer ignores which peer contributed an entry.
 //
-// Every submission goes through `MempoolInterface::add_transaction_remote`, the same method p2p
-// calls (`p2p/src/sync/peer/transaction_manager.rs`), so no test-only shortcut is involved.
+// Every remote submission goes through `MempoolInterface::add_transaction_remote`, the same
+// method p2p calls (`p2p/src/sync/peer/transaction_manager.rs`); the local-origin scenario
+// uses `add_transaction_local`, as no wire path delivers local transactions.
 //
 // Sections (one or more tests each):
 //   1. control  - a child parked before its parent is promoted once the parent arrives.
@@ -13,8 +14,9 @@
 //   3. scale    - a flood against a full pool is rejected; every parked orphan survives.
 //   4. quota    - per-peer fairness: hostile floods, many small peers, legitimate load.
 //   5. expiry   - expired entries are reclaimed before the quota is evaluated.
-//   6. teardown - a peer's orphans leave with its connection.
-//   7. tiers    - outbound peers get a larger share; both tiers cap their own peers.
+//   6. pinned   - a local origin is also rejected instead of displacing protected entries.
+//   7. teardown - a peer's orphans leave with its connection.
+//   8. tiers    - outbound peers get a larger share; both tiers cap their own peers.
 //
 // Run:  cd mintlayer-core && cargo test -p mempool --lib orphan_starvation -- --nocapture --test-threads=1
 
@@ -24,7 +26,7 @@ use crate::interface::MempoolInterface;
 use common::chain::signature::inputsig::InputWitness;
 use common::primitives::time::Time;
 use common::time_getter::{TimeGetter, TimeGetterFn};
-use mempool_types::tx_origin::RemoteTxOrigin;
+use mempool_types::tx_origin::{LocalTxOrigin, RemoteTxOrigin};
 use p2p_types::PeerId;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -256,7 +258,7 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     let mut honest_ids = Vec::new();
     let mut counter = 0u32;
     for peer in 0..peer_count {
-        for i in 0..peer_count {
+        for _i in 0..peer_count {
             let tx = free_orphan_tx(counter, 0xa1);
             counter += 1;
             honest_ids.push(tx.transaction().get_id());
@@ -438,7 +440,60 @@ async fn quota_ignores_expired_entries_when_admitting_new_ones() {
         .assert_in_orphan_pool();
 }
 
-// ------------------------------------------------------------------ 6. disconnect teardown
+// ------------------------------------------------- 6. local origin vs a pinned pool
+
+/// With local orphan parking enabled, a local submission into a pool pinned by within-quota
+/// remote peers is rejected instead of displacing anyone: the fail-closed behavior applies
+/// to local origin too, and the pinned peers keep their entries.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quota_local_origin_rejected_when_pool_pinned() {
+    let mut cfg = create_mempool_config();
+    cfg.allow_local_orphans = true.into();
+
+    let mut rng = make_seedable_rng(Seed::from_u64(8));
+    let mut tf = TestFramework::builder(&mut rng).build();
+    // Process a block to finish the initial block download.
+    tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
+    let mut mempool = setup_with_chainstate_generic(tf.chainstate(), cfg, Default::default());
+
+    // Fill the pool exactly: every remote peer parks at its own quota.
+    let peer_count = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32;
+    let mut parked_ids = Vec::new();
+    let mut counter = 0u32;
+    for peer in 0..peer_count {
+        for _i in 0..peer_count {
+            let tx = free_orphan_tx(counter, 0xa1);
+            counter += 1;
+            parked_ids.push(tx.transaction().get_id());
+            submit(&mut mempool, tx, 10 + peer as u64)
+                .expect("orphan should be parked")
+                .assert_in_orphan_pool();
+        }
+    }
+
+    let local_tx = free_orphan_tx(10_000, 0xd1);
+    let origin = LocalTxOrigin::P2p;
+    let options = TxOptions::default_for(origin.into());
+    let res = mempool.add_transaction_local(local_tx, origin, options);
+    assert!(
+        matches!(
+            res,
+            Err(crate::error::Error::Orphan(
+                crate::error::OrphanPoolError::Full
+            ))
+        ),
+        "a pinned pool must reject a local orphan, not displace protected entries (got {res:?})"
+    );
+
+    let survivors = parked_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
+    assert_eq!(
+        survivors,
+        parked_ids.len(),
+        "pinned peers must keep every entry they parked"
+    );
+}
+
+// ------------------------------------------------------------------ 7. disconnect teardown
 
 /// Orphans parked by a peer must leave with the peer's connection.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -460,7 +515,7 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
     );
 }
 
-// ------------------------------------------------------------------ 7. outbound peer tier
+// ------------------------------------------------------------------ 8. outbound peer tier
 
 /// Outbound (node-selected) peers get a larger per-peer share of the orphan pool than
 /// inbound peers; each tier still caps its own peers.
