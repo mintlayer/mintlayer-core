@@ -838,6 +838,7 @@ fn create_mempool(
         // once), so give explicit headroom to keep a per-peer quota failure from ever being
         // mistaken for the behavior under test.
         remote_orphan_pool_capacity_per_peer: 20.into(),
+        outbound_remote_orphan_pool_capacity_per_peer: 20.into(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count,
         max_cluster_size_bytes,

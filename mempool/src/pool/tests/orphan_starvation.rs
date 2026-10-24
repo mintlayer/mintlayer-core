@@ -342,3 +342,38 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
         "a peer's orphans must be purged when it disconnects"
     );
 }
+
+// ------------------------------------------------------------------ 6. outbound peer tier
+
+/// Outbound (node-selected) peers get a larger per-peer share of the orphan pool than
+/// inbound peers; each tier still caps its own peers.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn outbound_tier_gets_larger_per_peer_capacity() {
+    let (mut mempool, _funding_id, _height) = setup();
+
+    let submit_outbound = |mempool: &mut Pool,
+                           tx: SignedTransaction,
+                           peer_id: u64|
+     -> Result<TxStatus, crate::error::Error> {
+        let origin = RemoteTxOrigin::new(PeerId::from_u64(peer_id));
+        let options = TxOptions::default_for(origin.into()).with_origin_peer_outbound(true);
+        mempool.add_transaction_remote(tx, origin, options)
+    };
+
+    // An outbound peer can park up to the outbound per-peer capacity...
+    for i in 0..crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32 {
+        submit_outbound(&mut mempool, free_orphan_tx(i, 0xc1), 11)
+            .unwrap_or_else(|e| panic!("outbound orphan {i} should park: {e:?}"))
+            .assert_in_orphan_pool();
+    }
+    // ...but not beyond it.
+    assert!(submit_outbound(&mut mempool, free_orphan_tx(999, 0xc1), 11).is_err());
+
+    // The inbound cap is unchanged and applies independently.
+    for i in 0..crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32 {
+        submit(&mut mempool, free_orphan_tx(i, 0xc2), 12)
+            .expect("inbound orphan should park")
+            .assert_in_orphan_pool();
+    }
+    assert!(submit(&mut mempool, free_orphan_tx(999, 0xc2), 12).is_err());
+}

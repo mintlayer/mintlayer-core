@@ -127,6 +127,11 @@ pub const DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY: usize = 25;
 /// pool and starve other peers' transactions out of it.
 pub const DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER: usize = 10;
 
+/// A larger per-peer cap for orphans submitted by outbound (node-selected) peers. Outbound
+/// peers carry the node's main transaction feed, so they get a bigger share of the shared
+/// orphan pool than inbound peers.
+pub const DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER: usize = 40;
+
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
@@ -168,6 +173,13 @@ make_config_setting!(
     DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
 );
 
+// Larger per-peer cap for orphans submitted by outbound (node-selected) peers.
+make_config_setting!(
+    OutboundRemoteOrphanPoolCapacityPerPeer,
+    usize,
+    DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+);
+
 // When disabled (the default), transactions submitted locally whose inputs are not yet known are
 // rejected outright. When enabled, they are parked in the orphan pool instead and re-processed
 // once their parents arrive (or are mined), same as remote transactions.
@@ -192,6 +204,9 @@ pub struct MempoolConfig {
 
     /// Per-peer capacity for remote-origin orphans within the orphan pool.
     pub remote_orphan_pool_capacity_per_peer: RemoteOrphanPoolCapacityPerPeer,
+
+    /// Per-peer capacity for orphans submitted by outbound (node-selected) peers.
+    pub outbound_remote_orphan_pool_capacity_per_peer: OutboundRemoteOrphanPoolCapacityPerPeer,
 }
 
 impl MempoolConfig {
@@ -207,6 +222,7 @@ impl MempoolConfig {
             allow_local_orphans,
             local_orphan_pool_capacity,
             remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = self;
 
         RpcMempoolConfig {
@@ -216,6 +232,8 @@ impl MempoolConfig {
             allow_local_orphans: **allow_local_orphans,
             local_orphan_pool_capacity: **local_orphan_pool_capacity,
             remote_orphan_pool_capacity_per_peer: **remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer:
+                **outbound_remote_orphan_pool_capacity_per_peer,
         }
     }
 
@@ -250,6 +268,10 @@ impl MempoolConfig {
             *self.remote_orphan_pool_capacity_per_peer > 0,
             ConfigError::RemoteOrphanPoolCapacityPerPeerCannotBeZero
         );
+        ensure!(
+            *self.outbound_remote_orphan_pool_capacity_per_peer > 0,
+            ConfigError::OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero
+        );
         Ok(())
     }
 }
@@ -263,6 +285,7 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             allow_local_orphans,
             local_orphan_pool_capacity,
             remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = value;
 
         Self {
@@ -272,6 +295,8 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             allow_local_orphans: allow_local_orphans.into(),
             local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
             remote_orphan_pool_capacity_per_peer: remote_orphan_pool_capacity_per_peer.into(),
+            outbound_remote_orphan_pool_capacity_per_peer:
+                outbound_remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 }
@@ -285,6 +310,7 @@ pub struct RpcMempoolConfig {
     pub allow_local_orphans: bool,
     pub local_orphan_pool_capacity: usize,
     pub remote_orphan_pool_capacity_per_peer: usize,
+    pub outbound_remote_orphan_pool_capacity_per_peer: usize,
 }
 
 /// Mempool configuration errors.
@@ -301,6 +327,9 @@ pub enum ConfigError {
 
     #[error("Remote orphan pool capacity per peer cannot be zero")]
     RemoteOrphanPoolCapacityPerPeerCannotBeZero,
+
+    #[error("Outbound remote orphan pool capacity per peer cannot be zero")]
+    OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero,
 
     #[error("Maximum cluster size in bytes cannot be zero")]
     MaxClusterSizeBytesCannotBeZero,

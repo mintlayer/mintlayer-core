@@ -562,6 +562,7 @@ async fn get_all_txs_in_insertion_order(#[case] seed: Seed) {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
         remote_orphan_pool_capacity_per_peer: Default::default(),
+        outbound_remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count: Default::default(),
         max_cluster_size_bytes: Default::default(),

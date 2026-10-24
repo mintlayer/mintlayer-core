@@ -50,6 +50,7 @@ pub fn create_mempool_config() -> MempoolConfig {
         allow_local_orphans: false.into(),
         local_orphan_pool_capacity: Default::default(),
         remote_orphan_pool_capacity_per_peer: Default::default(),
+        outbound_remote_orphan_pool_capacity_per_peer: Default::default(),
     }
 }
 
@@ -389,6 +390,7 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
         allow_local_orphans: false.into(),
         local_orphan_pool_capacity: Default::default(),
         remote_orphan_pool_capacity_per_peer: Default::default(),
+        outbound_remote_orphan_pool_capacity_per_peer: Default::default(),
     };
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
