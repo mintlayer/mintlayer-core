@@ -190,14 +190,16 @@ pub struct TxOrphanPool {
 }
 
 impl TxOrphanPool {
-    pub fn new(
+    /// Only this crate constructs the pool (from validated `MempoolConfig` values), so the
+    /// constructor stays crate-private. Zero capacities are rejected by
+    /// `MempoolConfig::validate` at startup; the assertion below is a debug-build backstop
+    /// only and must not be relied on in release builds.
+    pub(crate) fn new(
         local_orphan_pool_capacity: usize,
         remote_orphan_pool_capacity_per_peer: usize,
         outbound_remote_orphan_pool_capacity_per_peer: usize,
     ) -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
-        // MempoolConfig::validate rejects zero capacities; mirror that invariant here so a
-        // mis-plumbed zero fails fast instead of silently disabling reservation protection.
         debug_assert!(
             local_orphan_pool_capacity > 0
                 && remote_orphan_pool_capacity_per_peer > 0
