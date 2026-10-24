@@ -58,8 +58,10 @@ fn check_integrity(orphans: &TxOrphanPool) {
     let mut count_sum = 0;
     let mut size_sum = 0;
     orphans.maps.origin_stats.iter().for_each(|(origin, stat)| {
-        // A zero-count key may linger until its origin is purged from the map;
-        // the count itself must always match the entries indexed under the origin.
+        assert!(
+            stat.count > 0,
+            "Origin {origin:?} lingers with zero entries"
+        );
         let entries = orphans
             .maps
             .by_origin
@@ -306,7 +308,6 @@ fn accounting_tracks_per_origin_occupancy(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[ignore = "requires purging of zero-count origin keys on removal"]
 fn teardown_purges_zero_count_origin_keys(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new(

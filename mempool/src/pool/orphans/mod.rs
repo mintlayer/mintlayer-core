@@ -142,6 +142,14 @@ impl TxOrphanPoolMaps {
         stat.count -= 1;
         stat.size -= entry.size().get();
 
+        // Purge exhausted entries so teardown leaves no per-origin accounting residue;
+        // a lingering zero-count key would make `tracked_origin_count` drift upward and
+        // keep the origin's memory in the map indefinitely.
+        if stat.count == 0 {
+            debug_assert_eq!(stat.size, 0);
+            self.origin_stats.remove(&entry.origin());
+        }
+
         entry.required_deps().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
         });
