@@ -125,12 +125,15 @@ impl TxOrphanPoolMaps {
         let outbound = entry.options().origin_peer_is_outbound();
         if stat.count > 0 {
             // A peer's connection class is fixed for the connection's lifetime; a flip here
-            // would silently change the whole origin's eviction tier.
+            // would silently change the whole origin's eviction tier. The assertion is a
+            // debug-build backstop: in release builds the first recorded class stays
+            // authoritative.
             debug_assert_eq!(stat.outbound, outbound, "origin changed connection class");
+        } else {
+            stat.outbound = outbound;
         }
         stat.count += 1;
         stat.size += entry.size().get();
-        stat.outbound = outbound;
 
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
@@ -361,9 +364,16 @@ impl TxOrphanPool {
     }
 
     /// The number of entries an origin of this class is guaranteed to keep when the pool
-    /// makes room for newcomers. Mirrors the per-class admission quotas in the policy layer.
-    /// Outbound (node-selected) peers get the larger share; whether an origin is outbound is
-    /// recorded at insertion time from the entry's options.
+    /// makes room for newcomers. Outbound (node-selected) peers get the larger share;
+    /// whether an origin is outbound is recorded at insertion time from the entry's
+    /// options.
+    ///
+    /// Note the reservation matches the admission quota only for remote origins. Local
+    /// admission (`check_orphan_pool_policy`) caps all local origins in aggregate, while
+    /// the reservation here protects each distinct local origin key separately, so up to
+    /// one reservation per local variant can be kept in aggregate. This is latent today:
+    /// the admission cap bounds the total, leaving the aggregate at or below the local
+    /// capacity in every reachable state.
     fn origin_reservation(&self, origin: &TxOrigin) -> usize {
         match origin {
             TxOrigin::Local(_) => *self.local_transaction_count_limit,
