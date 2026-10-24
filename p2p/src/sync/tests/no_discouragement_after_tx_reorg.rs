@@ -287,13 +287,8 @@ async fn no_discouragement_after_tx_reorg(#[case] seed: Seed) {
         let p2p_config = Arc::new(test_p2p_config());
 
         let mempool_config = MempoolConfig {
-            allow_local_orphans: Default::default(),
-            local_orphan_pool_capacity: Default::default(),
-            remote_orphan_pool_capacity_per_peer: Default::default(),
-            outbound_remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
-            max_cluster_tx_count: Default::default(),
-            max_cluster_size_bytes: Default::default(),
+            ..Default::default()
         };
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(tfxt.tfrm.chain_config()))

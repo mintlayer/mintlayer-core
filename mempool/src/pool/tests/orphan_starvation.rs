@@ -151,6 +151,12 @@ fn inbound_quota() -> u32 {
     crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32
 }
 
+/// A counter guaranteed to fall outside a family parked with counters `0..quota` for the
+/// same tag, whatever the quota default is.
+fn outside_family_counter(quota: usize) -> u32 {
+    (quota as u32) * 2 + 1
+}
+
 /// Bound for flood loops: enough submissions to exhaust every per-peer quota and the global
 /// pool, derived from the configured caps plus [`FLOOD_MARGIN`].
 fn flood_len() -> u32 {
@@ -432,10 +438,18 @@ async fn quota_ignores_expired_entries_when_admitting_new_ones() {
         Ordering::SeqCst,
     );
 
-    // The same peer must be able to park a new orphan against fresh occupancy.
-    submit(&mut mempool, free_orphan_tx(100, 0xc1), HONEST_PEER)
-        .expect("expired entries must not count against the quota")
-        .assert_in_orphan_pool();
+    // The same peer must be able to park a new orphan against fresh occupancy. The probe's
+    // counter must stay outside the parked family's 0..quota range even if the quota default
+    // grows.
+    let probe_counter =
+        outside_family_counter(crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER);
+    submit(
+        &mut mempool,
+        free_orphan_tx(probe_counter, 0xc1),
+        HONEST_PEER,
+    )
+    .expect("expired entries must not count against the quota")
+    .assert_in_orphan_pool();
 }
 
 // ------------------------------------------------- 6. local origin vs a pinned pool
@@ -551,7 +565,10 @@ async fn outbound_tier_gets_larger_per_peer_capacity() {
             .assert_in_orphan_pool();
     }
     // ...but not beyond it: the rejection must be the peer's own quota, not a full pool.
-    match submit_outbound(&mut mempool, free_orphan_tx(999, 0xc1), 11) {
+    let over_quota_counter = outside_family_counter(
+        crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
+    match submit_outbound(&mut mempool, free_orphan_tx(over_quota_counter, 0xc1), 11) {
         Err(crate::error::Error::Orphan(
             crate::error::OrphanPoolError::RemoteCapacityExceeded(origin, limit),
         )) => {
@@ -570,7 +587,14 @@ async fn outbound_tier_gets_larger_per_peer_capacity() {
             .expect("inbound orphan should park")
             .assert_in_orphan_pool();
     }
-    match submit(&mut mempool, free_orphan_tx(999, 0xc2), 12) {
+    match submit(
+        &mut mempool,
+        free_orphan_tx(
+            outside_family_counter(crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER),
+            0xc2,
+        ),
+        12,
+    ) {
         Err(crate::error::Error::Orphan(
             crate::error::OrphanPoolError::RemoteCapacityExceeded(origin, limit),
         )) => {
