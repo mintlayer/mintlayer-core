@@ -335,7 +335,7 @@ impl TxOrphanPool {
     }
 
     /// Remove expired items (older than `cur_time - expiration_interval`)
-    fn remove_expired(&mut self, cur_time: Time) -> usize {
+    pub(crate) fn remove_expired(&mut self, cur_time: Time) -> usize {
         // Remove all expired txns
         let expiry = cur_time.saturating_duration_sub(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL);
 

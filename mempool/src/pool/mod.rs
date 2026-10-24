@@ -746,6 +746,11 @@ impl<'a> TxFinalizer<'a> {
         error: chainstate::ConnectTransactionError,
     ) -> Result<TxStatus, Error> {
         let orphan_type = OrphanType::from_error(error)?;
+        // Reclaim capacity from expired entries before evaluating the policy. The quota
+        // checks below read current occupancy; without this sweep a peer whose parked
+        // orphans have all expired would be rejected against stale counts until some
+        // other event sweeps the pool.
+        self.orphan_pool.remove_expired(self.cur_time);
         let transaction = self.check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
         Ok(self.orphan_pool.insert_and_enforce_limits(transaction, self.cur_time)?)
     }

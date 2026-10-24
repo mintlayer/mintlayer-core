@@ -18,8 +18,21 @@ use super::*;
 
 use crate::interface::MempoolInterface;
 use common::chain::signature::inputsig::InputWitness;
+use common::primitives::time::Time;
+use common::time_getter::{TimeGetter, TimeGetterFn};
 use mempool_types::tx_origin::RemoteTxOrigin;
 use p2p_types::PeerId;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// A clock the test advances manually, so expiry windows can be crossed without waiting.
+struct FixedClock(Arc<AtomicU64>);
+
+impl TimeGetterFn for FixedClock {
+    fn get_time(&self) -> Time {
+        Time::from_secs_since_epoch(self.0.load(Ordering::SeqCst))
+    }
+}
 
 type Pool = crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>;
 
@@ -62,6 +75,10 @@ fn free_orphan_tx(counter: u32, tag: u8) -> SignedTransaction {
 
 /// One block with one funding tx that provides two spendable outputs.
 fn setup() -> (Pool, Id<Transaction>, BlockHeight) {
+    setup_with_clock(Default::default())
+}
+
+fn setup_with_clock(clock: TimeGetter) -> (Pool, Id<Transaction>, BlockHeight) {
     let mut rng = make_seedable_rng(Seed::from_u64(1));
     let mut tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
@@ -87,8 +104,7 @@ fn setup() -> (Pool, Id<Transaction>, BlockHeight) {
         .unwrap();
 
     let height = tf.best_block_index().block_height();
-    let mempool =
-        setup_with_chainstate_generic(tf.chainstate(), create_mempool_config(), Default::default());
+    let mempool = setup_with_chainstate_generic(tf.chainstate(), create_mempool_config(), clock);
 
     (mempool, funding_id, height)
 }
@@ -321,7 +337,33 @@ async fn quota_fair_share_under_legitimate_load() {
     );
 }
 
-// ------------------------------------------------------------------ 5. disconnect teardown
+// --------------------------------------------------- 5. expiry vs. quota accounting
+
+/// A peer whose parked orphans have all expired must not be locked out by stale occupancy:
+/// the quota has to be evaluated after expired entries are reclaimed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quota_ignores_expired_entries_when_admitting_new_ones() {
+    let now = Arc::new(AtomicU64::new(1_000_000));
+    let clock = TimeGetter::new(Arc::new(FixedClock(Arc::clone(&now))));
+    let (mut mempool, _funding_id, _height) = setup_with_clock(clock);
+
+    // Park the full inbound quota for one peer.
+    for i in 0..crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32 {
+        submit(&mut mempool, free_orphan_tx(i, 0xc1), HONEST_PEER)
+            .expect("orphan should be parked")
+            .assert_in_orphan_pool();
+    }
+
+    // Advance the clock past the expiry interval; everything parked above is now expired.
+    now.store(1_000_000 + 60, Ordering::SeqCst);
+
+    // The same peer must be able to park a new orphan against fresh occupancy.
+    submit(&mut mempool, free_orphan_tx(100, 0xc1), HONEST_PEER)
+        .expect("expired entries must not count against the quota")
+        .assert_in_orphan_pool();
+}
+
+// ------------------------------------------------------------------ 6. disconnect teardown
 
 /// Orphans parked by a peer must leave with the peer's connection.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -343,7 +385,7 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
     );
 }
 
-// ------------------------------------------------------------------ 6. outbound peer tier
+// ------------------------------------------------------------------ 7. outbound peer tier
 
 /// Outbound (node-selected) peers get a larger per-peer share of the orphan pool than
 /// inbound peers; each tier still caps its own peers.
