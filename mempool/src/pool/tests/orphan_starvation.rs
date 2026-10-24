@@ -12,8 +12,9 @@
 //   2. attack   - the same child is lost after a single peer floods the pool.
 //   3. scale    - 100 orphans from one peer are all displaced by ~1500 free submissions.
 //
-// Run:  ./run_poc.sh
-//   or: cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
+// Run:  cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
+//       append `--include-ignored` to also run the gated scenarios (attack, scale) that encode
+//       the current vulnerable behavior; their assertions must be inverted once the quota lands.
 
 use super::*;
 
