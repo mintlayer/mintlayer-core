@@ -68,11 +68,13 @@ fn submit(
 /// It satisfies `check_transaction` (structure, witness count, size) and fails later at the utxo
 /// lookup, which classifies it as an orphan. No fee is ever computed and no signature is ever
 /// verified, because the fee policy only runs for transactions that already validated.
+///
+/// The counter is encoded into all four bytes of the outpoint's txid, so identifiers stay
+/// unique by construction for any loop bound; the tag byte separates transaction families.
 fn free_orphan_tx(counter: u32, tag: u8) -> SignedTransaction {
     let mut input_bytes = [0u8; 32];
-    input_bytes[0] = (counter & 0xff) as u8;
-    input_bytes[1] = ((counter >> 8) & 0xff) as u8;
-    input_bytes[2] = tag;
+    input_bytes[0..4].copy_from_slice(&counter.to_le_bytes());
+    input_bytes[4] = tag;
 
     let source: Id<Transaction> = H256(input_bytes).into();
     let tx = Transaction::new(
@@ -143,39 +145,49 @@ fn parent_and_child(
     (parent, child)
 }
 
+/// Headroom added to the configured caps so a flood comfortably exceeds every per-peer
+/// quota and the global pool even if the caps shift; not load-bearing on its own.
+const FLOOD_MARGIN: u32 = 50;
+
+/// The inbound per-peer quota as a test-side value, so expectations derive from the same
+/// place as the loop bounds.
+fn inbound_quota() -> u32 {
+    crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32
+}
+
+/// Bound for flood loops: enough submissions to exhaust every per-peer quota and the global
+/// pool, derived from the configured caps plus [`FLOOD_MARGIN`].
+fn flood_len() -> u32 {
+    (crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
+        + crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+        + crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER) as u32
+        + FLOOD_MARGIN
+}
+
 // ------------------------------------------------------------------ 1. control
 
 /// Baseline: park the child, then deliver the parent. The child is promoted into the mempool.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn poc_orphan_control_child_is_promoted() {
     let mut rng = make_seedable_rng(Seed::from_u64(1));
-    let (mut mempool, funding_id, height) = setup();
-    println!("CONTROL: tip height = {height:?}");
+    let (mut mempool, funding_id, _height) = setup();
 
     let (parent, child) = parent_and_child(&mut rng, funding_id, 0);
-    let parent_id = parent.transaction().get_id();
     let child_id = child.transaction().get_id();
 
     submit(&mut mempool, child, HONEST_PEER)
         .expect("child should be parked")
         .assert_in_orphan_pool();
-    println!(
-        "CONTROL: child parked in orphan pool = {}",
-        mempool.contains_orphan_transaction(&child_id)
-    );
 
     submit(&mut mempool, parent, HONEST_PEER)
         .expect("parent should be accepted")
         .assert_in_mempool();
     mempool.process_queue();
 
-    let promoted = mempool.contains_transaction(&child_id);
-    println!(
-        "CONTROL: parent {parent_id} accepted into mempool = {}",
-        mempool.contains_transaction(&parent_id)
+    assert!(
+        mempool.contains_transaction(&child_id),
+        "baseline broken: the child was not promoted"
     );
-    println!("CONTROL: child promoted into mempool = {promoted}");
-    assert!(promoted, "baseline broken: the child was not promoted");
 }
 
 // ------------------------------------------------------------------ 2. attack
@@ -185,8 +197,7 @@ async fn poc_orphan_control_child_is_promoted() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn poc_orphan_attack_quota_protects_child() {
     let mut rng = make_seedable_rng(Seed::from_u64(2));
-    let (mut mempool, funding_id, height) = setup();
-    println!("ATTACK: tip height = {height:?}");
+    let (mut mempool, funding_id, _height) = setup();
 
     let (parent, child) = parent_and_child(&mut rng, funding_id, 1);
     let child_id = child.transaction().get_id();
@@ -194,23 +205,22 @@ async fn poc_orphan_attack_quota_protects_child() {
     submit(&mut mempool, child, HONEST_PEER)
         .expect("child should be parked")
         .assert_in_orphan_pool();
-    println!(
-        "ATTACK: child parked in orphan pool = {}",
-        mempool.contains_orphan_transaction(&child_id)
-    );
 
     let mut accepted = 0u32;
-    let mut rejected = 0u32;
-    for i in 0..1500u32 {
-        match submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER) {
-            Ok(_) => accepted += 1,
-            Err(_) => rejected += 1,
+    for i in 0..flood_len() {
+        if submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER).is_ok() {
+            accepted += 1;
         }
     }
-    println!("ATTACK: hostile submissions accepted = {accepted}, rejected = {rejected}");
-    println!(
-        "ATTACK: child survives the flood = {}",
-        mempool.contains_orphan_transaction(&child_id)
+    assert_eq!(
+        accepted,
+        inbound_quota(),
+        "hostile peer must be capped at its inbound quota (accepted {accepted} of {})",
+        flood_len()
+    );
+    assert!(
+        mempool.contains_orphan_transaction(&child_id),
+        "the parked child must survive the capped flood"
     );
 
     submit(&mut mempool, parent, HONEST_PEER)
@@ -218,9 +228,10 @@ async fn poc_orphan_attack_quota_protects_child() {
         .assert_in_mempool();
     mempool.process_queue();
 
-    let promoted = mempool.contains_transaction(&child_id);
-    println!("ATTACK: child promoted into mempool = {promoted}");
-    assert!(promoted, "the per-peer quota must protect the parked child");
+    assert!(
+        mempool.contains_transaction(&child_id),
+        "the per-peer quota must protect the parked child"
+    );
 }
 
 // ------------------------------------------------------------------ 3. scale
@@ -246,22 +257,18 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     }
     assert_eq!(
         honest_ids.len(),
-        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
+        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        "precondition broken: the pool is not filled to capacity"
     );
 
     let mut accepted = 0u32;
-    for i in 0..1500u32 {
+    for i in 0..flood_len() {
         if submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER).is_ok() {
             accepted += 1;
         }
     }
 
     let survivors = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
-    println!("SCALE: hostile submissions accepted = {accepted}");
-    println!(
-        "SCALE: honest orphans still parked = {survivors} / {}",
-        honest_ids.len()
-    );
     assert_eq!(
         accepted, 0,
         "a full pool must reject the flood, not evict protected entries"
@@ -287,9 +294,17 @@ async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
         .expect("child should be parked")
         .assert_in_orphan_pool();
 
-    for i in 0..1500u32 {
-        let _ = submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER);
+    let mut accepted = 0u32;
+    for i in 0..flood_len() {
+        if submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER).is_ok() {
+            accepted += 1;
+        }
     }
+    assert_eq!(
+        accepted,
+        inbound_quota(),
+        "hostile peer must be capped at its quota, not rejected wholesale (accepted {accepted})"
+    );
 
     assert!(
         mempool.contains_orphan_transaction(&child_id),
@@ -319,17 +334,32 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
         .expect("child should be parked")
         .assert_in_orphan_pool();
 
-    // 99 distinct peers each contribute one junk orphan, then flood fresh distinct
-    // transactions round-robin. Each peer stays under its own quota, so the policy admits
-    // them; the saturated pool must reject them instead of displacing any parked entry.
-    let junk: Vec<_> = (0..99u32).map(|i| free_orphan_tx(i, 0xb3)).collect();
-    for (i, tx) in junk.iter().enumerate() {
-        let _ = submit(&mut mempool, tx.clone(), 10 + i as u64);
+    // Every unit of the pool except the parked child is contributed by a distinct peer
+    // holding one junk orphan each, then fresh distinct transactions flood round-robin.
+    // Each peer stays under its own quota, so the policy admits them; the saturated pool
+    // must reject them instead of displacing any parked entry.
+    let peer_count = (crate::config::DEFAULT_ORPHAN_POOL_CAPACITY - 1) as u32;
+    for i in 0..peer_count {
+        submit(&mut mempool, free_orphan_tx(i, 0xb3), 10 + i as u64)
+            .expect("junk orphan should be parked")
+            .assert_in_orphan_pool();
     }
-    let flood: Vec<_> = (1000u32..1000 + 99 * 8).map(|i| free_orphan_tx(i, 0xb4)).collect();
-    for (i, tx) in flood.iter().enumerate() {
-        let _ = submit(&mut mempool, tx.clone(), 10 + (i % 99) as u64);
+    let mut flood_accepted = 0u32;
+    for i in 1000..1000 + flood_len() {
+        if submit(
+            &mut mempool,
+            free_orphan_tx(i, 0xb4),
+            10 + (i % peer_count) as u64,
+        )
+        .is_ok()
+        {
+            flood_accepted += 1;
+        }
     }
+    assert_eq!(
+        flood_accepted, 0,
+        "saturated pool must reject the flood, not displace parked entries"
+    );
 
     assert!(
         mempool.contains_orphan_transaction(&child_id),
@@ -349,10 +379,19 @@ async fn quota_fair_share_under_legitimate_load() {
         .expect("child should be parked")
         .assert_in_orphan_pool();
 
-    // A busy-but-honest peer streams ordinary orphans; nothing hostile.
-    for i in 0..500u32 {
-        let _ = submit(&mut mempool, free_orphan_tx(i, 0xa2), 4);
+    // A busy-but-honest peer streams ordinary orphans; nothing hostile. It must get
+    // exactly its own quota and nothing more.
+    let mut accepted = 0u32;
+    for i in 0..flood_len() {
+        if submit(&mut mempool, free_orphan_tx(i, 0xa2), 4).is_ok() {
+            accepted += 1;
+        }
     }
+    assert_eq!(
+        accepted,
+        inbound_quota(),
+        "busy peer must get exactly its own quota (accepted {accepted})"
+    );
 
     assert!(
         mempool.contains_orphan_transaction(&child_id),
