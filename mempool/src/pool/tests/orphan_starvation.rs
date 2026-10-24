@@ -7,12 +7,16 @@
 // Every submission goes through `MempoolInterface::add_transaction_remote`, the same method p2p
 // calls (`p2p/src/sync/peer/transaction_manager.rs`), so no test-only shortcut is involved.
 //
-// Three scenarios:
+// Sections (one or more tests each):
 //   1. control  - a child parked before its parent is promoted once the parent arrives.
 //   2. attack   - a flood from a single peer cannot cost a parked child its promotion.
 //   3. scale    - a flood against a full pool is rejected; every parked orphan survives.
+//   4. quota    - per-peer fairness: hostile floods, many small peers, legitimate load.
+//   5. expiry   - expired entries are reclaimed before the quota is evaluated.
+//   6. teardown - a peer's orphans leave with its connection.
+//   7. tiers    - outbound peers get a larger share; both tiers cap their own peers.
 //
-// Run:  cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
+// Run:  cd mintlayer-core && cargo test -p mempool --lib orphan_starvation -- --nocapture --test-threads=1
 
 use super::*;
 
@@ -35,6 +39,14 @@ impl TimeGetterFn for FixedClock {
 }
 
 type Pool = crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>;
+
+// The scale scenario parks one peer per unit of the inbound quota and assumes the result
+// fills the pool exactly; keep the defaults coupled or the scenario must be reworked.
+const _: () = assert!(
+    crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
+        == 10 * crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    "scale scenario assumes 10 peers at the default per-peer quota fill the pool exactly",
+);
 
 const HONEST_PEER: u64 = 2;
 const HOSTILE_PEER: u64 = 3;
