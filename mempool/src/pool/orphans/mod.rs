@@ -88,6 +88,8 @@ struct TxOrphanPoolMaps {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct OriginStat {
     count: usize,
+    /// Byte size of the origin's entries. Quotas and reservations are count-based today;
+    /// the size is maintained for the integrity checks and any future byte-budget quota.
     size: usize,
     /// Whether the origin is an outbound (node-selected) peer, recorded from the entry's
     /// options at insertion time. All entries of one origin share the class.

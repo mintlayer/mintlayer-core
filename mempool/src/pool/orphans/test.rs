@@ -351,6 +351,10 @@ fn remote_origin(peer: u64) -> TxOrigin {
 /// Fill the pool exactly to its capacity: `peers` remote peers with `per_peer` entries each.
 /// Every origin is at (not beyond) its reservation. All entries share one timestamp (no
 /// expiry sweep); "oldest" ties in the maps break by insertion order via the internal ID.
+///
+/// Panics unless `peers * per_peer` equals the pool's transaction count limit — the
+/// scenarios built on this helper rely on that exact fit and fail loudly if the config
+/// defaults ever diverge from it.
 fn fill_to_capacity(
     seed: Seed,
     peers: u64,
@@ -560,6 +564,8 @@ fn resubmission_of_expired_orphan_is_rejected_and_swept() {
     // entries from expiry. The resubmission itself is stale by then and falls through to
     // admission, where its own creation time makes it expire again — reported as `Full`,
     // leaving the pool empty, instead of the old order's perpetual `InOrphanPoolDuplicate`.
+    // Note `Full` here is surfaced by the trailing containment check, so it means "expired
+    // and swept", not "pool at capacity"; a non-stale pool would report the admission status.
     let after_expiry =
         Time::from_secs_since_epoch(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL.as_secs() + 1);
     assert_eq!(
