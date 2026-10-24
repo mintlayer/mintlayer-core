@@ -545,8 +545,19 @@ async fn outbound_tier_gets_larger_per_peer_capacity() {
             .unwrap_or_else(|e| panic!("outbound orphan {i} should park: {e:?}"))
             .assert_in_orphan_pool();
     }
-    // ...but not beyond it.
-    assert!(submit_outbound(&mut mempool, free_orphan_tx(999, 0xc1), 11).is_err());
+    // ...but not beyond it: the rejection must be the peer's own quota, not a full pool.
+    match submit_outbound(&mut mempool, free_orphan_tx(999, 0xc1), 11) {
+        Err(crate::error::Error::Orphan(
+            crate::error::OrphanPoolError::RemoteCapacityExceeded(origin, limit),
+        )) => {
+            assert_eq!(
+                limit,
+                crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+            );
+            assert_eq!(origin.peer_id().as_u64(), 11);
+        }
+        res => panic!("expected the outbound peer's own quota to bind, got {res:?}"),
+    }
 
     // The inbound cap is unchanged and applies independently.
     for i in 0..crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32 {
@@ -554,5 +565,16 @@ async fn outbound_tier_gets_larger_per_peer_capacity() {
             .expect("inbound orphan should park")
             .assert_in_orphan_pool();
     }
-    assert!(submit(&mut mempool, free_orphan_tx(999, 0xc2), 12).is_err());
+    match submit(&mut mempool, free_orphan_tx(999, 0xc2), 12) {
+        Err(crate::error::Error::Orphan(
+            crate::error::OrphanPoolError::RemoteCapacityExceeded(origin, limit),
+        )) => {
+            assert_eq!(
+                limit,
+                crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+            );
+            assert_eq!(origin.peer_id().as_u64(), 12);
+        }
+        res => panic!("expected the inbound peer's own quota to bind, got {res:?}"),
+    }
 }
