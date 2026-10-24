@@ -423,3 +423,32 @@ fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full() {
     assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
     check_integrity(&orphans);
 }
+
+#[test]
+fn resubmission_of_expired_orphan_is_rejected_and_swept() {
+    let mut rng = make_seedable_rng(Seed::from_entropy());
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
+
+    let entry = tx_entry_with_origin(&mut rng, remote_origin(1), Time::from_secs_since_epoch(0));
+    assert_eq!(
+        orphans.insert_and_enforce_limits(entry.clone(), Time::from_secs_since_epoch(0)),
+        Ok(TxStatus::InOrphanPool)
+    );
+
+    // Once the expiry interval has passed, the sweep must remove the entry even when the
+    // very same transaction is resubmitted: the duplicate check must not shield stale
+    // entries from expiry. The resubmission itself is stale by then and falls through to
+    // admission, where its own creation time makes it expire again — reported as `Full`,
+    // leaving the pool empty, instead of the old order's perpetual `InOrphanPoolDuplicate`.
+    let after_expiry =
+        Time::from_secs_since_epoch(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL.as_secs() + 1);
+    assert_eq!(
+        orphans.insert_and_enforce_limits(entry, after_expiry),
+        Err(OrphanPoolError::Full)
+    );
+    assert_eq!(orphans.len(), 0);
+    check_integrity(&orphans);
+}

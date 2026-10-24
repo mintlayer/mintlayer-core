@@ -173,6 +173,12 @@ impl TxOrphanPool {
         remote_orphan_pool_capacity_per_peer: usize,
     ) -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
+        // MempoolConfig::validate rejects zero capacities; mirror that invariant here so a
+        // mis-plumbed zero fails fast instead of silently disabling reservation protection.
+        debug_assert!(
+            local_orphan_pool_capacity > 0 && remote_orphan_pool_capacity_per_peer > 0,
+            "orphan capacities must be nonzero (validated at the config layer)"
+        );
         Self {
             // Headroom so pushes do not reallocate on every entry; the vector may temporarily
             // exceed the soft limit when entries are inserted directly.
