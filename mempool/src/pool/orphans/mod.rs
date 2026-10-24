@@ -125,13 +125,13 @@ impl TxOrphanPoolMaps {
 
         let stat = self.origin_stats.entry(origin).or_default();
         let outbound = entry.options().origin_peer_is_outbound();
-        if stat.count > 0 {
-            // A peer's connection class is fixed for the connection's lifetime; a flip here
-            // would silently change the whole origin's eviction tier. The assertion is a
-            // debug-build backstop: in release builds the first recorded class stays
-            // authoritative.
-            debug_assert_eq!(stat.outbound, outbound, "origin changed connection class");
-        } else {
+        if stat.count > 0 && outbound && !stat.outbound {
+            // The first entry records the origin's connection class. If a later entry claims
+            // the outbound tier, upgrade the whole origin: reservations may only grow (more
+            // protection), never shrink, and the invariant must not depend on peer IDs
+            // staying unique across a process lifetime. Downgrades are ignored.
+            stat.outbound = true;
+        } else if stat.count == 0 {
             stat.outbound = outbound;
         }
         stat.count += 1;
@@ -449,6 +449,14 @@ impl TxOrphanPool {
     /// otherwise the oldest entry in the pool is evicted. The reservation preference is a
     /// safety net for direct inserts; the admission path never lets a remote origin exceed
     /// its reservation (see [`Self::insert_and_enforce_limits`]).
+    ///
+    /// Invariant: on the production path (admission ahead of trimming) the oldest-overall
+    /// fallback is unreachable — a full pool whose origins are all within their reservations
+    /// is refused by admission with [`OrphanPoolError::Full`] before any caller needs to
+    /// trim. The fallback therefore fails open by design (it protects nothing); any future
+    /// caller that can reach this function in a production over-capacity state must go
+    /// through admission instead, or it silently converts the fail-closed guarantee into a
+    /// fail-open one.
     fn enforce_max_size(&mut self, max_size: usize) -> usize {
         let mut n_evicted = 0;
         while self.len() > max_size {

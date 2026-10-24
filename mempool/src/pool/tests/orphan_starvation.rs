@@ -534,6 +534,37 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
     );
 }
 
+/// A duplicate submission from a second peer does not transfer ownership of the parked
+/// entry: the orphan stays under its first parker's origin and quota. This is deliberate —
+/// re-tagging on the duplicate path would move the entry without ever checking the
+/// resubmitter against the admission policy. A peer that shows interest can recover its
+/// share by resubmitting once the first parker's entry is gone (expiry or disconnect).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn duplicate_submission_does_not_transfer_orphan_ownership() {
+    let (mut mempool, _funding_id, _height) = setup();
+
+    let orphan = free_orphan_tx(1, 0xd1);
+    let orphan_id = orphan.transaction().get_id();
+    submit(&mut mempool, orphan.clone(), HONEST_PEER)
+        .expect("first parker should hold the orphan")
+        .assert_in_orphan_pool();
+
+    let second_peer = HONEST_PEER + 1;
+    let duplicate = submit(&mut mempool, orphan, second_peer).expect("duplicate resubmission");
+    assert_eq!(duplicate, TxStatus::InOrphanPoolDuplicate);
+
+    // The first parker leaves: the entry goes with them, even though the second peer just
+    // showed interest.
+    mempool.on_peer_disconnected(PeerId::from_u64(HONEST_PEER));
+    assert!(!mempool.contains_orphan_transaction(&orphan_id));
+
+    // The interested peer recovers by resubmitting — and now owns the entry.
+    let orphan = free_orphan_tx(1, 0xd1);
+    submit(&mut mempool, orphan, second_peer)
+        .expect("resubmission after the first parker left")
+        .assert_in_orphan_pool();
+}
+
 // ------------------------------------------------------------------ 8. outbound peer tier
 
 /// Outbound (node-selected) peers get a larger per-peer share of the orphan pool than

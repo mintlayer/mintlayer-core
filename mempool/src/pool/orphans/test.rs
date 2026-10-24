@@ -196,15 +196,31 @@ fn simulation(#[case] seed: Seed) {
     for _ in 0..300 {
         let len_before = orphans.len();
         match rng.random_range(0..=4) {
-            // Insert a random tx
+            // Insert a random tx through the admission path: expiry sweep, duplicate
+            // short-circuit, reservation-aware eviction, and the fail-closed Full path all
+            // get randomized coverage.
             0..=1 => {
-                let entry = random_tx_entry(&mut rng);
-                assert_eq!(
-                    orphans.insert(entry.clone()),
-                    Ok(TxStatus::InOrphanPool),
-                    "Insertion of {entry:?} failed"
-                );
-                assert_eq!(orphans.len(), len_before + 1);
+                let time = Time::from_secs_since_epoch(rng.random_range(0u64..100));
+                let origin = TxOrigin::Remote(random_peer_origin(&mut rng));
+                let outbound = rng.random_bool(0.2);
+                let entry = tx_entry_with_options(&mut rng, origin, time, outbound);
+                match orphans.insert_and_enforce_limits(entry, time) {
+                    Ok(TxStatus::InOrphanPool) => assert!(
+                        orphans.len() <= len_before + 1,
+                        "successful admission inserts at most one entry"
+                    ),
+                    Ok(TxStatus::InOrphanPoolDuplicate) => {
+                        assert_eq!(orphans.len(), len_before, "duplicates change nothing")
+                    }
+                    Ok(status @ (TxStatus::InMempool | TxStatus::InMempoolDuplicate)) => {
+                        unreachable!("the orphan pool never produces {status:?}")
+                    }
+                    Err(OrphanPoolError::Full) => assert!(
+                        orphans.len() <= len_before,
+                        "a pinned pool evicts nothing and fails closed"
+                    ),
+                    Err(e) => panic!("unexpected insertion error: {e:?}"),
+                }
             }
 
             // Delete an existing tx
@@ -492,6 +508,53 @@ fn eviction_reservation_uses_outbound_tier(#[case] seed: Seed) {
     // order, so the "oldest" pick among equal timestamps is an arbitrary member of the origin.
     let n_inbound_gone = inbound_ids.iter().filter(|id| !orphans.contains(id)).count();
     assert_eq!(n_inbound_gone, inbound_excess);
+    check_integrity(&orphans);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mixed_class_inserts_upgrade_origin_to_outbound_tier(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
+    let time = Time::from_secs_since_epoch(0);
+    let origin = remote_origin(7);
+
+    // First entry arrives over an inbound connection: the origin records that class.
+    assert_eq!(
+        orphans.insert(tx_entry_with_options(&mut rng, origin, time, false)),
+        Ok(TxStatus::InOrphanPool)
+    );
+    assert_eq!(
+        orphans.origin_reservation(&origin),
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+    );
+
+    // A later entry claims the outbound tier: the whole origin upgrades. Reservations may
+    // only grow (more protection), and the invariant must not depend on peer IDs staying
+    // unique for the process lifetime.
+    assert_eq!(
+        orphans.insert(tx_entry_with_options(&mut rng, origin, time, true)),
+        Ok(TxStatus::InOrphanPool)
+    );
+    assert_eq!(
+        orphans.origin_reservation(&origin),
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+    );
+
+    // Downgrade attempts are ignored; the tier stays at the higher level.
+    assert_eq!(
+        orphans.insert(tx_entry_with_options(&mut rng, origin, time, false)),
+        Ok(TxStatus::InOrphanPool)
+    );
+    assert_eq!(
+        orphans.origin_reservation(&origin),
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+    );
     check_integrity(&orphans);
 }
 
