@@ -56,7 +56,7 @@ use crate::{
         UNCONFIRMED_TX_REQUEUE_MAX_DELAY,
         peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
         peer::transaction_manager::TX_RELAY_DELAY_INTERVAL_OUTBOUND,
-        tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
+        tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode, TestPeer},
     },
     test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -655,6 +655,129 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // A small sanity check that we have sent all transactions
         assert!(txs.is_empty());
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+// A peer connected as outbound gets the larger outbound per-peer orphan capacity over the
+// wire: the connection direction must reach the mempool through the transaction manager's
+// option wiring. With inbound capacity 1 and outbound capacity 2, the second orphan parks
+// but a third must be rejected silently (quota violations carry no ban score).
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn outbound_peer_parks_up_to_outbound_orphan_quota(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = Arc::new(create_unit_test_config());
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+        // Process a block to finish the initial block download.
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
+
+        let p2p_config = Arc::new(test_p2p_config());
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_mempool_config(MempoolConfig {
+                allow_local_orphans: Default::default(),
+                local_orphan_pool_capacity: Default::default(),
+                remote_orphan_pool_capacity_per_peer: 1.into(),
+                outbound_remote_orphan_pool_capacity_per_peer: 2.into(),
+                min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
+                    .into(),
+                max_cluster_tx_count: Default::default(),
+                max_cluster_size_bytes: Default::default(),
+            })
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        // connect_peer establishes an outbound connection, so responses from this peer are
+        // admitted under the outbound per-peer capacity.
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        // Distinct transactions whose inputs exist nowhere, so each parks as an orphan.
+        let orphan_tx = |counter: u32| {
+            let mut input_bytes = [0u8; 32];
+            input_bytes[0..4].copy_from_slice(&counter.to_le_bytes());
+            let source: Id<Transaction> = common::primitives::H256(input_bytes).into();
+            let tx = Transaction::new(
+                0x00,
+                vec![TxInput::from_utxo(source.into(), 0)],
+                vec![TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(1_000)),
+                    common::chain::Destination::AnyoneCanSpend,
+                )],
+            )
+            .unwrap();
+            SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+        };
+
+        // Announce a transaction, answer the node's request, and hand over the payload.
+        async fn park(node: &mut TestNode, peer: &TestPeer, tx: &SignedTransaction) {
+            peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
+                tx.transaction().get_id(),
+            ))
+            .await;
+            let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(peer.get_id(), sent_to);
+            assert_eq!(
+                message,
+                TransactionSyncMessage::TransactionRequest(tx.transaction().get_id())
+            );
+            peer.send_transaction_sync_message(TransactionSyncMessage::TransactionResponse(
+                TransactionResponse::Found(tx.clone()),
+            ))
+            .await;
+        }
+
+        let txs = Vec::from_iter((0u32..3).map(orphan_tx));
+        for tx in &txs {
+            park(&mut node, &peer, tx).await;
+        }
+
+        // The flush barrier: a peer's messages are processed in order, so the node asking
+        // for this extra announcement proves every response above has been handled.
+        let barrier = orphan_tx(100);
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
+            barrier.transaction().get_id(),
+        ))
+        .await;
+        let (_, message) = node.get_sent_transaction_sync_message().await;
+        assert_eq!(
+            message,
+            TransactionSyncMessage::TransactionRequest(barrier.transaction().get_id())
+        );
+
+        let parked = node
+            .mempool()
+            .call({
+                let ids: Vec<_> = txs.iter().map(|tx| tx.transaction().get_id()).collect();
+                move |m| {
+                    (
+                        m.contains_orphan_transaction(&ids[0]),
+                        m.contains_orphan_transaction(&ids[1]),
+                        m.contains_orphan_transaction(&ids[2]),
+                    )
+                }
+            })
+            .await;
+        assert_eq!(
+            parked.unwrap(),
+            (true, true, false),
+            "outbound peer must park up to the outbound per-peer capacity and no more"
+        );
+
+        // Quota rejections carry no ban score: the peer must not be punished.
+        node.assert_no_peer_manager_event().await;
+        node.assert_no_error().await;
 
         node.join_subsystem_manager().await;
     })
