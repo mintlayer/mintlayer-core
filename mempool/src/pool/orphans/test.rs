@@ -53,6 +53,34 @@ fn check_integrity(orphans: &TxOrphanPool) {
         let tx_dep = orphans.get_at(*iid).required_deps().find(|r| r == dep);
         assert!(tx_dep.is_some(), "Entry {iid:?} outpoint missing");
     });
+
+    let mut count_sum = 0;
+    let mut size_sum = 0;
+    orphans.maps.origin_stats.iter().for_each(|(origin, stat)| {
+        // A zero-count key may linger until its origin is purged from the map;
+        // the count itself must always match the entries indexed under the origin.
+        let entries = orphans
+            .maps
+            .by_origin
+            .range((*origin, InternalId::ZERO)..=(*origin, InternalId::MAX))
+            .count();
+        assert_eq!(
+            stat.count, entries,
+            "Origin {origin:?} count inconsistent",
+        );
+        count_sum += stat.count;
+        size_sum += stat.size;
+    });
+    assert_eq!(count_sum, len, "Origin stats count sum inconsistent");
+    assert_eq!(
+        size_sum,
+        orphans
+            .transactions
+            .iter()
+            .map(|entry| entry.size().get())
+            .sum::<usize>(),
+        "Origin stats size sum inconsistent",
+    );
 }
 
 fn random_peer_origin(rng: &mut impl Rng) -> RemoteTxOrigin {
@@ -211,4 +239,83 @@ fn simulation(#[case] seed: Seed) {
 
         check_integrity(&orphans);
     }
+}
+
+fn tx_entry_with_origin(rng: &mut impl Rng, origin: TxOrigin, time: Time) -> TxEntry {
+    let n_inputs = rng.random_range(1..=3);
+    let inputs: Vec<_> = (0..n_inputs)
+        .map(|_| {
+            let source: Id<Transaction> = H256(rng.random()).into();
+            TxInput::from_utxo(source.into(), rng.random_range(0..=400))
+        })
+        .collect();
+
+    let transaction = Transaction::new(0, inputs, Vec::new()).unwrap();
+    let signatures = vec![InputWitness::NoSignature(None); n_inputs];
+    let transaction = SignedTransaction::new(transaction, signatures).unwrap();
+    let options = crate::TxOptions::default_for(origin);
+
+    TxEntry::new(transaction, time, origin, options)
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn accounting_tracks_per_origin_occupancy(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut orphans = TxOrphanPool::new();
+    let time = Time::from_secs_since_epoch(0);
+
+    let origin_a = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(11)));
+    let origin_b = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(12)));
+
+    let mut sizes = BTreeMap::new();
+    for (origin, n) in [(origin_a, 3), (origin_b, 2)] {
+        for _ in 0..n {
+            let entry = tx_entry_with_origin(&mut rng, origin, time);
+            *sizes.entry(origin).or_insert(0) += entry.size().get();
+            assert_eq!(
+                orphans.insert_and_enforce_limits(entry, time),
+                Ok(TxStatus::InOrphanPool)
+            );
+        }
+    }
+
+    assert_eq!(orphans.len(), 5);
+    assert_eq!(orphans.origin_len(origin_a), 3);
+    assert_eq!(orphans.origin_len(origin_b), 2);
+    assert_eq!(orphans.origin_size(origin_a), sizes[&origin_a]);
+    assert_eq!(orphans.origin_size(origin_b), sizes[&origin_b]);
+    assert_eq!(orphans.tracked_origin_count(), 2);
+    assert_eq!(orphans.local_len(), 0);
+    check_integrity(&orphans);
+
+    orphans.remove_by_origin_impl(origin_a);
+    assert_eq!(orphans.origin_len(origin_a), 0);
+    assert_eq!(orphans.origin_size(origin_a), 0);
+    assert_eq!(orphans.origin_len(origin_b), 2);
+    check_integrity(&orphans);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[ignore = "requires purging of zero-count origin keys on removal"]
+fn teardown_purges_zero_count_origin_keys(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut orphans = TxOrphanPool::new();
+    let time = Time::from_secs_since_epoch(0);
+
+    let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(21)));
+    let entry = tx_entry_with_origin(&mut rng, origin, time);
+    assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
+    assert_eq!(orphans.tracked_origin_count(), 1);
+
+    orphans.remove_by_origin_impl(origin);
+    assert_eq!(orphans.origin_len(origin), 0);
+    assert_eq!(
+        orphans.tracked_origin_count(),
+        0,
+        "zero-count origin keys must not accumulate across peer churn",
+    );
 }

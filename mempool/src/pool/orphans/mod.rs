@@ -80,6 +80,16 @@ struct TxOrphanPoolMaps {
 
     /// Number of stored entries with a local origin
     local_count: usize,
+
+    /// Occupancy accounting per origin (entry count and total encoded size)
+    origin_stats: BTreeMap<TxOrigin, OriginStat>,
+}
+
+/// Occupancy of the pool attributable to a single origin
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct OriginStat {
+    count: usize,
+    size: usize,
 }
 
 impl TxOrphanPoolMaps {
@@ -90,6 +100,7 @@ impl TxOrphanPoolMaps {
             by_deps: BTreeSet::new(),
             by_origin: BTreeSet::new(),
             local_count: 0,
+            origin_stats: BTreeMap::new(),
         }
     }
 
@@ -108,6 +119,10 @@ impl TxOrphanPoolMaps {
             self.local_count += 1;
         }
 
+        let stat = self.origin_stats.entry(origin).or_default();
+        stat.count += 1;
+        stat.size += entry.size().get();
+
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
 
@@ -123,6 +138,13 @@ impl TxOrphanPoolMaps {
         if matches!(entry.origin(), TxOrigin::Local(_)) {
             self.local_count -= 1;
         }
+
+        let stat = self
+            .origin_stats
+            .get_mut(&entry.origin())
+            .expect("origin stat to be present");
+        stat.count -= 1;
+        stat.size -= entry.size().get();
 
         entry.required_deps().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
@@ -328,6 +350,21 @@ impl TxOrphanPool {
     /// Number of local-origin transactions in the orphan pool
     pub fn local_len(&self) -> usize {
         self.maps.local_count
+    }
+
+    /// Number of stored transactions with the given origin
+    pub fn origin_len(&self, origin: TxOrigin) -> usize {
+        self.maps.origin_stats.get(&origin).map_or(0, |s| s.count)
+    }
+
+    /// Total encoded size of stored transactions with the given origin
+    pub fn origin_size(&self, origin: TxOrigin) -> usize {
+        self.maps.origin_stats.get(&origin).map_or(0, |s| s.size)
+    }
+
+    /// Number of distinct origins currently tracked by the accounting map
+    pub fn tracked_origin_count(&self) -> usize {
+        self.maps.origin_stats.len()
     }
 }
 
