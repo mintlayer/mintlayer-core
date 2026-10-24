@@ -118,6 +118,7 @@ pub(crate) fn is_deterministic_mempool_rejection(err: &mempool::error::Error) ->
             orphan_error,
             OrphanPoolError::Full
                 | OrphanPoolError::LocalCapacityExceeded(_)
+                | OrphanPoolError::RemoteCapacityExceeded(_, _)
                 | OrphanPoolError::Conflict(_)
                 | OrphanPoolError::NonceGapTooLarge(_)
                 | OrphanPoolError::MempoolConflict
@@ -163,6 +164,7 @@ fn classify_mempool_error_message(message: &str) -> bool {
         "mempool is full",
         "orphan pool full",
         "local orphan capacity",
+        "remote orphan capacity",
         "account nonces too distant",
         "nonce is not incremental",
         "nonce is not found",
@@ -492,7 +494,7 @@ mod mempool_rejection_classification_tests {
         assert_eq!(MempoolError::COUNT, 9);
         assert_eq!(TxValidationError::COUNT, 4);
         assert_eq!(MempoolPolicyError::COUNT, 22);
-        assert_eq!(OrphanPoolError::COUNT, 7);
+        assert_eq!(OrphanPoolError::COUNT, 8);
         assert_eq!(ConnectTransactionError::COUNT, 40);
     }
 
