@@ -765,6 +765,24 @@ impl<'a> TxFinalizer<'a> {
             }
         }
 
+        // Keep any single remote peer from filling the shared orphan pool and starving other
+        // peers' orphans out of it. Same as the local check above, resubmissions of
+        // already-parked transactions bypass the capacity check so that they keep yielding the
+        // idempotent `InOrphanPoolDuplicate` status instead of an error.
+        if let TxOrigin::Remote(remote_origin) = transaction.origin() {
+            let per_peer_capacity = *tx_pool
+                .mempool_config()
+                .remote_orphan_pool_capacity_per_peer;
+            if !self.orphan_pool.contains(transaction.tx_id())
+                && self.orphan_pool.origin_len(transaction.origin()) >= per_peer_capacity
+            {
+                return Err(OrphanPoolError::RemoteCapacityExceeded(
+                    remote_origin,
+                    per_peer_capacity,
+                ));
+            }
+        }
+
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.
         let size: usize = transaction.size().into();

@@ -208,6 +208,9 @@ pub enum OrphanPoolError {
     #[error("Local orphan capacity exceeded (limit: {0})")]
     LocalCapacityExceeded(usize),
 
+    #[error("Remote orphan capacity for peer {0} exceeded (limit: {1})")]
+    RemoteCapacityExceeded(crate::tx_origin::RemoteTxOrigin, usize),
+
     #[error("Account nonces too distant, gap: {0}")]
     NonceGapTooLarge(u64),
 

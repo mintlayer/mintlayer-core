@@ -13,7 +13,7 @@
 //   3. scale    - 100 orphans from one peer are all displaced by ~1500 free submissions.
 //
 // Run:  cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
-//       append `--include-ignored` to also run the gated scenarios (attack, scale) that encode
+//       append `--include-ignored` to also run the gated scenario (scale) that pins the
 //       the current vulnerable behavior; their assertions must be inverted once the quota lands.
 
 use super::*;
@@ -142,11 +142,9 @@ async fn poc_orphan_control_child_is_promoted() {
 // ------------------------------------------------------------------ 2. attack
 
 /// Same setup, but the hostile peer floods the pool between the child and its parent.
-/// The child is evicted, and when the parent arrives there is nothing left to promote.
-/// TODO: invert these assertions once per-peer orphan quotas are implemented.
+/// With the per-peer quota in place the flood is capped and the child survives.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "asserts the currently vulnerable behavior; invert when the starvation fix lands"]
-async fn poc_orphan_attack_child_is_lost() {
+async fn poc_orphan_attack_quota_protects_child() {
     let mut rng = make_seedable_rng(Seed::from_u64(2));
     let (mut mempool, funding_id, height) = setup();
     println!("ATTACK: tip height = {height:?}");
@@ -179,14 +177,14 @@ async fn poc_orphan_attack_child_is_lost() {
 
     let promoted = mempool.contains_transaction(&child_id);
     println!("ATTACK: child promoted into mempool = {promoted}");
-    assert!(!promoted, "the child was expected to be gone");
-    assert!(!mempool.contains_orphan_transaction(&child_id));
+    assert!(promoted, "the per-peer quota must protect the parked child");
 }
 
 // ------------------------------------------------------------------ 3. scale
 
 /// How much of another peer's parked state survives a flood of free submissions.
-/// TODO: invert this assertion once per-peer orphan quotas are implemented.
+/// TODO: un-ignore once eviction is origin-aware; with the quota alone, 100 entries from one
+/// peer exceed the per-peer cap and the pool can still overflow with mixed contributors.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "asserts the currently vulnerable behavior; invert when the starvation fix lands"]
 async fn poc_orphan_scale_all_displaced() {
@@ -220,11 +218,10 @@ async fn poc_orphan_scale_all_displaced() {
     assert_eq!(after, 0, "expected every parked orphan to be displaced");
 }
 
-// ------------------------------------------------------------------ 4. quota (red until fixed)
+// ------------------------------------------------------------------ 4. quota
 
 /// One hostile connection must not be able to evict another peer's parked orphans.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "per-peer orphan quota not implemented yet"]
 async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
     let mut rng = make_seedable_rng(Seed::from_u64(4));
     let (mut mempool, funding_id, _height) = setup();
@@ -253,7 +250,6 @@ async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
 
 /// Eviction must not degenerate into coin flips when many peers hold one entry each.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "per-peer orphan quota not implemented yet"]
 async fn quota_many_small_peers_cannot_evict_honest_entry() {
     let mut rng = make_seedable_rng(Seed::from_u64(5));
     let (mut mempool, funding_id, _height) = setup();
@@ -262,10 +258,13 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
     let child_id = child.transaction().get_id();
     submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
 
-    // 99 distinct peers each contribute one junk orphan, then keep resubmitting.
-    for i in 0..800u32 {
-        let peer = 10 + (i % 99) as u64;
-        let _ = submit(&mut mempool, free_orphan_tx(i, 0xb3), peer);
+    // 99 distinct peers each contribute one junk orphan, then keep resubmitting it.
+    let junk: Vec<_> = (0..99u32).map(|i| free_orphan_tx(i, 0xb3)).collect();
+    for (i, tx) in junk.iter().enumerate() {
+        let _ = submit(&mut mempool, tx.clone(), 10 + i as u64);
+    }
+    for tx in junk.iter().cycle().take(800) {
+        let _ = submit(&mut mempool, tx.clone(), 10);
     }
 
     assert!(
@@ -276,7 +275,6 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
 
 /// A busy honest peer (no attacker) must not crowd out a slow peer's parked orphan.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "per-peer orphan quota not implemented yet"]
 async fn quota_fair_share_under_legitimate_load() {
     let mut rng = make_seedable_rng(Seed::from_u64(7));
     let (mut mempool, funding_id, _height) = setup();

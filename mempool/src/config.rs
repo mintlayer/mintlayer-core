@@ -123,6 +123,10 @@ pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 /// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
 pub const DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY: usize = 25;
 
+/// A per-peer cap for remote-origin orphans, so that no single peer can fill the shared orphan
+/// pool and starve other peers' transactions out of it.
+pub const DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER: usize = 10;
+
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
@@ -156,6 +160,14 @@ make_config_setting!(
     DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY
 );
 
+// Per-peer cap for remote-origin orphans, so that no single peer can fill the shared orphan
+// pool and starve other peers' transactions out of it.
+make_config_setting!(
+    RemoteOrphanPoolCapacityPerPeer,
+    usize,
+    DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+);
+
 // When disabled (the default), transactions submitted locally whose inputs are not yet known are
 // rejected outright. When enabled, they are parked in the orphan pool instead and re-processed
 // once their parents arrive (or are mined), same as remote transactions.
@@ -177,6 +189,9 @@ pub struct MempoolConfig {
 
     /// Capacity for local-origin orphans within the orphan pool.
     pub local_orphan_pool_capacity: LocalOrphanPoolCapacity,
+
+    /// Per-peer capacity for remote-origin orphans within the orphan pool.
+    pub remote_orphan_pool_capacity_per_peer: RemoteOrphanPoolCapacityPerPeer,
 }
 
 impl MempoolConfig {
@@ -191,6 +206,7 @@ impl MempoolConfig {
             max_cluster_size_bytes,
             allow_local_orphans,
             local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
         } = self;
 
         RpcMempoolConfig {
@@ -199,6 +215,7 @@ impl MempoolConfig {
             max_cluster_size_bytes: **max_cluster_size_bytes,
             allow_local_orphans: **allow_local_orphans,
             local_orphan_pool_capacity: **local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer: **remote_orphan_pool_capacity_per_peer,
         }
     }
 
@@ -226,6 +243,13 @@ impl MempoolConfig {
             *self.local_orphan_pool_capacity > 0,
             ConfigError::LocalOrphanPoolCapacityCannotBeZero
         );
+        // Note: as with the local cap, there is no upper bound relative to the overall orphan
+        // pool capacity (`config::DEFAULT_ORPHAN_POOL_CAPACITY`). If the sum of the per-peer
+        // caps exceeds the overall capacity, the overall capacity is what binds.
+        ensure!(
+            *self.remote_orphan_pool_capacity_per_peer > 0,
+            ConfigError::RemoteOrphanPoolCapacityPerPeerCannotBeZero
+        );
         Ok(())
     }
 }
@@ -238,6 +262,7 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             max_cluster_size_bytes,
             allow_local_orphans,
             local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
         } = value;
 
         Self {
@@ -246,6 +271,7 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
             allow_local_orphans: allow_local_orphans.into(),
             local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
+            remote_orphan_pool_capacity_per_peer: remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 }
@@ -258,6 +284,7 @@ pub struct RpcMempoolConfig {
     pub max_cluster_size_bytes: usize,
     pub allow_local_orphans: bool,
     pub local_orphan_pool_capacity: usize,
+    pub remote_orphan_pool_capacity_per_peer: usize,
 }
 
 /// Mempool configuration errors.
@@ -271,6 +298,9 @@ pub enum ConfigError {
 
     #[error("Local orphan pool capacity cannot be zero")]
     LocalOrphanPoolCapacityCannotBeZero,
+
+    #[error("Remote orphan pool capacity per peer cannot be zero")]
+    RemoteOrphanPoolCapacityPerPeerCannotBeZero,
 
     #[error("Maximum cluster size in bytes cannot be zero")]
     MaxClusterSizeBytesCannotBeZero,

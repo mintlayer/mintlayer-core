@@ -51,6 +51,7 @@ async fn tx_ids_by_score_and_ancestry(#[case] seed: Seed) {
         MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -220,6 +221,7 @@ fn stack_overflow_on_misconfigured_cluster_size_limit(#[case] seed: Seed) {
             MempoolConfig {
                 allow_local_orphans: Default::default(),
                 local_orphan_pool_capacity: Default::default(),
+                remote_orphan_pool_capacity_per_peer: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_size_bytes: usize::MAX.into(),
                 max_cluster_tx_count: usize::MAX.into(),

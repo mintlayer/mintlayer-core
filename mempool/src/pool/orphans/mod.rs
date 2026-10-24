@@ -358,11 +358,13 @@ impl TxOrphanPool {
     }
 
     /// Total encoded size of stored transactions with the given origin
+    #[cfg(test)]
     pub fn origin_size(&self, origin: TxOrigin) -> usize {
         self.maps.origin_stats.get(&origin).map_or(0, |s| s.size)
     }
 
     /// Number of distinct origins currently tracked by the accounting map
+    #[cfg(test)]
     pub fn tracked_origin_count(&self) -> usize {
         self.maps.origin_stats.len()
     }

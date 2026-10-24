@@ -389,6 +389,7 @@ async fn tx_bigger_than_cluster_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         max_cluster_size_bytes: max_cluster_size.into(),
 
@@ -1423,6 +1424,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: (num_child_txs + 1).into(),
@@ -1560,6 +1562,7 @@ async fn accepted_tx_size(
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         max_cluster_size_bytes: max_cluster_size.into(),
 
@@ -1602,6 +1605,7 @@ async fn initial_values(#[case] seed: Seed) {
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: FeeRate::from_atoms_per_kb(
             rng.random_range(100_000..100_000_000_000_000),
         )
@@ -1684,6 +1688,7 @@ fn stack_overflow_on_transaction_addition(
             MempoolConfig {
                 allow_local_orphans: Default::default(),
                 local_orphan_pool_capacity: Default::default(),
+                remote_orphan_pool_capacity_per_peer: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_size_bytes: usize::MAX.into(),
                 max_cluster_tx_count: max_cluster_tx_count.into(),
@@ -1846,6 +1851,7 @@ async fn storage_capacity_shrinkage(#[case] seed: Seed) {
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        remote_orphan_pool_capacity_per_peer: Default::default(),
         min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: txs.len().into(),
