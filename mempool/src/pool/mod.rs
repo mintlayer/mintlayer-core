@@ -755,6 +755,9 @@ impl<'a> TxFinalizer<'a> {
         Ok(self.orphan_pool.insert_and_enforce_limits(transaction, self.cur_time)?)
     }
 
+    /// Evaluate the orphan-pool admission policy. Occupancy must be fresh: expired entries
+    /// count against the caps unless swept first, and the only caller
+    /// ([`Self::try_add_orphan`]) sweeps immediately before calling this.
     fn check_orphan_pool_policy<M: MemoryUsageEstimator>(
         &self,
         transaction: TxEntry,

@@ -263,7 +263,10 @@ impl MempoolConfig {
         );
         // Note: as with the local cap, there is no upper bound relative to the overall orphan
         // pool capacity (`config::DEFAULT_ORPHAN_POOL_CAPACITY`). If the sum of the per-peer
-        // caps exceeds the overall capacity, the overall capacity is what binds.
+        // caps exceeds the overall capacity, the overall capacity is what binds; once it is
+        // exhausted by peers that are each within their own cap, further admissions are
+        // rejected as `Full` until space frees up (expiry, promotion, or peer teardown)
+        // instead of displacing other peers' parked orphans.
         ensure!(
             *self.remote_orphan_pool_capacity_per_peer > 0,
             ConfigError::RemoteOrphanPoolCapacityPerPeerCannotBeZero
