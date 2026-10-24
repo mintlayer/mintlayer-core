@@ -1,20 +1,18 @@
 // Proof of concept: orphan pool starvation in the mintlayer-core mempool.
 //
-// One connected peer can displace every other peer's parked orphans, because admission to the
-// orphan pool costs nothing (no fee check, no per-peer quota), eviction is uniformly random, and
-// an evicted orphan can never be promoted when its missing parent finally arrives.
+// Regression suite for the fix: per-peer quotas for remote orphans plus reservation-aware
+// admission mean a full pool rejects a flood instead of displacing other peers' parked
+// orphans, and eviction no longer ignores which peer contributed an entry.
 //
 // Every submission goes through `MempoolInterface::add_transaction_remote`, the same method p2p
 // calls (`p2p/src/sync/peer/transaction_manager.rs`), so no test-only shortcut is involved.
 //
 // Three scenarios:
 //   1. control  - a child parked before its parent is promoted once the parent arrives.
-//   2. attack   - the same child is lost after a single peer floods the pool.
-//   3. scale    - 100 orphans from one peer are all displaced by ~1500 free submissions.
+//   2. attack   - a flood from a single peer cannot cost a parked child its promotion.
+//   3. scale    - a flood against a full pool is rejected; every parked orphan survives.
 //
 // Run:  cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
-//       append `--include-ignored` to also run the gated scenario (scale) that pins the
-//       the current vulnerable behavior; their assertions must be inverted once the quota lands.
 
 use super::*;
 
@@ -29,7 +27,11 @@ const HONEST_PEER: u64 = 2;
 const HOSTILE_PEER: u64 = 3;
 
 /// Submit a transaction exactly as a remote peer would.
-fn submit(mempool: &mut Pool, tx: SignedTransaction, peer_id: u64) -> Result<TxStatus, crate::error::Error> {
+fn submit(
+    mempool: &mut Pool,
+    tx: SignedTransaction,
+    peer_id: u64,
+) -> Result<TxStatus, crate::error::Error> {
     let origin = RemoteTxOrigin::new(PeerId::from_u64(peer_id));
     let options = TxOptions::default_for(origin.into());
     mempool.add_transaction_remote(tx, origin, options)
@@ -79,7 +81,10 @@ fn setup() -> (Pool, Id<Transaction>, BlockHeight) {
         ))
         .build();
     let funding_id = funding.transaction().get_id();
-    tf.make_block_builder().add_transaction(funding).build_and_process(&mut rng).unwrap();
+    tf.make_block_builder()
+        .add_transaction(funding)
+        .build_and_process(&mut rng)
+        .unwrap();
 
     let height = tf.best_block_index().block_height();
     let mempool =
@@ -121,13 +126,17 @@ async fn poc_orphan_control_child_is_promoted() {
     let parent_id = parent.transaction().get_id();
     let child_id = child.transaction().get_id();
 
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
     println!(
         "CONTROL: child parked in orphan pool = {}",
         mempool.contains_orphan_transaction(&child_id)
     );
 
-    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    submit(&mut mempool, parent, HONEST_PEER)
+        .expect("parent should be accepted")
+        .assert_in_mempool();
     mempool.process_queue();
 
     let promoted = mempool.contains_transaction(&child_id);
@@ -152,7 +161,9 @@ async fn poc_orphan_attack_quota_protects_child() {
     let (parent, child) = parent_and_child(&mut rng, funding_id, 1);
     let child_id = child.transaction().get_id();
 
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
     println!(
         "ATTACK: child parked in orphan pool = {}",
         mempool.contains_orphan_transaction(&child_id)
@@ -172,7 +183,9 @@ async fn poc_orphan_attack_quota_protects_child() {
         mempool.contains_orphan_transaction(&child_id)
     );
 
-    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    submit(&mut mempool, parent, HONEST_PEER)
+        .expect("parent should be accepted")
+        .assert_in_mempool();
     mempool.process_queue();
 
     let promoted = mempool.contains_transaction(&child_id);
@@ -182,25 +195,24 @@ async fn poc_orphan_attack_quota_protects_child() {
 
 // ------------------------------------------------------------------ 3. scale
 
-/// How much of another peer's parked state survives a flood of free submissions.
-/// TODO: un-ignore once eviction is origin-aware; with the quota alone, 100 entries from one
-/// peer exceed the per-peer cap and the pool can still overflow with mixed contributors.
+/// With the pool at capacity, a flood is rejected instead of displacing other peers' parked
+/// orphans: every peer keeps what it parked and the flood gains nothing.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "asserts the currently vulnerable behavior; invert when the starvation fix lands"]
-async fn poc_orphan_scale_all_displaced() {
+async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     let (mut mempool, _funding_id, _height) = setup();
 
+    // Ten peers park ten orphans each: every peer is at its quota and the pool is full.
     let mut honest_ids = Vec::new();
-    for i in 0..100u32 {
-        let tx = free_orphan_tx(i, 0xa1);
-        honest_ids.push(tx.transaction().get_id());
-        submit(&mut mempool, tx, HONEST_PEER).expect("orphan should be parked").assert_in_orphan_pool();
+    for peer in 0..10u32 {
+        for i in 0..10u32 {
+            let tx = free_orphan_tx(peer * 1000 + i, 0xa1);
+            honest_ids.push(tx.transaction().get_id());
+            submit(&mut mempool, tx, 10 + peer as u64)
+                .expect("orphan should be parked")
+                .assert_in_orphan_pool();
+        }
     }
-    let before = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
-    println!("SCALE: honest orphans parked = {before}");
-
-    let sample = make_test_tx_entry(&TimeGetter::default(), free_orphan_tx(9_999, 0xb2));
-    println!("SCALE: cost of one hostile tx = {} bytes", sample.size());
+    assert_eq!(honest_ids.len(), 100);
 
     let mut accepted = 0u32;
     for i in 0..1500u32 {
@@ -209,13 +221,17 @@ async fn poc_orphan_scale_all_displaced() {
         }
     }
 
-    let after = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
+    let survivors = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
+    println!("SCALE: hostile submissions accepted = {accepted}");
     println!(
-        "SCALE: hostile submissions accepted = {accepted} (~{} KiB of traffic)",
-        (accepted * 50) / 1024
+        "SCALE: honest orphans still parked = {survivors} / {}",
+        honest_ids.len()
     );
-    println!("SCALE: honest orphans still parked = {after} / {before}");
-    assert_eq!(after, 0, "expected every parked orphan to be displaced");
+    assert_eq!(
+        accepted, 0,
+        "a full pool must reject the flood, not evict protected entries"
+    );
+    assert_eq!(survivors, 100, "every parked orphan must survive the flood");
 }
 
 // ------------------------------------------------------------------ 4. quota
@@ -228,7 +244,9 @@ async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
 
     let (parent, child) = parent_and_child(&mut rng, funding_id, 0);
     let child_id = child.transaction().get_id();
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
 
     for i in 0..1500u32 {
         let _ = submit(&mut mempool, free_orphan_tx(i, 0xb2), HOSTILE_PEER);
@@ -240,7 +258,9 @@ async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
     );
 
     // A surviving parked child must still be promotable once its parent arrives.
-    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    submit(&mut mempool, parent, HONEST_PEER)
+        .expect("parent should be accepted")
+        .assert_in_mempool();
     mempool.process_queue();
     assert!(
         mempool.contains_transaction(&child_id),
@@ -256,15 +276,20 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
 
     let (_, child) = parent_and_child(&mut rng, funding_id, 1);
     let child_id = child.transaction().get_id();
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
 
-    // 99 distinct peers each contribute one junk orphan, then keep resubmitting it.
+    // 99 distinct peers each contribute one junk orphan, then flood fresh distinct
+    // transactions round-robin. Each peer stays under its own quota, so the policy admits
+    // them; the saturated pool must reject them instead of displacing any parked entry.
     let junk: Vec<_> = (0..99u32).map(|i| free_orphan_tx(i, 0xb3)).collect();
     for (i, tx) in junk.iter().enumerate() {
         let _ = submit(&mut mempool, tx.clone(), 10 + i as u64);
     }
-    for tx in junk.iter().cycle().take(800) {
-        let _ = submit(&mut mempool, tx.clone(), 10);
+    let flood: Vec<_> = (1000u32..1000 + 99 * 8).map(|i| free_orphan_tx(i, 0xb4)).collect();
+    for (i, tx) in flood.iter().enumerate() {
+        let _ = submit(&mut mempool, tx.clone(), 10 + (i % 99) as u64);
     }
 
     assert!(
@@ -281,7 +306,9 @@ async fn quota_fair_share_under_legitimate_load() {
 
     let (_, child) = parent_and_child(&mut rng, funding_id, 1);
     let child_id = child.transaction().get_id();
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
 
     // A busy-but-honest peer streams ordinary orphans; nothing hostile.
     for i in 0..500u32 {
@@ -304,7 +331,9 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
 
     let (_, child) = parent_and_child(&mut rng, funding_id, 0);
     let child_id = child.transaction().get_id();
-    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    submit(&mut mempool, child, HONEST_PEER)
+        .expect("child should be parked")
+        .assert_in_orphan_pool();
 
     mempool.on_peer_disconnected(PeerId::from_u64(HONEST_PEER));
 

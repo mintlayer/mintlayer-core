@@ -770,9 +770,7 @@ impl<'a> TxFinalizer<'a> {
         // already-parked transactions bypass the capacity check so that they keep yielding the
         // idempotent `InOrphanPoolDuplicate` status instead of an error.
         if let TxOrigin::Remote(remote_origin) = transaction.origin() {
-            let per_peer_capacity = *tx_pool
-                .mempool_config()
-                .remote_orphan_pool_capacity_per_peer;
+            let per_peer_capacity = *tx_pool.mempool_config().remote_orphan_pool_capacity_per_peer;
             if !self.orphan_pool.contains(transaction.tx_id())
                 && self.orphan_pool.origin_len(transaction.origin()) >= per_peer_capacity
             {

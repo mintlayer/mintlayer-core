@@ -24,6 +24,7 @@ use common::{
     },
     primitives::{Amount, H256},
 };
+use randomness::RngExt;
 use test_utils::random::{Rng, Seed, make_seedable_rng};
 
 use super::*;
@@ -64,21 +65,14 @@ fn check_integrity(orphans: &TxOrphanPool) {
             .by_origin
             .range((*origin, InternalId::ZERO)..=(*origin, InternalId::MAX))
             .count();
-        assert_eq!(
-            stat.count, entries,
-            "Origin {origin:?} count inconsistent",
-        );
+        assert_eq!(stat.count, entries, "Origin {origin:?} count inconsistent",);
         count_sum += stat.count;
         size_sum += stat.size;
     });
     assert_eq!(count_sum, len, "Origin stats count sum inconsistent");
     assert_eq!(
         size_sum,
-        orphans
-            .transactions
-            .iter()
-            .map(|entry| entry.size().get())
-            .sum::<usize>(),
+        orphans.transactions.iter().map(|entry| entry.size().get()).sum::<usize>(),
         "Origin stats size sum inconsistent",
     );
 }
@@ -318,4 +312,96 @@ fn teardown_purges_zero_count_origin_keys(#[case] seed: Seed) {
         0,
         "zero-count origin keys must not accumulate across peer churn",
     );
+}
+
+fn remote_origin(peer: u64) -> TxOrigin {
+    TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(peer)))
+}
+
+/// Fill the pool exactly to its capacity: `peers` remote peers with `per_peer` entries each.
+/// Every origin is at (not beyond) its reservation. All entries share one timestamp (no
+/// expiry sweep); "oldest" ties in the maps break by insertion order via the internal ID.
+fn fill_to_capacity(peers: u64, per_peer: usize) -> (TxOrphanPool, Vec<Vec<Id<Transaction>>>) {
+    let mut rng = make_seedable_rng(Seed::from_entropy());
+    let mut orphans = TxOrphanPool::new();
+    let mut ids_per_peer = Vec::new();
+
+    for peer in 0..peers {
+        let mut ids = Vec::new();
+        for _i in 0..per_peer {
+            let time = Time::from_secs_since_epoch(0);
+            let entry = tx_entry_with_origin(&mut rng, remote_origin(peer), time);
+            ids.push(*entry.tx_id());
+            assert_eq!(
+                orphans.insert_and_enforce_limits(entry, time),
+                Ok(TxStatus::InOrphanPool)
+            );
+        }
+        ids_per_peer.push(ids);
+    }
+
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    (orphans, ids_per_peer)
+}
+
+#[test]
+fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries() {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
+    let mut rng = make_seedable_rng(Seed::from_entropy());
+
+    // A flood from another peer cannot displace any parked entry; it is rejected outright.
+    for _i in 0..100u32 {
+        let time = Time::from_secs_since_epoch(0);
+        let entry = tx_entry_with_origin(&mut rng, remote_origin(99), time);
+        assert_eq!(
+            orphans.insert_and_enforce_limits(entry, time),
+            Err(OrphanPoolError::Full)
+        );
+    }
+
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    for ids in &ids_per_peer {
+        assert!(ids.iter().all(|id| orphans.contains(id)));
+    }
+    check_integrity(&orphans);
+}
+
+#[test]
+fn eviction_prefers_entries_from_origins_beyond_reservation() {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
+    let mut rng = make_seedable_rng(Seed::from_entropy());
+
+    // Take peer 0 one entry beyond its reservation with a direct insert.
+    let overflow = tx_entry_with_origin(&mut rng, remote_origin(0), Time::from_secs_since_epoch(1));
+    let overflow_id = *overflow.tx_id();
+    assert_eq!(orphans.insert(overflow), Ok(TxStatus::InOrphanPool));
+    assert_eq!(orphans.len(), 101);
+
+    // Enforcing the cap removes exactly the over-reservation origin's oldest entry.
+    assert_eq!(
+        orphans.enforce_max_size(config::DEFAULT_ORPHAN_POOL_CAPACITY),
+        1
+    );
+    assert_eq!(orphans.len(), 100);
+    assert_eq!(orphans.origin_len(remote_origin(0)), 10);
+    assert!(orphans.contains(&overflow_id));
+    assert!(!orphans.contains(&ids_per_peer[0][0]));
+    for ids in ids_per_peer.iter().skip(1) {
+        assert!(ids.iter().all(|id| orphans.contains(id)));
+    }
+    check_integrity(&orphans);
+}
+
+#[test]
+fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full() {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
+
+    let parked_id = ids_per_peer[3][5];
+    let resubmission = orphans.get(&parked_id).unwrap().clone();
+    assert_eq!(
+        orphans.insert_and_enforce_limits(resubmission, Time::from_secs_since_epoch(0)),
+        Ok(TxStatus::InOrphanPoolDuplicate)
+    );
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    check_integrity(&orphans);
 }

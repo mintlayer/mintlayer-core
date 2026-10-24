@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{chain::Transaction, primitives::Id};
 use logging::log;
 use mempool_types::TxStatus;
-use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time};
@@ -139,10 +138,7 @@ impl TxOrphanPoolMaps {
             self.local_count -= 1;
         }
 
-        let stat = self
-            .origin_stats
-            .get_mut(&entry.origin())
-            .expect("origin stat to be present");
+        let stat = self.origin_stats.get_mut(&entry.origin()).expect("origin stat to be present");
         stat.count -= 1;
         stat.size -= entry.size().get();
 
@@ -163,17 +159,25 @@ pub struct TxOrphanPool {
 
     /// Maximum orphan pool size in the number of transactions
     transaction_count_limit: ConstValue<usize>,
+
+    /// Number of entries a local origin is guaranteed to keep when the pool makes room
+    local_transaction_count_limit: ConstValue<usize>,
+
+    /// Number of entries a single remote peer is guaranteed to keep when the pool makes room
+    remote_per_peer_limit: ConstValue<usize>,
 }
 
 impl TxOrphanPool {
     pub fn new() -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
         Self {
-            // We add 1 to the capacity because in normal operation, a transaction is added and
-            // then the limit is enforced so the vector may temporarily exceed the limit by one.
+            // Headroom so pushes do not reallocate on every entry; the vector may temporarily
+            // exceed the soft limit when entries are inserted directly.
             transactions: Vec::with_capacity(transaction_count_limit + 1),
             maps: TxOrphanPoolMaps::new(),
             transaction_count_limit: transaction_count_limit.into(),
+            local_transaction_count_limit: config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY.into(),
+            remote_per_peer_limit: config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER.into(),
         }
     }
 
@@ -247,12 +251,28 @@ impl TxOrphanPool {
     }
 
     /// Insert a transaction entry and make sure the pool size does not grow too large
+    ///
+    /// A resubmission of an already-parked transaction stays idempotent even when the pool is
+    /// full. Otherwise expired entries are dropped first and room is made by evicting only
+    /// from origins that exceed their reservation; a still-full pool rejects the newcomer
+    /// with [`OrphanPoolError::Full`] instead of displacing another peer's protected entries.
     pub fn insert_and_enforce_limits(
         &mut self,
         entry: TxEntry,
         cur_time: Time,
     ) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
+
+        if self.contains(&tx_id) {
+            return Ok(TxStatus::InOrphanPoolDuplicate);
+        }
+
+        self.remove_expired(cur_time);
+        if self.len() >= *self.transaction_count_limit
+            && !self.evict_over_reservation(*self.transaction_count_limit)
+        {
+            return Err(OrphanPoolError::Full);
+        }
 
         let status = self.insert(entry)?;
         self.enforce_limits(cur_time);
@@ -301,13 +321,65 @@ impl TxOrphanPool {
         n_expired
     }
 
-    /// Evict transactions at random until the specified cap is reached
-    fn enforce_max_size(&mut self, max_size: usize) -> usize {
-        let mut rng = make_pseudo_rng();
+    /// The number of entries an origin of this class is guaranteed to keep when the pool
+    /// makes room for newcomers. Mirrors the per-class admission quotas in the policy layer.
+    fn origin_reservation(&self, origin: &TxOrigin) -> usize {
+        match origin {
+            TxOrigin::Local(_) => *self.local_transaction_count_limit,
+            TxOrigin::Remote(_) => *self.remote_per_peer_limit,
+        }
+    }
 
+    /// The oldest entry of the origin holding the largest number of entries beyond its
+    /// reservation. `None` if every origin is within its reservation.
+    fn pick_over_reservation(&self) -> Option<InternalId> {
+        let mut candidate = None;
+        for (origin, stat) in self.maps.origin_stats.iter() {
+            let excess = stat.count.saturating_sub(self.origin_reservation(origin));
+            if excess > 0 && candidate.map_or(true, |(_, best)| excess > best) {
+                candidate = Some((origin, excess));
+            }
+        }
+        let (origin, _) = candidate?;
+        self.oldest_of_origin(origin.clone())
+    }
+
+    fn oldest_of_origin(&self, origin: TxOrigin) -> Option<InternalId> {
+        self.maps
+            .by_origin
+            .range((origin.clone(), InternalId::ZERO)..=(origin, InternalId::MAX))
+            .map(|(_origin, iid)| *iid)
+            .min_by_key(|iid| self.get_at(*iid).creation_time())
+    }
+
+    /// Make room for a newcomer by evicting only from origins beyond their reservation.
+    /// Returns false if the pool is still full, in which case no protected entry was touched.
+    fn evict_over_reservation(&mut self, max_size: usize) -> bool {
+        while self.len() >= max_size {
+            match self.pick_over_reservation() {
+                Some(iid) => {
+                    self.remove_at(iid);
+                }
+                None => return false,
+            }
+        }
+        true
+    }
+
+    /// Evict transactions until the specified cap is reached
+    ///
+    /// Origins beyond their reservation are evicted first (largest excess, oldest entry);
+    /// otherwise the oldest entry in the pool is evicted. The reservation preference is a
+    /// safety net for direct inserts; the admission path never lets a remote origin exceed
+    /// its reservation (see [`Self::insert_and_enforce_limits`]).
+    fn enforce_max_size(&mut self, max_size: usize) -> usize {
         let mut n_evicted = 0;
         while self.len() > max_size {
-            self.remove_at(InternalId::new(rng.random_range(0..self.len())));
+            let iid = self
+                .pick_over_reservation()
+                .or_else(|| self.maps.by_insertion_time.iter().next().map(|(_, iid)| *iid))
+                .expect("pool is not empty");
+            self.remove_at(iid);
             n_evicted += 1;
         }
 
