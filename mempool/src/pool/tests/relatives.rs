@@ -833,8 +833,10 @@ fn create_mempool(
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
-        // These tests park up to 9 orphans from the single test peer; give explicit headroom
-        // so a per-peer quota failure would never be mistaken for the behavior under test.
+        // These tests park up to 10 orphans from the single test peer (9 in the deterministic
+        // subtest; in the fully-shuffled subtest all of b0-b6, c0, d0, d1 can be parked at
+        // once), so give explicit headroom to keep a per-peer quota failure from ever being
+        // mistaken for the behavior under test.
         remote_orphan_pool_capacity_per_peer: 20.into(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count,
