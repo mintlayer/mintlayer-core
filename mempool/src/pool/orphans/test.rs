@@ -126,6 +126,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
 
     let entry = random_tx_entry(&mut rng);
@@ -161,6 +162,7 @@ fn capacity_reached(#[case] seed: Seed) {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     let time = Time::from_secs_since_epoch(0);
 
@@ -187,6 +189,7 @@ fn simulation(#[case] seed: Seed) {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     check_integrity(&orphans);
 
@@ -247,6 +250,15 @@ fn simulation(#[case] seed: Seed) {
 }
 
 fn tx_entry_with_origin(rng: &mut impl Rng, origin: TxOrigin, time: Time) -> TxEntry {
+    tx_entry_with_options(rng, origin, time, false)
+}
+
+fn tx_entry_with_options(
+    rng: &mut impl Rng,
+    origin: TxOrigin,
+    time: Time,
+    outbound: bool,
+) -> TxEntry {
     let n_inputs = rng.random_range(1..=3);
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
@@ -258,7 +270,7 @@ fn tx_entry_with_origin(rng: &mut impl Rng, origin: TxOrigin, time: Time) -> TxE
     let transaction = Transaction::new(0, inputs, Vec::new()).unwrap();
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
-    let options = crate::TxOptions::default_for(origin);
+    let options = crate::TxOptions::default_for(origin).with_origin_peer_outbound(outbound);
 
     TxEntry::new(transaction, time, origin, options)
 }
@@ -271,6 +283,7 @@ fn accounting_tracks_per_origin_occupancy(#[case] seed: Seed) {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     let time = Time::from_secs_since_epoch(0);
 
@@ -313,6 +326,7 @@ fn teardown_purges_zero_count_origin_keys(#[case] seed: Seed) {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     let time = Time::from_secs_since_epoch(0);
 
@@ -342,6 +356,7 @@ fn fill_to_capacity(peers: u64, per_peer: usize) -> (TxOrphanPool, Vec<Vec<Id<Tr
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     let mut ids_per_peer = Vec::new();
 
@@ -382,6 +397,55 @@ fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries() {
     for ids in &ids_per_peer {
         assert!(ids.iter().all(|id| orphans.contains(id)));
     }
+    check_integrity(&orphans);
+}
+
+#[test]
+fn eviction_reservation_uses_outbound_tier() {
+    let mut rng = make_seedable_rng(Seed::from_entropy());
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
+    let time = Time::from_secs_since_epoch(0);
+
+    // An outbound origin pushed 4 entries beyond its own (larger) reservation; an inbound
+    // origin 2 beyond its smaller one. Total pool target: 40 + 10 = 50.
+    let mut outbound_ids = Vec::new();
+    for i in 0..44 {
+        let entry = tx_entry_with_options(&mut rng, remote_origin(1), time, true);
+        outbound_ids.push(*entry.tx_id());
+        assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
+    }
+    let mut inbound_ids = Vec::new();
+    for i in 0..12 {
+        let entry = tx_entry_with_origin(&mut rng, remote_origin(2), time);
+        inbound_ids.push(*entry.tx_id());
+        assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
+    }
+
+    // Evicting down to 50 removes exactly each origin's over-reservation excess: the 4
+    // oldest outbound entries (largest excess first), then the 2 oldest inbound ones. The
+    // outbound origin keeps its full 40-entry tier, not the inbound 10.
+    assert_eq!(orphans.enforce_max_size(50), 6);
+    assert_eq!(orphans.len(), 50);
+
+    // The outbound origin loses exactly its 4 over-reservation entries (its oldest — at this
+    // point internal IDs still match insertion order) and keeps the rest of its 40-entry tier.
+    for id in &outbound_ids[..4] {
+        assert!(
+            !orphans.contains(id),
+            "oldest over-reservation outbound entry to go"
+        );
+    }
+    assert!(outbound_ids[4..].iter().all(|id| orphans.contains(id)));
+
+    // The inbound origin loses exactly its 2 over-reservation entries. Which two of the twelve
+    // is not pinned down: after the first swap-removal, internal IDs no longer track insertion
+    // order, so the "oldest" pick among equal timestamps is an arbitrary member of the origin.
+    let n_inbound_gone = inbound_ids.iter().filter(|id| !orphans.contains(id)).count();
+    assert_eq!(n_inbound_gone, 2);
     check_integrity(&orphans);
 }
 
@@ -431,6 +495,7 @@ fn resubmission_of_expired_orphan_is_rejected_and_swept() {
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
 
     let entry = tx_entry_with_origin(&mut rng, remote_origin(1), Time::from_secs_since_epoch(0));

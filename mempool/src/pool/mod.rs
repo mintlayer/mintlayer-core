@@ -160,6 +160,8 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 let local_orphan_pool_capacity = *mempool_config.local_orphan_pool_capacity;
                 let remote_orphan_pool_capacity_per_peer =
                     *mempool_config.remote_orphan_pool_capacity_per_peer;
+                let outbound_remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.outbound_remote_orphan_pool_capacity_per_peer;
                 let chainstate_handle = chainstate_handle.shallow_clone();
                 let clock = clock.shallow_clone();
                 let memory_usage_estimator = memory_usage_estimator.shallow_clone();
@@ -179,6 +181,7 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                     orphans: orphans::TxOrphanPool::new(
                         local_orphan_pool_capacity,
                         remote_orphan_pool_capacity_per_peer,
+                        outbound_remote_orphan_pool_capacity_per_peer,
                     ),
                     work_queue: WorkQueue::new(),
                     events_broadcast,

@@ -349,6 +349,13 @@ async fn teardown_removes_peer_orphans_on_disconnect() {
 /// inbound peers; each tier still caps its own peers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn outbound_tier_gets_larger_per_peer_capacity() {
+    // The outbound tier is only meaningful if it is strictly larger than the inbound one.
+    assert!(
+        crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+            > crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        "outbound per-peer capacity must exceed the inbound per-peer capacity"
+    );
+
     let (mut mempool, _funding_id, _height) = setup();
 
     let submit_outbound = |mempool: &mut Pool,

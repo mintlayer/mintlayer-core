@@ -89,6 +89,9 @@ struct TxOrphanPoolMaps {
 struct OriginStat {
     count: usize,
     size: usize,
+    /// Whether the origin is an outbound (node-selected) peer, recorded from the entry's
+    /// options at insertion time. All entries of one origin share the class.
+    outbound: bool,
 }
 
 impl TxOrphanPoolMaps {
@@ -121,6 +124,7 @@ impl TxOrphanPoolMaps {
         let stat = self.origin_stats.entry(origin).or_default();
         stat.count += 1;
         stat.size += entry.size().get();
+        stat.outbound = entry.options().origin_peer_is_outbound();
 
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
@@ -172,19 +176,26 @@ pub struct TxOrphanPool {
     local_transaction_count_limit: ConstValue<usize>,
 
     /// Number of entries a single remote peer is guaranteed to keep when the pool makes room
+    /// (inbound tier)
     remote_per_peer_limit: ConstValue<usize>,
+
+    /// Number of entries a single outbound (node-selected) remote peer is guaranteed to keep
+    outbound_remote_per_peer_limit: ConstValue<usize>,
 }
 
 impl TxOrphanPool {
     pub fn new(
         local_orphan_pool_capacity: usize,
         remote_orphan_pool_capacity_per_peer: usize,
+        outbound_remote_orphan_pool_capacity_per_peer: usize,
     ) -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
         // MempoolConfig::validate rejects zero capacities; mirror that invariant here so a
         // mis-plumbed zero fails fast instead of silently disabling reservation protection.
         debug_assert!(
-            local_orphan_pool_capacity > 0 && remote_orphan_pool_capacity_per_peer > 0,
+            local_orphan_pool_capacity > 0
+                && remote_orphan_pool_capacity_per_peer > 0
+                && outbound_remote_orphan_pool_capacity_per_peer > 0,
             "orphan capacities must be nonzero (validated at the config layer)"
         );
         Self {
@@ -195,6 +206,7 @@ impl TxOrphanPool {
             transaction_count_limit: transaction_count_limit.into(),
             local_transaction_count_limit: local_orphan_pool_capacity.into(),
             remote_per_peer_limit: remote_orphan_pool_capacity_per_peer.into(),
+            outbound_remote_per_peer_limit: outbound_remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 
@@ -342,10 +354,19 @@ impl TxOrphanPool {
 
     /// The number of entries an origin of this class is guaranteed to keep when the pool
     /// makes room for newcomers. Mirrors the per-class admission quotas in the policy layer.
+    /// Outbound (node-selected) peers get the larger share; whether an origin is outbound is
+    /// recorded at insertion time from the entry's options.
     fn origin_reservation(&self, origin: &TxOrigin) -> usize {
         match origin {
             TxOrigin::Local(_) => *self.local_transaction_count_limit,
-            TxOrigin::Remote(_) => *self.remote_per_peer_limit,
+            TxOrigin::Remote(_) => {
+                let outbound = self.maps.origin_stats.get(origin).map_or(false, |s| s.outbound);
+                if outbound {
+                    *self.outbound_remote_per_peer_limit
+                } else {
+                    *self.remote_per_peer_limit
+                }
+            }
         }
     }
 
