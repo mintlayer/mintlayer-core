@@ -343,6 +343,13 @@ mod mempool_rejection_classification_tests {
         common::chain::UtxoOutPoint::new(OutPointSourceId::Transaction(test_id(n)), 0)
     }
 
+    fn remote_capacity_exceeded(peer: u64) -> OrphanPoolError {
+        OrphanPoolError::RemoteCapacityExceeded(
+            mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(peer)),
+            10,
+        )
+    }
+
     #[test]
     fn deterministic_rejections_are_classified_as_such() {
         // Policy: fee, size and expiry rules are deterministic for the
@@ -397,10 +404,7 @@ mod mempool_rejection_classification_tests {
             OrphanPoolError::LocalCapacityExceeded(1)
         )));
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Orphan(
-            OrphanPoolError::RemoteCapacityExceeded(
-                mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(1)),
-                10,
-            )
+            remote_capacity_exceeded(1)
         )));
         // Conflicts with other mempool transactions may resolve on their own.
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Policy(
@@ -434,10 +438,7 @@ mod mempool_rejection_classification_tests {
             MempoolError::Policy(MempoolPolicyError::MempoolFull),
             MempoolError::Orphan(OrphanPoolError::Full),
             MempoolError::Orphan(OrphanPoolError::LocalCapacityExceeded(1)),
-            MempoolError::Orphan(OrphanPoolError::RemoteCapacityExceeded(
-                mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(1)),
-                10,
-            )),
+            MempoolError::Orphan(remote_capacity_exceeded(1)),
             MempoolError::Orphan(OrphanPoolError::NonceGapTooLarge(3)),
             MempoolError::Orphan(OrphanPoolError::MempoolConflict),
             MempoolError::Policy(MempoolPolicyError::Conflict(
