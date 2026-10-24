@@ -356,7 +356,7 @@ async fn quota_ignores_expired_entries_when_admitting_new_ones() {
 
     // Advance the clock past the expiry interval; everything parked above is now expired.
     now.store(
-        1_000_000 + u64::from(crate::config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL.as_secs()) + 1,
+        1_000_000 + crate::config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL.as_secs() + 1,
         Ordering::SeqCst,
     );
 
