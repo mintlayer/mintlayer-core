@@ -229,10 +229,12 @@ async fn poc_orphan_attack_quota_protects_child() {
 async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     let (mut mempool, _funding_id, _height) = setup();
 
-    // Ten peers park ten orphans each: every peer is at its quota and the pool is full.
+    // One peer per unit of the inbound quota parks one orphan per unit of that quota: every
+    // peer is at its quota and the pool (default capacity = quota x peers) is exactly full.
+    let peer_count = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32;
     let mut honest_ids = Vec::new();
-    for peer in 0..10u32 {
-        for i in 0..10u32 {
+    for peer in 0..peer_count {
+        for i in 0..peer_count {
             let tx = free_orphan_tx(peer * 1000 + i, 0xa1);
             honest_ids.push(tx.transaction().get_id());
             submit(&mut mempool, tx, 10 + peer as u64)
@@ -240,7 +242,7 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
                 .assert_in_orphan_pool();
         }
     }
-    assert_eq!(honest_ids.len(), 100);
+    assert_eq!(honest_ids.len(), crate::config::DEFAULT_ORPHAN_POOL_CAPACITY);
 
     let mut accepted = 0u32;
     for i in 0..1500u32 {
@@ -259,7 +261,11 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
         accepted, 0,
         "a full pool must reject the flood, not evict protected entries"
     );
-    assert_eq!(survivors, 100, "every parked orphan must survive the flood");
+    assert_eq!(
+        survivors,
+        honest_ids.len(),
+        "every parked orphan must survive the flood"
+    );
 }
 
 // ------------------------------------------------------------------ 4. quota
