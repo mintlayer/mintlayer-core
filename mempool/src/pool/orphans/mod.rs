@@ -168,7 +168,10 @@ pub struct TxOrphanPool {
 }
 
 impl TxOrphanPool {
-    pub fn new() -> Self {
+    pub fn new(
+        local_orphan_pool_capacity: usize,
+        remote_orphan_pool_capacity_per_peer: usize,
+    ) -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
         Self {
             // Headroom so pushes do not reallocate on every entry; the vector may temporarily
@@ -176,8 +179,8 @@ impl TxOrphanPool {
             transactions: Vec::with_capacity(transaction_count_limit + 1),
             maps: TxOrphanPoolMaps::new(),
             transaction_count_limit: transaction_count_limit.into(),
-            local_transaction_count_limit: config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY.into(),
-            remote_per_peer_limit: config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER.into(),
+            local_transaction_count_limit: local_orphan_pool_capacity.into(),
+            remote_per_peer_limit: remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 
@@ -263,11 +266,13 @@ impl TxOrphanPool {
     ) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
 
+        // Sweep expired entries before anything else so that resubmissions of stale entries
+        // cannot keep them alive by perpetually short-circuiting on the duplicate check.
+        self.remove_expired(cur_time);
         if self.contains(&tx_id) {
             return Ok(TxStatus::InOrphanPoolDuplicate);
         }
 
-        self.remove_expired(cur_time);
         if self.len() >= *self.transaction_count_limit
             && !self.evict_over_reservation(*self.transaction_count_limit)
         {

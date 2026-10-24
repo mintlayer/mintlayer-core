@@ -65,7 +65,7 @@ fn check_integrity(orphans: &TxOrphanPool) {
             .by_origin
             .range((*origin, InternalId::ZERO)..=(*origin, InternalId::MAX))
             .count();
-        assert_eq!(stat.count, entries, "Origin {origin:?} count inconsistent",);
+        assert_eq!(stat.count, entries, "Origin {origin:?} count inconsistent");
         count_sum += stat.count;
         size_sum += stat.size;
     });
@@ -121,7 +121,10 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
 #[case(Seed::from_entropy())]
 fn insert_and_delete(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
 
     let entry = random_tx_entry(&mut rng);
     let tx_id = *entry.tx_id();
@@ -153,7 +156,10 @@ fn insert_and_delete(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn capacity_reached(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
     let time = Time::from_secs_since_epoch(0);
 
     for entry in (0..config::DEFAULT_ORPHAN_POOL_CAPACITY).map(|_| random_tx_entry(&mut rng)) {
@@ -176,7 +182,10 @@ fn capacity_reached(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn simulation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
     check_integrity(&orphans);
 
     for _ in 0..300 {
@@ -257,7 +266,10 @@ fn tx_entry_with_origin(rng: &mut impl Rng, origin: TxOrigin, time: Time) -> TxE
 #[case(Seed::from_entropy())]
 fn accounting_tracks_per_origin_occupancy(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
     let time = Time::from_secs_since_epoch(0);
 
     let origin_a = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(11)));
@@ -297,7 +309,10 @@ fn accounting_tracks_per_origin_occupancy(#[case] seed: Seed) {
 #[ignore = "requires purging of zero-count origin keys on removal"]
 fn teardown_purges_zero_count_origin_keys(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
     let time = Time::from_secs_since_epoch(0);
 
     let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(21)));
@@ -323,7 +338,10 @@ fn remote_origin(peer: u64) -> TxOrigin {
 /// expiry sweep); "oldest" ties in the maps break by insertion order via the internal ID.
 fn fill_to_capacity(peers: u64, per_peer: usize) -> (TxOrphanPool, Vec<Vec<Id<Transaction>>>) {
     let mut rng = make_seedable_rng(Seed::from_entropy());
-    let mut orphans = TxOrphanPool::new();
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
     let mut ids_per_peer = Vec::new();
 
     for peer in 0..peers {

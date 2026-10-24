@@ -157,6 +157,9 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 } = state;
                 let chain_config = Arc::clone(&*chain_config);
                 let mempool_config = std::mem::take(mempool_config);
+                let local_orphan_pool_capacity = *mempool_config.local_orphan_pool_capacity;
+                let remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.remote_orphan_pool_capacity_per_peer;
                 let chainstate_handle = chainstate_handle.shallow_clone();
                 let clock = clock.shallow_clone();
                 let memory_usage_estimator = memory_usage_estimator.shallow_clone();
@@ -173,7 +176,10 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
 
                 *self = Self(MempoolState::AfterIbd(MempoolStateAfterIbd {
                     tx_pool,
-                    orphans: orphans::TxOrphanPool::new(),
+                    orphans: orphans::TxOrphanPool::new(
+                        local_orphan_pool_capacity,
+                        remote_orphan_pool_capacity_per_peer,
+                    ),
                     work_queue: WorkQueue::new(),
                     events_broadcast,
                     clock,
