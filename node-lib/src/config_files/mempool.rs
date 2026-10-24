@@ -39,6 +39,9 @@ pub struct MempoolConfigFile {
 
     /// Capacity for local-origin orphans within the orphan pool.
     pub local_orphan_pool_capacity: Option<usize>,
+
+    /// Capacity for orphans from a single remote peer within the orphan pool.
+    pub remote_orphan_pool_capacity_per_peer: Option<usize>,
 }
 
 impl MempoolConfigFile {
@@ -53,6 +56,7 @@ impl MempoolConfigFile {
             max_cluster_size_bytes,
             allow_local_orphans,
             local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
         } = config;
 
         let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
@@ -60,8 +64,9 @@ impl MempoolConfigFile {
             max_cluster_tx_count.or(options.mempool_max_cluster_transaction_count);
         let max_cluster_size_bytes =
             max_cluster_size_bytes.or(options.mempool_max_cluster_size_bytes);
-        // Note: `allow_local_orphans` and `local_orphan_pool_capacity` are intentionally not
-        // exposed as CLI options; they can only be set through the mempool config file.
+        // Note: `allow_local_orphans`, `local_orphan_pool_capacity` and
+        // `remote_orphan_pool_capacity_per_peer` are intentionally not exposed as CLI options;
+        // they can only be set through the mempool config file.
 
         MempoolConfigFile {
             min_tx_relay_fee_rate,
@@ -69,6 +74,7 @@ impl MempoolConfigFile {
             max_cluster_size_bytes,
             allow_local_orphans,
             local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
         }
     }
 }
@@ -81,6 +87,7 @@ impl From<MempoolConfigFile> for MempoolConfig {
             max_cluster_size_bytes,
             allow_local_orphans,
             local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
         } = config_file;
 
         Self {
@@ -91,6 +98,7 @@ impl From<MempoolConfigFile> for MempoolConfig {
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
             allow_local_orphans: allow_local_orphans.into(),
             local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
+            remote_orphan_pool_capacity_per_peer: remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 }

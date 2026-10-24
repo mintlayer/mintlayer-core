@@ -120,6 +120,7 @@ async fn token_account_deps(#[case] seed: Seed, fees_selection: FeesSelection) {
         .with_mempool_config(MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -580,6 +581,7 @@ async fn pool_creation_and_decommissioning(#[case] seed: Seed) {
         .with_mempool_config(MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -712,6 +714,7 @@ async fn pool_creation_and_delegation(#[case] seed: Seed, fees_selection: FeesSe
         .with_mempool_config(MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -938,6 +941,7 @@ async fn pool_creation_and_delegation_withdrawals(
         .with_mempool_config(MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),
@@ -1103,6 +1107,7 @@ async fn order_creation_and_usage(
         .with_mempool_config(MempoolConfig {
             allow_local_orphans: Default::default(),
             local_orphan_pool_capacity: Default::default(),
+            remote_orphan_pool_capacity_per_peer: Default::default(),
             min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
             max_cluster_tx_count: Default::default(),
             max_cluster_size_bytes: Default::default(),

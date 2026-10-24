@@ -833,7 +833,9 @@ fn create_mempool(
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
-        remote_orphan_pool_capacity_per_peer: Default::default(),
+        // These tests park up to 9 orphans from the single test peer; give explicit headroom
+        // so a per-peer quota failure would never be mistaken for the behavior under test.
+        remote_orphan_pool_capacity_per_peer: 20.into(),
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
         max_cluster_tx_count,
         max_cluster_size_bytes,
