@@ -351,8 +351,12 @@ fn remote_origin(peer: u64) -> TxOrigin {
 /// Fill the pool exactly to its capacity: `peers` remote peers with `per_peer` entries each.
 /// Every origin is at (not beyond) its reservation. All entries share one timestamp (no
 /// expiry sweep); "oldest" ties in the maps break by insertion order via the internal ID.
-fn fill_to_capacity(peers: u64, per_peer: usize) -> (TxOrphanPool, Vec<Vec<Id<Transaction>>>) {
-    let mut rng = make_seedable_rng(Seed::from_entropy());
+fn fill_to_capacity(
+    seed: Seed,
+    peers: u64,
+    per_peer: usize,
+) -> (TxOrphanPool, Vec<Vec<Id<Transaction>>>) {
+    let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
@@ -378,10 +382,15 @@ fn fill_to_capacity(peers: u64, per_peer: usize) -> (TxOrphanPool, Vec<Vec<Id<Tr
     (orphans, ids_per_peer)
 }
 
-#[test]
-fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries() {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
-    let mut rng = make_seedable_rng(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), Seed::from_entropy())]
+fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries(
+    #[case] fill_seed: Seed,
+    #[case] rng_seed: Seed,
+) {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, 10, 10);
+    let mut rng = make_seedable_rng(rng_seed);
 
     // A flood from another peer cannot displace any parked entry; it is rejected outright.
     for _i in 0..100u32 {
@@ -400,9 +409,11 @@ fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries() {
     check_integrity(&orphans);
 }
 
-#[test]
-fn eviction_reservation_uses_outbound_tier() {
-    let mut rng = make_seedable_rng(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn eviction_reservation_uses_outbound_tier(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new(
         config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
         config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
@@ -449,10 +460,15 @@ fn eviction_reservation_uses_outbound_tier() {
     check_integrity(&orphans);
 }
 
-#[test]
-fn eviction_prefers_entries_from_origins_beyond_reservation() {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
-    let mut rng = make_seedable_rng(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), Seed::from_entropy())]
+fn eviction_prefers_entries_from_origins_beyond_reservation(
+    #[case] fill_seed: Seed,
+    #[case] rng_seed: Seed,
+) {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, 10, 10);
+    let mut rng = make_seedable_rng(rng_seed);
 
     // Take peer 0 one entry beyond its reservation with a direct insert.
     let overflow = tx_entry_with_origin(&mut rng, remote_origin(0), Time::from_secs_since_epoch(1));
@@ -475,9 +491,11 @@ fn eviction_prefers_entries_from_origins_beyond_reservation() {
     check_integrity(&orphans);
 }
 
-#[test]
-fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full() {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(10, 10);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full(#[case] seed: Seed) {
+    let (mut orphans, ids_per_peer) = fill_to_capacity(seed, 10, 10);
 
     let parked_id = ids_per_peer[3][5];
     let resubmission = orphans.get(&parked_id).unwrap().clone();
