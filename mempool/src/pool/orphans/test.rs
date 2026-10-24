@@ -29,19 +29,6 @@ use test_utils::random::{Rng, Seed, make_seedable_rng};
 
 use super::*;
 
-// Couplings the reservation scenarios below rely on; retuning a default requires reworking
-// the affected scenarios rather than silently breaking their arithmetic.
-const _: () = assert!(
-    config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
-        == 4 * config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
-    "eviction_reservation_uses_outbound_tier assumes outbound = 4x inbound",
-);
-const _: () = assert!(
-    config::DEFAULT_ORPHAN_POOL_CAPACITY
-        == 10 * config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
-    "fill_to_capacity default usage assumes capacity = 10x the inbound quota",
-);
-
 fn check_integrity(orphans: &TxOrphanPool) {
     let len = orphans.len();
     assert!(len <= ORPHAN_POOL_SIZE_HARD_LIMIT);
@@ -376,6 +363,7 @@ fn fill_to_capacity(
         config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
     );
     let mut ids_per_peer = Vec::new();
+    let mut inserted = 0usize;
 
     for peer in 0..peers {
         let mut ids = Vec::new();
@@ -385,13 +373,28 @@ fn fill_to_capacity(
             ids.push(*entry.tx_id());
             assert_eq!(
                 orphans.insert_and_enforce_limits(entry, time),
-                Ok(TxStatus::InOrphanPool)
+                Ok(TxStatus::InOrphanPool),
+                "fill_to_capacity assumes peers x per_peer fits within \
+                 DEFAULT_ORPHAN_POOL_CAPACITY; pass counts that match or rework the \
+                 scenarios built on this helper"
             );
+            assert_eq!(
+                orphans.len(),
+                inserted + 1,
+                "an entry was evicted during the fill; every peer must stay within its \
+                 reservation for the scenarios built on this helper"
+            );
+            inserted += 1;
         }
         ids_per_peer.push(ids);
     }
 
-    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    assert_eq!(
+        orphans.len(),
+        config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        "fill_to_capacity assumes peers x per_peer fills the pool exactly; pass counts \
+         that match DEFAULT_ORPHAN_POOL_CAPACITY or rework the scenarios built on it"
+    );
     (orphans, ids_per_peer)
 }
 
@@ -402,11 +405,12 @@ fn admission_rejects_flood_when_full_instead_of_evicting_protected_entries(
     #[case] fill_seed: Seed,
     #[case] rng_seed: Seed,
 ) {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, 10, 10);
+    let peers = config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, peers as u64, peers);
     let mut rng = make_seedable_rng(rng_seed);
 
     // A flood from another peer cannot displace any parked entry; it is rejected outright.
-    for _i in 0..100u32 {
+    for _i in 0..config::DEFAULT_ORPHAN_POOL_CAPACITY {
         let time = Time::from_secs_since_epoch(0);
         let entry = tx_entry_with_origin(&mut rng, remote_origin(99), time);
         assert_eq!(
@@ -434,42 +438,56 @@ fn eviction_reservation_uses_outbound_tier(#[case] seed: Seed) {
     );
     let time = Time::from_secs_since_epoch(0);
 
-    // An outbound origin pushed 4 entries beyond its own (larger) reservation; an inbound
-    // origin 2 beyond its smaller one. Total pool target: 40 + 10 = 50.
+    let outbound = config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    let inbound = config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    // The scenario can only tell the tiers apart if the outbound reservation is the larger
+    // one; that is what the config promises.
+    assert!(
+        outbound > inbound,
+        "eviction_reservation_uses_outbound_tier assumes outbound > inbound"
+    );
+    let outbound_excess = 4;
+    let inbound_excess = 2;
+
+    // An outbound origin pushed a few entries beyond its own (larger) reservation; an
+    // inbound origin a couple beyond its smaller one.
     let mut outbound_ids = Vec::new();
-    for _i in 0..44 {
+    for _i in 0..outbound + outbound_excess {
         let entry = tx_entry_with_options(&mut rng, remote_origin(1), time, true);
         outbound_ids.push(*entry.tx_id());
         assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
     }
     let mut inbound_ids = Vec::new();
-    for _i in 0..12 {
+    for _i in 0..inbound + inbound_excess {
         let entry = tx_entry_with_origin(&mut rng, remote_origin(2), time);
         inbound_ids.push(*entry.tx_id());
         assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
     }
 
-    // Evicting down to 50 removes exactly each origin's over-reservation excess: the 4
-    // oldest outbound entries (largest excess first), then the 2 oldest inbound ones. The
-    // outbound origin keeps its full 40-entry tier, not the inbound 10.
-    assert_eq!(orphans.enforce_max_size(50), 6);
-    assert_eq!(orphans.len(), 50);
+    // Evicting down to the two reservations' sum removes exactly each origin's
+    // over-reservation excess: the outbound entries first (largest excess), then the inbound
+    // ones. The outbound origin keeps its full tier, not the smaller inbound one.
+    assert_eq!(
+        orphans.enforce_max_size(outbound + inbound),
+        outbound_excess + inbound_excess
+    );
+    assert_eq!(orphans.len(), outbound + inbound);
 
-    // The outbound origin loses exactly its 4 over-reservation entries (its oldest — at this
-    // point internal IDs still match insertion order) and keeps the rest of its 40-entry tier.
-    for id in &outbound_ids[..4] {
+    // The outbound origin loses exactly its over-reservation entries (its oldest — at this
+    // point internal IDs still match insertion order) and keeps the rest of its tier.
+    for id in &outbound_ids[..outbound_excess] {
         assert!(
             !orphans.contains(id),
             "oldest over-reservation outbound entry to go"
         );
     }
-    assert!(outbound_ids[4..].iter().all(|id| orphans.contains(id)));
+    assert!(outbound_ids[outbound_excess..].iter().all(|id| orphans.contains(id)));
 
-    // The inbound origin loses exactly its 2 over-reservation entries. Which two of the twelve
-    // is not pinned down: after the first swap-removal, internal IDs no longer track insertion
+    // The inbound origin loses exactly its over-reservation entries. Which ones exactly is
+    // not pinned down: after the first swap-removal, internal IDs no longer track insertion
     // order, so the "oldest" pick among equal timestamps is an arbitrary member of the origin.
     let n_inbound_gone = inbound_ids.iter().filter(|id| !orphans.contains(id)).count();
-    assert_eq!(n_inbound_gone, 2);
+    assert_eq!(n_inbound_gone, inbound_excess);
     check_integrity(&orphans);
 }
 
@@ -480,22 +498,23 @@ fn eviction_prefers_entries_from_origins_beyond_reservation(
     #[case] fill_seed: Seed,
     #[case] rng_seed: Seed,
 ) {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, 10, 10);
+    let peers = config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    let (mut orphans, ids_per_peer) = fill_to_capacity(fill_seed, peers as u64, peers);
     let mut rng = make_seedable_rng(rng_seed);
 
     // Take peer 0 one entry beyond its reservation with a direct insert.
     let overflow = tx_entry_with_origin(&mut rng, remote_origin(0), Time::from_secs_since_epoch(1));
     let overflow_id = *overflow.tx_id();
     assert_eq!(orphans.insert(overflow), Ok(TxStatus::InOrphanPool));
-    assert_eq!(orphans.len(), 101);
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY + 1);
 
     // Enforcing the cap removes exactly the over-reservation origin's oldest entry.
     assert_eq!(
         orphans.enforce_max_size(config::DEFAULT_ORPHAN_POOL_CAPACITY),
         1
     );
-    assert_eq!(orphans.len(), 100);
-    assert_eq!(orphans.origin_len(remote_origin(0)), 10);
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    assert_eq!(orphans.origin_len(remote_origin(0)), peers);
     assert!(orphans.contains(&overflow_id));
     assert!(!orphans.contains(&ids_per_peer[0][0]));
     for ids in ids_per_peer.iter().skip(1) {
@@ -508,9 +527,10 @@ fn eviction_prefers_entries_from_origins_beyond_reservation(
 #[trace]
 #[case(Seed::from_entropy())]
 fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full(#[case] seed: Seed) {
-    let (mut orphans, ids_per_peer) = fill_to_capacity(seed, 10, 10);
+    let peers = config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    let (mut orphans, ids_per_peer) = fill_to_capacity(seed, peers as u64, peers);
 
-    let parked_id = ids_per_peer[3][5];
+    let parked_id = ids_per_peer[peers - 1][peers - 1];
     let resubmission = orphans.get(&parked_id).unwrap().clone();
     assert_eq!(
         orphans.insert_and_enforce_limits(resubmission, Time::from_secs_since_epoch(0)),

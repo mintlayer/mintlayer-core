@@ -42,22 +42,9 @@ impl TimeGetterFn for FixedClock {
 
 type Pool = crate::pool::Mempool<crate::pool::memory_usage_estimator::StoreMemoryUsageEstimator>;
 
-// The scale scenario parks one peer per unit of the inbound quota, each peer at that same
-// quota, and assumes the result fills the pool exactly; keep the defaults coupled (capacity
-// == quota squared) or the scenario must be reworked.
-const _: () = assert!(
-    crate::config::DEFAULT_ORPHAN_POOL_CAPACITY
-        == crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
-            * crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
-    "scale scenario assumes peers-at-quota x quota fills the pool exactly",
-);
-
-// The many-small-peers scenario derives its peer count as capacity - 1; degenerate defaults
-// would make that count zero (underflow in the derivation below) or one (modulo by zero).
-const _: () = assert!(
-    crate::config::DEFAULT_ORPHAN_POOL_CAPACITY >= 2,
-    "many-small-peers scenario needs at least two pool slots",
-);
+// The scenarios below derive their peer counts from the configured defaults and assert the
+// assumptions at runtime, so retuning a default fails the affected tests (with the reason)
+// instead of breaking compilation of the whole test crate.
 
 const HONEST_PEER: u64 = 2;
 const HOSTILE_PEER: u64 = 3;
@@ -252,9 +239,16 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     let (mut mempool, _funding_id, _height) = setup();
 
     // One peer per unit of the inbound quota parks one orphan per unit of that quota: every
-    // peer is at its quota and the pool (default capacity = quota x peers) is exactly full.
-    // A running counter keeps every transaction id distinct regardless of the loop bounds.
-    let peer_count = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32;
+    // peer is at its quota and the pool (capacity = quota x peers) is exactly full. A
+    // running counter keeps every transaction id distinct regardless of the loop bounds.
+    let quota = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    assert_eq!(
+        quota * quota,
+        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        "scale scenario assumes peers-at-quota x quota fills the pool exactly; \
+         rework the scenario if the defaults diverge"
+    );
+    let peer_count = quota as u32;
     let mut honest_ids = Vec::new();
     let mut counter = 0u32;
     for peer in 0..peer_count {
@@ -350,6 +344,10 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
     // holding one junk orphan each, then fresh distinct transactions flood round-robin.
     // Each peer stays under its own quota, so the policy admits them; the saturated pool
     // must reject them instead of displacing any parked entry.
+    assert!(
+        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY >= 2,
+        "many-small-peers scenario needs at least two pool slots"
+    );
     let peer_count = (crate::config::DEFAULT_ORPHAN_POOL_CAPACITY - 1) as u32;
     for i in 0..peer_count {
         submit(&mut mempool, free_orphan_tx(i, 0xb3), 10 + i as u64)
@@ -457,7 +455,14 @@ async fn quota_local_origin_rejected_when_pool_pinned() {
     let mut mempool = setup_with_chainstate_generic(tf.chainstate(), cfg, Default::default());
 
     // Fill the pool exactly: every remote peer parks at its own quota.
-    let peer_count = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u32;
+    let quota = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    assert_eq!(
+        quota * quota,
+        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        "pinned-pool scenario assumes peers-at-quota x quota fills the pool exactly; \
+         rework the scenario if the defaults diverge"
+    );
+    let peer_count = quota as u32;
     let mut parked_ids = Vec::new();
     let mut counter = 0u32;
     for peer in 0..peer_count {
