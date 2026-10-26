@@ -624,12 +624,10 @@ fn resubmission_of_expired_orphan_is_rejected_and_swept() {
 
     // Once the expiry interval has passed, the sweep must remove the entry even when the
     // very same transaction is resubmitted: the duplicate check must not shield stale
-    // entries from expiry. The resubmission itself is stale by then and falls through to
-    // admission, where its own creation time makes it expire again — reported as `Expired`,
-    // leaving the pool empty, instead of the old order's perpetual `InOrphanPoolDuplicate`.
-    // The dedicated variant keeps this failure mode distinguishable from `Full`, which
-    // callers read as resource exhaustion; a non-stale pool would report the admission
-    // status.
+    // entries from expiry. The resubmission is itself stale by then and is rejected by the
+    // explicit staleness check — reported as `Expired`, leaving the pool empty, instead of
+    // the old order's perpetual `InOrphanPoolDuplicate`. The dedicated variant keeps this
+    // failure mode distinguishable from `Full`, which callers read as resource exhaustion.
     let after_expiry =
         Time::from_secs_since_epoch(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL.as_secs() + 1);
     assert_eq!(

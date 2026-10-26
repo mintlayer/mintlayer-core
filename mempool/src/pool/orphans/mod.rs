@@ -330,14 +330,30 @@ impl TxOrphanPool {
             return Err(OrphanPoolError::Full);
         }
 
+        // An already-stale entry is rejected here instead of being inserted and immediately
+        // swept again: `remove_expired` has just run, so staleness is detectable without
+        // touching the pool. Reporting `Expired` keeps a swept-and-rejected resubmission
+        // distinguishable from `Full`, which callers read as resource exhaustion.
+        if entry.creation_time() < self.expiry_cutoff(cur_time) {
+            return Err(OrphanPoolError::Expired);
+        }
+
         let status = self.insert(entry)?;
         self.enforce_limits(cur_time);
-        // If the entry is gone after the post-insert sweep, it was already expired at
-        // `cur_time` — capacity-wise nothing was rejected (the pool had room), so report
-        // expiry rather than `Full`, which callers read as resource exhaustion.
-        ensure!(self.contains(&tx_id), OrphanPoolError::Expired);
+        // Unreachable by construction: the entry was not stale on insertion (checked above),
+        // so the sweep inside `enforce_limits` cannot remove it, and the `Full` check above
+        // bounds the pool below capacity, so `enforce_max_size` evicts nothing. Should this
+        // ever fire, the pool's internal invariant is broken and `Full` reports it
+        // fail-closed.
+        ensure!(self.contains(&tx_id), OrphanPoolError::Full);
 
         Ok(status)
+    }
+
+    /// The insertion time below which an entry counts as expired at `cur_time`. Mirrors the
+    /// cutoff used by [`Self::remove_expired`].
+    fn expiry_cutoff(&self, cur_time: Time) -> Time {
+        cur_time.saturating_duration_sub(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL)
     }
 
     /// Remove transaction by its internal ID
@@ -365,7 +381,7 @@ impl TxOrphanPool {
     /// Remove expired items (older than `cur_time - expiration_interval`)
     pub(crate) fn remove_expired(&mut self, cur_time: Time) -> usize {
         // Remove all expired txns
-        let expiry = cur_time.saturating_duration_sub(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL);
+        let expiry = self.expiry_cutoff(cur_time);
 
         let mut n_expired = 0;
         while let Some(entry) = self.maps.by_insertion_time.first().filter(|(t, _)| *t < expiry) {
