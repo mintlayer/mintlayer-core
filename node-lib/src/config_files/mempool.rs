@@ -42,7 +42,7 @@ pub struct MempoolConfigFile {
 
     /// Capacity for orphans from a single remote peer within the orphan pool.
     ///
-    /// The pool's aggregate capacity is fixed (`DEFAULT_ORPHAN_POOL_CAPACITY`, 100) and not
+    /// The pool's aggregate capacity is fixed (`DEFAULT_ORPHAN_POOL_CAPACITY`) and not
     /// configurable; if the per-peer caps are large, the aggregate binds first and further
     /// admissions fail with "orphan pool full" instead of displacing parked entries.
     pub remote_orphan_pool_capacity_per_peer: Option<usize>,

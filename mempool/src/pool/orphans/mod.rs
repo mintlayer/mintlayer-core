@@ -332,7 +332,10 @@ impl TxOrphanPool {
 
         let status = self.insert(entry)?;
         self.enforce_limits(cur_time);
-        ensure!(self.contains(&tx_id), OrphanPoolError::Full);
+        // If the entry is gone after the post-insert sweep, it was already expired at
+        // `cur_time` — capacity-wise nothing was rejected (the pool had room), so report
+        // expiry rather than `Full`, which callers read as resource exhaustion.
+        ensure!(self.contains(&tx_id), OrphanPoolError::Expired);
 
         Ok(status)
     }
@@ -388,7 +391,7 @@ impl TxOrphanPool {
     /// one reservation per local variant can be kept in aggregate. This is latent today:
     /// the admission cap bounds the total, leaving the aggregate at or below the local
     /// capacity in every reachable state.
-    fn origin_reservation(&self, origin: &TxOrigin) -> usize {
+    pub(crate) fn origin_reservation(&self, origin: &TxOrigin) -> usize {
         match origin {
             TxOrigin::Local(_) => *self.local_transaction_count_limit,
             TxOrigin::Remote(_) => {

@@ -205,6 +205,9 @@ pub enum OrphanPoolError {
     #[error("Orphan pool full")]
     Full,
 
+    #[error("Orphan transaction expired")]
+    Expired,
+
     #[error("Local orphan capacity exceeded (limit: {0})")]
     LocalCapacityExceeded(usize),
 

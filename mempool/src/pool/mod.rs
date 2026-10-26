@@ -788,11 +788,18 @@ impl<'a> TxFinalizer<'a> {
         // capacity check so that they keep yielding the idempotent `InOrphanPoolDuplicate`
         // status instead of an error.
         if let TxOrigin::Remote(remote_origin) = transaction.origin() {
-            let per_peer_capacity = if transaction.options().origin_peer_is_outbound() {
+            // Admission and eviction must agree on the origin's tier. The pool records the
+            // tier per origin (upgrade-only, see `TxOrphanPoolMaps::insert`); the
+            // newcomer's own outbound flag can only raise the admitted tier, and the pool
+            // then records that upgrade on insert, so the reservation protecting the
+            // origin never lags behind the quota its entries were admitted under.
+            let recorded_capacity = self.orphan_pool.origin_reservation(&transaction.origin());
+            let entry_tier_capacity = if transaction.options().origin_peer_is_outbound() {
                 *tx_pool.mempool_config().outbound_remote_orphan_pool_capacity_per_peer
             } else {
                 *tx_pool.mempool_config().remote_orphan_pool_capacity_per_peer
             };
+            let per_peer_capacity = recorded_capacity.max(entry_tier_capacity);
             if !self.orphan_pool.contains(transaction.tx_id())
                 && self.orphan_pool.origin_len(transaction.origin()) >= per_peer_capacity
             {
