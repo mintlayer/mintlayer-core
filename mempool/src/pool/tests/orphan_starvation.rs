@@ -248,9 +248,12 @@ async fn poc_orphan_scale_flood_is_rejected_not_displacing() {
     // peer is at its quota and the pool (capacity = quota x peers) is exactly full. A
     // running counter keeps every transaction id distinct regardless of the loop bounds.
     let quota = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    // Deliberately a runtime assertion: it couples the scenario to the production
+    // defaults and must fail as a test failure, not a compile error.
+    let capacity = crate::config::DEFAULT_ORPHAN_POOL_CAPACITY;
     assert_eq!(
         quota * quota,
-        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        capacity,
         "scale scenario assumes peers-at-quota x quota fills the pool exactly; \
          rework the scenario if the defaults diverge"
     );
@@ -350,8 +353,11 @@ async fn quota_many_small_peers_cannot_evict_honest_entry() {
     // holding one junk orphan each, then fresh distinct transactions flood round-robin.
     // Each peer stays under its own quota, so the policy admits them; the saturated pool
     // must reject them instead of displacing any parked entry.
+    // Deliberately a runtime assertion: it couples the scenario to the production
+    // defaults and must fail as a test failure, not a compile error.
+    let capacity = crate::config::DEFAULT_ORPHAN_POOL_CAPACITY;
     assert!(
-        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY >= 2,
+        capacity >= 2,
         "many-small-peers scenario needs at least two pool slots"
     );
     let peer_count = (crate::config::DEFAULT_ORPHAN_POOL_CAPACITY - 1) as u32;
@@ -470,9 +476,12 @@ async fn quota_local_origin_rejected_when_pool_pinned() {
 
     // Fill the pool exactly: every remote peer parks at its own quota.
     let quota = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    // Deliberately a runtime assertion: it couples the scenario to the production
+    // defaults and must fail as a test failure, not a compile error.
+    let capacity = crate::config::DEFAULT_ORPHAN_POOL_CAPACITY;
     assert_eq!(
         quota * quota,
-        crate::config::DEFAULT_ORPHAN_POOL_CAPACITY,
+        capacity,
         "pinned-pool scenario assumes peers-at-quota x quota fills the pool exactly; \
          rework the scenario if the defaults diverge"
     );
@@ -572,9 +581,12 @@ async fn duplicate_submission_does_not_transfer_orphan_ownership() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn outbound_tier_gets_larger_per_peer_capacity() {
     // The outbound tier is only meaningful if it is strictly larger than the inbound one.
+    // Deliberately a runtime assertion: it couples the scenario to the production
+    // defaults and must fail as a test failure, not a compile error.
+    let outbound_cap = crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
+    let inbound_cap = crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER;
     assert!(
-        crate::config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
-            > crate::config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        outbound_cap > inbound_cap,
         "outbound per-peer capacity must exceed the inbound per-peer capacity"
     );
 

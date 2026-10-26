@@ -607,6 +607,42 @@ fn resubmission_of_parked_orphan_stays_idempotent_when_pool_is_full(#[case] seed
     check_integrity(&orphans);
 }
 
+// A stale entry must report `Expired` even when the pool is also full: the more specific
+// condition wins over resource exhaustion, and the stale entry must not trigger an
+// eviction for room it would never use.
+#[test]
+fn stale_entry_on_full_pool_reports_expired_not_full() {
+    let mut rng = make_seedable_rng(Seed::from_u64(11));
+    let mut orphans = TxOrphanPool::new(
+        config::DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY,
+        config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+        config::DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER,
+    );
+    // Fill every peer to its quota at a time that stays fresh at `cur_time`.
+    let fill_time = Time::from_secs_since_epoch(60);
+    let peers = config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER as u64;
+    for peer in 0..peers {
+        for _ in 0..config::DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER {
+            let entry = tx_entry_with_origin(&mut rng, remote_origin(peer), fill_time);
+            assert_eq!(
+                orphans.insert_and_enforce_limits(entry, fill_time),
+                Ok(TxStatus::InOrphanPool)
+            );
+        }
+    }
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+
+    // An entry older than the cutoff (fill_time - 1) submitted when the pool is full.
+    let stale = tx_entry_with_origin(&mut rng, remote_origin(0), Time::from_secs_since_epoch(59));
+    assert_eq!(
+        orphans.insert_and_enforce_limits(stale, Time::from_secs_since_epoch(110)),
+        Err(OrphanPoolError::Expired)
+    );
+    // The pool is untouched: no eviction was triggered for the rejected entry.
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    check_integrity(&orphans);
+}
+
 #[test]
 fn resubmission_of_expired_orphan_is_rejected_and_swept() {
     let mut rng = make_seedable_rng(Seed::from_entropy());

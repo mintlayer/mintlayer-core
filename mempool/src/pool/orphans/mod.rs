@@ -324,18 +324,20 @@ impl TxOrphanPool {
             return Ok(TxStatus::InOrphanPoolDuplicate);
         }
 
+        // Staleness is decided before capacity: an already-stale entry must report
+        // `Expired` even when the pool is also full, and it must not trigger an eviction
+        // for room it would never use. `remove_expired` has just run, so staleness is
+        // detectable without touching the pool. Reporting `Expired` keeps a
+        // swept-and-rejected resubmission distinguishable from `Full`, which callers read
+        // as resource exhaustion.
+        if entry.creation_time() < self.expiry_cutoff(cur_time) {
+            return Err(OrphanPoolError::Expired);
+        }
+
         if self.len() >= *self.transaction_count_limit
             && !self.evict_over_reservation(*self.transaction_count_limit)
         {
             return Err(OrphanPoolError::Full);
-        }
-
-        // An already-stale entry is rejected here instead of being inserted and immediately
-        // swept again: `remove_expired` has just run, so staleness is detectable without
-        // touching the pool. Reporting `Expired` keeps a swept-and-rejected resubmission
-        // distinguishable from `Full`, which callers read as resource exhaustion.
-        if entry.creation_time() < self.expiry_cutoff(cur_time) {
-            return Err(OrphanPoolError::Expired);
         }
 
         let status = self.insert(entry)?;
@@ -411,7 +413,7 @@ impl TxOrphanPool {
         match origin {
             TxOrigin::Local(_) => *self.local_transaction_count_limit,
             TxOrigin::Remote(_) => {
-                let outbound = self.maps.origin_stats.get(origin).map_or(false, |s| s.outbound);
+                let outbound = self.maps.origin_stats.get(origin).is_some_and(|s| s.outbound);
                 if outbound {
                     *self.outbound_remote_per_peer_limit
                 } else {
@@ -427,18 +429,19 @@ impl TxOrphanPool {
         let mut candidate = None;
         for (origin, stat) in self.maps.origin_stats.iter() {
             let excess = stat.count.saturating_sub(self.origin_reservation(origin));
-            if excess > 0 && candidate.map_or(true, |(_, best)| excess > best) {
+            if excess > 0 && candidate.is_none_or(|(_, best)| excess > best) {
                 candidate = Some((origin, excess));
             }
         }
         let (origin, _) = candidate?;
-        self.oldest_of_origin(origin.clone())
+        self.oldest_of_origin(*origin)
     }
 
     fn oldest_of_origin(&self, origin: TxOrigin) -> Option<InternalId> {
+        let range = (origin, InternalId::ZERO)..=(origin, InternalId::MAX);
         self.maps
             .by_origin
-            .range((origin.clone(), InternalId::ZERO)..=(origin, InternalId::MAX))
+            .range(range)
             .map(|(_origin, iid)| *iid)
             .min_by_key(|iid| self.get_at(*iid).creation_time())
     }
