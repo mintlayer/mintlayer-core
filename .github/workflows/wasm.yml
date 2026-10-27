@@ -52,7 +52,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install TypeScript & Knip
-        run: npm install typescript knip
+        run: npm install typescript@5.9.3 knip@6.43.0
 
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
@@ -63,7 +63,7 @@ jobs:
 
       - name: Compile the tests
         working-directory: ./wasm-wrappers
-        run: tsc --project js-bindings-test/tsconfig.json
+        run: npx --no-install tsc --project js-bindings-test/tsconfig.json
 
       - name: Run the tests
         working-directory: ./wasm-wrappers
@@ -71,7 +71,7 @@ jobs:
 
       - name: Run Knip
         working-directory: ./wasm-wrappers/js-bindings-test
-        run: npx knip
+        run: npx --no-install knip
 
   wasm_artifacts:
     runs-on: ubuntu-latest
