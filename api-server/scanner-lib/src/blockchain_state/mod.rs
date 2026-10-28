@@ -1016,13 +1016,19 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Block subsidy and fees should not overflow");
 
             let pool_id = *pos_data.stake_pool_id();
+            // Read the state as of this block's height. Connecting a block must never
+            // observe state written by higher (future) blocks, otherwise rewards would
+            // be credited on top of future state and the accumulated balances would
+            // silently drift from the chain on every reconnection of a lower block.
             let pool_data = db_tx
-                .get_pool_data(pool_id)
+                .get_pool_data_at_or_below_height(pool_id, block_height)
                 .await
                 .expect("Unable to get pool data")
                 .expect("Pool should exist");
 
-            let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
+            let delegation_shares = db_tx
+                .get_pool_delegations_at_or_below_height(pool_id, block_height)
+                .await?;
             let mut adapter =
                 pos_adapter::PoSAdapter::new(pool_id, pool_data.pool_data, &delegation_shares);
 
@@ -1382,7 +1388,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                         //TODO: optimize into a single query when amount is a number in the DB
                         let delegation = db_tx
-                            .get_delegation(*delegation_id)
+                            .get_delegation_at_or_below_height(*delegation_id, block_height)
                             .await
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
@@ -1396,7 +1402,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                         let pool_id = *new_delegation.pool_id();
                         let pool_data = db_tx
-                            .get_pool_data(pool_id)
+                            .get_pool_data_at_or_below_height(pool_id, block_height)
                             .await
                             .expect("unable to get pool data")
                             .expect("must exist");
@@ -1825,7 +1831,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 // Update delegation pledge
 
                 let delegation = db_tx
-                    .get_delegation(*delegation_id)
+                    .get_delegation_at_or_below_height(*delegation_id, block_height)
                     .await
                     .expect("Unable to get delegation")
                     .expect("Delegation should exist");
@@ -1847,7 +1853,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 let pool_id = *new_delegation.pool_id();
                 let pool_data = db_tx
-                    .get_pool_data(pool_id)
+                    .get_pool_data_at_or_below_height(pool_id, block_height)
                     .await
                     .expect("unable to get pool data")
                     .expect("must exist");
