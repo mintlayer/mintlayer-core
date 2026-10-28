@@ -192,14 +192,15 @@ impl Delegation {
         }
     }
 
-    pub fn spend_share(self, amount: Amount, nonce: AccountNonce) -> Self {
-        Self {
+    pub fn spend_share(self, amount: Amount, nonce: AccountNonce) -> Result<Self, PosError> {
+        Ok(Self {
             spend_destination: self.spend_destination,
             pool_id: self.pool_id,
-            balance: (self.balance - amount).expect("not underflow"),
-            next_nonce: nonce.increment().expect("no overflow"),
+            balance: (self.balance - amount)
+                .ok_or(PosError::DelegationBalanceSubtractionError)?,
+            next_nonce: nonce.increment().ok_or(PosError::AdditionError)?,
             creation_block_height: self.creation_block_height,
-        }
+        })
     }
 }
 
@@ -224,11 +225,12 @@ impl PoolDataWithExtraInfo {
         }
     }
 
-    pub fn decrease_delegation_balance(self, stake: Amount) -> Self {
-        Self {
+    pub fn decrease_delegation_balance(self, stake: Amount) -> Result<Self, PosError> {
+        Ok(Self {
             pool_data: self.pool_data,
-            delegations_balance: (self.delegations_balance - stake).expect("no overflow"),
-        }
+            delegations_balance: (self.delegations_balance - stake)
+                .ok_or(PosError::DelegationBalanceSubtractionError)?,
+        })
     }
 
     pub fn staker_balance(&self) -> Result<Amount, PosError> {
