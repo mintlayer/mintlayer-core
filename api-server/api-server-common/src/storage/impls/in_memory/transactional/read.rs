@@ -241,8 +241,7 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         pool_id: PoolId,
         block_height: BlockHeight,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
-        self.transaction
-            .get_pool_data_at_or_below_height(pool_id, Some(block_height))
+        self.transaction.get_pool_data_at_or_below_height(pool_id, Some(block_height))
     }
 
     async fn get_utxo(

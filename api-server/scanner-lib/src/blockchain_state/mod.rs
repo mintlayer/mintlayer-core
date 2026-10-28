@@ -1028,9 +1028,8 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Unable to get pool data")
                 .expect("Pool should exist");
 
-            let delegation_shares = db_tx
-                .get_pool_delegations_at_or_below_height(pool_id, block_height)
-                .await?;
+            let delegation_shares =
+                db_tx.get_pool_delegations_at_or_below_height(pool_id, block_height).await?;
             let mut adapter =
                 pos_adapter::PoSAdapter::new(pool_id, pool_data.pool_data, &delegation_shares);
 
@@ -2303,5 +2302,235 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::CreateOrder(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod replay_regression_tests {
+    use super::*;
+
+    use api_server_common::storage::{
+        impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+        storage_api::{ApiServerStorageRead, ApiServerTransactionRw, Transactional},
+    };
+    use chainstate::{BlockSource, chainstate_interface::ChainstateInterface};
+    use chainstate_test_framework::{TestFramework, TransactionBuilder};
+    use common::{
+        chain::{
+            CoinUnit, Destination, OutPointSourceId, PoolId, TxInput, TxOutput,
+            output_value::OutputValue, signature::inputsig::InputWitness, stakelock::StakePoolData,
+        },
+        primitives::{H256, per_thousand::PerThousand},
+    };
+    use crypto::{
+        key::{KeyKind, PrivateKey},
+        vrf::{VRFKeyKind, VRFPrivateKey},
+    };
+    use randomness::CryptoRng;
+    use rstest::rstest;
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    fn make_pos_block(
+        rng: &mut impl CryptoRng,
+        tf: &mut TestFramework,
+        prev_block_id: Id<GenBlock>,
+        staking_sk: &PrivateKey,
+        vrf_sk: &VRFPrivateKey,
+        pool_id: PoolId,
+        transactions: Vec<SignedTransaction>,
+    ) -> Block {
+        tf.progress_time_seconds_since_epoch(
+            tf.chainstate.get_chain_config().target_block_spacing().as_secs(),
+        );
+        tf.make_pos_block_builder()
+            .with_parent(prev_block_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .with_stake_pool_id(pool_id)
+            .with_transactions(transactions)
+            .build(rng)
+    }
+
+    fn trivial_spend_transaction(input_id: Id<GenBlock>) -> SignedTransaction {
+        TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::BlockReward(input_id), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build()
+    }
+
+    async fn fresh_storage(
+        chain_config: &Arc<ChainConfig>,
+    ) -> TransactionalApiServerInMemoryStorage {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(chain_config);
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(chain_config).await.unwrap();
+        let genesis = chain_config.genesis_block().as_ref();
+        update_tables_from_block_reward(
+            Arc::clone(chain_config),
+            &mut db_tx,
+            BlockHeight::new(0),
+            genesis.utxos(),
+            genesis.get_id().into(),
+        )
+        .await
+        .unwrap();
+        db_tx.commit().await.unwrap();
+        storage
+    }
+
+    async fn connect_block(
+        chain_config: &Arc<ChainConfig>,
+        storage: &mut TransactionalApiServerInMemoryStorage,
+        block_height: BlockHeight,
+        block: &Block,
+    ) {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        update_tables_from_block(
+            Arc::clone(chain_config),
+            &mut db_tx,
+            block_height,
+            block,
+            Fee(Amount::ZERO),
+        )
+        .await
+        .unwrap();
+        db_tx.commit().await.unwrap();
+    }
+
+    async fn pool_staker_balance_at(
+        storage: &TransactionalApiServerInMemoryStorage,
+        pool_id: PoolId,
+        max_height: BlockHeight,
+    ) -> Amount {
+        storage
+            .transaction_ro()
+            .await
+            .unwrap()
+            .get_pool_data_at_or_below_height(pool_id, max_height)
+            .await
+            .unwrap()
+            .expect("pool row must exist")
+            .staker_balance()
+            .expect("staker balance")
+    }
+
+    /// Regression: connecting a block must read PoS state as of that block's height.
+    /// History rows written by higher (future) heights - e.g. left behind when a
+    /// rescan is interrupted and restarted from an earlier common block - must never
+    /// leak into reward distribution, otherwise replaying the range silently
+    /// accumulates duplicate rewards and the scanner drifts from the chain.
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    #[tokio::test]
+    async fn connecting_block_ignores_future_pool_rows(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN;
+        let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let staking_key = Destination::PublicKey(pk.clone());
+        let pool_data = StakePoolData::new(
+            Amount::from_atoms(initial_pledge),
+            staking_key.clone(),
+            vrf_pk,
+            staking_key.clone(),
+            PerThousand::new_from_rng(&mut rng),
+            Amount::ZERO,
+        );
+        let pool_id = PoolId::new(H256::random_using(&mut rng));
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            Amount::from_atoms(initial_pledge * 2),
+            pool_id,
+            pool_data,
+        )
+        .build();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+
+        let block1 = make_pos_block(
+            &mut rng,
+            &mut tf,
+            chain_config.genesis_block_id(),
+            &staking_sk,
+            &vrf_sk,
+            pool_id,
+            vec![trivial_spend_transaction(chain_config.genesis_block_id())],
+        );
+        tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+
+        let block2 = make_pos_block(
+            &mut rng,
+            &mut tf,
+            block1.get_id().into(),
+            &staking_sk,
+            &vrf_sk,
+            pool_id,
+            vec![],
+        );
+        tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+
+        // Baseline: a clean linear pass over both blocks.
+        let mut clean_storage = fresh_storage(&chain_config).await;
+        connect_block(
+            &chain_config,
+            &mut clean_storage,
+            BlockHeight::new(1),
+            &block1,
+        )
+        .await;
+        connect_block(
+            &chain_config,
+            &mut clean_storage,
+            BlockHeight::new(2),
+            &block2,
+        )
+        .await;
+        let clean_balance =
+            pool_staker_balance_at(&clean_storage, pool_id, BlockHeight::new(2)).await;
+
+        // Corrupted run: identical replay, except a pool row written by a higher
+        // (never-connected) height survives between the two blocks.
+        let mut storage = fresh_storage(&chain_config).await;
+        connect_block(&chain_config, &mut storage, BlockHeight::new(1), &block1).await;
+
+        {
+            let mut db_tx = storage.transaction_rw().await.unwrap();
+            let future_pool_data = db_tx
+                .get_pool_data(pool_id)
+                .await
+                .unwrap()
+                .expect("pool must exist after block 1");
+            let inflated = future_pool_data
+                .pool_data
+                .increase_staker_rewards(Amount::from_atoms(10_000))
+                .unwrap();
+            db_tx
+                .set_pool_data_at_height(
+                    pool_id,
+                    &PoolDataWithExtraInfo::new(inflated),
+                    BlockHeight::new(50),
+                )
+                .await
+                .unwrap();
+            db_tx.commit().await.unwrap();
+        }
+
+        connect_block(&chain_config, &mut storage, BlockHeight::new(2), &block2).await;
+
+        // Connecting block 2 must read the state as of height 2, so the corrupted
+        // run converges to the clean balance. With a latest-row read the balance
+        // would come out as clean_balance + 10_000 + the block 2 reward.
+        let corrupted_balance =
+            pool_staker_balance_at(&storage, pool_id, BlockHeight::new(2)).await;
+        assert_eq!(clean_balance, corrupted_balance);
     }
 }
