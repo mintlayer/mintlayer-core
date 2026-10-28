@@ -52,7 +52,7 @@ use common::{
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, H256, Id, Idable, id::WithId},
 };
 use orders_accounting::OrderData;
-use pos_accounting::{PoSAccountingView, PoolData};
+use pos_accounting::{Error as PosError, PoSAccountingView, PoolData};
 use serialization::DecodeAll;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
@@ -67,6 +67,8 @@ mod pos_adapter;
 pub enum BlockchainStateError {
     #[error("Unexpected storage error: {0}")]
     StorageError(#[from] ApiServerStorageError),
+    #[error("PoS accounting error: {0}")]
+    PosAccountingError(#[from] PosError),
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
@@ -452,7 +454,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
     total_tx_fees: Fee,
-) -> Result<(), ApiServerStorageError> {
+) -> Result<(), BlockchainStateError> {
     update_tables_from_block_reward(
         chain_config.clone(),
         db_tx,
@@ -1099,7 +1101,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
     tx_global_index: u64,
-) -> Result<(), ApiServerStorageError> {
+) -> Result<(), BlockchainStateError> {
     update_tables_from_transaction_inputs(
         Arc::clone(&chain_config),
         db_tx,
@@ -1128,7 +1130,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     tx: &SignedTransaction,
     tx_global_index: u64,
-) -> Result<(), ApiServerStorageError> {
+) -> Result<(), BlockchainStateError> {
     let sigs = tx.signatures();
     let tx = tx.transaction();
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
@@ -1393,7 +1395,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
 
-                        let new_delegation = delegation.spend_share(*amount, outpoint.nonce());
+                        let new_delegation = delegation.spend_share(*amount, outpoint.nonce())?;
 
                         db_tx
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
@@ -1406,7 +1408,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .await
                             .expect("unable to get pool data")
                             .expect("must exist");
-                        let new_pool_data = pool_data.decrease_delegation_balance(*amount);
+                        let new_pool_data = pool_data.decrease_delegation_balance(*amount)?;
 
                         db_tx
                             .set_pool_data_at_height(pool_id, &new_pool_data, block_height)
