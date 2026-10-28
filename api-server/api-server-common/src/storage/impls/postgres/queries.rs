@@ -1713,7 +1713,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ORDER BY block_height DESC
                 LIMIT 1;
                 "#,
-                &[&delegation_id.as_str(), &max_height.map(Self::block_height_to_postgres_friendly)],
+                &[
+                    &delegation_id.as_str(),
+                    &max_height.map(Self::block_height_to_postgres_friendly),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2124,14 +2127,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: &PoolId,
     ) -> Result<(DelegationId, Delegation), ApiServerStorageError> {
         let delegation_id_str: String = row.get(0);
-        let delegation_id =
-            Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
-                .map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "invalid delegation id {delegation_id_str}: {e}"
-                    ))
-                })?
-                .into_object();
+        let delegation_id = Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid delegation id {delegation_id_str}: {e}"
+                ))
+            })?
+            .into_object();
         let balance: String = row.get(1);
         let spend_destination: Vec<u8> = row.get(2);
         let next_nonce: Vec<u8> = row.get(3);
@@ -2139,7 +2141,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
             ApiServerStorageError::DeserializationError(format!(
-        "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
+                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
             ))
         })?;
         let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
@@ -2149,13 +2151,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     pool_id, e
                 ))
             })?;
-        let next_nonce =
-            AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Delegation {} deserialization failed: {}",
-                    delegation_id_str, e
-                ))
-            })?;
+        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id_str, e
+            ))
+        })?;
 
         Ok((
             delegation_id,

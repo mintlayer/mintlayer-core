@@ -196,8 +196,7 @@ impl Delegation {
         Ok(Self {
             spend_destination: self.spend_destination,
             pool_id: self.pool_id,
-            balance: (self.balance - amount)
-                .ok_or(PosError::DelegationBalanceSubtractionError)?,
+            balance: (self.balance - amount).ok_or(PosError::DelegationBalanceSubtractionError)?,
             next_nonce: nonce.increment().ok_or(PosError::AdditionError)?,
             creation_block_height: self.creation_block_height,
         })
@@ -1179,3 +1178,60 @@ pub trait Transactional<'tx> {
 }
 
 pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send + Sync {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::primitives::{BlockHeight, H256, per_thousand::PerThousand};
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    fn test_delegation(balance: Amount) -> Delegation {
+        Delegation::new(
+            BlockHeight::new(1),
+            Destination::AnyoneCanSpend,
+            PoolId::new(H256::zero()),
+            balance,
+            AccountNonce::new(7),
+        )
+    }
+
+    /// Regression: spending more than the delegation balance must return an error,
+    /// not panic - a stale scanner state must not take the whole scanner down.
+    #[test]
+    fn spend_share_underflow_returns_error() {
+        let delegation = test_delegation(Amount::from_atoms(100));
+        let err = delegation
+            .spend_share(Amount::from_atoms(101), AccountNonce::new(8))
+            .expect_err("underflow must be an error");
+        assert!(matches!(err, PosError::DelegationBalanceSubtractionError));
+    }
+
+    #[test]
+    fn spend_share_exact_balance_succeeds_and_bumps_nonce() {
+        let delegation = test_delegation(Amount::from_atoms(100));
+        let spent = delegation
+            .spend_share(Amount::from_atoms(100), AccountNonce::new(8))
+            .expect("exact spend must succeed");
+        assert_eq!(spent.balance(), &Amount::ZERO);
+        assert_eq!(spent.next_nonce(), &AccountNonce::new(9));
+    }
+
+    #[test]
+    fn decrease_delegation_balance_underflow_returns_error() {
+        let mut rng = make_seedable_rng(Seed::from(1u64));
+        let (_, vrf_public_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let pool_data = PoolDataWithExtraInfo::new(PoolData::new(
+            Destination::AnyoneCanSpend,
+            Amount::from_atoms(1_000),
+            Amount::ZERO,
+            vrf_public_key,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        ));
+        let err = pool_data
+            .decrease_delegation_balance(Amount::from_atoms(1))
+            .expect_err("underflow must be an error");
+        assert!(matches!(err, PosError::DelegationBalanceSubtractionError));
+    }
+}
