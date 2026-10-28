@@ -6,6 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Fixed
+- The scanner no longer credits block rewards on top of pool or delegation state written by higher (future) blocks when it reconnects blocks after an interrupted scan: all pool, delegation and delegation-shares reads performed while connecting a block at height h are now point-in-time reads (state as of h), so replaying a range of blocks always reproduces the same history as a clean scan instead of silently accumulating duplicated rewards.
+- Spending a delegation share with an amount larger than the delegation's balance, or an overflowing nonce, now fails with a typed PoS accounting error instead of panicking and crash-looping the scanner daemon.
+
+### Changed
+- The api-server storage version was bumped from 27 to 28 (point-in-time replay reads); the scanner re-initializes the database when it finds a different version, as before. Full resync is required, which also repairs databases whose stored balances already drifted from the chain through the replay bug above.
+
 ## [1.4.1]
 
 ### Added
