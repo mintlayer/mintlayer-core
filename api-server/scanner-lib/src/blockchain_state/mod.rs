@@ -894,6 +894,8 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
                 // Fee calculation runs while connecting `block_height`, so the pool state
                 // must be read as of that height; a row written by a higher block must
                 // not influence the fees (see `update_tables_from_consensus_data`).
+                // On a valid chain the pool was created before this block, so the
+                // missing row can only mean corrupt storage, hence the panic.
                 let data = db_tx
                     .get_pool_data_at_or_below_height(*pool_id, block_height)
                     .await?
@@ -1030,6 +1032,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             // observe state written by higher (future) blocks, otherwise rewards would
             // be credited on top of future state and the accumulated balances would
             // silently drift from the chain on every reconnection of a lower block.
+            // The producing pool must exist as of this block on a valid chain.
             let pool_data = db_tx
                 .get_pool_data_at_or_below_height(pool_id, block_height)
                 .await
@@ -1396,6 +1399,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         // Update delegation pledge
 
                         //TODO: optimize into a single query when amount is a number in the DB
+                        // The delegation must exist as of this block on a valid chain,
+                        // since the spending input references it.
                         let delegation = db_tx
                             .get_delegation_at_or_below_height(*delegation_id, block_height)
                             .await
