@@ -709,6 +709,36 @@ pub trait ApiServerStorageRead: Sync {
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
 
+    /// Point-in-time variant of [`Self::get_pool_data`]: returns the pool state as of
+    /// `block_height`, i.e. the latest history row with `block_height <= block_height`.
+    ///
+    /// Replay code must use this instead of [`Self::get_pool_data`]: connecting a block
+    /// at height `h` must never observe state written by blocks above `h`, otherwise
+    /// rewards get credited on top of future state and the accumulated balances
+    /// silently drift from the chain.
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
+
+    /// Point-in-time variant of [`Self::get_delegation`]: returns the delegation state
+    /// as of `block_height`, i.e. the latest history row with
+    /// `block_height <= block_height`.
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError>;
+
+    /// Point-in-time variant of [`Self::get_pool_delegations`]: for every delegation
+    /// of the pool, its latest history row with `block_height <= block_height`.
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError>;
+
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,

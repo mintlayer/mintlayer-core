@@ -574,6 +574,19 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         Ok(res)
     }
 
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_delegation_at_or_below_height(delegation_id, Some(block_height), &self.chain_config)
+            .await?;
+
+        Ok(res)
+    }
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
@@ -637,6 +650,19 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         Ok(res)
     }
 
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_pool_data_at_or_below_height(pool_id, Some(block_height), &self.chain_config)
+            .await?;
+
+        Ok(res)
+    }
+
     async fn get_latest_pool_data(
         &self,
         len: u32,
@@ -689,6 +715,19 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_delegation_shares(pool_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_pool_delegations_at_or_below_height(pool_id, Some(block_height), &self.chain_config)
+            .await?;
 
         Ok(res)
     }
