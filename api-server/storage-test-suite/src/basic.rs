@@ -2325,6 +2325,141 @@ where
     Ok(())
 }
 
+/// Point-in-time reads: connecting a block at height h must observe pool and
+/// delegation state as of h, never rows written by higher blocks.
+async fn point_in_time_pool_and_delegation_reads<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let pool_id = PoolId::random_using(&mut rng);
+    let (h5, h10, h15, h20, h25, h30) = (
+        BlockHeight::new(5),
+        BlockHeight::new(10),
+        BlockHeight::new(15),
+        BlockHeight::new(20),
+        BlockHeight::new(25),
+        BlockHeight::new(30),
+    );
+    let pool_at_h10 = make_pool_data(&mut rng, Amount::from_atoms(100));
+    let pool_at_h30 = make_pool_data(&mut rng, Amount::from_atoms(300));
+    db_tx.set_pool_data_at_height(pool_id, &pool_at_h10, h10).await.unwrap();
+    db_tx.set_pool_data_at_height(pool_id, &pool_at_h30, h30).await.unwrap();
+
+    // pool state is read as of the requested height
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h5).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h15).await.unwrap(),
+        Some(pool_at_h10.clone())
+    );
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h30).await.unwrap(),
+        Some(pool_at_h30.clone())
+    );
+
+    // delegation rows across heights: d1 accrues 100 -> 150, d2 and d3 appear later
+    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination = Destination::PublicKey(pk);
+    let (d1_id, d2_id, d3_id) = (
+        DelegationId::random_using(&mut rng),
+        DelegationId::random_using(&mut rng),
+        DelegationId::random_using(&mut rng),
+    );
+    let d1_h10 = Delegation::new(
+        h10,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(100),
+        AccountNonce::new(0),
+    );
+    let d1_h20 = Delegation::new(
+        h20,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(150),
+        AccountNonce::new(1),
+    );
+    let d2_h20 = Delegation::new(
+        h20,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(50),
+        AccountNonce::new(0),
+    );
+    let d3_h30 = Delegation::new(
+        h30,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(70),
+        AccountNonce::new(0),
+    );
+    db_tx.set_delegation_at_height(d1_id, &d1_h10, h10).await.unwrap();
+    db_tx.set_delegation_at_height(d1_id, &d1_h20, h20).await.unwrap();
+    db_tx.set_delegation_at_height(d2_id, &d2_h20, h20).await.unwrap();
+    db_tx.set_delegation_at_height(d3_id, &d3_h30, h30).await.unwrap();
+
+    // single delegation read as of a height
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h5).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h15).await.unwrap(),
+        Some(d1_h10.clone())
+    );
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h30).await.unwrap(),
+        Some(d1_h20.clone())
+    );
+
+    // pool delegation shares as of a height; rows above the bound are ignored
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h5).await.unwrap(),
+        BTreeMap::new()
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h15).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h10.clone())])
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h25).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20.clone()), (d2_id, d2_h20.clone())])
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h30).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20.clone()), (d2_id, d2_h20.clone()), (d3_id, d3_h30.clone())])
+    );
+
+    // the rollback of rows above h20 is observed by the bounded reads
+    db_tx.del_delegations_above_height(h20).await.unwrap();
+    db_tx.del_pools_above_height(h20).await.unwrap();
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h30).await.unwrap(),
+        Some(pool_at_h10)
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h30).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20), (d2_id, d2_h20)])
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
 /// Holders of an asset: the top address amounts with keyset (cursor) pagination.
 async fn top_address_amounts<S, Fut, F>(
     storage_maker: Arc<F>,
@@ -2785,6 +2920,10 @@ where
         make_test!(set_get, storage_maker.clone()),
         make_test!(token_transactions_offset_paging, storage_maker.clone()),
         make_test!(pool_data_keyset, storage_maker.clone()),
+        make_test!(
+            point_in_time_pool_and_delegation_reads,
+            storage_maker.clone()
+        ),
         make_test!(top_address_amounts, storage_maker.clone()),
         make_test!(order_book_entries, storage_maker.clone()),
         make_test!(stream_events_append_and_read, storage_maker),

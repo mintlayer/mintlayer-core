@@ -855,7 +855,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
     db_tx: &T,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
-    let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
+    let pools = prefetch_pool_data(&inputs_utxos, db_tx, block_height).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
 
@@ -883,6 +883,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
 async fn prefetch_pool_data<T: ApiServerStorageRead>(
     inputs_utxos: &Vec<Option<TxOutput>>,
     db_tx: &T,
+    block_height: BlockHeight,
 ) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
@@ -890,7 +891,14 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let data = db_tx.get_pool_data(*pool_id).await?.expect("should exist").pool_data;
+                // Fee calculation runs while connecting `block_height`, so the pool state
+                // must be read as of that height; a row written by a higher block must
+                // not influence the fees (see `update_tables_from_consensus_data`).
+                let data = db_tx
+                    .get_pool_data_at_or_below_height(*pool_id, block_height)
+                    .await?
+                    .expect("should exist")
+                    .pool_data;
                 pools.insert(*pool_id, data);
             }
             Some(
@@ -2124,9 +2132,14 @@ async fn decommission_pool_and_decrement_staked<T: ApiServerStorageWrite>(
     pool_id: PoolId,
     block_height: BlockHeight,
 ) -> Result<PoolDataWithExtraInfo, ApiServerStorageError> {
-    let pool_data = db_tx.get_pool_data(pool_id).await?.ok_or_else(|| {
-        ApiServerStorageError::LowLevelStorageError(format!("pool data for {pool_id} should exist"))
-    })?;
+    let pool_data = db_tx
+        .get_pool_data_at_or_below_height(pool_id, block_height)
+        .await?
+        .ok_or_else(|| {
+            ApiServerStorageError::LowLevelStorageError(format!(
+                "pool data for {pool_id} should exist"
+            ))
+        })?;
     let staker_balance = pool_data.staker_balance().map_err(|error| {
         ApiServerStorageError::LowLevelStorageError(format!(
             "staker balance overflow for pool {pool_id}: {error}",

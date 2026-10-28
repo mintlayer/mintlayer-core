@@ -2089,12 +2089,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
     /// Returns the delegation shares of `pool_id` as of `max_height`: for every
     /// delegation of the pool, its latest `ml.delegations` history row with
-    /// `block_height <= max_height` (`None` means unbounded, i.e. the latest state).
+    /// `block_height <= max_height`.
     ///
-    /// Reads the history table directly and deliberately bypasses
-    /// `ml.latest_delegations_cache`, which only ever reflects the latest state.
-    /// Replay code must use this so that connecting a block at height `h` never
-    /// observes delegation state written by blocks above `h`.
+    /// With `max_height: None` the latest state is read directly from
+    /// `ml.latest_delegations_cache` (one primary-key range scan per pool).
+    ///
+    /// With a bound, the set of delegation ids is taken from
+    /// `ml.latest_delegations_cache` (kept in lockstep with the history table by
+    /// `set_delegation_at_height` and the rollback paths; a delegation's pool
+    /// never changes after creation). For each id, a primary-key point lookup
+    /// picks the newest history row at or below `max_height`, so a delegation
+    /// created above `max_height` contributes no row and the cost is one index
+    /// lookup per delegation instead of a scan of the pool's whole history.
+    /// Replay code must use the bounded form so that connecting a block at
+    /// height `h` never observes state written by blocks above `h`.
     pub async fn get_pool_delegations_at_or_below_height(
         &mut self,
         pool_id: PoolId,
@@ -2103,17 +2111,34 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let pool_id_str = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let sql = if max_height.is_none() {
+            // latest state: a direct primary-key range scan of the cache; `$2` is
+            // always NULL here and the condition always true, the parameter exists
+            // only to keep both queries on the same two-parameter call shape
+            "SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
+             FROM ml.latest_delegations_cache
+             WHERE pool_id = $1 AND $2::bigint IS NULL;"
+        } else {
+            "SELECT d.delegation_id, d.balance, d.spend_destination, d.next_nonce,
+                    d.creation_block_height
+             FROM ml.latest_delegations_cache AS c
+             CROSS JOIN LATERAL (
+                 SELECT delegation_id, balance, spend_destination, next_nonce,
+                        creation_block_height
+                 FROM ml.delegations
+                 WHERE delegation_id = c.delegation_id
+                   AND block_height <= $2
+                 ORDER BY block_height DESC
+                 LIMIT 1
+             ) AS d
+             WHERE c.pool_id = $1;"
+        };
+        let pool_id_param = pool_id_str.as_str();
+        let height_param = max_height.map(Self::block_height_to_postgres_friendly);
+        let params: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+            [&pool_id_param, &height_param];
         self.tx
-            .query(
-                r#"
-                SELECT DISTINCT ON (delegation_id)
-                    delegation_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.delegations
-                WHERE pool_id = $1 AND ($2::bigint IS NULL OR block_height <= $2)
-                ORDER BY delegation_id, block_height DESC;
-                "#,
-                &[&pool_id_str.as_str(), &max_height.map(Self::block_height_to_postgres_friendly)],
-            )
+            .query(sql, &params)
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
