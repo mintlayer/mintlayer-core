@@ -1,7 +1,11 @@
 
 # cargo-vet audits file
 
-[audits]
+[[audits.libc]]
+who = "Enrico Rubboli"
+criteria = "safe-to-deploy"
+delta = "0.2.180 -> 0.2.191"
+notes = "Platform-constant and FFI declaration changes only. Reviewed the added unsafe items: select/poll shims, BSD socket macros, wait-status helpers, and per-platform event constants, all transcribing documented libc interfaces. Marking three exotic-platform function-pointer APIs unsafe is a soundness improvement. No new ambient capabilities or logic changes in code paths we exercise."
 
 [[trusted.aead]]
 criteria = "safe-to-deploy"
