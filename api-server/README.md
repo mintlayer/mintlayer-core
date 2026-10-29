@@ -32,7 +32,7 @@ In addition to the PostgreSQL, an implementation of a full in-memory storage exi
 
 #### Database schema versions and upgrades
 
-The storage schema is versioned (`CURRENT_STORAGE_VERSION` in the source code, currently 26). When the blockchain scanner daemon encounters a database with a different version than the one it expects, it re-initializes the database from scratch, dropping the old data and performing a full re-scan of the blockchain; this is also when missing tables are created. Version 26 added the `ml.emitted_events` table, the append-only log that backs the [real-time event stream](#real-time-event-stream). Since the event stream has no replay and old events are never read again, the scanner prunes stream events older than the most recent 10,000.
+The storage schema is versioned (`CURRENT_STORAGE_VERSION` in the source code, currently 28). When the blockchain scanner daemon encounters a database with a different version than the one it expects, it re-initializes the database from scratch, dropping the old data and performing a full re-scan of the blockchain; this is also when missing tables are created. Version 26 added the `ml.emitted_events` table, the append-only log that backs the [real-time event stream](#real-time-event-stream). Since the event stream has no replay and old events are never read again, the scanner prunes stream events older than the most recent 10,000.
 
 ## Real-time event stream
 
