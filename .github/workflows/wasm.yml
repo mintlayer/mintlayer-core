@@ -52,6 +52,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install TypeScript & Knip
+        working-directory: ./wasm-wrappers
         run: npm install typescript knip
 
       - name: Install wasm-pack
@@ -63,7 +64,7 @@ jobs:
 
       - name: Compile the tests
         working-directory: ./wasm-wrappers
-        run: tsc --project js-bindings-test/tsconfig.json
+        run: npx tsc --project js-bindings-test/tsconfig.json
 
       - name: Run the tests
         working-directory: ./wasm-wrappers
