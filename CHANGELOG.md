@@ -11,6 +11,32 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-10-31
+
+### Added
+  - Node:
+    - The orphan pool now enforces a per-peer capacity limit for remote
+      orphans: peers reached through outbound connections get a larger orphan
+      quota, eviction honors per-peer reservations, occupancy is tracked per
+      origin, and the new quota fields are exposed through the mempool
+      config RPC.
+
+### Fixed
+  - Node:
+    - Orphan pool hardening: stale orphans are rejected before insertion and
+      expiry takes priority over capacity during admission, the
+      first-recorded origin class stays authoritative, the outbound tier is
+      honored by eviction reservations, quota configuration is validated,
+      and zero-count origin statistics are purged on teardown.
+  - Wallet:
+    - Remote orphan quota rejections are classified as transient errors
+      instead of permanent failures.
+
+### Security
+  - Node:
+    - Advisory-exposed dependencies were patched (rustls-webpki,
+      webpki-root-certs, tokio) and the cargo-vet imports refreshed.
+
 ## [1.4.1] - 2026-09-25
 
 ### Added
