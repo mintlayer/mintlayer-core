@@ -409,6 +409,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         self.transaction.get_delegation(delegation_id)
     }
 
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.transaction
+            .get_delegation_at_or_below_height(delegation_id, Some(block_height))
+    }
+
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
@@ -422,6 +431,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         self.transaction.get_pool_delegations(pool_id)
+    }
+
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.transaction
+            .get_pool_delegations_at_or_below_height(pool_id, Some(block_height))
     }
 
     async fn get_main_chain_block_id(
@@ -466,6 +484,14 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
+    }
+
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.transaction.get_pool_data_at_or_below_height(pool_id, Some(block_height))
     }
 
     async fn get_latest_pool_data(

@@ -1687,6 +1687,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         delegation_id: DelegationId,
         chain_config: &ChainConfig,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.get_delegation_at_or_below_height(delegation_id, None, chain_config).await
+    }
+
+    /// Returns the delegation state as of `max_height`: the latest `ml.delegations`
+    /// history row with `block_height <= max_height` (`None` means unbounded).
+    ///
+    /// Note this reads the history table directly and deliberately bypasses
+    /// `ml.latest_delegations_cache`, which only ever reflects the latest state.
+    pub async fn get_delegation_at_or_below_height(
+        &mut self,
+        delegation_id: DelegationId,
+        max_height: Option<BlockHeight>,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
         let delegation_id = Address::new(chain_config, delegation_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
@@ -1694,11 +1708,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                 SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.latest_delegations_cache
-                WHERE delegation_id = $1
+                FROM ml.delegations
+                WHERE delegation_id = $1 AND ($2::bigint IS NULL OR block_height <= $2)
+                ORDER BY block_height DESC
                 LIMIT 1;
                 "#,
-                &[&delegation_id.as_str()],
+                &[
+                    &delegation_id.as_str(),
+                    &max_height.map(Self::block_height_to_postgres_friendly),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2066,72 +2084,136 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.get_pool_delegations_at_or_below_height(pool_id, None, chain_config).await
+    }
+
+    /// Returns the delegation shares of `pool_id` as of `max_height`: for every
+    /// delegation of the pool, its latest `ml.delegations` history row with
+    /// `block_height <= max_height`.
+    ///
+    /// With `max_height: None` the latest state is read directly from
+    /// `ml.latest_delegations_cache` (one primary-key range scan per pool).
+    ///
+    /// With a bound, the set of delegation ids is taken from
+    /// `ml.latest_delegations_cache` (kept in lockstep with the history table by
+    /// `set_delegation_at_height` and the rollback paths; a delegation's pool
+    /// never changes after creation). For each id, a primary-key point lookup
+    /// picks the newest history row at or below `max_height`, so a delegation
+    /// created above `max_height` contributes no row and the cost is one index
+    /// lookup per delegation instead of a scan of the pool's whole history.
+    /// Replay code must use the bounded form so that connecting a block at
+    /// height `h` never observes state written by blocks above `h`.
+    pub async fn get_pool_delegations_at_or_below_height(
+        &mut self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+        chain_config: &ChainConfig,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let pool_id_str = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let sql = if max_height.is_none() {
+            // latest state: a direct primary-key range scan of the cache; `$2` is
+            // always NULL here and the condition always true, the parameter exists
+            // only to keep both queries on the same two-parameter call shape
+            "SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
+             FROM ml.latest_delegations_cache
+             WHERE pool_id = $1 AND $2::bigint IS NULL;"
+        } else {
+            "SELECT d.delegation_id, d.balance, d.spend_destination, d.next_nonce,
+                    d.creation_block_height
+             FROM ml.latest_delegations_cache AS c
+             CROSS JOIN LATERAL (
+                 SELECT delegation_id, balance, spend_destination, next_nonce,
+                        creation_block_height
+                 FROM ml.delegations
+                 WHERE delegation_id = c.delegation_id
+                   AND block_height <= $2
+                 ORDER BY block_height DESC
+                 LIMIT 1
+             ) AS d
+             WHERE c.pool_id = $1;"
+        };
+        let pool_id_param = pool_id_str.as_str();
+        let height_param = max_height.map(Self::block_height_to_postgres_friendly);
+        let params: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+            [&pool_id_param, &height_param];
         self.tx
-            .query(
-                r#"
-                SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.latest_delegations_cache
-                WHERE pool_id = $1;
-                "#,
-                &[&pool_id_str.as_str()],
-            )
+            .query(sql, &params)
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| {
-                let delegation_id_str: String = row.get(0);
-                let delegation_id =
-                    Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
-                        .map_err(|e| {
-                            ApiServerStorageError::DeserializationError(format!(
-                                "invalid delegation id {delegation_id_str}: {e}"
-                            ))
-                        })?
-                        .into_object();
-                let balance: String = row.get(1);
-                let spend_destination: Vec<u8> = row.get(2);
-                let next_nonce: Vec<u8> = row.get(3);
-                let creation_block_height: i64 = row.get(4);
-
-                let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
-                    ApiServerStorageError::DeserializationError(format!(
-                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
-                    ))
-                })?;
-                let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
-                    .map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Amount for PoolId {} deserialization failed: {}",
-                            pool_id_str, e
-                        ))
-                    })?;
-                let next_nonce =
-                    AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Delegation {} deserialization failed: {}",
-                            delegation_id_str, e
-                        ))
-                    })?;
-
-                Ok((
-                    delegation_id,
-                    Delegation::new(
-                        BlockHeight::new(creation_block_height as u64),
-                        spend_destination,
-                        pool_id,
-                        balance,
-                        next_nonce,
-                    ),
-                ))
-            })
+            .map(|row| Self::decode_delegation_share_row(&row, chain_config, &pool_id))
             .collect()
+    }
+
+    fn decode_delegation_share_row(
+        row: &tokio_postgres::Row,
+        chain_config: &ChainConfig,
+        pool_id: &PoolId,
+    ) -> Result<(DelegationId, Delegation), ApiServerStorageError> {
+        let delegation_id_str: String = row.get(0);
+        let delegation_id = Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid delegation id {delegation_id_str}: {e}"
+                ))
+            })?
+            .into_object();
+        let balance: String = row.get(1);
+        let spend_destination: Vec<u8> = row.get(2);
+        let next_nonce: Vec<u8> = row.get(3);
+        let creation_block_height: i64 = row.get(4);
+
+        let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
+            ))
+        })?;
+        let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Amount for PoolId {} deserialization failed: {}",
+                    pool_id, e
+                ))
+            })?;
+        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id_str, e
+            ))
+        })?;
+
+        Ok((
+            delegation_id,
+            Delegation::new(
+                BlockHeight::new(creation_block_height as u64),
+                spend_destination,
+                *pool_id,
+                balance,
+                next_nonce,
+            ),
+        ))
     }
 
     pub async fn get_pool_data(
         &mut self,
         pool_id: PoolId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.get_pool_data_at_or_below_height(pool_id, None, chain_config).await
+    }
+
+    /// Returns the pool state as of `max_height`: the latest history row with
+    /// `block_height <= max_height` (`None` means unbounded, i.e. the latest row).
+    ///
+    /// Replay code must use this instead of [`Self::get_pool_data`]: connecting a
+    /// block at height `h` must never observe state written by blocks above `h`,
+    /// otherwise rewards get credited on top of future state and the accumulated
+    /// balances silently drift from the chain.
+    pub async fn get_pool_data_at_or_below_height(
+        &mut self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
         chain_config: &ChainConfig,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_id = Address::new(chain_config, pool_id)
@@ -2141,11 +2223,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 SELECT data
                 FROM ml.pool_data
-                WHERE pool_id = $1
+                WHERE pool_id = $1 AND ($2::bigint IS NULL OR block_height <= $2)
                 ORDER BY block_height DESC
                 LIMIT 1;
             "#,
-                &[&pool_id.as_str()],
+                &[&pool_id.as_str(), &max_height.map(Self::block_height_to_postgres_friendly)],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
