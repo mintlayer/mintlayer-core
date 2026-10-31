@@ -239,6 +239,10 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mempool_config = MempoolConfig {
         allow_local_orphans: Default::default(),
         local_orphan_pool_capacity: Default::default(),
+        // Make sure we don't hit the per-peer orphan quota: this test permutes insertion
+        // order over a small set of peers and relies on nothing being quota-rejected.
+        remote_orphan_pool_capacity_per_peer: num_txs.into(),
+        outbound_remote_orphan_pool_capacity_per_peer: num_txs.into(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: num_txs.into(),

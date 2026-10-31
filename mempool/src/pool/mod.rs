@@ -157,6 +157,11 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 } = state;
                 let chain_config = Arc::clone(&*chain_config);
                 let mempool_config = std::mem::take(mempool_config);
+                let local_orphan_pool_capacity = *mempool_config.local_orphan_pool_capacity;
+                let remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.remote_orphan_pool_capacity_per_peer;
+                let outbound_remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.outbound_remote_orphan_pool_capacity_per_peer;
                 let chainstate_handle = chainstate_handle.shallow_clone();
                 let clock = clock.shallow_clone();
                 let memory_usage_estimator = memory_usage_estimator.shallow_clone();
@@ -173,7 +178,11 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
 
                 *self = Self(MempoolState::AfterIbd(MempoolStateAfterIbd {
                     tx_pool,
-                    orphans: orphans::TxOrphanPool::new(),
+                    orphans: orphans::TxOrphanPool::new(
+                        local_orphan_pool_capacity,
+                        remote_orphan_pool_capacity_per_peer,
+                        outbound_remote_orphan_pool_capacity_per_peer,
+                    ),
                     work_queue: WorkQueue::new(),
                     events_broadcast,
                     clock,
@@ -737,10 +746,18 @@ impl<'a> TxFinalizer<'a> {
         error: chainstate::ConnectTransactionError,
     ) -> Result<TxStatus, Error> {
         let orphan_type = OrphanType::from_error(error)?;
+        // Reclaim capacity from expired entries before evaluating the policy. The quota
+        // checks below read current occupancy; without this sweep a peer whose parked
+        // orphans have all expired would be rejected against stale counts until some
+        // other event sweeps the pool.
+        self.orphan_pool.remove_expired(self.cur_time);
         let transaction = self.check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
         Ok(self.orphan_pool.insert_and_enforce_limits(transaction, self.cur_time)?)
     }
 
+    /// Evaluate the orphan-pool admission policy. Occupancy must be fresh: expired entries
+    /// count against the caps unless swept first, and the only caller
+    /// ([`Self::try_add_orphan`]) sweeps immediately before calling this.
     fn check_orphan_pool_policy<M: MemoryUsageEstimator>(
         &self,
         transaction: TxEntry,
@@ -762,6 +779,34 @@ impl<'a> TxFinalizer<'a> {
                 && self.orphan_pool.local_len() >= local_capacity
             {
                 return Err(OrphanPoolError::LocalCapacityExceeded(local_capacity));
+            }
+        }
+
+        // Keep any single remote peer from filling the shared orphan pool and starving other
+        // peers' orphans out of it. Outbound (node-selected) peers get a larger share. Same as
+        // the local check above, resubmissions of already-parked transactions bypass the
+        // capacity check so that they keep yielding the idempotent `InOrphanPoolDuplicate`
+        // status instead of an error.
+        if let TxOrigin::Remote(remote_origin) = transaction.origin() {
+            // Admission and eviction must agree on the origin's tier. The pool records the
+            // tier per origin (upgrade-only, see `TxOrphanPoolMaps::insert`); the
+            // newcomer's own outbound flag can only raise the admitted tier, and the pool
+            // then records that upgrade on insert, so the reservation protecting the
+            // origin never lags behind the quota its entries were admitted under.
+            let recorded_capacity = self.orphan_pool.origin_reservation(&transaction.origin());
+            let entry_tier_capacity = if transaction.options().origin_peer_is_outbound() {
+                *tx_pool.mempool_config().outbound_remote_orphan_pool_capacity_per_peer
+            } else {
+                *tx_pool.mempool_config().remote_orphan_pool_capacity_per_peer
+            };
+            let per_peer_capacity = recorded_capacity.max(entry_tier_capacity);
+            if !self.orphan_pool.contains(transaction.tx_id())
+                && self.orphan_pool.origin_len(transaction.origin()) >= per_peer_capacity
+            {
+                return Err(OrphanPoolError::RemoteCapacityExceeded(
+                    remote_origin,
+                    per_peer_capacity,
+                ));
             }
         }
 

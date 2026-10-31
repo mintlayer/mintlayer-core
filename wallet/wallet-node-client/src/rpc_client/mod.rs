@@ -117,7 +117,9 @@ pub(crate) fn is_deterministic_mempool_rejection(err: &mempool::error::Error) ->
         mempool::error::Error::Orphan(orphan_error) => !matches!(
             orphan_error,
             OrphanPoolError::Full
+                | OrphanPoolError::Expired
                 | OrphanPoolError::LocalCapacityExceeded(_)
+                | OrphanPoolError::RemoteCapacityExceeded(_, _)
                 | OrphanPoolError::Conflict(_)
                 | OrphanPoolError::NonceGapTooLarge(_)
                 | OrphanPoolError::MempoolConflict
@@ -162,7 +164,9 @@ fn classify_mempool_error_message(message: &str) -> bool {
         "added during initial block download",
         "mempool is full",
         "orphan pool full",
+        "orphan transaction expired",
         "local orphan capacity",
+        "remote orphan capacity",
         "account nonces too distant",
         "nonce is not incremental",
         "nonce is not found",
@@ -341,6 +345,13 @@ mod mempool_rejection_classification_tests {
         common::chain::UtxoOutPoint::new(OutPointSourceId::Transaction(test_id(n)), 0)
     }
 
+    fn remote_capacity_exceeded(peer: u64) -> OrphanPoolError {
+        OrphanPoolError::RemoteCapacityExceeded(
+            mempool::tx_origin::RemoteTxOrigin::new(p2p::types::PeerId::from_u64(peer)),
+            10,
+        )
+    }
+
     #[test]
     fn deterministic_rejections_are_classified_as_such() {
         // Policy: fee, size and expiry rules are deterministic for the
@@ -394,6 +405,9 @@ mod mempool_rejection_classification_tests {
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Orphan(
             OrphanPoolError::LocalCapacityExceeded(1)
         )));
+        assert!(!is_deterministic_mempool_rejection(&MempoolError::Orphan(
+            remote_capacity_exceeded(1)
+        )));
         // Conflicts with other mempool transactions may resolve on their own.
         assert!(!is_deterministic_mempool_rejection(&MempoolError::Policy(
             MempoolPolicyError::Conflict(MempoolConflictError::Irreplacable)
@@ -425,7 +439,9 @@ mod mempool_rejection_classification_tests {
             MempoolError::TipMoved,
             MempoolError::Policy(MempoolPolicyError::MempoolFull),
             MempoolError::Orphan(OrphanPoolError::Full),
+            MempoolError::Orphan(OrphanPoolError::Expired),
             MempoolError::Orphan(OrphanPoolError::LocalCapacityExceeded(1)),
+            MempoolError::Orphan(remote_capacity_exceeded(1)),
             MempoolError::Orphan(OrphanPoolError::NonceGapTooLarge(3)),
             MempoolError::Orphan(OrphanPoolError::MempoolConflict),
             MempoolError::Policy(MempoolPolicyError::Conflict(
@@ -492,7 +508,7 @@ mod mempool_rejection_classification_tests {
         assert_eq!(MempoolError::COUNT, 9);
         assert_eq!(TxValidationError::COUNT, 4);
         assert_eq!(MempoolPolicyError::COUNT, 22);
-        assert_eq!(OrphanPoolError::COUNT, 7);
+        assert_eq!(OrphanPoolError::COUNT, 9);
         assert_eq!(ConnectTransactionError::COUNT, 40);
     }
 
