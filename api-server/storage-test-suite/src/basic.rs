@@ -2635,6 +2635,115 @@ where
     Ok(())
 }
 
+/// Regression: the top-holders listing must compare balances numerically. The
+/// `amount::text` output column of the holders query is auto-named `amount`, so a
+/// bare `ORDER BY amount` resolves to that alias and sorts the atom strings
+/// lexicographically ('9' sorts above '100' and '1000' as text, below them as
+/// numbers). The ORDER BY in the query must qualify the column; this case keeps
+/// mixed digit lengths in the fixtures so a regression fails the assert.
+async fn top_address_amounts_digit_ordering<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let (addr_small, addr_mid, addr_big, addr_tie_a, addr_tie_b) = (
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+    );
+
+    let h1 = BlockHeight::new(1);
+
+    // mixed digit lengths so text order and numeric order disagree, plus an equal
+    // balance pair so the encoded-address tie-break keeps working across the fix
+    let holders: Vec<(Address<Destination>, Amount)> = vec![
+        (addr_small.clone(), Amount::from_atoms(9)),
+        (addr_mid.clone(), Amount::from_atoms(100)),
+        (addr_big.clone(), Amount::from_atoms(1000)),
+        (addr_tie_a.clone(), Amount::from_atoms(99)),
+        (addr_tie_b.clone(), Amount::from_atoms(99)),
+    ];
+    for (address, amount) in &holders {
+        db_tx
+            .set_address_balance_at_height(address, *amount, CoinOrTokenId::Coin, h1)
+            .await
+            .unwrap();
+    }
+
+    let mut tie = [addr_tie_a.as_str(), addr_tie_b.as_str()];
+    tie.sort_unstable();
+    let (tie_low, tie_high) = (tie[0], tie[1]);
+
+    // numeric descending: 1000, 100, 99, 99, 9
+    let all = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 10, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr_big.as_str().to_owned(), Amount::from_atoms(1000)),
+            (addr_mid.as_str().to_owned(), Amount::from_atoms(100)),
+            (tie_high.to_owned(), Amount::from_atoms(99)),
+            (tie_low.to_owned(), Amount::from_atoms(99)),
+            (addr_small.as_str().to_owned(), Amount::from_atoms(9)),
+        ]
+    );
+
+    // the cursor continues on the numeric amount, so pagination must walk the
+    // same order the listing returns
+    let page = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        page,
+        vec![
+            (addr_big.as_str().to_owned(), Amount::from_atoms(1000)),
+            (addr_mid.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+    let (last_address, last_amount) = page[1].clone();
+
+    let next_page = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_address, last_amount)))
+        .await
+        .unwrap();
+    assert_eq!(
+        next_page,
+        vec![
+            (tie_high.to_owned(), Amount::from_atoms(99)),
+            (tie_low.to_owned(), Amount::from_atoms(99)),
+        ]
+    );
+    let (last_address, last_amount) = next_page[1].clone();
+
+    let tail = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_address, last_amount)))
+        .await
+        .unwrap();
+    assert_eq!(
+        tail,
+        vec![(addr_small.as_str().to_owned(), Amount::from_atoms(9))]
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
 /// The order book entries of a trading pair: only the live (not concluded, not frozen)
 /// orders with non-zero remaining balances are returned.
 async fn order_book_entries<S, Fut, F>(
@@ -2925,6 +3034,7 @@ where
             storage_maker.clone()
         ),
         make_test!(top_address_amounts, storage_maker.clone()),
+        make_test!(top_address_amounts_digit_ordering, storage_maker.clone()),
         make_test!(order_book_entries, storage_maker.clone()),
         make_test!(stream_events_append_and_read, storage_maker),
     ]

@@ -253,6 +253,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // predicate is appended from a constant, so the ordering and the cursor
         // comparison cannot drift apart between the two branches (all query parts
         // are compile-time constants; only bound parameters carry runtime values)
+        // NOTE: the ORDER BY must qualify the column. The `amount::text` output
+        // column of the SELECT is auto-named `amount`, and a bare `ORDER BY amount`
+        // resolves to that output alias, comparing the atom strings
+        // lexicographically ('9' > '100') instead of the numeric balances.
         const QUERY_HEAD: &str = r#"
             SELECT address, amount::text
             FROM ml.address_amount
@@ -262,7 +266,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     OR (amount = $2::text::numeric
                         AND address COLLATE "C" < $3))"#;
         const QUERY_TAIL: &str = r#"
-            ORDER BY amount DESC, address COLLATE "C" DESC
+            ORDER BY ml.address_amount.amount DESC, ml.address_amount.address COLLATE "C" DESC
             LIMIT "#;
         // the largest placeholder of each query variant, derived from the ACTUAL
         // constants above at compile time (const-concatenation): editing a constant
