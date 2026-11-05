@@ -19,6 +19,7 @@ use super::helpers::new_pub_key_destination;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
+use storage::StorageContents;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
     TestFramework, TestStore, TransactionBuilder, anyonecanspend_address,
@@ -232,10 +233,22 @@ fn stake_pool_reorg(
             storage
         };
 
-        assert_eq!(
-            storage.transaction_ro().unwrap().dump_raw(),
-            expected_storage.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) Exclude the strategy-dependent per-transaction
+        // fee records from the dump comparison (see homomorphism.rs).
+        {
+            use chainstate_storage::schema::{DBBlockTxFees, Schema};
+            use storage::schema::HasDbMap;
+            let fee_map_index = <Schema as HasDbMap<DBBlockTxFees, _>>::INDEX;
+            let filter =
+                |dump: &mut storage::StorageContents<chainstate_storage::schema::Schema>| {
+                    dump.retain(|map_id, _| map_id.as_core() != fee_map_index);
+                };
+            let mut left = storage.transaction_ro().unwrap().dump_raw().unwrap();
+            let mut right = expected_storage.transaction_ro().unwrap().dump_raw().unwrap();
+            filter(&mut left);
+            filter(&mut right);
+            assert_eq!(left, right);
+        }
     });
 }
 

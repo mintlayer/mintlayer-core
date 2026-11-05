@@ -25,6 +25,7 @@ pub use crate::chain::{
 pub mod block_body;
 pub mod block_header;
 pub mod block_size;
+pub mod tx_fees;
 pub mod consensus_data;
 pub mod signed_block_header;
 pub mod timestamp;
@@ -468,3 +469,5 @@ mod tests {
         check_block_tag(&block);
     }
 }
+
+pub use tx_fees::BlockTxFees;

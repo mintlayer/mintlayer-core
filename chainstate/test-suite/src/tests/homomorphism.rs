@@ -21,12 +21,15 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        AccountCommand, AccountNonce, Destination, OutPointSourceId, PoolId, TxInput, TxOutput,
-        UtxoOutPoint, make_delegation_id, make_token_id, output_value::OutputValue,
+        AccountCommand, AccountNonce, BlockTxFees, Destination, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint, make_delegation_id, make_token_id, output_value::OutputValue,
         timelock::OutputTimeLock, tokens::TokenIssuance,
     },
     primitives::{Amount, Idable},
 };
+use storage::StorageContents;
+use storage::schema::HasDbMap;
+use chainstate_storage::schema::{DBBlockTxFees, Schema};
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use test_utils::token_utils::random_token_issuance_v1;
 
@@ -125,10 +128,12 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
 
         // create alternative chains that triggers reorg
         let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
@@ -149,10 +154,12 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
     });
 }
 
@@ -237,10 +244,12 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
 
         // create alternative chains that triggers reorg
         let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
@@ -261,10 +270,12 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
     });
 }
 
@@ -362,10 +373,12 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
 
         // create alternative chains that triggers reorg
         let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
@@ -386,9 +399,30 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            storage1.transaction_ro().unwrap().dump_raw(),
-            storage2.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) The per-transaction fee records are
+        // strategy-dependent metadata: the Disposable strategy skips full
+        // verification and therefore doesn't produce fees. Exclude the
+        // DBBlockTxFees map from the dump comparison; consensus state itself
+        // must still be identical.
+        assert_dumps_equal_excluding_fees(&storage1, &storage2);
     });
+}
+
+/// (experimental step 9) Compare the full raw dumps of the two storages,
+/// excluding the strategy-dependent per-transaction fee records (the
+/// Disposable strategy skips full verification and cannot produce fees).
+fn assert_dumps_equal_excluding_fees(
+    storage1: &TestStore,
+    storage2: &TestStore,
+) {
+    let fee_map_index =
+        <Schema as HasDbMap<DBBlockTxFees, _>>::INDEX;
+    let filter = |dump: &mut StorageContents<Schema>| {
+        dump.retain(|map_id, _| map_id.as_core() != fee_map_index);
+    };
+    let mut left = storage1.transaction_ro().unwrap().dump_raw().unwrap();
+    let mut right = storage2.transaction_ro().unwrap().dump_raw().unwrap();
+    filter(&mut left);
+    filter(&mut right);
+    assert_eq!(left, right);
 }

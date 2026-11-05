@@ -34,6 +34,7 @@ pub use signed_transaction::SignedTransaction;
 pub use transaction::*;
 
 pub use block::Block;
+pub use block::BlockTxFees;
 pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
 pub use currency::{Currency, RpcCurrency};
