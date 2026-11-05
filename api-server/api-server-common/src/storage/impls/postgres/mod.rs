@@ -18,6 +18,8 @@ pub mod transactional;
 
 mod queries;
 
+pub use queries::take_postgres_statement_count;
+
 use std::sync::Arc;
 
 use bb8_postgres::PostgresConnectionManager;

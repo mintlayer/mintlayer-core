@@ -105,6 +105,8 @@ pub fn log_batch_summary() {
         return;
     }
 
+    let stmts = api_server_common::storage::impls::postgres::take_postgres_statement_count();
+
     let stage_lines: Vec<String> = STAGES
         .iter()
         .enumerate()
@@ -121,9 +123,13 @@ pub fn log_batch_summary() {
         .collect();
 
     eprintln!(
-        "(experimental scanner timing) batch: {} blocks, {} txs:\n{}",
+        "(experimental scanner timing) batch: {} blocks, {} txs, {} sql statements \
+         ({:.1} stmts/block, {:.1} stmts/tx):\n{}",
         blocks,
         txs,
+        stmts,
+        stmts as f64 / blocks as f64,
+        if txs > 0 { stmts as f64 / txs as f64 } else { 0.0 },
         stage_lines.join("\n"),
     );
 }
