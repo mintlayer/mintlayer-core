@@ -20,7 +20,7 @@ use common::{
 pub mod local_state;
 mod remote_node;
 
-use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
+pub use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
