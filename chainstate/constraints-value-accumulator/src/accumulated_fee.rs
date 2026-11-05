@@ -42,6 +42,16 @@ impl AccumulatedFee {
         }
     }
 
+    /// (experimental) Construct an accumulator that maps back to exactly the
+    /// given coin fee via `map_into_block_fees` (used when consuming trusted
+    /// fees persisted by the consensus layer).
+    pub fn from_coin_fee(fee: Fee) -> Self {
+        Self {
+            unconstrained_value: BTreeMap::from([(CoinOrTokenId::Coin, fee.0)]),
+            timelock_constrained: Default::default(),
+        }
+    }
+
     pub(super) fn from_data(
         unconstrained_value: BTreeMap<CoinOrTokenId, Amount>,
         timelock_constrained: BTreeMap<NonZeroU64, Amount>,

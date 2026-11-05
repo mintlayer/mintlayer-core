@@ -25,7 +25,8 @@ use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
-        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo,
         SignedTransaction, Transaction,
         tokens::{RPCTokenInfo, TokenId},
     },
@@ -203,6 +204,17 @@ impl NodeInterface for WalletHandlesClient {
             .call(move |this| this.get_mainchain_blocks(from, max_count))
             .await??;
         Ok(blocks)
+    }
+
+    async fn get_block_tx_fees(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
+        let fees = self
+            .chainstate
+            .call(move |this| this.get_block_tx_fees(&block_id))
+            .await??;
+        Ok(fees)
     }
 
     async fn get_block_ids_as_checkpoints(

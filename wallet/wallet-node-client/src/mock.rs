@@ -25,7 +25,8 @@ use tokio::sync::{Mutex, MutexGuard};
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
         tokens::{RPCTokenInfo, TokenId},
     },
@@ -87,6 +88,13 @@ impl NodeInterface for ClonableMockNodeInterface {
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error> {
         self.lock().await.get_mainchain_blocks(from, max_count).await
+    }
+
+    async fn get_block_tx_fees(
+        &self,
+        _block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
+        Ok(None)
     }
 
     async fn get_block_ids_as_checkpoints(
