@@ -127,6 +127,18 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
+        // (experimental step 9) The trait entry point; no trusted fees.
+        let fees = vec![None; blocks.len()];
+        self.scan_blocks_with_fees(common_block_height, blocks, fees).await
+    }
+
+    async fn scan_blocks_with_fees(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        trusted_fees: Vec<Option<Vec<Fee>>>,
+    ) -> Result<(), Self::Error> {
+        assert_eq!(blocks.len(), trusted_fees.len(), "fees must align with blocks");
         let mut db_tx = self.storage.transaction_rw().await?;
 
         // Note: a reorg happened iff the local best block is above the common ancestor with the
@@ -255,8 +267,12 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // Third, txs are flushed to the db AFTER the block.
             // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
+            let block_trusted_fees = trusted_fees.get(index).and_then(|f| f.clone());
             count_txs(block.transactions().len());
             for (idx, tx) in block.transactions().iter().enumerate() {
+                let trusted_fee = block_trusted_fees
+                    .as_ref()
+                    .and_then(|fees| fees.get(idx).copied());
                 let (tx_fee, tx_additional_info) = {
                     let _t = TimingGuard::stage(Stage::FeeCalc);
                     calculate_tx_fee_and_collect_token_info(
@@ -265,6 +281,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         tx.transaction(),
                         block_height,
                         &utxo_cache,
+                        trusted_fee,
                     )
                     .await?
                 };
@@ -961,6 +978,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     tx: &Transaction,
     block_height: BlockHeight,
     utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    trusted_fee: Option<Fee>,
 ) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
     let new_tokens = tx
         .outputs()
@@ -994,7 +1012,13 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     let input_utxos: Vec<Option<TxOutput>> =
         collect_inputs_utxos(utxo_cache, db_tx, tx.inputs()).await?;
 
-    let fee = tx_fees(chain_config, block_height, tx, &input_utxos, db_tx).await?;
+    // (experimental step 9) Trust the node's persisted fee when available
+    // (computed by consensus at connect time); fall back to local
+    // recomputation only for blocks predating fee persistence.
+    let fee = match trusted_fee {
+        Some(fee) => AccumulatedFee::from_coin_fee(fee),
+        None => tx_fees(chain_config, block_height, tx, &input_utxos, db_tx).await?,
+    };
 
     let token_ids = {
         let mut token_ids = BTreeSet::new();

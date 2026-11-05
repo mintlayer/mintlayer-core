@@ -23,7 +23,8 @@ use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId,
+        PoolId, RpcOrderInfo,
         SignedTransaction, Transaction,
         tokens::{RPCTokenInfo, TokenId},
     },
@@ -85,6 +86,13 @@ impl NodeInterface for ColdWalletClient {
         _from: BlockHeight,
         _max_count: usize,
     ) -> Result<Vec<Block>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_block_tx_fees(
+        &self,
+        _block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

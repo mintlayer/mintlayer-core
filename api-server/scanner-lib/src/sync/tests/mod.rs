@@ -38,7 +38,8 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     address::Address,
     chain::{
-        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, CoinUnit, Destination,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, BlockTxFees, CoinUnit,
+        Destination,
         OrderAccountCommand, OrderData, OrderId, OutPointSourceId, PoolId, SignedTransaction,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
         htlc::{HashedTimelockContract, HtlcSecret},
@@ -177,6 +178,13 @@ impl RemoteNode for MockRemoteNode {
             .last_common_ancestor_by_id(&first_block, &second_block)
             .unwrap())
     }
+
+    async fn block_tx_fees(
+        &self,
+        _block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
+        Ok(None)
+}
 
     async fn mainchain_blocks(
         &self,
