@@ -122,6 +122,8 @@ pub fn log_batch_summary() {
     let stmts = api_server_common::storage::impls::postgres::take_postgres_statement_count();
     let hits = CACHE_HITS.swap(0, Ordering::Relaxed);
     let misses = CACHE_MISSES.swap(0, Ordering::Relaxed);
+    let (stmt_cache_hits, stmt_cache_misses) =
+        api_server_common::storage::impls::postgres::take_postgres_statement_cache_stats();
 
     let stage_lines: Vec<String> = STAGES
         .iter()
@@ -140,7 +142,8 @@ pub fn log_batch_summary() {
 
     eprintln!(
         "(experimental scanner timing) batch: {} blocks, {} txs, {} sql statements \
-         ({:.1} stmts/block, {:.1} stmts/tx), utxo cache: {} hits / {} misses:\n{}",
+         ({:.1} stmts/block, {:.1} stmts/tx), utxo cache: {} hits / {} misses, \
+         stmt cache: {} hits / {} misses:\n{}",
         blocks,
         txs,
         stmts,
@@ -148,6 +151,8 @@ pub fn log_batch_summary() {
         if txs > 0 { stmts as f64 / txs as f64 } else { 0.0 },
         hits,
         misses,
+        stmt_cache_hits,
+        stmt_cache_misses,
         stage_lines.join("\n"),
     );
 }

@@ -49,6 +49,8 @@ use crate::streaming::{
     StreamEventId, StreamEventReadError,
 };
 
+use std::collections::HashMap;
+
 const VERSION_STR: &str = "version";
 
 // (experimental) Statement counting for scanner profiling. Enabled via
@@ -74,21 +76,79 @@ pub fn take_postgres_statement_count() -> u64 {
     }
 }
 
+// (experimental) step 7: per-transaction prepared statement cache.
+// tokio_postgres::Statement is an Arc handle holding only a Weak reference to
+// the client, so cached statements are plain safe Rust and stay valid for the
+// lifetime of the cache; they are cleared when the transaction struct is
+// dropped, before its connection returns to the pool.
+pub type StatementCache = std::sync::Mutex<HashMap<String, tokio_postgres::Statement>>;
+
+static STMT_CACHE_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STMT_CACHE_MISSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Returns and resets (cache hits, cache misses) since the last call.
+/// Meaningful only when ML_SCANNER_STAGE_TIMING is enabled.
+pub fn take_postgres_statement_cache_stats() -> (u64, u64) {
+    if stmt_counting_enabled() {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            STMT_CACHE_HITS.swap(0, Relaxed),
+            STMT_CACHE_MISSES.swap(0, Relaxed),
+        )
+    } else {
+        (0, 0)
+    }
+}
+
 /// Thin forwarding wrapper around a pooled postgres connection that counts
 /// issued statements. Method signatures mirror the tokio-postgres ones used by
 /// `QueryFromConnection`, so call sites don't change.
 pub struct CountingConnection<'a, 'b> {
     inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+    statements: &'a StatementCache,
 }
 
 impl<'a, 'b> CountingConnection<'a, 'b> {
-    pub fn new(inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
-        Self { inner }
+    pub fn new(
+        inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self { inner, statements }
     }
 
     fn count(&self) {
         if stmt_counting_enabled() {
             STMT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Prepares the statement unless it is already in this transaction's
+    /// cache; saves one Parse+Describe round trip per execution.
+    async fn cached_statement(
+        &self,
+        statement: &str,
+    ) -> Result<tokio_postgres::Statement, tokio_postgres::Error> {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        let cached = self.statements.lock().unwrap().get(statement).cloned();
+        match cached {
+            Some(prepared) => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_HITS.fetch_add(1, Relaxed);
+                }
+                Ok(prepared)
+            }
+            None => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_MISSES.fetch_add(1, Relaxed);
+                }
+                let prepared = self.inner.prepare(statement).await?;
+                self.statements
+                    .lock()
+                    .unwrap()
+                    .insert(statement.to_string(), prepared.clone());
+                Ok(prepared)
+            }
         }
     }
 
@@ -98,7 +158,8 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
         params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<u64, tokio_postgres::Error> {
         self.count();
-        self.inner.execute(statement, params).await
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.execute(&prepared, params).await
     }
 
     pub async fn query(
@@ -107,7 +168,8 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
         params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
         self.count();
-        self.inner.query(statement, params).await
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query(&prepared, params).await
     }
 
     pub async fn query_opt(
@@ -116,7 +178,8 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
         params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
         self.count();
-        self.inner.query_opt(statement, params).await
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_opt(&prepared, params).await
     }
 
     pub async fn query_one(
@@ -125,7 +188,8 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
         params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
         self.count();
-        self.inner.query_one(statement, params).await
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_one(&prepared, params).await
     }
 }
 
@@ -190,8 +254,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
     }
 
-    pub fn new(tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
-        Self { tx: CountingConnection::new(tx) }
+    pub fn new(
+        tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self { tx: CountingConnection::new(tx, statements) }
     }
 
     fn block_height_to_postgres_friendly(block_height: BlockHeight) -> i64 {
