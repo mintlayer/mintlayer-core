@@ -26,6 +26,9 @@ pub mod ban_score;
 pub mod block_checking;
 pub mod block_invalidation;
 pub(crate) mod perf_timing;
+
+use std::collections::BTreeMap;
+use std::sync::Mutex;
 pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
@@ -126,6 +129,12 @@ pub struct Chainstate<S, V> {
     is_initial_block_download_finished: SetFlag,
     shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     reckless_mode_counter: DbRecklessModeCounter,
+    /// (experimental) step 11: blocks whose `check_block` already passed in
+    /// this process (via `preliminary_block_check`), mapped to the tip they
+    /// were checked against. Consumed by `integrate_block` to skip the
+    /// duplicate check; entries are stale-safe because the recorded tip must
+    /// still be the current one.
+    pre_checked_blocks: Mutex<BTreeMap<Id<Block>, Id<GenBlock>>>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -250,6 +259,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             is_initial_block_download_finished: SetFlag::new(),
             shutdown_initiated_rx,
             reckless_mode_counter: DbRecklessModeCounter::new(),
+            pre_checked_blocks: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -367,10 +377,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
         block_index: BlockIndex,
+        already_checked: bool,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        {
+        if !already_checked {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::CheckBlock);
             chainstate_ref
                 .check_block(block)
@@ -417,7 +428,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // due to a bad parent. This will be done by the caller code.
         let result = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Connect);
-            chainstate_ref.activate_best_chain(&block_index)
+            chainstate_ref.activate_best_chain(&block_index, Some(block))
         };
 
         {
@@ -458,6 +469,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Ensure that the block being submitted is new to us. If not, bail out immediately,
         // otherwise create a new block index and continue.
+        let already_checked;
         let block_index = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
@@ -471,13 +483,26 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 };
             }
 
+            // (experimental) step 11: the block may have been fully checked
+            // (preliminary_block_check) against the same tip we're still on;
+            // in that case integrate_block can skip the duplicate check.
+            let best_tip = chainstate_ref
+                .get_best_block_id()
+                .map_err(|e| BlockError::PropertyQueryError(e.into()))?;
+            already_checked =
+                self.pre_checked_blocks.lock().unwrap().remove(&block_id).is_some_and(
+                    |checked_against_tip| checked_against_tip == best_tip,
+                );
+
             chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
         };
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
         let integrate_block_result = self.with_rw_tx(
-            |chainstate_ref| Self::integrate_block(chainstate_ref, &block, block_index.clone()),
+            |chainstate_ref| {
+                Self::integrate_block(chainstate_ref, &block, block_index.clone(), already_checked)
+            },
             |attempt_number| {
                 log::info!("Processing block {block_id}, attempt #{attempt_number}");
             },
