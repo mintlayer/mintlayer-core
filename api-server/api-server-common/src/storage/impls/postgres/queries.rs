@@ -2936,10 +2936,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         }
 
         let encoded: Vec<Vec<u8>> = outpoints.iter().map(|op| op.encode()).collect();
+        // (review fix) The utxo table can hold multiple versioned rows per
+        // outpoint (one per height); DISTINCT ON with block_height DESC makes
+        // the batched fetch pick the same newest row the single get_utxo
+        // (ORDER BY block_height DESC LIMIT 1) would pick.
         let rows = self
             .tx
             .query(
-                "SELECT outpoint, utxo, spent, block_height FROM ml.utxo WHERE outpoint = ANY($1);",
+                "SELECT DISTINCT ON (outpoint) outpoint, utxo, spent, block_height \
+                 FROM ml.utxo WHERE outpoint = ANY($1) \
+                 ORDER BY outpoint, block_height DESC;",
                 &[&encoded],
             )
             .await
@@ -2964,7 +2970,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         Ok(outpoints
             .iter()
-            .map(|op| by_outpoint.remove(&op.encode()))
+            .map(|op| by_outpoint.get(&op.encode()).cloned())
             .collect())
     }
 

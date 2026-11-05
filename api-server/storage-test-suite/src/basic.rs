@@ -2977,6 +2977,7 @@ where
         ),
         make_test!(top_address_amounts, storage_maker.clone()),
         make_test!(order_book_entries, storage_maker.clone()),
+        make_test!(get_utxos_batch_semantics, storage_maker.clone()),
         make_test!(stream_events_append_and_read, storage_maker),
     ]
     .into_iter()
@@ -3083,6 +3084,108 @@ where
             db_tx.read_stream_events_after(ids[0]).await.unwrap().len(),
             1
         );
+    }
+
+    Ok(())
+}
+
+
+/// (review fix) Batched UTXO fetch must agree with the single fetch:
+/// - multiple versioned rows per outpoint resolve to the newest row,
+/// - duplicate outpoints in the request return the same value per position,
+/// - missing outpoints return None,
+/// and the result order matches the request order.
+pub async fn get_utxos_batch_semantics<S, Fut, F: Fn() -> Fut>(
+    storage_maker: Arc<F>,
+    _seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+{
+    let mut rng = make_seedable_rng(Seed::from_entropy_and_print("get_utxos_batch_semantics"));
+    let chain_config = create_unit_test_config();
+    let (_, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
+    let alice_address = Address::<Destination>::new(&chain_config, alice_destination.clone())
+        .expect("Unable to encode destination");
+
+    let mut storage = storage_maker().await;
+
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let tx_id = Id::<Transaction>::random_using(&mut rng);
+        let outpoint =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), rng.random::<u32>());
+
+        // Two versioned rows for the same outpoint: an unspent row at the
+        // lower height and a spent row at the higher height. The newest row
+        // must win, exactly like the single get_utxo (ORDER BY ... DESC
+        // LIMIT 1) does.
+        let old_unspent = Utxo::new(
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
+                alice_destination.clone(),
+            ),
+            None,
+            None,
+        );
+        let newer_spent = Utxo::new(
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
+                alice_destination.clone(),
+            ),
+            None,
+            Some(BlockHeight::new(rng.random_range(100..200))),
+        );
+
+        db_tx
+            .set_utxo_at_height(
+                outpoint.clone(),
+                old_unspent,
+                &[alice_address.as_str()],
+                BlockHeight::new(1),
+            )
+            .await
+            .unwrap();
+        db_tx
+            .set_utxo_at_height(
+                outpoint.clone(),
+                newer_spent.clone(),
+                &[alice_address.as_str()],
+                BlockHeight::new(2),
+            )
+            .await
+            .unwrap();
+
+        // An outpoint that was never written.
+        let missing_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(Id::<Transaction>::random_using(&mut rng)),
+            rng.random::<u32>(),
+        );
+
+        let requested = &[
+            missing_outpoint.clone(),
+            outpoint.clone(),
+            outpoint.clone(),
+        ];
+
+        let batched = db_tx.get_utxos(requested).await.unwrap();
+        let single_0 = db_tx.get_utxo(missing_outpoint.clone()).await.unwrap();
+        let single_1 = db_tx.get_utxo(outpoint.clone()).await.unwrap();
+        let single_2 = db_tx.get_utxo(outpoint.clone()).await.unwrap();
+
+        assert_eq!(batched[0], single_0);
+        assert!(batched[0].is_none());
+        assert_eq!(batched[1].as_ref(), single_1.as_ref());
+        assert_eq!(batched[1], batched[2]);
+        assert_eq!(single_1, single_2);
+        // The newest (spent) row wins over the older unspent one.
+        assert_eq!(batched[1].as_ref().unwrap(), &newer_spent);
+
+        // Empty request is not an error.
+        assert!(db_tx.get_utxos(&[]).await.unwrap().is_empty());
     }
 
     Ok(())

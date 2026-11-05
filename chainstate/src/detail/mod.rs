@@ -460,6 +460,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        let result = self.attempt_to_process_block_inner(block, block_source);
+        // (review fix) count every processed block, on success and failure
+        // alike, so the timing window doesn't drift.
+        perf_timing::on_block_processed();
+        result
+    }
+
+    fn attempt_to_process_block_inner(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
         let _window = perf_timing::WindowGuard::start();
         let block = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
@@ -513,7 +525,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         match integrate_block_result {
             Ok(reorg_occurred) => {
-                perf_timing::on_block_processed();
                 // If the above code has succeeded, then the block_index must be present in the DB.
                 // Note that we can't return the initially obtained block_index, because its
                 // block status is outdated.
