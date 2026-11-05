@@ -34,6 +34,29 @@ use test_utils::random::make_seedable_rng;
 
 const BLOCKS: usize = 20;
 
+/// (experimental) Recreate a fresh database for a test so parallel tests don't
+/// clobber each other's schema.
+async fn reset_db(db_name: &str) {
+    let bootstrap = "host=127.0.0.1 port=15432 user=postgres dbname=postgres";
+    let (client, conn) = tokio_postgres::connect(bootstrap, tokio_postgres::NoTls)
+        .await
+        .expect("connect to postgres");
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+    client
+        .execute(
+            &format!("DROP DATABASE IF EXISTS {db_name} WITH (FORCE)"),
+            &[],
+        )
+        .await
+        .expect("drop db");
+    client
+        .execute(&format!("CREATE DATABASE {db_name}"), &[])
+        .await
+        .expect("create db");
+}
+
 #[tokio::test]
 #[ignore = "requires a running postgres; see module docs"]
 async fn postgres_scan_perf_summary() {
@@ -84,12 +107,13 @@ async fn postgres_scan_perf_summary() {
     .unwrap();
 
     let chain_config = Arc::new(chain_config);
+    reset_db("ml_scan_perf_pos").await;
     let mut storage = TransactionalApiServerPostgresStorage::new(
         "127.0.0.1",
         15432,
         "postgres",
         None,
-        Some("postgres"),
+        Some("ml_scan_perf_pos"),
         4,
         Arc::clone(&chain_config),
     )
@@ -122,4 +146,62 @@ async fn postgres_scan_perf_summary() {
 
     // The (experimental scanner timing) summary, including the postgres
     // statement count, is printed by log_batch_summary inside scan_blocks.
+}
+
+/// (experimental) Same as above but with one transfer transaction per block
+/// (via TestFramework::create_chain), so the per-tx statement counts (fee
+/// calculation, input UTXO fetches) are exercised.
+#[tokio::test]
+#[ignore = "requires a running postgres; see module docs"]
+async fn postgres_scan_perf_summary_with_txs() {
+    if std::env::var("ML_PG_SCAN_PERF").is_err() {
+        eprintln!("Set ML_PG_SCAN_PERF=1 to run against postgres on 127.0.0.1:15432");
+        return;
+    }
+
+    let mut rng = make_seedable_rng(5555.into());
+
+    // Default unit-test (regtest) config so PoW-style blocks with transfer
+    // transactions are valid on this chain.
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let chain_config = tf.chain_config().clone();
+
+    tf.create_chain(&tf.genesis().get_id().into(), BLOCKS, &mut rng)
+        .unwrap();
+
+    let chain_config = Arc::new(chain_config);
+    reset_db("ml_scan_perf_tx").await;
+    let mut storage = TransactionalApiServerPostgresStorage::new(
+        "127.0.0.1",
+        15432,
+        "postgres",
+        None,
+        Some("ml_scan_perf_tx"),
+        4,
+        Arc::clone(&chain_config),
+    )
+    .await
+    .unwrap();
+
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+    }
+
+    let mut local_state = BlockchainState::new(Arc::clone(&chain_config), storage);
+    local_state
+        .scan_genesis(chain_config.genesis_block().as_ref())
+        .await
+        .unwrap();
+
+    let mut blocks = Vec::with_capacity(BLOCKS);
+    for height in 1..=BLOCKS {
+        blocks.push(tf.block(*tf.index_at(height).block_id()));
+    }
+
+    local_state
+        .scan_blocks(BlockHeight::zero(), blocks)
+        .await
+        .unwrap();
 }
