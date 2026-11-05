@@ -168,6 +168,12 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             last_event_id = db_tx.append_stream_event(&event).await?;
         }
 
+        // (experimental) step 5: fetch the median-time window once per batch
+        // (after the reorg cleanup, so it reflects the new chain) and roll it
+        // in memory per block.
+        let mut median_time_window: Vec<BlockTimestamp> =
+            db_tx.get_latest_blocktimestamps().await?;
+
         let mut next_order_number =
             db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
@@ -210,7 +216,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // calculate the previous and new median_time
             let (_previous_median_time, new_median_time) = {
                 let _t = TimingGuard::stage(Stage::MedianLocked);
-                let medians = previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
+                let medians = previous_and_new_median_time_from_window(
+                    &mut median_time_window,
+                    block_timestamp,
+                );
 
                 update_locked_amounts_for_current_block(
                     &mut db_tx,
@@ -464,18 +473,23 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-async fn previous_and_new_median_time<T: ApiServerStorageRead>(
-    db_tx: &mut T,
+/// (experimental) step 5: in-memory version of `previous_and_new_median_time`.
+/// `window` holds the MEDIAN_TIME_SPAN most recent block timestamps,
+/// newest-first (same shape the db query returns); it is advanced in place
+/// with the new block's timestamp so the whole batch needs only one initial
+/// query instead of one per block.
+fn previous_and_new_median_time_from_window(
+    window: &mut Vec<BlockTimestamp>,
     block_timestamp: BlockTimestamp,
-) -> Result<(BlockTimestamp, BlockTimestamp), ApiServerStorageError> {
-    let mut timestamps = db_tx.get_latest_blocktimestamps().await?;
+) -> (BlockTimestamp, BlockTimestamp) {
     let previous_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
-    timestamps.insert(0, block_timestamp);
+        calculate_median_time_past_from_blocktimestamps(window.iter().copied());
+    window.insert(0, block_timestamp);
+    window.truncate(chainstate::MEDIAN_TIME_SPAN);
     let new_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+        calculate_median_time_past_from_blocktimestamps(window.iter().copied());
 
-    Ok((previous_median_time, new_median_time))
+    (previous_median_time, new_median_time)
 }
 
 async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
