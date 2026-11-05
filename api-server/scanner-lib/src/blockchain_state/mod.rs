@@ -147,7 +147,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             None
         };
 
-        {
+        // (experimental) The table cleanup below is only needed when a reorg
+        // actually happened; during catch-up sync (the common case) the local
+        // best height is below the common ancestor and every DELETE would be
+        // a no-op costing 14 indexed scans per batch.
+        if is_reorg {
             let _t = TimingGuard::stage(Stage::ReorgCleanup);
             disconnect_tables_above_height(&mut db_tx, common_block_height).await?;
         }
@@ -173,7 +177,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             let block_timestamp = block.timestamp();
 
             // calculate the previous and new median_time
-            let (previous_median_time, new_median_time) = {
+            let (_previous_median_time, new_median_time) = {
                 let _t = TimingGuard::stage(Stage::MedianLocked);
                 let medians = previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
 
