@@ -377,9 +377,24 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
         block_index: BlockIndex,
-        already_checked: bool,
+        checked_against_tip: Option<Id<GenBlock>>,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
+
+        // (review round 3) Re-verify the memoized check verdict against the
+        // tip as observed INSIDE this rw transaction: the verdict is only
+        // trusted if the recorded tip is still the current one. This keeps
+        // the skip stale-safe across retries and batch commits.
+        let already_checked = match checked_against_tip {
+            Some(checked_tip) => {
+                let current_tip = chainstate_ref
+                    .get_best_block_id()
+                    .map_err(|e| BlockError::PropertyQueryError(e.into()))
+                    .map_err(BlockIntegrationError::OtherNonValidationError)?;
+                checked_tip == current_tip
+            }
+            None => false,
+        };
 
         if !already_checked {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::CheckBlock);
@@ -481,7 +496,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Ensure that the block being submitted is new to us. If not, bail out immediately,
         // otherwise create a new block index and continue.
-        let already_checked;
         let block_index = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
@@ -495,25 +509,27 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 };
             }
 
-            // (experimental) step 11: the block may have been fully checked
-            // (preliminary_block_check) against the same tip we're still on;
-            // in that case integrate_block can skip the duplicate check.
-            let best_tip = chainstate_ref
-                .get_best_block_id()
-                .map_err(|e| BlockError::PropertyQueryError(e.into()))?;
-            already_checked =
-                self.pre_checked_blocks.lock().unwrap().remove(&block_id).is_some_and(
-                    |checked_against_tip| checked_against_tip == best_tip,
-                );
-
             chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
         };
+
+        // (experimental) step 11: the block may have been fully checked
+        // (preliminary_block_check); take the recorded tip out of the memo.
+        // The tip is re-verified INSIDE the rw transaction (see
+        // integrate_block), so the verdict can never be applied against a
+        // state that no longer matches the one it was validated against -
+        // including across with_rw_tx retries and, later, batch commits.
+        let checked_against_tip = self.pre_checked_blocks.lock().unwrap().remove(&block_id);
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
         let integrate_block_result = self.with_rw_tx(
             |chainstate_ref| {
-                Self::integrate_block(chainstate_ref, &block, block_index.clone(), already_checked)
+                Self::integrate_block(
+                    chainstate_ref,
+                    &block,
+                    block_index.clone(),
+                    checked_against_tip,
+                )
             },
             |attempt_number| {
                 log::info!("Processing block {block_id}, attempt #{attempt_number}");
