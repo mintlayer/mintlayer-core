@@ -2631,6 +2631,57 @@ where
         ]
     );
 
+    // REGRESSION GUARD (mixed magnitudes): amounts whose TEXT representation
+    // orders differently from their numeric value. Postgres resolves a bare
+    // name in ORDER BY to the OUTPUT column first, so an unaliased
+    // `amount::text` select makes `ORDER BY amount DESC` sort by the text of
+    // the atoms ('9000000' > '10000000'), returning a lexicographic listing
+    // instead of the balance order both storage backends must honor.
+    // 10_000_000 must rank above 9_000_000 on every backend.
+    let (addr5, addr6) = (
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+    );
+    db_tx
+        .set_address_balance_at_height(
+            &addr5,
+            Amount::from_atoms(9_000_000),
+            CoinOrTokenId::Coin,
+            h1,
+        )
+        .await
+        .unwrap();
+    db_tx
+        .set_address_balance_at_height(
+            &addr6,
+            Amount::from_atoms(10_000_000),
+            CoinOrTokenId::Coin,
+            h1,
+        )
+        .await
+        .unwrap();
+    let mixed = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
+    assert_eq!(
+        mixed,
+        vec![
+            (addr6.as_str().to_owned(), Amount::from_atoms(10_000_000)),
+            (addr5.as_str().to_owned(), Amount::from_atoms(9_000_000)),
+        ]
+    );
+    // the keyset cursor crosses the 10_000_000 -> 9_000_000 boundary numerically
+    let next = db_tx
+        .get_top_address_amounts(
+            CoinOrTokenId::Coin,
+            2,
+            Some((addr6.as_str().to_owned(), Amount::from_atoms(10_000_000))),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        next.first(),
+        Some(&(addr5.as_str().to_owned(), Amount::from_atoms(9_000_000)))
+    );
+
     db_tx.commit().await.unwrap();
     Ok(())
 }

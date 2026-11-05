@@ -253,8 +253,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // predicate is appended from a constant, so the ordering and the cursor
         // comparison cannot drift apart between the two branches (all query parts
         // are compile-time constants; only bound parameters carry runtime values)
+        // NOTE: the select ALIASES the text cast (amount_text). A bare
+        // `amount::text` output column would be named `amount`, and ORDER BY
+        // resolves a bare name to the OUTPUT column first — sorting by the
+        // TEXT representation of the atoms instead of the numeric value
+        // (lexicographic order, e.g. '999999997' after '99999999998'). The
+        // alias keeps `ORDER BY amount` bound to the numeric input column,
+        // matching the cursor predicate, which already compares numerically.
         const QUERY_HEAD: &str = r#"
-            SELECT address, amount::text
+            SELECT address, amount::text AS amount_text
             FROM ml.address_amount
             WHERE coin_or_token_id = $1 AND amount != 0"#;
         const CURSOR_PREDICATE: &str = r#"
