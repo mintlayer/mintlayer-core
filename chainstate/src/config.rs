@@ -80,7 +80,11 @@ impl ChainstateConfig {
     }
 
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
-        self.enable_db_reckless_mode_in_ibd.unwrap_or(false)
+        // (experimental) step 12: default-on for the experimental IBD
+        // performance branch. No-sync commits during IBD with a forced sync
+        // when IBD finishes; can crash-corrupt the db on power loss during
+        // sync, which is why master keeps the opt-in default.
+        self.enable_db_reckless_mode_in_ibd.unwrap_or(true)
     }
 
     pub fn heavy_checks_enabled(&self, chain_config: &ChainConfig) -> bool {
