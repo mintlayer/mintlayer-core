@@ -316,6 +316,16 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_utxos(
+        &self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_utxos(outpoints).await?;
+
+        Ok(res)
+    }
+
     async fn get_address_available_utxos(
         &self,
         address: &str,

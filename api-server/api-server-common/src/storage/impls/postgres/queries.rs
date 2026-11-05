@@ -2766,6 +2766,52 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(Utxo::new_with_info(output, spent_at_block_height)))
     }
 
+    /// (experimental) Batched variant of `get_utxo`; one query for all
+    /// outpoints. Rows are matched back to the requested outpoints, so the
+    /// result order mirrors the input order.
+    pub async fn get_utxos(
+        &mut self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        use std::collections::BTreeMap;
+
+        if outpoints.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let encoded: Vec<Vec<u8>> = outpoints.iter().map(|op| op.encode()).collect();
+        let rows = self
+            .tx
+            .query(
+                "SELECT outpoint, utxo, spent, block_height FROM ml.utxo WHERE outpoint = ANY($1);",
+                &[&encoded],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut by_outpoint: BTreeMap<Vec<u8>, Utxo> = BTreeMap::new();
+        for row in rows {
+            let outpoint: Vec<u8> = row.get(0);
+            let serialized_data: Vec<u8> = row.get(1);
+            let spent: bool = row.get(2);
+            let block_height: i64 = row.get(3);
+            let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
+
+            let utxo = UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Utxo deserialization failed in batched fetch: {}",
+                    e
+                ))
+            })?;
+            by_outpoint.insert(outpoint, Utxo::new_with_info(utxo, spent_at_block_height));
+        }
+
+        Ok(outpoints
+            .iter()
+            .map(|op| by_outpoint.remove(&op.encode()))
+            .collect())
+    }
+
     pub async fn get_address_available_utxos(
         &mut self,
         address: &str,

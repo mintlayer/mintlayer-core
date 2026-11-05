@@ -102,6 +102,7 @@ impl<S: ApiServerStorage> BlockchainState<S> {
             BlockHeight::new(0),
             genesis.utxos(),
             genesis.get_id().into(),
+            None,
         )
         .await?;
 
@@ -168,6 +169,36 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         let mut next_order_number =
             db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
+        // (experimental) step 4: prefetch all input UTXOs referenced by the
+        // whole batch (including PoS kernel inputs) with a single query.
+        // UTXOs created and consumed within the same batch are not in the DB
+        // yet at this point; those fall back to direct reads via
+        // cached_get_utxo, which observe the uncommitted writes of the rw tx.
+        let mut prefetch_outpoints: BTreeSet<UtxoOutPoint> = BTreeSet::new();
+        for block in &blocks {
+            for tx in block.transactions() {
+                for input in tx.transaction().inputs() {
+                    if let TxInput::Utxo(outpoint) = input {
+                        prefetch_outpoints.insert(outpoint.clone());
+                    }
+                }
+            }
+            if let ConsensusData::PoS(pos_data) = block.consensus_data() {
+                for input in pos_data.kernel_inputs() {
+                    if let TxInput::Utxo(outpoint) = input {
+                        prefetch_outpoints.insert(outpoint.clone());
+                    }
+                }
+            }
+        }
+        let outpoint_list: Vec<UtxoOutPoint> = prefetch_outpoints.into_iter().collect();
+        let fetched_utxos = db_tx.get_utxos(&outpoint_list).await?;
+        let mut utxo_cache: BTreeMap<UtxoOutPoint, Utxo> = outpoint_list
+            .into_iter()
+            .zip(fetched_utxos)
+            .filter_map(|(outpoint, utxo)| utxo.map(|utxo| (outpoint, utxo)))
+            .collect();
+
         // Connect the new blocks in the new chain
         count_blocks(blocks.len());
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
@@ -214,6 +245,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         &mut db_tx,
                         tx.transaction(),
                         block_height,
+                        &utxo_cache,
                     )
                     .await?
                 };
@@ -230,6 +262,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         new_median_time,
                         tx,
                         next_order_number + idx as u64,
+                        &mut utxo_cache,
                     )
                     .await?;
                 }
@@ -287,6 +320,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     block_height,
                     &block,
                     block_fees,
+                    &mut utxo_cache,
                 )
                 .await?;
             }
@@ -351,7 +385,10 @@ async fn capture_main_chain_block_ids<T: ApiServerStorageRead>(
 // Find locked UTXOs that are unlocked at this height or time and update address balances
 mod perf_timing;
 
-use perf_timing::{Stage, TimingGuard, count_blocks, count_txs, log_batch_summary};
+use perf_timing::{
+    Stage, TimingGuard, count_blocks, count_cache_hit, count_cache_miss, count_txs,
+    log_batch_summary,
+};
 
 async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
@@ -481,6 +518,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
     total_tx_fees: Fee,
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_block_reward(
         chain_config.clone(),
@@ -488,6 +526,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
         block_height,
         block.block_reward().outputs(),
         block.get_id().into(),
+        Some(&mut *utxo_cache),
     )
     .await?;
 
@@ -497,6 +536,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
         block_height,
         block,
         total_tx_fees,
+        utxo_cache,
     )
     .await?;
 
@@ -509,6 +549,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block_rewards: &[TxOutput],
     block_id: Id<GenBlock>,
+    mut utxo_cache: Option<&mut BTreeMap<UtxoOutPoint, Utxo>>,
 ) -> Result<(), ApiServerStorageError> {
     for (idx, output) in block_rewards.iter().enumerate() {
         let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id), idx as u32);
@@ -530,6 +571,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
             }
@@ -548,6 +590,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
                 increase_statistic_amount(
@@ -644,6 +687,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
             }
@@ -658,6 +702,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     tx: &Transaction,
     block_height: BlockHeight,
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
     let new_tokens = tx
         .outputs()
@@ -688,7 +733,8 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     // the fee calculation and the token-info collection below; previously the
     // inputs were fetched twice per transaction (once inside tx_fees via
     // collect_inputs_utxos and once through the FuturesOrdered here).
-    let input_utxos: Vec<Option<TxOutput>> = collect_inputs_utxos(db_tx, tx.inputs()).await?;
+    let input_utxos: Vec<Option<TxOutput>> =
+        collect_inputs_utxos(utxo_cache, db_tx, tx.inputs()).await?;
 
     let fee = tx_fees(chain_config, block_height, tx, &input_utxos, db_tx).await?;
 
@@ -767,18 +813,34 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     Ok((fee, tx_aditional_infos))
 }
 
+/// (experimental) step 4: UTXO reads go through the batch-level prefetch
+/// cache first; a cache miss (e.g. a UTXO created by a tx earlier in the same
+/// batch, which the prefetch couldn't see) falls back to a direct read, which
+/// does observe the uncommitted writes of the current transaction.
+async fn cached_get_utxo<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    outpoint: &UtxoOutPoint,
+    db_tx: &T,
+) -> Result<Option<Utxo>, ApiServerStorageError> {
+    if let Some(utxo) = utxo_cache.get(outpoint) {
+        count_cache_hit();
+        return Ok(Some(utxo.clone()));
+    }
+    count_cache_miss();
+    db_tx.get_utxo(outpoint.clone()).await
+}
+
 async fn fetch_utxo<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     input: &TxInput,
     db_tx: &T,
 ) -> Result<Option<TxOutput>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = db_tx
-                .get_utxo(outpoint.clone())
+            let utxo = cached_get_utxo(utxo_cache, outpoint, db_tx)
                 .await?
-                .map(|utxo| utxo.into_output())
                 .expect("must be present");
-            Ok(Some(utxo))
+            Ok(Some(utxo.into_output()))
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
             Ok(None)
@@ -998,12 +1060,13 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
 }
 
 async fn collect_inputs_utxos<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     db_tx: &T,
     inputs: &[TxInput],
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
     let mut outputs = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let output = fetch_utxo(input, db_tx).await?;
+        let output = fetch_utxo(utxo_cache, input, db_tx).await?;
         outputs.push(output);
     }
 
@@ -1016,6 +1079,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
     total_tx_fees: Fee,
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(), ApiServerStorageError> {
     match block.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {}
@@ -1023,8 +1087,9 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             for input in pos_data.kernel_inputs() {
                 match input {
                     TxInput::Utxo(outpoint) => {
-                        let utxo =
-                            db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                        let utxo = cached_get_utxo(&utxo_cache, outpoint, db_tx)
+                            .await?
+                            .expect("must be present");
                         set_utxo(
                             outpoint.clone(),
                             utxo.output(),
@@ -1033,6 +1098,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                             block_height,
                             true,
                             &chain_config,
+                            None,
                         )
                         .await;
                     }
@@ -1125,6 +1191,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
     tx_global_index: u64,
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_transaction_inputs(
         Arc::clone(&chain_config),
@@ -1132,6 +1199,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         block_height,
         transaction,
         tx_global_index,
+        utxo_cache,
     )
     .await?;
 
@@ -1142,6 +1210,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         median_time,
         transaction.transaction(),
         tx_global_index,
+        &mut *utxo_cache,
     )
     .await?;
 
@@ -1154,6 +1223,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     tx: &SignedTransaction,
     tx_global_index: u64,
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(), ApiServerStorageError> {
     let sigs = tx.signatures();
     let tx = tx.transaction();
@@ -1451,7 +1521,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
             }
             TxInput::Utxo(outpoint) => match outpoint.source_id() {
                 OutPointSourceId::BlockReward(_) => {
-                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    let utxo = cached_get_utxo(&utxo_cache, outpoint, db_tx)
+                        .await?
+                        .expect("must be present");
                     set_utxo(
                         outpoint.clone(),
                         utxo.output(),
@@ -1460,6 +1532,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                         true,
                         &chain_config,
+                        None,
                     )
                     .await;
 
@@ -1497,7 +1570,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     }
                 }
                 OutPointSourceId::Transaction(_) => {
-                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    let utxo = cached_get_utxo(&utxo_cache, outpoint, db_tx)
+                        .await?
+                        .expect("must be present");
                     set_utxo(
                         outpoint.clone(),
                         utxo.output(),
@@ -1506,6 +1581,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                         true,
                         &chain_config,
+                        None,
                     )
                     .await;
 
@@ -1647,6 +1723,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     median_time: BlockTimestamp,
     transaction: &Transaction,
     tx_global_index: u64,
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
 ) -> Result<(), ApiServerStorageError> {
     let tx_id = transaction.get_id();
     let inputs = transaction.inputs();
@@ -1793,6 +1870,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    Some(&mut *utxo_cache),
                 )
                 .await;
             }
@@ -1839,6 +1917,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    Some(&mut *utxo_cache),
                 )
                 .await;
                 let address = Address::<Destination>::new(
@@ -1933,9 +2012,17 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                    .set_utxo_at_height(
+                        outpoint.clone(),
+                        utxo.clone(),
+                        &[address.as_str()],
+                        block_height,
+                    )
                     .await
                     .expect("Unable to set utxo");
+                // (experimental) step 4: make the new UTXO visible to the
+                // batch cache for later inputs of this batch.
+                utxo_cache.insert(outpoint, utxo);
             }
             TxOutput::LockThenTransfer(output_value, destination, lock) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
@@ -2006,9 +2093,17 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 if already_unlocked {
                     let utxo = Utxo::new(output.clone(), token_decimals, None);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                        .set_utxo_at_height(
+                            outpoint.clone(),
+                            utxo.clone(),
+                            &[address.as_str()],
+                            block_height,
+                        )
                         .await
                         .expect("Unable to set utxo");
+                    // (experimental) step 4: make the new UTXO visible to the
+                    // batch cache for later inputs of this batch.
+                    utxo_cache.insert(outpoint, utxo);
                 } else {
                     let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
@@ -2297,6 +2392,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     spent: bool,
     chain_config: &ChainConfig,
+    mut utxo_cache: Option<&mut BTreeMap<UtxoOutPoint, Utxo>>,
 ) {
     let utxo = Utxo::new(
         output.clone(),
@@ -2307,9 +2403,20 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");
         db_tx
-            .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+            .set_utxo_at_height(
+                outpoint.clone(),
+                utxo.clone(),
+                &[address.as_str()],
+                block_height,
+            )
             .await
             .expect("Unable to set utxo");
+        // (experimental) step 4: freshly created UTXOs become visible to the
+        // batch cache, so later inputs of the same batch read them from
+        // memory instead of the db.
+        if let (Some(cache), false) = (utxo_cache.as_mut(), spent) {
+            cache.insert(outpoint, utxo);
+        }
     }
 }
 
