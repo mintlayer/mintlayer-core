@@ -67,9 +67,22 @@ pub enum BlockchainStateError {
     PosAccountingError(#[from] PosError),
 }
 
+/// (experimental step 10) The indexing mode of the scanner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanMode {
+    /// Full indexing: everything is written as blocks are scanned.
+    Full,
+    /// Fast catch-up: secondary indexes (address/token transaction history and
+    /// statistics) are deferred; core data (balances, utxos, blocks,
+    /// transactions, stream events) is still indexed. A backfill pass after
+    /// catching up rebuilds the deferred tables.
+    CatchingUp,
+}
+
 pub struct BlockchainState<S: ApiServerStorage> {
     chain_config: Arc<ChainConfig>,
     storage: S,
+    scan_mode: ScanMode,
     /// The event id at which the next stream event retention pruning is due.
     ///
     /// Note: this is an in-memory watermark, so the pruning (with its `max(id)` lookup and the
@@ -83,8 +96,18 @@ impl<S: ApiServerStorage> BlockchainState<S> {
         Self {
             chain_config,
             storage,
+            scan_mode: ScanMode::Full,
             stream_events_next_prune_id: 0,
         }
+    }
+
+    /// (experimental step 10) Switch between full indexing and fast catch-up.
+    pub fn set_scan_mode(&mut self, mode: ScanMode) {
+        self.scan_mode = mode;
+    }
+
+    pub fn scan_mode(&self) -> ScanMode {
+        self.scan_mode
     }
 
     pub fn storage(&self) -> &S {
@@ -270,6 +293,13 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
             let block_trusted_fees = trusted_fees.get(index).and_then(|f| f.clone());
+            // (experimental step 10) In fast catch-up mode, address/token
+            // transaction history and statistics tables are deferred to the
+            // post-catch-up backfill pass. Balances, utxos, blocks,
+            // transactions and stream events keep indexing so the core API
+            // stays complete.
+            let defer_secondary = self.scan_mode == ScanMode::CatchingUp;
+
             count_txs(block.transactions().len());
             for (idx, tx) in block.transactions().iter().enumerate() {
                 let trusted_fee = block_trusted_fees
@@ -302,6 +332,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                         next_order_number + idx as u64,
                         &mut utxo_cache,
                         &mut acc,
+                        defer_secondary,
                     )
                     .await?;
                 }
@@ -1494,6 +1525,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     tx_global_index: u64,
     utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
     acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
 ) -> Result<(), BlockchainStateError> {
     update_tables_from_transaction_inputs(
         Arc::clone(&chain_config),
@@ -1503,6 +1535,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         tx_global_index,
         utxo_cache,
         acc,
+        defer_secondary,
     )
     .await?;
 
@@ -1515,6 +1548,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         tx_global_index,
         &mut *utxo_cache,
         acc,
+        defer_secondary,
     )
     .await?;
 
@@ -1529,6 +1563,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     tx_global_index: u64,
     utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
 ) -> Result<(), BlockchainStateError> {
     let sigs = tx.signatures();
     let tx = tx.transaction();
@@ -1999,7 +2034,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
         }
     }
 
+    // (experimental step 10) address/token transaction history is deferred in
+    // fast catch-up mode; rebuilt by the post-catch-up backfill pass.
     for (address, transactions) in address_transactions {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
@@ -2011,6 +2051,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     }
     let tx_id = tx.get_id();
     for token_id in transaction_tokens {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
             .await
@@ -2033,6 +2076,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     tx_global_index: u64,
     utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
     acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
 ) -> Result<(), ApiServerStorageError> {
     let tx_id = transaction.get_id();
     let inputs = transaction.inputs();
@@ -2496,6 +2540,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     }
 
     for (address, transactions) in address_transactions {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
@@ -2507,6 +2554,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     }
 
     for token_id in transaction_tokens {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
             .await

@@ -320,6 +320,58 @@ async fn supervise_sync<S: ApiServerStorage>(
 
         // Note: the backoff state at this point belongs to the successful connection; it is
         // only reset after a successful sync, see below.
+        // (experimental step 10) Fast catch-up decision: while the scanner is
+        // more than CATCH_UP_THRESHOLD blocks behind the node, run in
+        // CatchingUp mode (secondary indexes deferred); within the threshold,
+        // run Full and complete any deferred backfill. The threshold is
+        // deliberately simple; the backfill pass is a follow-up tracked in the
+        // experimental notes.
+        const CATCH_UP_THRESHOLD: u64 = 2_000;
+        // Note: the RemoteNode wrapper already maps connection errors; reuse
+        // the sync error handling by folding the decision into the sync cycle
+        // below via local_block's mode (kept unchanged on failure).
+        if let Ok(chain_info) =
+            api_blockchain_scanner_lib::sync::RemoteNode::chainstate(&client).await
+        {
+            let (local_height, local_id) = match local_block.best_block().await {
+                Ok(v) => v,
+                Err(_) => {
+                    // Best-block failure is handled by sync_once below.
+                    let _ = api_blockchain_scanner_lib::sync::sync_once(
+                        chain_config,
+                        &client,
+                        local_block,
+                    )
+                    .await;
+                    continue;
+                }
+            };
+            let local_is_on_node_chain = local_id == chain_info.best_block_id
+                || matches!(
+                    api_blockchain_scanner_lib::sync::RemoteNode::last_common_ancestor(
+                        &client, local_id, chain_info.best_block_id,
+                    )
+                    .await,
+                    Ok(Some(_))
+                );
+            let behind = chain_info.best_block_height > local_height;
+            let mode = if behind
+                && local_is_on_node_chain
+                && chain_info.best_block_height
+                    .into_int()
+                    .saturating_sub(local_height.into_int())
+                    > CATCH_UP_THRESHOLD
+            {
+                api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp
+            } else {
+                api_blockchain_scanner_lib::blockchain_state::ScanMode::Full
+            };
+            if local_block.scan_mode() != mode {
+                logging::log::info!("(experimental) scanner scan mode: {:?}", mode);
+                local_block.set_scan_mode(mode);
+            }
+        }
+
         match api_blockchain_scanner_lib::sync::sync_once(chain_config, &client, local_block).await
         {
             Ok(()) => {
