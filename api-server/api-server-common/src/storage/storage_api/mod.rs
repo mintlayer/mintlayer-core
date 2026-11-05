@@ -797,6 +797,20 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
     -> Result<Option<Utxo>, ApiServerStorageError>;
 
+    /// (experimental) Fetch multiple UTXOs in one round trip, preserving the
+    /// input order. The default implementation loops over `get_utxo`; backends
+    /// override it with a single batched query.
+    async fn get_utxos(
+        &self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        let mut result = Vec::with_capacity(outpoints.len());
+        for outpoint in outpoints {
+            result.push(self.get_utxo(outpoint.clone()).await?);
+        }
+        Ok(result)
+    }
+
     async fn get_address_available_utxos(
         &self,
         address: &str,

@@ -53,6 +53,8 @@ static STAGE_NS: [AtomicU64; 7] = [
 
 static BATCH_BLOCKS: AtomicUsize = AtomicUsize::new(0);
 static BATCH_TXS: AtomicUsize = AtomicUsize::new(0);
+static CACHE_HITS: AtomicUsize = AtomicUsize::new(0);
+static CACHE_MISSES: AtomicUsize = AtomicUsize::new(0);
 
 pub struct TimingGuard {
     stage: usize,
@@ -93,6 +95,18 @@ pub fn count_txs(txs: usize) {
     }
 }
 
+pub fn count_cache_hit() {
+    if enabled() {
+        CACHE_HITS.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+pub fn count_cache_miss() {
+    if enabled() {
+        CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Log and reset accumulated stage times; call at the end of scan_blocks.
 pub fn log_batch_summary() {
     if !enabled() {
@@ -106,6 +120,8 @@ pub fn log_batch_summary() {
     }
 
     let stmts = api_server_common::storage::impls::postgres::take_postgres_statement_count();
+    let hits = CACHE_HITS.swap(0, Ordering::Relaxed);
+    let misses = CACHE_MISSES.swap(0, Ordering::Relaxed);
 
     let stage_lines: Vec<String> = STAGES
         .iter()
@@ -124,12 +140,14 @@ pub fn log_batch_summary() {
 
     eprintln!(
         "(experimental scanner timing) batch: {} blocks, {} txs, {} sql statements \
-         ({:.1} stmts/block, {:.1} stmts/tx):\n{}",
+         ({:.1} stmts/block, {:.1} stmts/tx), utxo cache: {} hits / {} misses:\n{}",
         blocks,
         txs,
         stmts,
         stmts as f64 / blocks as f64,
         if txs > 0 { stmts as f64 / txs as f64 } else { 0.0 },
+        hits,
+        misses,
         stage_lines.join("\n"),
     );
 }
