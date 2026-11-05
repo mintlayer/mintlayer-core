@@ -24,8 +24,8 @@ use common::{
     TokenDecimals,
     address::{Address, RpcAddress, dehexify::to_dehexified_json},
     chain::{
-        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcCurrency, RpcOrderInfo,
-        TxOutput,
+        BlockTxFees, ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcCurrency,
+        RpcOrderInfo, TxOutput,
         output_values_holder::collect_token_v1_ids_from_output_values_holder,
         tokens::{RPCTokenInfo, TokenId},
     },
@@ -96,6 +96,14 @@ trait ChainstateRpc {
     /// Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
     #[method(name = "get_utxo")]
     async fn get_utxo(&self, outpoint: RpcUtxoOutpoint) -> RpcResult<Option<TxOutput>>;
+
+    /// (experimental) Returns the per-transaction fees of a mainchain block,
+    /// ordered by transaction index within the block. Fees are computed and
+    /// persisted by the consensus layer at block connection time.
+    ///
+    /// Returns `None` (null) if the block predates fee persistence.
+    #[method(name = "get_block_tx_fees")]
+    async fn get_block_tx_fees(&self, block_id: Id<Block>) -> RpcResult<Option<BlockTxFees>>;
 
     /// Submit a block to be included in the blockchain.
     ///
@@ -319,6 +327,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))
             })
             .await,
+        )
+    }
+
+    async fn get_block_tx_fees(&self, block_id: Id<Block>) -> RpcResult<Option<BlockTxFees>> {
+        rpc::handle_result(
+            self.call(move |this| this.get_block_tx_fees(&block_id)).await,
         )
     }
 

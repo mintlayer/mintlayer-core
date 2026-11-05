@@ -22,6 +22,7 @@ use chainstate_types::{
 use common::{
     chain::{
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
+        BlockTxFees,
         UtxoOutPoint,
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
@@ -50,6 +51,8 @@ storage::decl_schema! {
         pub DBUtxo: Map<UtxoOutPoint, Utxo>,
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
+        /// (experimental) Per-transaction fees of a block, computed at connect
+        pub DBBlockTxFees: Map<Id<Block>, BlockTxFees>,
         /// Store for EpochData
         pub DBEpochData: Map<EpochIndex, EpochData>,
         /// Store for token's info; created on issuance

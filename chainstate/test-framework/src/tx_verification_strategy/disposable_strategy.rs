@@ -18,7 +18,7 @@ use chainstate::{
 };
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::{Idable, id::WithId},
 };
 use constraints_value_accumulator::AccumulatedFee;
@@ -61,7 +61,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -120,7 +120,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
 
         base_tx_verifier.set_best_block(block.get_id().into());
 
-        Ok(base_tx_verifier)
+        Ok((base_tx_verifier, BlockTxFees(vec![])))
     }
 
     fn disconnect_block<C, S, M, U, A, T, O>(

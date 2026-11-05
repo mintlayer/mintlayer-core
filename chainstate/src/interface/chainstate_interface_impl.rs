@@ -32,8 +32,8 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        AccountNonce, AccountType, Currency, DelegationId, OrderId, PoolId, RpcOrderInfo,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, BlockTxFees, Currency, DelegationId, OrderId, PoolId,
+        RpcOrderInfo, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
@@ -216,6 +216,17 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_mainchain_blocks(from, max_count)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_tx_fees(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

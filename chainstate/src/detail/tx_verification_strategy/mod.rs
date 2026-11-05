@@ -18,7 +18,7 @@ pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::id::WithId,
 };
 use orders_accounting::OrdersAccountingView;
@@ -62,7 +62,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,

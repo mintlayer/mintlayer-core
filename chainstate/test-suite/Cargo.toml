@@ -9,6 +9,7 @@ rust-version.workspace = true
 accounting = { path = "../../accounting" }
 chainstate = { path = "../" }
 chainstate-storage = { path = "../storage", features = ["expensive-reads"] }
+storage = { path = "../../storage" }
 chainstate-test-framework = { path = "../test-framework" }
 chainstate-types = { path = "../types" }
 common = { path = "../../common" }

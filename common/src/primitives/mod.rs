@@ -37,8 +37,13 @@ pub use version_tag::VersionTag;
 use crate::chain::{output_value::OutputValue, tokens::TokenId};
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct Fee(pub Amount);
+
+impl rpc_description::HasValueHint for Fee {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
+    const HINT_DE: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);

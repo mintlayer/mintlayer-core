@@ -37,7 +37,8 @@ use chainstate_types::{
 use common::{
     Uint256,
     chain::{
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OrderAccountCommand,
+        AccountNonce, AccountType, Block, BlockTxFees, ChainConfig, GenBlock, GenBlockId,
+        OrderAccountCommand,
         PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{
             BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
@@ -269,6 +270,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
+    }
+
+    /// (experimental) Per-transaction fees of a mainchain block, as persisted
+    /// at connect time. None if the block predates fee persistence.
+    pub fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, PropertyQueryError> {
+        self.db_tx
+            .get_block_tx_fees(block_id)
+            .map_err(PropertyQueryError::from)
     }
 
     #[log_error]
@@ -1273,7 +1285,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let connected_txs = self
+        let (connected_txs, block_tx_fees) = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
@@ -1288,6 +1300,11 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
 
+        // (experimental) step 9: persist the per-transaction fees computed
+        // during connect, for serving to API consumers.
+        self.db_tx
+            .set_block_tx_fees(block_index.block_id(), &block_tx_fees)?;
+
         Ok(())
     }
 
@@ -1301,6 +1318,10 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         )?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
+
+        // (experimental) step 9: the block is no longer on the mainchain; its
+        // persisted per-transaction fees are removed with it.
+        self.db_tx.del_block_tx_fees(&Id::<Block>::from(block.get_id()))?;
 
         Ok(())
     }

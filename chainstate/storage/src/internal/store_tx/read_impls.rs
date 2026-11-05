@@ -22,8 +22,8 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
@@ -157,6 +157,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     #[log_error]
     fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
+    }
+
+    #[log_error]
+    fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>> {
+        self.read::<db::DBBlockTxFees, _, _>(id)
     }
 
     #[log_error]
@@ -497,6 +502,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     #[log_error]
     fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
+    }
+
+    #[log_error]
+    fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>> {
+        self.read::<db::DBBlockTxFees, _, _>(id)
     }
 
     #[log_error]

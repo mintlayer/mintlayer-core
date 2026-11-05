@@ -106,6 +106,7 @@ pub use storage_core::{
 
 // Re-export the interface types
 pub use database::*;
+pub use database::StorageContents;
 
 #[cfg(test)]
 mod test;
