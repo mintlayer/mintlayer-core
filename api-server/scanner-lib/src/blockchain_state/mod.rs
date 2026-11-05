@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::{Add, Sub},
-    sync::Arc,
-};
+use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 
 use futures::{TryStreamExt, stream::FuturesOrdered};
 

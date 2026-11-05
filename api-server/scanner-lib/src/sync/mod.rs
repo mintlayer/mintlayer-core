@@ -188,6 +188,22 @@ async fn fetch_new_blocks<R: RemoteNode>(
         None => return Err(SyncError::NoNewBlocksFound),
     }
 
+    // (experimental) hardening: the scanner derives every row's block height
+    // from the position in this batch, so a gap or an internal fork in the
+    // returned list would silently index blocks under wrong heights and
+    // corrupt the versioned tables. Verify the whole batch is a contiguous
+    // chain before trusting it.
+    for pair in blocks.windows(2) {
+        utils::ensure!(
+            *pair[1].header().prev_block_id()
+                == Id::<GenBlock>::from(pair[0].header().block_id()),
+            SyncError::InvalidPrevBlockId(
+                *pair[1].header().prev_block_id(),
+                pair[0].header().block_id().into(),
+            )
+        );
+    }
+
     Ok(FetchedBlocks {
         blocks,
         common_block_height,
