@@ -145,7 +145,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             None
         };
 
-        disconnect_tables_above_height(&mut db_tx, common_block_height).await?;
+        {
+            let _t = TimingGuard::stage(Stage::ReorgCleanup);
+            disconnect_tables_above_height(&mut db_tx, common_block_height).await?;
+        }
 
         let mut last_event_id: StreamEventId = 0;
         if let Some(removed_block_ids) = removed_block_ids {
@@ -162,21 +165,25 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
         // Connect the new blocks in the new chain
+        count_blocks(blocks.len());
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let block_timestamp = block.timestamp();
 
             // calculate the previous and new median_time
-            let (previous_median_time, new_median_time) =
-                previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
+            let (previous_median_time, new_median_time) = {
+                let _t = TimingGuard::stage(Stage::MedianLocked);
+                let medians = previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
 
-            update_locked_amounts_for_current_block(
-                &mut db_tx,
-                &self.chain_config,
-                block_height,
-                (previous_median_time, new_median_time),
-            )
-            .await?;
+                update_locked_amounts_for_current_block(
+                    &mut db_tx,
+                    &self.chain_config,
+                    block_height,
+                    medians,
+                )
+                .await?;
+                medians
+            };
 
             logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
@@ -194,27 +201,34 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // Third, txs are flushed to the db AFTER the block.
             // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
+            count_txs(block.transactions().len());
             for (idx, tx) in block.transactions().iter().enumerate() {
-                let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
-                    &self.chain_config,
-                    &mut db_tx,
-                    tx.transaction(),
-                    block_height,
-                )
-                .await?;
+                let (tx_fee, tx_additional_info) = {
+                    let _t = TimingGuard::stage(Stage::FeeCalc);
+                    calculate_tx_fee_and_collect_token_info(
+                        &self.chain_config,
+                        &mut db_tx,
+                        tx.transaction(),
+                        block_height,
+                    )
+                    .await?
+                };
 
                 total_fees = total_fees.combine(tx_fee).expect("no overflow");
                 tx_additional_infos.push(tx_additional_info.clone());
 
-                update_tables_from_transaction(
-                    Arc::clone(&self.chain_config),
-                    &mut db_tx,
-                    (block_height, block_timestamp),
-                    new_median_time,
-                    tx,
-                    next_order_number + idx as u64,
-                )
-                .await?;
+                {
+                    let _t = TimingGuard::stage(Stage::TxTables);
+                    update_tables_from_transaction(
+                        Arc::clone(&self.chain_config),
+                        &mut db_tx,
+                        (block_height, block_timestamp),
+                        new_median_time,
+                        tx,
+                        next_order_number + idx as u64,
+                    )
+                    .await?;
+                }
 
                 let tx_info = TransactionInfo {
                     tx: tx.clone(),
@@ -228,47 +242,50 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 block: WithId::take(block.clone()),
                 tx_additional_infos,
             };
-            db_tx.set_mainchain_block(block_id, block_height, &block_with_extras).await?;
+            {
+                let _t = TimingGuard::stage(Stage::BlockTables);
+                db_tx.set_mainchain_block(block_id, block_height, &block_with_extras).await?;
 
-            let event = StreamEvent::Block {
-                block_id,
-                height: block_height,
-                timestamp: block_timestamp,
-                tx_ids: block.transactions().iter().map(|tx| tx.transaction().get_id()).collect(),
-            };
-            last_event_id = db_tx.append_stream_event(&event).await?;
+                let event = StreamEvent::Block {
+                    block_id,
+                    height: block_height,
+                    timestamp: block_timestamp,
+                    tx_ids: block.transactions().iter().map(|tx| tx.transaction().get_id()).collect(),
+                };
+                last_event_id = db_tx.append_stream_event(&event).await?;
 
-            for (idx, tx_info) in transactions.iter().enumerate() {
+                for (idx, tx_info) in transactions.iter().enumerate() {
+                    db_tx
+                        .set_transaction(
+                            tx_info.tx.transaction().get_id(),
+                            next_order_number + idx as u64,
+                            block_id,
+                            tx_info,
+                        )
+                        .await?;
+                }
+                next_order_number += transactions.len() as u64;
+
                 db_tx
-                    .set_transaction(
-                        tx_info.tx.transaction().get_id(),
-                        next_order_number + idx as u64,
+                    .set_block_aux_data(
                         block_id,
-                        tx_info,
+                        &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
                     )
                     .await?;
-            }
-            next_order_number += transactions.len() as u64;
 
-            db_tx
-                .set_block_aux_data(
-                    block_id,
-                    &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
+                let block_fees = total_fees
+                    .map_into_block_fees(&self.chain_config, block_height)
+                    .expect("no overflow");
+
+                update_tables_from_block(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    &block,
+                    block_fees,
                 )
                 .await?;
-
-            let block_fees = total_fees
-                .map_into_block_fees(&self.chain_config, block_height)
-                .expect("no overflow");
-
-            update_tables_from_block(
-                Arc::clone(&self.chain_config),
-                &mut db_tx,
-                block_height,
-                &block,
-                block_fees,
-            )
-            .await?;
+            }
         }
 
         // Note: sent within the transaction, so the notification is only delivered if the
@@ -287,11 +304,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             db_tx.notify_new_stream_events(last_event_id).await?;
         }
 
-        db_tx.commit().await?;
+        {
+            let _t = TimingGuard::stage(Stage::Commit);
+            db_tx.commit().await?;
+        }
         if should_prune {
             self.stream_events_next_prune_id = last_event_id + STREAM_EVENTS_RETENTION_COUNT;
         }
         logging::log::info!("Database commit completed successfully");
+        log_batch_summary();
 
         Ok(())
     }
@@ -324,6 +345,10 @@ async fn capture_main_chain_block_ids<T: ApiServerStorageRead>(
 }
 
 // Find locked UTXOs that are unlocked at this height or time and update address balances
+mod perf_timing;
+
+use perf_timing::{Stage, TimingGuard, count_blocks, count_txs, log_batch_summary};
+
 async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     chain_config: &ChainConfig,
