@@ -25,6 +25,7 @@ mod orphan_blocks;
 pub mod ban_score;
 pub mod block_checking;
 pub mod block_invalidation;
+pub(crate) mod perf_timing;
 pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
@@ -343,7 +344,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 }
             };
 
-            let db_commit_result = chainstate_ref.commit_db_tx();
+            let db_commit_result = {
+                let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Commit);
+                chainstate_ref.commit_db_tx()
+            };
 
             match db_commit_result {
                 Ok(()) => return Ok(result),
@@ -366,10 +370,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        chainstate_ref
-            .check_block(block)
-            .map_err(BlockError::CheckBlockFailed)
-            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::CheckBlock);
+            chainstate_ref
+                .check_block(block)
+                .map_err(BlockError::CheckBlockFailed)
+                .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        }
 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
         let block_status = block_status;
@@ -378,23 +385,29 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // succeeds, we'll save both the index and the block itself via the same db tx;
         // and if it fails, neither will be saved.
         let block_index = block_index.with_status(block_status).make_persisted();
-        chainstate_ref
-            .set_new_block_index(&block_index)
-            .and_then(|_| chainstate_ref.persist_block(block))
-            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Persist);
+            chainstate_ref
+                .set_new_block_index(&block_index)
+                .and_then(|_| chainstate_ref.persist_block(block))
+                .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        }
 
         // Seal duplication tracking is observational: it feeds no validation
         // rule, so its failure (e.g. a storage issue in the seal tables) must
         // not reject an otherwise valid block and harm the liveness of the
         // node. The indexing of the affected block is lost, which the logging
         // makes visible.
-        if let Err(err) =
-            chainstate_ref.index_block_seal_if_enabled(block, block_index.block_height())
         {
-            log::error!(
-                "Failed to index the seal of the block {}: {err}",
-                block.get_id()
-            );
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::SealIndex);
+            if let Err(err) = chainstate_ref
+                .index_block_seal_if_enabled(block, block_index.block_height())
+            {
+                log::error!(
+                    "Failed to index the seal of the block {}: {err}",
+                    block.get_id()
+                );
+            }
         }
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
@@ -402,11 +415,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // checked. It's activate_best_chain's responsibility to update their statuses.
         // Likewise, we don't set the failure flag here, because the activation could also fail
         // due to a bad parent. This will be done by the caller code.
-        let result = chainstate_ref.activate_best_chain(&block_index);
+        let result = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Connect);
+            chainstate_ref.activate_best_chain(&block_index)
+        };
 
-        chainstate_ref
-            .update_min_height_with_allowed_reorg()
-            .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::MinHeight);
+            chainstate_ref
+                .update_min_height_with_allowed_reorg()
+                .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        };
 
         result.map_err(|err| match err {
             ReorgError::ConnectTipFailed(block_id, block_err) => {
@@ -430,12 +449,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let block = self.check_legitimate_orphan(block_source, block)?;
+        let _window = perf_timing::WindowGuard::start();
+        let block = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
+            self.check_legitimate_orphan(block_source, block)?
+        };
         let block_id = block.get_id();
 
         // Ensure that the block being submitted is new to us. If not, bail out immediately,
         // otherwise create a new block index and continue.
         let block_index = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
             let existing_block_index = get_block_index(&chainstate_ref, &block_id)?;
 
@@ -464,6 +488,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         match integrate_block_result {
             Ok(reorg_occurred) => {
+                perf_timing::on_block_processed();
                 // If the above code has succeeded, then the block_index must be present in the DB.
                 // Note that we can't return the initially obtained block_index, because its
                 // block status is outdated.
