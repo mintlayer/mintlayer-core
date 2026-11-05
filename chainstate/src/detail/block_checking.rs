@@ -37,6 +37,19 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
         chainstate_ref.check_block(&block).log_err()?;
+        // (experimental) step 11: remember that this block was fully checked,
+        // along with the tip it was validated against, so integrate_block can
+        // skip the duplicate check if the tip is unchanged by then.
+        {
+            let tip = chainstate_ref
+                .get_best_block_id()
+                .map_err(|e| BlockError::PropertyQueryError(e.into()))?;
+            let mut memo = self.chainstate.pre_checked_blocks.lock().unwrap();
+            if memo.len() > 10_000 {
+                memo.clear();
+            }
+            memo.insert(*WithId::id(&block), tip);
+        }
         Ok(block)
     }
 
