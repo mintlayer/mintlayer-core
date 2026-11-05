@@ -22,21 +22,99 @@ use api_server_common::storage::{
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        Destination, PoolId, config::create_unit_test_config, stakelock::StakePoolData,
+        Destination, PoolId, Transaction, UtxoOutPoint as UtxoOutPointT,
+        config::create_unit_test_config, stakelock::StakePoolData,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, H256, Idable, per_thousand::PerThousand},
+    primitives::{Amount, BlockDistance, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
 };
+use randomness::CryptoRng;
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use test_utils::random::make_seedable_rng;
 
+/// (review fix) Exercises the postgres get_utxos override against real data:
+/// batched results must match single fetches for every outpoint referenced by
+/// the scanned blocks (inputs and PoS kernel inputs), a missing outpoint must
+/// return None, and duplicate request entries must return identical values.
+async fn assert_get_utxos_matches_single<S>(
+    storage: &S,
+    blocks: &[common::chain::Block],
+    rng: &mut impl CryptoRng,
+) where
+    S: for<'tx> api_server_common::storage::storage_api::Transactional<'tx>,
+{
+    use api_server_common::storage::storage_api::ApiServerStorageRead;
+    use randomness::RngExt as _;
+    // transaction_ro comes from the Transactional trait implemented for the
+    // storage; the reference-based call resolves through the ApiServerStorage
+    // supertrait bounds on S.
+
+    let mut outpoints = std::collections::BTreeSet::new();
+    for block in blocks {
+        for tx in block.transactions() {
+            for input in tx.transaction().inputs() {
+                if let common::chain::TxInput::Utxo(outpoint) = input {
+                    outpoints.insert(outpoint.clone());
+                }
+            }
+        }
+        if let common::chain::block::ConsensusData::PoS(pos_data) = block.consensus_data() {
+            for input in pos_data.kernel_inputs() {
+                if let common::chain::TxInput::Utxo(outpoint) = input {
+                    outpoints.insert(outpoint.clone());
+                }
+            }
+        }
+    }
+    let missing = UtxoOutPointT::new(
+        common::chain::OutPointSourceId::Transaction(Id::<Transaction>::random_using(rng)),
+        rng.random::<u32>(),
+    );
+
+    let db_tx = storage.transaction_ro().await.unwrap();
+
+    let requested: Vec<common::chain::UtxoOutPoint> =
+        std::iter::once(missing.clone()).chain(outpoints.iter().cloned()).collect();
+    let batched = db_tx.get_utxos(&requested).await.unwrap();
+    assert_eq!(batched.len(), requested.len());
+    assert!(batched[0].is_none(), "missing outpoint must resolve to None");
+
+    for (position, outpoint) in requested.iter().enumerate().skip(1) {
+        let single = db_tx.get_utxo(outpoint.clone()).await.unwrap().expect("must be present");
+        let batched_utxo = batched[position].as_ref().expect("must be present");
+        assert_eq!(
+            batched_utxo,
+            &single,
+            "batched fetch disagrees with single fetch for {outpoint:?}"
+        );
+    }
+
+    // Duplicate request entries return identical values.
+    let first_known = requested[1].clone();
+    let dup = db_tx
+        .get_utxos(&[first_known.clone(), first_known.clone()])
+        .await
+        .unwrap();
+    assert_eq!(dup[0], dup[1]);
+    assert!(dup[0].is_some());
+}
+
 const BLOCKS: usize = 20;
 
 /// (experimental) Recreate a fresh database for a test so parallel tests don't
 /// clobber each other's schema.
 async fn reset_db(db_name: &str) {
+    // (review fix) identifiers cannot be bound as parameters; since this
+    // helper interpolates into destructive DDL, restrict the name to a safe
+    // charset before use.
+    assert!(
+        !db_name.is_empty()
+            && db_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && !db_name.starts_with(|c: char| c.is_ascii_digit()),
+        "invalid database name: {db_name}"
+    );
     let bootstrap = "host=127.0.0.1 port=15432 user=postgres dbname=postgres";
     let (client, conn) = tokio_postgres::connect(bootstrap, tokio_postgres::NoTls)
         .await
@@ -144,6 +222,11 @@ async fn postgres_scan_perf_summary() {
         .await
         .unwrap();
 
+    let scanned: Vec<common::chain::Block> = (1..=BLOCKS)
+        .map(|height| tf.block(*tf.index_at(height).block_id()))
+        .collect();
+    assert_get_utxos_matches_single(local_state.storage(), &scanned, &mut rng).await;
+
     // The (experimental scanner timing) summary, including the postgres
     // statement count, is printed by log_batch_summary inside scan_blocks.
 }
@@ -204,4 +287,9 @@ async fn postgres_scan_perf_summary_with_txs() {
         .scan_blocks(BlockHeight::zero(), blocks)
         .await
         .unwrap();
+
+    let scanned: Vec<common::chain::Block> = (1..=BLOCKS)
+        .map(|height| tf.block(*tf.index_at(height).block_id()))
+        .collect();
+    assert_get_utxos_matches_single(local_state.storage(), &scanned, &mut rng).await;
 }

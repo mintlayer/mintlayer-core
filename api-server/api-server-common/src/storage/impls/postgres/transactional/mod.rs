@@ -171,7 +171,11 @@ impl Drop for ApiServerPostgresTransactionalRw<'_> {
     fn drop(&mut self) {
         // (experimental) step 7: drop prepared statements before the
         // connection goes back to the pool.
-        self.statements.lock().unwrap().clear();
+        // (review fix) degrade gracefully if the mutex is poisoned: never
+        // panic in Drop before the connection returns to the pool.
+        if let Ok(mut statements) = self.statements.lock() {
+            statements.clear();
+        }
         if !self.finished {
             self.db_tx_sender
                 .send(self.connection.take().expect(CONN_ERR))
@@ -248,7 +252,11 @@ impl Drop for ApiServerPostgresTransactionalRo<'_> {
     fn drop(&mut self) {
         // (experimental) step 7: drop prepared statements before the
         // connection goes back to the pool.
-        self.statements.lock().unwrap().clear();
+        // (review fix) degrade gracefully if the mutex is poisoned: never
+        // panic in Drop before the connection returns to the pool.
+        if let Ok(mut statements) = self.statements.lock() {
+            statements.clear();
+        }
         if !self.finished {
             self.db_tx_sender
                 .send(self.connection.take().expect(CONN_ERR))

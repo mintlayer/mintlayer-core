@@ -56,6 +56,11 @@ const VERSION_STR: &str = "version";
 // (experimental) Statement counting for scanner profiling. Enabled via
 // ML_SCANNER_STAGE_TIMING=1; the counter is read and reset per sync batch by
 // the scanner's perf_timing module.
+//
+// Caveat (review round 2, INFO): these counters are process-global across all
+// postgres connections. Numbers are exact when the scanner is the only
+// postgres traffic in the process (dedicated scanner-daemon); if an api-server
+// serves requests in the same process, stmts/block absorbs that traffic too.
 static STMT_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static STMT_COUNT_ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 

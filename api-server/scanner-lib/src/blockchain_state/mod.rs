@@ -201,12 +201,20 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             }
         }
         let outpoint_list: Vec<UtxoOutPoint> = prefetch_outpoints.into_iter().collect();
-        let fetched_utxos = db_tx.get_utxos(&outpoint_list).await?;
-        let mut utxo_cache: BTreeMap<UtxoOutPoint, Utxo> = outpoint_list
-            .into_iter()
-            .zip(fetched_utxos)
-            .filter_map(|(outpoint, utxo)| utxo.map(|utxo| (outpoint, utxo)))
-            .collect();
+        // (review round 3) Chunk the prefetch so a transaction-heavy batch
+        // cannot build one giant ANY($1) bind.
+        const UTXO_PREFETCH_CHUNK: usize = 10_000;
+        let mut utxo_cache: BTreeMap<UtxoOutPoint, Utxo> = BTreeMap::new();
+        for chunk in outpoint_list.chunks(UTXO_PREFETCH_CHUNK) {
+            let fetched_utxos = db_tx.get_utxos(chunk).await?;
+            utxo_cache.extend(
+                chunk
+                    .iter()
+                    .cloned()
+                    .zip(fetched_utxos)
+                    .filter_map(|(outpoint, utxo)| utxo.map(|utxo| (outpoint, utxo))),
+            );
+        }
 
         // Connect the new blocks in the new chain
         count_blocks(blocks.len());
@@ -429,13 +437,23 @@ fn amount_delta_i128(amount: &Amount) -> i128 {
     i128::try_from(amount.into_atoms()).expect("amount atoms do not fit i128")
 }
 
-fn apply_delta(current: Amount, delta: i128, context: &str) -> Amount {
-    let current_atoms = i128::try_from(current.into_atoms()).expect("amount atoms do not fit i128");
+/// (review round 3) Returns an error instead of panicking so a statistic
+/// underflow surfaces as a scan error like it did before the aggregation
+/// refactor (address-balance paths keep the historical panic-for-parity via
+/// the caller).
+fn apply_delta(current: Amount, delta: i128, context: &str) -> Result<Amount, ApiServerStorageError> {
+    let current_atoms = i128::try_from(current.into_atoms())
+        .map_err(|_| ApiServerStorageError::LowLevelStorageError(format!("amount atoms do not fit i128: {context}")))?;
     let new_atoms = current_atoms + delta;
     if new_atoms < 0 {
-        panic!("Balance should not overflow {context}: would go negative");
+        return Err(ApiServerStorageError::LowLevelStorageError(format!(
+            "Balance should not overflow {context}: would go negative"
+        )));
     }
-    Amount::from_atoms(u128::try_from(new_atoms).expect("balance overflow"))
+    Ok(Amount::from_atoms(
+        u128::try_from(new_atoms)
+            .map_err(|_| ApiServerStorageError::LowLevelStorageError(format!("balance overflow: {context}")))?,
+    ))
 }
 
 impl BalanceAccumulator {
@@ -485,11 +503,14 @@ impl BalanceAccumulator {
                     value
                 }
             };
+            // Address balances panicked on underflow before the aggregation
+            // refactor; keep that parity.
             let new_amount = apply_delta(
                 current,
                 delta,
                 &format!("{address:?} {coin_or_token_id:?}"),
-            );
+            )
+            .expect("address balance underflow");
             db_tx
                 .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
                 .await?;
@@ -508,11 +529,14 @@ impl BalanceAccumulator {
                     value
                 }
             };
+            // Address locked balances panicked on underflow before the
+            // aggregation refactor; keep that parity.
             let new_amount = apply_delta(
                 current,
                 delta,
                 &format!("locked {address:?} {coin_or_token_id:?}"),
-            );
+            )
+            .expect("locked address balance underflow");
             db_tx
                 .set_address_locked_balance_at_height(
                     &address,
@@ -536,11 +560,13 @@ impl BalanceAccumulator {
                     value
                 }
             };
+            // Statistics returned an error on underflow before the
+            // aggregation refactor; propagate instead of panicking.
             let new_amount = apply_delta(
                 current,
                 delta,
                 &format!("statistic {statistic:?} {coin_or_token_id:?}"),
-            );
+            )?;
             db_tx
                 .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
                 .await?;
@@ -2801,5 +2827,71 @@ mod replay_regression_tests {
         let corrupted_balance =
             pool_staker_balance_at(&storage, pool_id, BlockHeight::new(2)).await;
         assert_eq!(clean_balance, corrupted_balance);
+
+mod median_window_tests {
+    // Focused coverage for the in-memory median-time
+    // window: the rolling window must produce identical medians to a
+    // from-scratch recomputation over the same history, for chains both
+    // shorter and longer than MEDIAN_TIME_SPAN.
+    use super::previous_and_new_median_time_from_window;
+    use chainstate::{
+        calculate_median_time_past_from_blocktimestamps, MEDIAN_TIME_SPAN,
+    };
+    use randomness::{CryptoRng, RngExt as _};
+    use common::chain::block::timestamp::BlockTimestamp;
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    #[test]
+    fn rolling_window_matches_from_scratch_recomputation() {
+        let mut rng = make_seedable_rng(Seed::from_entropy_and_print("median_window"));
+        let mut window: Vec<BlockTimestamp> = Vec::new();
+        let mut history: Vec<BlockTimestamp> = Vec::new();
+
+        // The db query always includes at least the genesis timestamp, so the
+        // window is never empty in production; mirror that.
+        let genesis_timestamp = BlockTimestamp::from_int_seconds(1_699_999_970);
+        window.push(genesis_timestamp);
+        history.push(genesis_timestamp);
+
+        let base = 1_700_000_000u64;
+        for step in 0..200u64 {
+            let timestamp = BlockTimestamp::from_int_seconds(base + step * 30);
+
+            // From-scratch mirror of the per-block db query: the previous
+            // median covers the history BEFORE this block; the new median
+            // covers it after inserting this block at the front.
+            let previous = calculate_median_time_past_from_blocktimestamps(
+                history.iter().copied(),
+            );
+            history.insert(0, timestamp);
+            let new = calculate_median_time_past_from_blocktimestamps(
+                history.iter().copied(),
+            );
+
+            let (rolled_previous, rolled_new) =
+                previous_and_new_median_time_from_window(&mut window, timestamp);
+
+            assert_eq!(rolled_previous, previous, "step {step}: previous median");
+            assert_eq!(rolled_new, new, "step {step}: new median");
+
+            // The window must never exceed MEDIAN_TIME_SPAN entries.
+            assert!(window.len() <= MEDIAN_TIME_SPAN);
+
+            // Occasionally verify the window content matches the db-query
+            // shape (last 11 timestamps, newest first, incl. genesis-like
+            // short chains).
+            let expected_window: Vec<BlockTimestamp> =
+                history.iter().take(MEDIAN_TIME_SPAN).copied().collect();
+            assert_eq!(window, expected_window, "step {step}: window content");
+
+            // Randomly rewind the history to simulate a reorg-resolved state:
+            // the production code re-reads the window after cleanup, so just
+            // rebuild both sides consistently.
+            if step % 17 == 16 {
+                let keep = rng.random_range(1..=history.len());
+                history.truncate(keep);
+                window.truncate(keep.min(MEDIAN_TIME_SPAN));
+            }
+        }
     }
 }
