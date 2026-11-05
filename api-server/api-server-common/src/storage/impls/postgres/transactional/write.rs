@@ -45,7 +45,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.reinitialize_database(chain_config).await?;
 
         Ok(())
@@ -55,7 +55,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_address_balance_above_height(block_height).await?;
 
         Ok(())
@@ -65,7 +65,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_address_locked_balance_above_height(block_height).await?;
 
         Ok(())
@@ -75,7 +75,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_address_transactions_above_height(block_height).await?;
 
         Ok(())
@@ -85,7 +85,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_token_transactions_above_height(block_height).await?;
 
         Ok(())
@@ -98,7 +98,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_address_balance_at_height(address, amount, coin_or_token_id, block_height)
             .await?;
 
@@ -112,7 +112,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_address_locked_balance_at_height(address, amount, coin_or_token_id, block_height)
             .await?;
 
@@ -125,7 +125,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         transaction_ids: BTreeSet<Id<Transaction>>,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_address_transactions_at_height(address, transaction_ids, block_height)
             .await?;
 
@@ -139,7 +139,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         tx_global_index: u64,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_token_transactions_at_height(
             token_id,
             transaction_id,
@@ -157,7 +157,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_mainchain_block(block_id, block_height, block).await?;
 
         Ok(())
@@ -169,7 +169,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         delegation: &Delegation,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_delegation_at_height(delegation_id, delegation, block_height, &self.chain_config)
             .await?;
 
@@ -183,7 +183,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_transaction(transaction_id, order_number, owning_block, transaction)
             .await?;
 
@@ -195,7 +195,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_id: Id<Block>,
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_block_aux_data(block_id, block_aux_data).await?;
 
         Ok(())
@@ -205,7 +205,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_main_chain_blocks_above_height(block_height).await?;
 
         Ok(())
@@ -217,7 +217,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         pool_data: &PoolDataWithExtraInfo,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_pool_data_at_height(pool_id, pool_data, block_height, &self.chain_config)
             .await?;
 
@@ -228,7 +228,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_delegations_above_height(block_height).await?;
 
         Ok(())
@@ -238,7 +238,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_pools_above_height(block_height).await?;
 
         Ok(())
@@ -251,7 +251,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
@@ -264,7 +264,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         addresses: &[&str],
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_locked_utxo_at_height(outpoint, utxo, addresses, block_height).await?;
 
         Ok(())
@@ -274,7 +274,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_utxo_above_height(block_height).await?;
 
         Ok(())
@@ -284,7 +284,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_locked_utxo_above_height(block_height).await?;
 
         Ok(())
@@ -296,7 +296,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_fungible_token_issuance(token_id, block_height, issuance, &self.chain_config)
             .await?;
 
@@ -309,7 +309,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         data: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_fungible_token_data(token_id, block_height, data, &self.chain_config)
             .await?;
 
@@ -323,7 +323,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         issuance: NftIssuance,
         owner: &Destination,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_nft_token_issuance(token_id, block_height, issuance, owner).await?;
 
         Ok(())
@@ -333,7 +333,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_token_issuance_above_height(block_height).await?;
 
         Ok(())
@@ -343,7 +343,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_nft_issuance_above_height(block_height).await?;
 
         Ok(())
@@ -353,7 +353,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_coin_or_token_decimals_above_height(block_height).await?;
 
         Ok(())
@@ -366,7 +366,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         amount: Amount,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_statistic(statistic, coin_or_token_id, block_height, amount).await?;
 
         Ok(())
@@ -376,7 +376,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_statistics_above_height(block_height).await?;
 
         Ok(())
@@ -388,7 +388,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         order: &Order,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.set_order_at_height(order_id, order, block_height, &self.chain_config)
             .await?;
 
@@ -399,7 +399,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.del_orders_above_height(block_height).await?;
 
         Ok(())
@@ -409,7 +409,7 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         event: &StreamEvent,
     ) -> Result<StreamEventId, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.append_stream_event(event).await?;
 
         Ok(res)
@@ -419,14 +419,14 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
         &mut self,
         last_event_id: StreamEventId,
     ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.notify_new_stream_events(last_event_id).await?;
 
         Ok(())
     }
 
     async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let deleted = conn.prune_stream_events().await?;
         if deleted > 0 {
             logging::log::warn!(
@@ -441,14 +441,14 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
 #[async_trait::async_trait]
 impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
     async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_storage_version().await?;
 
         Ok(res)
@@ -459,7 +459,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
         Ok(res)
@@ -471,7 +471,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         cursor: Option<(String, Amount)>,
     ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.get_top_address_amounts(coin_or_token_id, len, cursor).await
     }
 
@@ -479,7 +479,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
     ) -> Result<BTreeMap<CoinOrTokenId, AmountWithDecimals>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_balances(address).await?;
 
         Ok(res)
@@ -490,7 +490,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         address: &str,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_locked_balance(address, coin_or_token_id).await?;
 
         Ok(res)
@@ -500,7 +500,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_transactions(address).await?;
 
         Ok(res)
@@ -512,7 +512,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_token_transactions(token_id, len, offset).await?;
 
         Ok(res)
@@ -521,14 +521,14 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn get_latest_blocktimestamps(
         &self,
     ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_latest_blocktimestamps().await?;
 
         Ok(res)
     }
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_best_block().await?;
 
         Ok(res)
@@ -538,7 +538,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block(block_id).await?;
 
         Ok(res)
@@ -548,7 +548,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
@@ -558,7 +558,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         time_range: (BlockTimestamp, BlockTimestamp),
     ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block_range_from_time_range(time_range).await?;
 
         Ok(res)
@@ -568,7 +568,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_delegation(delegation_id, &self.chain_config).await?;
 
         Ok(res)
@@ -578,7 +578,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
@@ -588,7 +588,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_transaction_with_block(transaction_id).await?;
 
         Ok(res)
@@ -599,7 +599,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_transactions_with_block(len, offset).await?;
 
         Ok(res)
@@ -610,7 +610,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         tx_global_index: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn
             .get_transactions_with_block_before_tx_global_index(len, tx_global_index)
             .await?;
@@ -621,7 +621,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
     async fn get_last_transaction_global_index(
         &self,
     ) -> Result<Option<u64>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_last_transaction_global_index().await?;
 
         Ok(res)
@@ -631,7 +631,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
@@ -642,7 +642,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_latest_pool_data(len, offset, &self.chain_config).await?;
 
         Ok(res)
@@ -653,7 +653,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         cursor: Option<(BlockHeight, PoolId)>,
     ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_latest_pool_data_before(len, cursor, &self.chain_config).await?;
 
         Ok(res)
@@ -664,7 +664,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn
             .get_pool_data_with_largest_staker_balance(len, offset, &self.chain_config)
             .await?;
@@ -677,7 +677,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         pool_id: PoolId,
         block_range: (BlockHeight, BlockHeight),
     ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_pool_block_stats(pool_id, block_range, &self.chain_config).await?;
 
         Ok(res)
@@ -687,7 +687,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_pool_delegation_shares(pool_id, &self.chain_config).await?;
 
         Ok(res)
@@ -697,7 +697,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
@@ -707,7 +707,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         outpoint: UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_utxo(outpoint).await?;
 
         Ok(res)
@@ -717,7 +717,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_available_utxos(address).await?;
 
         Ok(res)
@@ -727,7 +727,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_address_all_utxos(address).await?;
 
         Ok(res)
@@ -738,7 +738,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
     ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_locked_utxos_until_now(block_height, time_range).await?;
 
         Ok(res)
@@ -748,7 +748,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_delegations_from_address(address, &self.chain_config).await?;
 
         Ok(res)
@@ -758,7 +758,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         authority: Destination,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_fungible_tokens_by_authority(authority, &self.chain_config).await?;
 
         Ok(res)
@@ -768,7 +768,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_fungible_token_issuance(token_id).await?;
 
         Ok(res)
@@ -778,7 +778,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<NftWithOwner>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_nft_token_issuance(token_id).await?;
 
         Ok(res)
@@ -788,7 +788,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_token_num_decimals(token_id).await?;
 
         Ok(res)
@@ -799,7 +799,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_token_ids(len, offset).await?;
 
         Ok(res)
@@ -811,7 +811,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         offset: u64,
         ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_token_ids_by_ticker(len, offset, ticker).await?;
 
         Ok(res)
@@ -822,7 +822,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         statistic: CoinOrTokenStatistic,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_statistic(statistic, coin_or_token_id).await?;
 
         Ok(res)
@@ -832,14 +832,14 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_all_statistic(coin_or_token_id).await?;
 
         Ok(res)
     }
 
     async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_order(order_id, &self.chain_config).await?;
 
         Ok(res)
@@ -850,7 +850,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_orders_by_height(len, offset, &self.chain_config).await?;
 
         Ok(res)
@@ -862,7 +862,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
 
         Ok(res)
@@ -873,7 +873,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         ask_currency: CoinOrTokenId,
         give_currency: CoinOrTokenId,
     ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         conn.get_order_book_entries(ask_currency, give_currency).await
     }
 
@@ -881,14 +881,14 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         &self,
         last_seen_id: StreamEventId,
     ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.read_stream_events_after(last_seen_id).await?;
 
         Ok(res)
     }
 
     async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.latest_stream_event_id().await?;
 
         Ok(res)

@@ -18,6 +18,7 @@ pub mod transactional;
 
 mod queries;
 
+pub use queries::take_postgres_statement_cache_stats;
 pub use queries::take_postgres_statement_count;
 
 use std::sync::Arc;
