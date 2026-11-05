@@ -749,9 +749,8 @@ fn initial_block_download(
             })
             .with_initial_time_since_genesis(2)
             .build();
-        // (experimental) step 12: matches the experimental default-on flip in
-        // ChainstateConfig::db_reckless_mode_in_ibd_enabled.
-        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(true);
+        // (review fix) library default stays opt-in, matching master.
+        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
 
         // We are two seconds after genesis timestamp, so in the IBD state
         assert!(tf.chainstate.is_initial_block_download());

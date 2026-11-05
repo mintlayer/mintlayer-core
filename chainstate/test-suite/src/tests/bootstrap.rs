@@ -749,9 +749,8 @@ fn check_reckless_mode(
                 pos_seal_duplication_tracking: Default::default(),
             })
             .build();
-        // (experimental) step 12: matches the experimental default-on flip in
-        // ChainstateConfig::db_reckless_mode_in_ibd_enabled.
-        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(true);
+        // (review fix) library default stays opt-in, matching master.
+        let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
         let dest_tf_store = dest_tf.storage.clone();
 
         let result = import_from_slice_with_callback(&mut dest_tf, &exported_blocks, || {

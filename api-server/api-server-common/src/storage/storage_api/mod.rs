@@ -439,7 +439,7 @@ impl LockedUtxo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
     spent_at_block_height: Option<BlockHeight>,

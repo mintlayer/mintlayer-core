@@ -85,8 +85,8 @@ static TOTAL_BLOCKS: AtomicUsize = AtomicUsize::new(0);
 
 const SUMMARY_EVERY_BLOCKS: usize = 100;
 
-/// Must be called once per fully processed block (success or failure) to keep
-/// the wall-clock window and block count in sync.
+/// Called by the attempt_to_process_block wrapper on every exit (success or
+/// failure) so the wall-clock window and block count stay in sync.
 pub(crate) fn on_block_processed() {
     if !enabled() {
         return;
