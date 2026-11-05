@@ -686,11 +686,14 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-    let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
+    // (experimental) step 3: fetch input UTXOs once and share them between
+    // the fee calculation and the token-info collection below; previously the
+    // inputs were fetched twice per transaction (once inside tx_fees via
+    // collect_inputs_utxos and once through the FuturesOrdered here).
+    let input_utxos: Vec<Option<TxOutput>> = collect_inputs_utxos(db_tx, tx.inputs()).await?;
 
-    let input_tasks: FuturesOrdered<_> =
-        tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
-    let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
+    let fee = tx_fees(chain_config, block_height, tx, &input_utxos, db_tx).await?;
+
     let token_ids = {
         let mut token_ids = BTreeSet::new();
         for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
@@ -881,9 +884,9 @@ async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &Transaction,
+    inputs_utxos: &[Option<TxOutput>],
     db_tx: &T,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
     let pools = prefetch_pool_data(&inputs_utxos, db_tx, block_height).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
@@ -910,7 +913,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
 }
 
 async fn prefetch_pool_data<T: ApiServerStorageRead>(
-    inputs_utxos: &Vec<Option<TxOutput>>,
+    inputs_utxos: &[Option<TxOutput>],
     db_tx: &T,
     block_height: BlockHeight,
 ) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
