@@ -247,6 +247,7 @@ fn make_p2p_config() -> P2pConfig {
             msg_max_locator_count: Default::default(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            ..Default::default()
         },
 
         bind_addresses: Default::default(),

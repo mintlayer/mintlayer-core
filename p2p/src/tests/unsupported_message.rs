@@ -72,6 +72,7 @@ async fn unsupported_message_impl(seed: Seed, make_msg_too_big: bool) {
         max_addr_list_response_address_count: Default::default(),
         msg_max_locator_count: Default::default(),
         max_peer_tx_announcements: Default::default(),
+        ..Default::default()
     }));
 
     let mut test_node = TestNode::<Transport>::start(
