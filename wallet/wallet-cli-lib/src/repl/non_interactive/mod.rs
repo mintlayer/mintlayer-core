@@ -40,6 +40,10 @@ fn process_line<N: NodeInterface>(
     line: &str,
     assume_yes: bool,
 ) -> Result<LineOutput, WalletCliError<N>> {
+    if let Some(listing) = super::grammar_view_request(line, repl_command) {
+        return to_line_output(ConsoleCommand::Print(listing));
+    }
+
     let command_opt = parse_input(line, repl_command)?;
 
     let command = match command_opt {
@@ -154,6 +158,7 @@ fn handle_response<N: NodeInterface>(
 
 #[cfg(test)]
 mod rendering_tests {
+    use rstest::rstest;
     use serde_json::json;
 
     use super::*;
@@ -212,5 +217,52 @@ mod rendering_tests {
     fn warn_is_printed_as_text() {
         let output = render(ConsoleCommand::Warn("heads up".to_owned()));
         assert_eq!(output.lines, ["heads up"]);
+    }
+
+    // The view lines must answer without touching the event loop, so a dummy
+    // channel stands in for it. Grammar construction overflows the default
+    // 2 MiB test-thread stack, so build it on a large-stack thread.
+    #[rstest]
+    fn help_views_print_in_commands_file_mode(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        let repl_command = wallet_cli_commands::run_with_large_stack(move || {
+            wallet_cli_commands::build_repl_command(cold_wallet, mutable_wallet)
+        });
+        let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+        // The cold grammars have no `wallet` group; `challenge sign` stands in
+        // as the nested spelling that does parse there.
+        let lines: Vec<&str> = if cold_wallet {
+            vec!["help full", "legacy", "help", "help challenge sign"]
+        } else {
+            vec!["help full", "legacy", "help", "help wallet"]
+        };
+        for line in lines {
+            match process_line::<node_comm::node_traits::MockNodeInterface>(
+                &repl_command,
+                &event_tx,
+                line,
+                true,
+            ) {
+                Ok(LineOutput::Print(text)) => {
+                    assert!(!text.is_empty(), "`{line}` must render non-empty text")
+                }
+                other => panic!("`{line}` must print in commands-file mode, got {other:?}"),
+            }
+        }
+        // The views answer before the confirmation gate, so they print even
+        // for callers that did not pass --yes.
+        match process_line::<node_comm::node_traits::MockNodeInterface>(
+            &repl_command,
+            &event_tx,
+            "legacy",
+            false,
+        ) {
+            Ok(LineOutput::Print(text)) => assert!(!text.is_empty()),
+            other => panic!("`legacy` must print without --yes, got {other:?}"),
+        }
     }
 }

@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use clap::{Arg, ArgAction, Command};
 use reedline::{Completer, Hinter, Span, Suggestion};
+use wallet_cli_commands::{expands_first_level, first_about_line, visible_first_level_subcommands};
 
 /// A completer that walks the clap command tree, offering subcommand names,
 /// long flags, and enumeration values for the token in front of the cursor.
@@ -151,6 +152,31 @@ fn positional_candidates(cmd: &Command, index: usize) -> Vec<Candidate> {
         return Vec::new();
     };
     possible_value_candidates(arg.get_possible_values())
+}
+
+/// Candidates spelled as two tokens (`transaction inspect`), offered at the
+/// root so the completion menu mirrors the `help full` listing. Hidden
+/// commands (the legacy flat spellings) are kept out of it.
+fn first_level_path_candidates(cmd: &Command) -> Vec<Candidate> {
+    let mut candidates = Vec::new();
+    for group in cmd.get_subcommands() {
+        if group.is_hide_set() {
+            continue;
+        }
+        let group_name = group.get_name();
+        if !expands_first_level(group) {
+            continue;
+        }
+        for sub in visible_first_level_subcommands(group) {
+            candidates.push(Candidate {
+                value: format!("{group_name} {}", sub.get_name()),
+                // The same first-line rule `help full` uses, so the menu and
+                // the listing describe a command identically.
+                description: Some(first_about_line(sub)).filter(|line| !line.is_empty()),
+            });
+        }
+    }
+    candidates
 }
 
 fn value_candidates(pending_value_flag: Option<&Arg>) -> Vec<Candidate> {
@@ -288,6 +314,45 @@ impl Completer for WalletCompletions {
             flag_candidates(level.cmd, &level.taken_flags)
         } else {
             let mut candidates = subcommand_candidates(level.cmd);
+            // At the root, the completion menu mirrors the `help full`
+            // listing: the primary commands plus every first-level
+            // subcommand spelled as its full two-token path. The two
+            // advertised help views stay completable as well.
+            if std::ptr::eq(level.cmd, &*self.root) {
+                candidates.extend(first_level_path_candidates(level.cmd));
+                if self.root.find_subcommand("legacy").is_some() {
+                    candidates.push(Candidate {
+                        value: "help full".to_owned(),
+                        description: Some(
+                            "List every command with its first-level subcommands".to_owned(),
+                        ),
+                    });
+                    candidates.push(Candidate {
+                        value: "legacy".to_owned(),
+                        description: Some(
+                            "List the legacy flat command spellings with their nested equivalents"
+                                .to_owned(),
+                        ),
+                    });
+                }
+            } else if self
+                .root
+                .find_subcommand("help")
+                .is_some_and(|root_help| std::ptr::eq(level.cmd, root_help))
+                && self.root.find_subcommand("legacy").is_some()
+            {
+                // Under the root's auto `help` command, clap mirrors the
+                // top-level commands but not the `full` view; offer it so the
+                // advertised `help full` syntax completes. Every group gets
+                // its own auto `help` too, where `help full` does not parse,
+                // so the pointer identity above scopes the offer to the root.
+                candidates.push(Candidate {
+                    value: "full".to_owned(),
+                    description: Some(
+                        "List every command with its first-level subcommands".to_owned(),
+                    ),
+                });
+            }
             candidates.extend(positional_candidates(level.cmd, level.positional_index));
             candidates
         };
@@ -385,6 +450,8 @@ mod tests {
     use super::*;
     use clap::{CommandFactory, Parser};
     use reedline::History;
+    use rstest::rstest;
+    use wallet_cli_commands::{build_repl_command, full_command_listing};
 
     /// A small grammar with the shapes the completer must understand.
     #[derive(Parser, Debug)]
@@ -411,6 +478,23 @@ mod tests {
         Sweep {
             /// Whether to sweep
             broadcast: YesNo,
+        },
+        /// Hidden maintenance group
+        #[clap(hide = true, name = "purge")]
+        Purge {
+            #[command(subcommand)]
+            command: PurgeSubCommand,
+        },
+    }
+
+    #[derive(clap::Subcommand, Debug)]
+    enum PurgeSubCommand {
+        /// Purge everything
+        All,
+        /// Purge a range
+        Range {
+            /// Upper bound
+            bound: u32,
         },
     }
 
@@ -450,7 +534,95 @@ mod tests {
         let mut completer = completer();
         let suggestions = completer.complete("", 0);
         let values = values(&suggestions);
-        assert_eq!(values, vec!["broadcast", "group", "help", "send"]);
+        // The root menu mirrors the `help full` listing: the top-level
+        // commands plus every first-level subcommand as a full path.
+        assert_eq!(
+            values,
+            vec!["broadcast", "group", "group status", "help", "send"]
+        );
+    }
+
+    #[test]
+    fn hidden_commands_stay_out_of_the_root_menu_paths() {
+        let mut completer = completer();
+        // The hidden `sweep` command is not offered directly...
+        let suggestions = completer.complete("", 0);
+        let offered = values(&suggestions);
+        assert!(!offered.contains(&"sweep"));
+        // ...and there is no group under it whose paths could leak in.
+
+        // A hidden group with visible children must leak neither the group
+        // name nor any two-token path into the root menu.
+        assert!(!offered.contains(&"purge"));
+        assert!(!offered.contains(&"purge all"));
+        assert!(!offered.contains(&"purge range"));
+        // Typing it still resolves: hidden commands stay runnable.
+        let suggestions = completer.complete("purge ", 6);
+        assert_eq!(values(&suggestions), vec!["all", "help", "range"]);
+    }
+
+    #[rstest]
+    fn root_menu_matches_the_help_full_listing(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        let grammar = wallet_cli_commands::run_with_large_stack(move || {
+            build_repl_command(cold_wallet, mutable_wallet)
+        });
+        let mut completer = WalletCompletions::new(grammar.clone());
+
+        let offered: std::collections::BTreeSet<String> =
+            values(&completer.complete("", 0)).into_iter().map(str::to_owned).collect();
+
+        let listing = full_command_listing(&grammar);
+        let mut listed = std::collections::BTreeSet::new();
+        for line in listing.lines().skip(1) {
+            let token = line.trim_start().split("  ").next().expect("listing line with a token");
+            listed.insert(token.to_owned());
+            assert!(
+                offered.contains(token),
+                "the completion menu is missing the listed command `{token}`"
+            );
+        }
+        // Everything offered is part of the listing or a visible alias of a
+        // listed command (aliases stay usable in the menu), or one of the two
+        // advertised help views the menu keeps completable.
+        let mut aliases = std::collections::BTreeSet::new();
+        for primary in grammar.get_subcommands().filter(|primary| !primary.is_hide_set()) {
+            for alias in primary.get_visible_aliases() {
+                aliases.insert(alias.to_owned());
+            }
+        }
+        for value in &offered {
+            assert!(
+                listed.contains(value)
+                    || aliases.contains(value)
+                    || value == "help full"
+                    || value == "legacy",
+                "the completion menu offers `{value}`, which the full listing does not"
+            );
+        }
+
+        // The legacy flat spellings that each grammar hides stay out of both
+        // views; the ones a grammar keeps as primary spellings (cold wallets)
+        // legitimately appear in both.
+        let hidden_legacy: Vec<&str> = if cold_wallet {
+            vec!["challenge-sign-plain", "history-print", "screen-clear"]
+        } else {
+            vec!["address-new", "wallet-create", "staking-create-pool"]
+        };
+        for legacy in hidden_legacy {
+            assert!(
+                !listed.contains(legacy),
+                "the full listing shows `{legacy}`"
+            );
+            assert!(
+                !offered.contains(legacy),
+                "the completion menu shows `{legacy}`"
+            );
+        }
     }
 
     #[test]
@@ -522,6 +694,44 @@ mod tests {
         let mut completer = completer();
         let suggestions = completer.complete("group status ", 13);
         assert_eq!(suggestions[0].description.as_deref(), Some("Everything"));
+    }
+
+    #[rstest]
+    fn advertised_help_views_stay_completable(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        let grammar = wallet_cli_commands::run_with_large_stack(move || {
+            build_repl_command(cold_wallet, mutable_wallet)
+        });
+        let mut completer = WalletCompletions::new(grammar);
+
+        // At the root, both advertised views are offered.
+        let root_suggestions = completer.complete("", 0);
+        let at_root = values(&root_suggestions);
+        assert!(
+            at_root.contains(&"help full"),
+            "the root menu must offer `help full`"
+        );
+        assert!(
+            at_root.contains(&"legacy"),
+            "the root menu must offer `legacy`"
+        );
+
+        // `help f` completes the `full` view; `leg` completes `legacy`.
+        assert_eq!(values(&completer.complete("help f", 6)), vec!["full"]);
+        assert_eq!(values(&completer.complete("leg", 3)), vec!["legacy"]);
+
+        // Every group carries its own auto `help`, where `help full` does not
+        // parse; the `full` offer must stay scoped to the root's `help`. (The
+        // cold grammars have no `group`, so this falls to the root menu where
+        // nothing matches the full path either.)
+        assert_eq!(
+            values(&completer.complete("group help f", 13)),
+            Vec::<&str>::new()
+        );
     }
 
     #[test]

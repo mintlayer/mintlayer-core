@@ -243,6 +243,7 @@ fn wallet_confirmation(command: &WalletCommand) -> Option<String> {
             address,
             htlc_secret: _,
         } => Some(format!("Spend the outpoint {utxo} to {address}?")),
+        // The legacy listing only prints the command name table.
         WalletCommand::ColdCommands(command) => cold_wallet_confirmation(command),
         WalletCommand::SelectAccount { account_index } => Some(format!(
             "Select account {account_index} for subsequent commands?"
@@ -370,6 +371,8 @@ fn set_lookahead_size_question() -> String {
 }
 
 fn cold_wallet_confirmation(command: &ColdWalletCommand) -> Option<String> {
+    // The match is exhaustive so a newly added variant fails to compile until
+    // it is classified here, the same way `wallet_confirmation` does.
     match command {
         ColdWalletCommand::PurgeSeedPhrase => Some(
             "Permanently delete the stored seed phrase from this wallet file? \
@@ -390,7 +393,52 @@ fn cold_wallet_confirmation(command: &ColdWalletCommand) -> Option<String> {
             lookahead_size: _,
             i_know_what_i_am_doing: _,
         } => Some(set_lookahead_size_question()),
-        _ => None,
+
+        // No confirmation, matching long-standing behavior: these commands
+        // are read-only or only touch local presentation state. (Some, like
+        // `NewAddress`, do mutate local wallet state, but they never move
+        // funds and have always run without asking.)
+        ColdWalletCommand::WalletInfo
+        | ColdWalletCommand::LockPrivateKeys
+        | ColdWalletCommand::ShowSeedPhrase
+        | ColdWalletCommand::AddressQRCode { address: _ }
+        | ColdWalletCommand::NewAddress
+        | ColdWalletCommand::RevealPublicKeyHex { public_key_hash: _ }
+        | ColdWalletCommand::RevealPublicKey { public_key_hash: _ }
+        | ColdWalletCommand::ShowAddresses { include_change: _ }
+        | ColdWalletCommand::ShowStandaloneAddresses
+        | ColdWalletCommand::ShowStandaloneAddressDetails { address: _ }
+        | ColdWalletCommand::NewVrfPublicKey
+        | ColdWalletCommand::GetVrfPublicKey
+        | ColdWalletCommand::GetLegacyVrfPublicKey
+        | ColdWalletCommand::AccountExtendedPublicKey
+        | ColdWalletCommand::SignRawTransaction { transaction: _ }
+        | ColdWalletCommand::SignChallegeHex {
+            message: _,
+            address: _,
+        }
+        | ColdWalletCommand::SignChallege {
+            message: _,
+            address: _,
+        }
+        | ColdWalletCommand::VerifyChallengeHex {
+            message: _,
+            signed_challenge: _,
+            address: _,
+        }
+        | ColdWalletCommand::VerifyChallenge {
+            message: _,
+            signed_challenge: _,
+            address: _,
+        }
+        | ColdWalletCommand::PrintHistory
+        | ColdWalletCommand::ClearHistory
+        | ColdWalletCommand::ClearScreen
+        | ColdWalletCommand::Challenge { command: _ }
+        | ColdWalletCommand::History { command: _ }
+        | ColdWalletCommand::Clear
+        | ColdWalletCommand::Legacy
+        | ColdWalletCommand::Version => None,
     }
 }
 
@@ -472,6 +520,9 @@ mod tests {
         assert!(prompt("account-balance").is_none());
         assert!(prompt("address-new").is_none());
         assert!(prompt("staking-status").is_none());
+        // The legacy listing and the help views only print, so the
+        // confirmation gate must never fire for them.
+        assert!(prompt("legacy").is_none());
     }
 
     #[test]

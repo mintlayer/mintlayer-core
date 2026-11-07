@@ -1432,6 +1432,13 @@ pub enum ColdWalletCommand {
     #[clap(name = "clear")]
     Clear,
 
+    /// List the legacy flat command spellings with their nested equivalents.
+    ///
+    /// The legacy spellings are hidden from the help listings but keep
+    /// working; this command is the explicit way to see them all.
+    #[clap(name = "legacy", hide = true)]
+    Legacy,
+
     Version,
 }
 
@@ -1468,7 +1475,6 @@ pub enum WalletCommand {
     },
 
     /// Wallet management commands (create, recover, open, close).
-    /// The flat commands (`wallet-create`, `wallet-recover`, ...) remain available.
     #[clap(name = "wallet")]
     Wallet {
         #[command(subcommand)]
@@ -1476,7 +1482,6 @@ pub enum WalletCommand {
     },
 
     /// Account commands (create, rename, select, utxos, balance, show-xpub).
-    /// The flat commands (`account-create`, `account-utxos`, ...) remain available.
     #[clap(name = "account")]
     Account {
         #[command(subcommand)]
@@ -1484,14 +1489,13 @@ pub enum WalletCommand {
     },
 
     /// Address commands (new, list, qr, reveal-public-key, sweep, standalone).
-    /// The flat commands (`address-new`, `address-show`, ...) remain available.
     #[clap(name = "address")]
     Address {
         #[command(subcommand)]
         command: AddressGroupSubCommand,
     },
 
-    /// Send coins to an address (same as `address-send`).
+    /// Send coins to an address.
     #[clap(name = "send")]
     Send {
         /// The receiving address of the coins
@@ -2534,8 +2538,241 @@ pub enum ConsoleCommand {
 
 // Strip out usage
 const MAIN_HELP_TEMPLATE: &str = "\
-    {all-args}
+    {all-args}{after-help}\
 ";
+
+// The legacy flat command names with their nested equivalents, for deriving
+// the grammar-specific hide set.
+lazy_static::lazy_static! {
+    static ref LEGACY_TO_NESTED: std::collections::BTreeMap<&'static str, &'static str> =
+        LEGACY_ALIASES.iter().copied().collect();
+}
+
+/// Whether a nested command path (`wallet info`, `address standalone add`)
+/// parses against this grammar: every structural segment resolves to a
+/// subcommand. Everything from the first `--` on is options, not structure.
+pub fn nested_equivalent_available(repl: &Command, nested: &str) -> bool {
+    let (structural_path, _) = nested.split_once(" --").unwrap_or((nested, ""));
+    let mut level = repl;
+    for segment in structural_path.split_whitespace() {
+        match level.find_subcommand(segment) {
+            Some(sub) => level = sub,
+            None => return false,
+        }
+    }
+    true
+}
+
+/// The legacy flat spellings hidden from the listings in this grammar: a
+/// legacy-named root command is hidden only when its nested equivalent also
+/// parses there. In grammars where a flat spelling is the only form of a
+/// command (cold wallets have no nested groups), it stays visible.
+pub fn hidden_legacy_commands(repl: &Command) -> Vec<&str> {
+    repl.get_subcommands()
+        .filter_map(|sub| {
+            let nested = *LEGACY_TO_NESTED.get(sub.get_name())?;
+            nested_equivalent_available(repl, nested).then_some(sub.get_name())
+        })
+        .collect()
+}
+
+/// Footer rendered by the root `help` listing and appended to the `help full`
+/// listing. The hidden legacy spellings keep working; both views point at the
+/// `legacy` command that enumerates the pairs available in this grammar. The
+/// example names are drawn from the spellings this grammar actually hides.
+pub fn legacy_help_footer(repl: &Command) -> String {
+    // A grammar without the `legacy` command has no legacy views at all, so
+    // it must not advertise them.
+    if repl.find_subcommand("legacy").is_none() {
+        return String::new();
+    }
+    let mut hidden = hidden_legacy_commands(repl);
+    hidden.sort_unstable();
+    let examples = match (hidden.first(), hidden.get(1)) {
+        (Some(first), Some(second)) => format!(" (e.g. {first}, {second})"),
+        (Some(first), None) => format!(" (e.g. {first})"),
+        // A grammar that hides nothing still keeps the legacy documentation
+        // reachable, just without example names.
+        _ => String::new(),
+    };
+    format!(
+        "\nLegacy flat spellings{examples} are still accepted and \
+        keep working.\n\
+        Run `help full` to list every command with its first-level subcommands, \
+        `legacy` \
+        to list every legacy spelling with its nested equivalent, or \
+        `help <command>` \
+        to read about a specific command, legacy spellings included.\n"
+    )
+}
+
+/// Render the legacy flat spellings with their nested equivalents as an
+/// aligned two-column listing. This is the body printed by the `legacy`
+/// command, the explicit way to see the old command formats. Only the pairs
+/// that parse against the given grammar are listed; in a cold-wallet grammar
+/// most flat spellings are primary commands, not legacy duplicates.
+pub fn legacy_command_table(root: &Command) -> String {
+    let pairs: Vec<(&str, &str)> = LEGACY_ALIASES
+        .iter()
+        .copied()
+        .filter(|(legacy, nested)| {
+            root.find_subcommand(legacy).is_some() && nested_equivalent_available(root, nested)
+        })
+        .collect();
+    // The legacy column is at least as wide as the header label, so the
+    // header and the data rows share one nested column even in grammars with
+    // only short legacy names.
+    let width = pairs
+        .iter()
+        .map(|(legacy, _nested)| legacy.len())
+        .max()
+        .unwrap_or(0)
+        .max("Legacy spelling (still accepted)".len());
+    let nested_width = pairs.iter().map(|(_legacy, nested)| nested.len()).max().unwrap_or(0);
+    let mut table = format!(
+        "{:<width$}  Nested equivalent\n",
+        "Legacy spelling (still accepted)"
+    );
+    table.push_str(&format!(
+        "{}  {}\n",
+        "-".repeat(width),
+        "-".repeat(nested_width.max("Nested equivalent".len()))
+    ));
+    for (legacy, nested) in pairs {
+        table.push_str(&format!("{legacy:<width$}  {nested}\n"));
+    }
+    table
+}
+
+/// Answer the grammar-view requests (`help full` and `legacy`) before
+/// parsing: clap's built-in help has no mode that lists the primary commands
+/// together with their first-level subcommands, and the `legacy` listing must
+/// be filtered against the grammar it runs in. Every interactive surface
+/// (interactive, non-interactive, exec, and the GUI console) routes its input
+/// lines through this single entry point so the views behave identically
+/// everywhere. Returns `None` for any other line.
+///
+/// The views are only answered where the grammar carries the `legacy`
+/// command — the same marker the completer keys the advertised views on, so
+/// the two cannot drift apart.
+pub fn grammar_view_request(line: &str, repl_command: &Command) -> Option<String> {
+    // Tokenize the way the parser does, so a quoted spelling is answered
+    // exactly when the parser would treat it as these tokens.
+    let tokens = shlex::split(line)?;
+    // Each view is keyed on the command it needs: the `legacy` views on the
+    // hidden `legacy` command (the same marker the completer keys their
+    // offers on), plain help on the auto-added `help` command.
+    let has_legacy = repl_command.find_subcommand("legacy").is_some();
+    let has_help = repl_command.find_subcommand("help").is_some();
+    match tokens.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["legacy"] if has_legacy => Some(legacy_command_table(repl_command)),
+        ["help", "full"] if has_legacy => {
+            let mut listing = full_command_listing(repl_command);
+            listing.push_str(&legacy_help_footer(repl_command));
+            Some(listing)
+        }
+        // Any other `help [path]` renders clap's help for that path as a
+        // successful print, so non-interactive modes (`--exec`,
+        // `--commands-file`) exit 0 on help like the interactive one does
+        // instead of surfacing clap's DisplayHelp error as a failure.
+        ["help", rest @ ..] if has_help => {
+            let mut args = vec!["help"];
+            args.extend(rest.iter().copied());
+            match repl_command.clone().try_get_matches_from(args) {
+                Err(err) if err.kind() == clap::error::ErrorKind::DisplayHelp => {
+                    Some(err.render().to_string())
+                }
+                // Unknown paths are errors; let the regular parse path
+                // produce the same clap error it always did.
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The visible first-level subcommands of a group: hidden commands and the
+/// auto-added `help` plumbing are kept out. This is the set the full listing
+/// and the root completion menu expand, keyed off the same filters so the two
+/// views cannot drift.
+pub fn visible_first_level_subcommands(group: &Command) -> Vec<&Command> {
+    group
+        .get_subcommands()
+        .filter(|sub| !sub.is_hide_set() && sub.get_name() != "help")
+        .collect()
+}
+
+/// First line of a command's about text, without the trailing newline the
+/// grammar appends to every about for help rendering. The full listing and
+/// the completion menu describe commands with this same first line, so both
+/// views of the same content agree.
+pub fn first_about_line(command: &Command) -> String {
+    command
+        .get_about()
+        .map(|about| about.to_string())
+        .unwrap_or_default()
+        .lines()
+        .next()
+        .map(str::to_owned)
+        .unwrap_or_default()
+}
+
+/// Whether a primary command's first-level subcommands expand under it in the
+/// full listing and the root completion menu. The auto-added `help`
+/// "subcommand" exposes the help targets as children; they are help plumbing,
+/// not commands, so it does not expand.
+pub fn expands_first_level(command: &Command) -> bool {
+    command.get_subcommands().next().is_some() && command.get_name() != "help"
+}
+
+/// Render the "full" listing: every visible primary command with its visible
+/// first-level subcommands shown underneath, one per line with a short
+/// description. This is the body printed by `help full` and mirrors what the
+/// completer offers at the prompt; hidden commands (the legacy flat
+/// spellings) stay out of it.
+pub fn full_command_listing(root: &Command) -> String {
+    // Keep one ordering across the views of the same content: the clap help
+    // listing and the completion menu are alphabetical, so the full listing is
+    // too, instead of following the enum declaration order.
+    let mut primaries: Vec<&Command> =
+        root.get_subcommands().filter(|command| !command.is_hide_set()).collect();
+    primaries.sort_by_key(|command| command.get_name());
+    let primary_width = primaries.iter().map(|command| command.get_name().len()).max().unwrap_or(0);
+    let sub_width = primaries
+        .iter()
+        .filter(|primary| expands_first_level(primary))
+        .flat_map(|primary| {
+            let primary_name = primary.get_name();
+            visible_first_level_subcommands(primary)
+                .into_iter()
+                .map(move |sub| primary_name.len() + 1 + sub.get_name().len())
+        })
+        .max()
+        .unwrap_or(0);
+
+    let mut listing = String::from("Commands:\n");
+    for primary in &primaries {
+        let name = primary.get_name();
+        listing.push_str(&format!(
+            "  {name:<primary_width$}  {}\n",
+            first_about_line(primary)
+        ));
+        let mut subs = if expands_first_level(primary) {
+            visible_first_level_subcommands(primary)
+        } else {
+            Vec::new()
+        };
+        subs.sort_by_key(|sub| sub.get_name());
+        for sub in subs {
+            let path = format!("{name} {}", sub.get_name());
+            listing.push_str(&format!(
+                "    {path:<sub_width$}  {}\n",
+                first_about_line(sub)
+            ));
+        }
+    }
+    listing
+}
 
 // Strip out name/version.
 // Note: here we expect "about" to have a trailing EOL, see the comments inside get_repl_command.
@@ -2649,9 +2886,22 @@ pub fn build_repl_command(cold_wallet: bool, mutable_wallet: bool) -> Command {
     // later, so it will always be at the end).
     // 3) If the command's "about" is empty, re-use the description of the corresponding RPC
     // method.
+    // 4) Hide the legacy flat spellings from the listings while keeping them
+    // runnable; the root help footer and the `legacy` command point at them.
+    // A flat spelling whose nested equivalent does not parse in this grammar
+    // is the only form of that command here (cold wallets have no nested
+    // groups), so it stays visible.
+    let footer = legacy_help_footer(&repl_command);
+    let hidden_legacy: Vec<String> =
+        hidden_legacy_commands(&repl_command).into_iter().map(str::to_owned).collect();
+    repl_command = repl_command.after_help(footer);
     for subcommand in repl_command.get_subcommands_mut() {
         let mut new_subcommand =
             subcommand.clone().help_template(COMMAND_HELP_TEMPLATE).display_order(0);
+
+        if hidden_legacy.iter().any(|name| name == subcommand.get_name()) {
+            new_subcommand = new_subcommand.hide(true);
+        }
 
         if new_subcommand.get_about().is_none()
             && let Some(rpc_method) = method_desc_from_rpc.get(subcommand.get_name())
@@ -2853,6 +3103,288 @@ mod tests {
             .expect("the wallet group is part of the hot wallet grammar");
         assert!(wallet_group.find_subcommand("create").is_some());
         assert!(wallet_group.find_subcommand("close").is_some());
+    }
+
+    // Render what the REPL prints for a help line: `parse_input` surfaces the
+    // clap DisplayHelp error and the console renders it.
+    fn help_output(line: &str) -> String {
+        let repl = grammar_with_large_stack(false, true);
+        match parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl) {
+            Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                clap_error.render().to_string()
+            }
+            other => panic!("`{line}` must surface as a clap help error, got {other:?}"),
+        }
+    }
+
+    // The command listing block of a rendered help text, excluding any
+    // surrounding sections (the legacy footer names legacy spellings as
+    // examples, so assertions about the listing must not see them).
+    fn commands_section(help_text: &str) -> String {
+        let start = help_text.find("Commands:").expect("help renders the Commands section");
+        let rest = &help_text[start..];
+        let end = rest.find("\n\n").unwrap_or(rest.len());
+        rest[..end].to_owned()
+    }
+
+    #[test]
+    fn root_help_lists_nested_categories_and_hides_legacy_spellings() {
+        let listing = commands_section(&help_output("help"));
+
+        // The nested categories are listed with their descriptions.
+        for category_about in [
+            "Wallet management commands",
+            "Account commands",
+            "Address commands",
+            "Staking pool operations",
+            "Delegation operations",
+            "Token operations",
+            "Order operations",
+            "HTLC operations",
+            "Transaction operations",
+            "Node management commands",
+            "Peer management commands",
+        ] {
+            assert!(
+                listing.contains(category_about),
+                "root help is missing the `{category_about}` category\n{listing}"
+            );
+        }
+
+        // The legacy flat spellings are absent from the listing.
+        for legacy in ["address-new", "wallet-create", "staking-create-pool", "node-shutdown"] {
+            assert!(
+                !listing.contains(legacy),
+                "root help must not list the legacy spelling `{legacy}`\n{listing}"
+            );
+        }
+
+        // The footer (outside the listing) points at the explicit legacy listing.
+        let output = help_output("help");
+        assert!(
+            output.contains("`legacy`"),
+            "root help is missing the legacy footer\n{output}"
+        );
+    }
+
+    #[test]
+    fn help_still_renders_legacy_commands_when_selected_explicitly() {
+        for legacy in ["address-new", "wallet-create", "staking-create-pool"] {
+            let output = help_output(&format!("help {legacy}"));
+            assert!(
+                output.contains(legacy),
+                "`help {legacy}` must render the legacy command help\n{output}"
+            );
+        }
+        // Multi-segment nested paths render the deepest command's help.
+        let output = help_output("help address standalone add");
+        assert!(
+            output.contains("standalone add"),
+            "multi-segment help path renders\n{output}"
+        );
+
+        // The cold grammars hide a different set of flats; their legacy
+        // spellings stay reachable through the help path too.
+        let cold = grammar_with_large_stack(true, true);
+        match parse_input::<node_comm::node_traits::MockNodeInterface>(
+            "help challenge-sign-plain",
+            &cold,
+        ) {
+            Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                let rendered = clap_error.render().to_string();
+                assert!(
+                    rendered.contains("challenge-sign-plain"),
+                    "cold `help challenge-sign-plain` must render\n{rendered}"
+                );
+            }
+            other => panic!("cold help line must surface as a clap help error, got {other:?}"),
+        }
+        let cold_view = grammar_view_request("help challenge-sign-plain", &cold)
+            .expect("the cold view path must render legacy help too");
+        assert!(cold_view.contains("challenge-sign-plain"));
+    }
+
+    #[test]
+    fn legacy_command_parses_in_every_grammar() {
+        // (true, true) is the grammar the shipped cold CLI builds.
+        for (cold_wallet, mutable_wallet) in
+            [(false, true), (false, false), (true, false), (true, true)]
+        {
+            let repl = grammar_with_large_stack(cold_wallet, mutable_wallet);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>("legacy", &repl)
+                .expect("`legacy` must parse")
+                .expect("`legacy` must parse to a command");
+            assert!(
+                matches!(
+                    command,
+                    ManageableWalletCommand::WalletCommands(WalletCommand::ColdCommands(
+                        ColdWalletCommand::Legacy
+                    ))
+                ),
+                "`legacy` must parse to the legacy listing command in the \
+                 cold={cold_wallet} mutable={mutable_wallet} grammar"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_table_lists_the_pairs_that_parse_in_the_grammar() {
+        // The mutable grammar hides and lists every legacy pair.
+        let mutable = grammar_with_large_stack(false, true);
+        let table = legacy_command_table(&mutable);
+        let width = LEGACY_ALIASES.iter().map(|(legacy, _)| legacy.len()).max().unwrap_or(0);
+        for (legacy, nested) in LEGACY_ALIASES {
+            assert!(
+                mutable.find_subcommand(legacy).is_some(),
+                "the mutable grammar is missing `{legacy}`"
+            );
+            assert!(
+                table.contains(&format!("{legacy:<width$}  {nested}")),
+                "the mutable legacy table is missing the `{legacy}` / `{nested}` pair"
+            );
+        }
+
+        // The cold grammars keep the flat spellings that are their only form
+        // of a command, so their tables list only the pairs that parse there.
+        // (true, true) is the cold grammar the shipped CLI builds; the
+        // management flats parse there but their nested forms do not.
+        for mutable in [false, true] {
+            let cold = grammar_with_large_stack(true, mutable);
+            let cold_table = legacy_command_table(&cold);
+            assert!(cold_table.contains("challenge-sign-plain"));
+            assert!(cold_table.contains("challenge sign"));
+            for absent in ["address-send", "node-shutdown", "token-mint"] {
+                assert!(
+                    !cold_table.contains(absent),
+                    "the cold legacy table must not list `{absent}`: it does not parse there"
+                );
+            }
+            assert!(
+                !cold_table.contains("wallet-create"),
+                "the cold legacy table must not list `wallet-create`: \
+                 its nested form does not parse there"
+            );
+        }
+    }
+
+    #[test]
+    fn cold_grammar_help_hides_legacy_spellings_too() {
+        let repl = grammar_with_large_stack(true, false);
+        let output = match parse_input::<node_comm::node_traits::MockNodeInterface>("help", &repl) {
+            Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                clap_error.render().to_string()
+            }
+            other => panic!("`help` must surface as a clap help error, got {other:?}"),
+        };
+        let listing = commands_section(&output);
+
+        // The nested spellings stay listed...
+        for category in ["challenge", "history"] {
+            assert!(
+                listing.contains(category),
+                "cold help is missing `{category}`\n{listing}"
+            );
+        }
+        // Flat spellings with a nested equivalent in this grammar stay hidden.
+        for legacy in ["challenge-sign-plain", "history-print", "screen-clear"] {
+            assert!(
+                !listing.contains(legacy),
+                "cold help must not list the legacy spelling `{legacy}`\n{listing}"
+            );
+        }
+        // Flat spellings without a nested equivalent here are the only form
+        // of those commands, so they stay listed.
+        for primary in ["wallet-info", "address-new", "staking-new-vrf-public-key"] {
+            assert!(
+                listing.contains(primary),
+                "cold help must keep the primary spelling `{primary}`\n{listing}"
+            );
+        }
+    }
+
+    #[test]
+    fn full_listing_shows_primaries_with_first_level_subcommands() {
+        let repl = grammar_with_large_stack(false, true);
+        let listing = full_command_listing(&repl);
+
+        // Primary commands appear with their groups' first-level subcommands.
+        for path in [
+            "transaction",
+            "transaction inspect",
+            "wallet",
+            "wallet create",
+            "address",
+            "address new",
+            "staking",
+            "staking create-pool",
+            "send",
+            "help",
+        ] {
+            assert!(
+                listing.contains(path),
+                "the full listing is missing `{path}`\n{listing}"
+            );
+        }
+
+        // The legacy flat spellings stay out of the full listing.
+        for legacy in ["address-new", "wallet-create", "staking-create-pool"] {
+            assert!(
+                !listing.contains(legacy),
+                "the full listing must not contain `{legacy}`\n{listing}"
+            );
+        }
+
+        // Deeper levels are not expanded: `standalone` is listed, its own
+        // subcommands are not.
+        assert!(listing.contains("address standalone"));
+        assert!(!listing.contains("address standalone add"));
+    }
+
+    #[test]
+    fn legacy_view_and_table_render_identically_across_grammars() {
+        // The pre-parse view and the dispatch fallback must render the same
+        // table for every grammar variant, so a swapped (cold, mutable) flag
+        // at a constructor call site changes both together.
+        for (cold_wallet, mutable_wallet) in
+            [(false, true), (false, false), (true, false), (true, true)]
+        {
+            let repl = grammar_with_large_stack(cold_wallet, mutable_wallet);
+            let view = grammar_view_request("legacy", &repl).expect("`legacy` must render");
+            assert_eq!(
+                view,
+                legacy_command_table(&repl),
+                "the legacy view and the table diverge for cold={cold_wallet} \
+                 mutable={mutable_wallet}"
+            );
+        }
+    }
+
+    #[test]
+    fn fallback_table_matches_the_pre_parse_view() {
+        // The dispatch fallback (`legacy_table_for`) and the pre-parse view
+        // (`grammar_view_request`) must render the same listing for every
+        // grammar variant, so the two surfaces cannot show different tables.
+        for (cold_wallet, mutable_wallet) in
+            [(false, true), (false, false), (true, false), (true, true)]
+        {
+            let repl = grammar_with_large_stack(cold_wallet, mutable_wallet);
+            let view = grammar_view_request("legacy", &repl).expect("`legacy` must render");
+            assert_eq!(
+                view.as_str(),
+                command_handler::legacy_table_for(cold_wallet, mutable_wallet),
+                "the fallback table diverges from the view for cold={cold_wallet} \
+                 mutable={mutable_wallet}"
+            );
+        }
+    }
+
+    #[test]
+    fn full_listing_matches_across_grammar_variants() {
+        // The listing is derived from whatever grammar variant is in use; the
+        // cold one must render without the wallet management group.
+        let cold = full_command_listing(&grammar_with_large_stack(true, false));
+        assert!(cold.contains("challenge"));
+        assert!(!cold.contains("wallet create"));
     }
 
     #[rstest]

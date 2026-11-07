@@ -118,6 +118,8 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                 },
                 wallet,
                 Some(qr),
+                cold_wallet,
+                true,
             )
             .await;
 
@@ -168,6 +170,8 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
                 },
                 wallet,
                 Some(qr),
+                cold_wallet,
+                true,
             )
             .await;
 

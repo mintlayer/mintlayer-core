@@ -179,6 +179,10 @@ fn process_line<N: NodeInterface>(
         }
     }
 
+    if let Some(listing) = super::grammar_view_request(&line, repl_command) {
+        return Ok(Some(ConsoleCommand::Print(listing)));
+    }
+
     let command_opt = parse_input(&line, repl_command)?;
 
     let command = match command_opt {
@@ -297,9 +301,10 @@ pub fn run<N: NodeInterface>(
         }
     }
 
-    console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'help' to see the command categories.");
+    console.print_line("Use 'help full' to list every command with its subcommands.");
     console.print_line("Use 'help <command>' to learn more about the parameters of the command.");
-    console.print_line("Press TAB on your keyboard to auto-complete any command you write.");
+    console.print_line("Press TAB to see the commands and auto-complete what you write.");
     console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     let mut cmd = None;
@@ -586,6 +591,52 @@ fn read_command(
             }
             crossterm::event::Event::Resize(_, _) => return Ok(PagginationCommand::TerminalResize),
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod view_hook_tests {
+    use super::*;
+    use reedline::Signal;
+    use rstest::rstest;
+
+    // The view lines must answer before the confirmation gate and without
+    // touching the event loop, so a dummy channel stands in for it. Grammar
+    // construction overflows the default 2 MiB test-thread stack, so build it
+    // on a large-stack thread.
+    #[rstest]
+    fn help_views_print_before_the_gate_in_interactive_mode(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        let repl_command = wallet_cli_commands::run_with_large_stack(move || {
+            build_repl_command(cold_wallet, mutable_wallet)
+        });
+        let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+        // The cold grammars have no `wallet`/`address` groups, so their help
+        // paths target the nested spellings they do carry.
+        let lines: Vec<&str> = if cold_wallet {
+            vec!["help full", "legacy", "help", "help challenge sign"]
+        } else {
+            vec!["help full", "legacy", "help", "help wallet", "help address-new"]
+        };
+        for line in lines {
+            let outcome = process_line::<node_comm::node_traits::MockNodeInterface>(
+                &repl_command,
+                &event_tx,
+                Signal::Success(line.to_owned()),
+                false,
+            )
+            .expect("view lines must not fail in interactive mode");
+            match outcome {
+                Some(ConsoleCommand::Print(text)) => {
+                    assert!(!text.is_empty(), "`{line}` must render non-empty text")
+                }
+                other => panic!("`{line}` must print in interactive mode, got {other:?}"),
+            }
         }
     }
 }

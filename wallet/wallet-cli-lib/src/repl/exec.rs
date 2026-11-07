@@ -22,6 +22,7 @@ use crate::{
     cli_event_loop::Event, config::CliOutputFormat, console::ConsoleOutput, errors::WalletCliError,
 };
 
+#[derive(Debug)]
 enum ExecOutput {
     Text(String),
     Json {
@@ -37,6 +38,10 @@ fn process_line<N: NodeInterface>(
     line: &str,
     assume_yes: bool,
 ) -> Result<ExecOutput, WalletCliError<N>> {
+    if let Some(listing) = super::grammar_view_request(line, repl_command) {
+        return Ok(ExecOutput::Text(listing));
+    }
+
     let command_opt = parse_input(line, repl_command)?;
 
     let command = match command_opt {
@@ -188,6 +193,7 @@ fn to_startup_text(command_output: ConsoleCommand) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     fn parse_line(line: &'static str, cold: bool) -> Option<serde_json::Value> {
         // Grammar construction overflows the default 2 MiB test-thread stack,
@@ -223,5 +229,64 @@ mod tests {
         // The cold-wallet grammar keeps the flat command names and drops the
         // hot-wallet groups, so pin the flat spelling here.
         assert_eq!(parse_line("wallet-info", true).unwrap(), "parsed");
+    }
+
+    // Grammar construction overflows the default 2 MiB test-thread stack.
+    fn grammar() -> clap::Command {
+        wallet_cli_commands::run_with_large_stack(|| build_repl_command(false, true))
+    }
+
+    // The view lines must answer without touching the event loop, so a dummy
+    // channel stands in for it.
+    fn exec_line(
+        line: &str,
+        grammar: &clap::Command,
+        assume_yes: bool,
+    ) -> Result<ExecOutput, WalletCliError<node_comm::node_traits::MockNodeInterface>> {
+        let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+        process_line(grammar, &event_tx, line, assume_yes)
+    }
+
+    #[rstest]
+    fn help_views_print_and_exit_zero_in_exec_mode(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        // The shipped CLI builds (cold, true) in every mode; the cold variants
+        // pin the contract for cold deployments too.
+        let grammar = wallet_cli_commands::run_with_large_stack(move || {
+            build_repl_command(cold_wallet, mutable_wallet)
+        });
+        // The cold grammars have no `wallet`/`address` groups, so their help
+        // paths target the nested spellings they do carry.
+        let lines: Vec<&str> = if cold_wallet {
+            vec!["help full", "legacy", "help", "help challenge sign"]
+        } else {
+            vec!["help full", "legacy", "help", "help wallet", "help address standalone"]
+        };
+        for line in lines {
+            match exec_line(line, &grammar, true) {
+                Ok(ExecOutput::Text(text)) => {
+                    assert!(!text.is_empty(), "`{line}` must render non-empty help text")
+                }
+                other => panic!("`{line}` must print in exec mode, got {other:?}"),
+            }
+        }
+        // The views answer before the confirmation gate, so they print even
+        // for callers that did not pass --yes.
+        match exec_line("legacy", &grammar, false) {
+            Ok(ExecOutput::Text(text)) => assert!(!text.is_empty()),
+            other => panic!("`legacy` must print without --yes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_help_paths_stay_parse_errors_in_exec_mode() {
+        // The deliberate exit-code split: unknown paths fall through to the
+        // parser and surface as failures, so scripts can tell them apart.
+        let grammar = grammar();
+        assert!(exec_line("help nonexistent-command", &grammar, true).is_err());
     }
 }
