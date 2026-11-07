@@ -135,7 +135,7 @@ pub fn dump_storage<B: Backend, Sch: Schema>(
         .enumerate()
         .map(|(idx, _dbinfo)| {
             let idx = storage_core::DbMapId::new(idx);
-            let items = dbtx.dbtx.prefix_iter(idx, Vec::new())?;
+            let items = dbtx.dbtx.prefix_iter(idx, &[])?;
             Ok((DbMapId::from_idx_unchecked(idx), items.collect()))
         })
         .collect::<crate::Result<StorageContents<Sch>>>()
