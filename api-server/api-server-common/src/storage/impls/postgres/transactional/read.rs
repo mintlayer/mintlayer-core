@@ -176,6 +176,23 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         Ok(res)
     }
 
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_delegation_at_or_below_height(
+                delegation_id,
+                Some(block_height),
+                &self.chain_config,
+            )
+            .await?;
+
+        Ok(res)
+    }
+
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
@@ -193,6 +210,23 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_delegation_shares(pool_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_pool_delegations_at_or_below_height(
+                pool_id,
+                Some(block_height),
+                &self.chain_config,
+            )
+            .await?;
 
         Ok(res)
     }
@@ -257,6 +291,19 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
     {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn
+            .get_pool_data_at_or_below_height(pool_id, Some(block_height), &self.chain_config)
+            .await?;
 
         Ok(res)
     }

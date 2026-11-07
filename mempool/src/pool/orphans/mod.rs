@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{chain::Transaction, primitives::Id};
 use logging::log;
 use mempool_types::TxStatus;
-use randomness::{RngExt as _, make_pseudo_rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time};
@@ -80,6 +79,21 @@ struct TxOrphanPoolMaps {
 
     /// Number of stored entries with a local origin
     local_count: usize,
+
+    /// Occupancy accounting per origin (entry count and total encoded size)
+    origin_stats: BTreeMap<TxOrigin, OriginStat>,
+}
+
+/// Occupancy of the pool attributable to a single origin
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct OriginStat {
+    count: usize,
+    /// Byte size of the origin's entries. Quotas and reservations are count-based today;
+    /// the size is maintained for the integrity checks and any future byte-budget quota.
+    size: usize,
+    /// Whether the origin is an outbound (node-selected) peer, recorded from the entry's
+    /// options at insertion time. All entries of one origin share the class.
+    outbound: bool,
 }
 
 impl TxOrphanPoolMaps {
@@ -90,6 +104,7 @@ impl TxOrphanPoolMaps {
             by_deps: BTreeSet::new(),
             by_origin: BTreeSet::new(),
             local_count: 0,
+            origin_stats: BTreeMap::new(),
         }
     }
 
@@ -108,6 +123,20 @@ impl TxOrphanPoolMaps {
             self.local_count += 1;
         }
 
+        let stat = self.origin_stats.entry(origin).or_default();
+        let outbound = entry.options().origin_peer_is_outbound();
+        if stat.count > 0 && outbound && !stat.outbound {
+            // The first entry records the origin's connection class. If a later entry claims
+            // the outbound tier, upgrade the whole origin: reservations may only grow (more
+            // protection), never shrink, and the invariant must not depend on peer IDs
+            // staying unique across a process lifetime. Downgrades are ignored.
+            stat.outbound = true;
+        } else if stat.count == 0 {
+            stat.outbound = outbound;
+        }
+        stat.count += 1;
+        stat.size += entry.size().get();
+
         self.by_deps.extend(entry.required_deps().map(|dep| (dep, iid)));
     }
 
@@ -122,6 +151,18 @@ impl TxOrphanPoolMaps {
 
         if matches!(entry.origin(), TxOrigin::Local(_)) {
             self.local_count -= 1;
+        }
+
+        let stat = self.origin_stats.get_mut(&entry.origin()).expect("origin stat to be present");
+        stat.count -= 1;
+        stat.size -= entry.size().get();
+
+        // Purge exhausted entries so teardown leaves no per-origin accounting residue;
+        // a lingering zero-count key would make `tracked_origin_count` drift upward and
+        // keep the origin's memory in the map indefinitely.
+        if stat.count == 0 {
+            debug_assert_eq!(stat.size, 0);
+            self.origin_stats.remove(&entry.origin());
         }
 
         entry.required_deps().for_each(|dep| {
@@ -141,17 +182,44 @@ pub struct TxOrphanPool {
 
     /// Maximum orphan pool size in the number of transactions
     transaction_count_limit: ConstValue<usize>,
+
+    /// Number of entries a local origin is guaranteed to keep when the pool makes room
+    local_transaction_count_limit: ConstValue<usize>,
+
+    /// Number of entries a single remote peer is guaranteed to keep when the pool makes room
+    /// (inbound tier)
+    remote_per_peer_limit: ConstValue<usize>,
+
+    /// Number of entries a single outbound (node-selected) remote peer is guaranteed to keep
+    outbound_remote_per_peer_limit: ConstValue<usize>,
 }
 
 impl TxOrphanPool {
-    pub fn new() -> Self {
+    /// Only this crate constructs the pool (from validated `MempoolConfig` values), so the
+    /// constructor stays crate-private. Zero capacities are rejected by
+    /// `MempoolConfig::validate` at startup; the assertion below is a debug-build backstop
+    /// only and must not be relied on in release builds.
+    pub(crate) fn new(
+        local_orphan_pool_capacity: usize,
+        remote_orphan_pool_capacity_per_peer: usize,
+        outbound_remote_orphan_pool_capacity_per_peer: usize,
+    ) -> Self {
         let transaction_count_limit = config::DEFAULT_ORPHAN_POOL_CAPACITY;
+        debug_assert!(
+            local_orphan_pool_capacity > 0
+                && remote_orphan_pool_capacity_per_peer > 0
+                && outbound_remote_orphan_pool_capacity_per_peer > 0,
+            "orphan capacities must be nonzero (validated at the config layer)"
+        );
         Self {
-            // We add 1 to the capacity because in normal operation, a transaction is added and
-            // then the limit is enforced so the vector may temporarily exceed the limit by one.
+            // Headroom so pushes do not reallocate on every entry; the vector may temporarily
+            // exceed the soft limit when entries are inserted directly.
             transactions: Vec::with_capacity(transaction_count_limit + 1),
             maps: TxOrphanPoolMaps::new(),
             transaction_count_limit: transaction_count_limit.into(),
+            local_transaction_count_limit: local_orphan_pool_capacity.into(),
+            remote_per_peer_limit: remote_orphan_pool_capacity_per_peer.into(),
+            outbound_remote_per_peer_limit: outbound_remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 
@@ -207,7 +275,13 @@ impl TxOrphanPool {
     }
 
     /// Insert a transaction entry
-    pub fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
+    ///
+    /// Crate-private: the production entry point for orphan admission is
+    /// [`crate::pool::Mempool::try_add_orphan`], which runs the per-peer admission policy
+    /// (`check_orphan_pool_policy`) before any insert. This method enforces only the
+    /// aggregate hard limit, so bypassing the policy here would admit orphans outside the
+    /// per-peer quota and shield them from eviction with their reservation.
+    pub(crate) fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
         if self.contains(&tx_id) {
             return Ok(TxStatus::InOrphanPoolDuplicate);
@@ -225,18 +299,63 @@ impl TxOrphanPool {
     }
 
     /// Insert a transaction entry and make sure the pool size does not grow too large
-    pub fn insert_and_enforce_limits(
+    ///
+    /// A resubmission of an already-parked transaction stays idempotent even when the pool is
+    /// full. Otherwise expired entries are dropped first and room is made by evicting only
+    /// from origins that exceed their reservation; a still-full pool rejects the newcomer
+    /// with [`OrphanPoolError::Full`] instead of displacing another peer's protected entries.
+    ///
+    /// This enforces the aggregate cap (and expiry); the per-peer remote quota lives in
+    /// `TxFinalizer::check_orphan_pool_policy` (`pool/mod.rs`), which every production
+    /// caller runs before inserting.
+    pub(crate) fn insert_and_enforce_limits(
         &mut self,
         entry: TxEntry,
         cur_time: Time,
     ) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
 
+        // Sweep expired entries before anything else so that resubmissions of stale entries
+        // cannot keep them alive by perpetually short-circuiting on the duplicate check.
+        // On the production path the caller has already swept for the policy check, so this
+        // pass is a no-op there; it matters for direct callers (unit tests).
+        self.remove_expired(cur_time);
+        if self.contains(&tx_id) {
+            return Ok(TxStatus::InOrphanPoolDuplicate);
+        }
+
+        // Staleness is decided before capacity: an already-stale entry must report
+        // `Expired` even when the pool is also full, and it must not trigger an eviction
+        // for room it would never use. `remove_expired` has just run, so staleness is
+        // detectable without touching the pool. Reporting `Expired` keeps a
+        // swept-and-rejected resubmission distinguishable from `Full`, which callers read
+        // as resource exhaustion.
+        if entry.creation_time() < self.expiry_cutoff(cur_time) {
+            return Err(OrphanPoolError::Expired);
+        }
+
+        if self.len() >= *self.transaction_count_limit
+            && !self.evict_over_reservation(*self.transaction_count_limit)
+        {
+            return Err(OrphanPoolError::Full);
+        }
+
         let status = self.insert(entry)?;
         self.enforce_limits(cur_time);
+        // Unreachable by construction: the entry was not stale on insertion (checked above),
+        // so the sweep inside `enforce_limits` cannot remove it, and the `Full` check above
+        // bounds the pool below capacity, so `enforce_max_size` evicts nothing. Should this
+        // ever fire, the pool's internal invariant is broken and `Full` reports it
+        // fail-closed.
         ensure!(self.contains(&tx_id), OrphanPoolError::Full);
 
         Ok(status)
+    }
+
+    /// The insertion time below which an entry counts as expired at `cur_time`. Mirrors the
+    /// cutoff used by [`Self::remove_expired`].
+    fn expiry_cutoff(&self, cur_time: Time) -> Time {
+        cur_time.saturating_duration_sub(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL)
     }
 
     /// Remove transaction by its internal ID
@@ -262,9 +381,9 @@ impl TxOrphanPool {
     }
 
     /// Remove expired items (older than `cur_time - expiration_interval`)
-    fn remove_expired(&mut self, cur_time: Time) -> usize {
+    pub(crate) fn remove_expired(&mut self, cur_time: Time) -> usize {
         // Remove all expired txns
-        let expiry = cur_time.saturating_duration_sub(config::DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL);
+        let expiry = self.expiry_cutoff(cur_time);
 
         let mut n_expired = 0;
         while let Some(entry) = self.maps.by_insertion_time.first().filter(|(t, _)| *t < expiry) {
@@ -279,13 +398,95 @@ impl TxOrphanPool {
         n_expired
     }
 
-    /// Evict transactions at random until the specified cap is reached
-    fn enforce_max_size(&mut self, max_size: usize) -> usize {
-        let mut rng = make_pseudo_rng();
+    /// The number of entries an origin of this class is guaranteed to keep when the pool
+    /// makes room for newcomers. Outbound (node-selected) peers get the larger share;
+    /// whether an origin is outbound is recorded at insertion time from the entry's
+    /// options.
+    ///
+    /// Note the reservation matches the admission quota only for remote origins. Local
+    /// admission (`check_orphan_pool_policy`) caps all local origins in aggregate, while
+    /// the reservation here protects each distinct local origin key separately, so up to
+    /// one reservation per local variant can be kept in aggregate. This is latent today:
+    /// the admission cap bounds the total, leaving the aggregate at or below the local
+    /// capacity in every reachable state.
+    pub(crate) fn origin_reservation(&self, origin: &TxOrigin) -> usize {
+        match origin {
+            TxOrigin::Local(_) => *self.local_transaction_count_limit,
+            TxOrigin::Remote(_) => {
+                let outbound = self.maps.origin_stats.get(origin).is_some_and(|s| s.outbound);
+                if outbound {
+                    *self.outbound_remote_per_peer_limit
+                } else {
+                    *self.remote_per_peer_limit
+                }
+            }
+        }
+    }
 
+    /// The oldest entry of the origin holding the largest number of entries beyond its
+    /// reservation. `None` if every origin is within its reservation.
+    fn pick_over_reservation(&self) -> Option<InternalId> {
+        let mut candidate = None;
+        for (origin, stat) in self.maps.origin_stats.iter() {
+            let excess = stat.count.saturating_sub(self.origin_reservation(origin));
+            if excess > 0 && candidate.is_none_or(|(_, best)| excess > best) {
+                candidate = Some((origin, excess));
+            }
+        }
+        let (origin, _) = candidate?;
+        self.oldest_of_origin(*origin)
+    }
+
+    fn oldest_of_origin(&self, origin: TxOrigin) -> Option<InternalId> {
+        let range = (origin, InternalId::ZERO)..=(origin, InternalId::MAX);
+        self.maps
+            .by_origin
+            .range(range)
+            .map(|(_origin, iid)| *iid)
+            .min_by_key(|iid| self.get_at(*iid).creation_time())
+    }
+
+    /// Make room for a newcomer by evicting only from origins beyond their reservation.
+    ///
+    /// Complexity is O(evictions × (origins + entries-of-origin)): each eviction rescans
+    /// `origin_stats` and range-scans the chosen origin's entries. This is acceptable at
+    /// the configured aggregate cap (100 by default) and the production path only reaches
+    /// eviction as defense-in-depth, since admission rejects before evicting.
+    /// Returns false if the pool is still full, in which case no protected entry was touched.
+    fn evict_over_reservation(&mut self, max_size: usize) -> bool {
+        while self.len() >= max_size {
+            match self.pick_over_reservation() {
+                Some(iid) => {
+                    self.remove_at(iid);
+                }
+                None => return false,
+            }
+        }
+        true
+    }
+
+    /// Evict transactions until the specified cap is reached
+    ///
+    /// Origins beyond their reservation are evicted first (largest excess, oldest entry);
+    /// otherwise the oldest entry in the pool is evicted. The reservation preference is a
+    /// safety net for direct inserts; the admission path never lets a remote origin exceed
+    /// its reservation (see [`Self::insert_and_enforce_limits`]).
+    ///
+    /// Invariant: on the production path (admission ahead of trimming) the oldest-overall
+    /// fallback is unreachable — a full pool whose origins are all within their reservations
+    /// is refused by admission with [`OrphanPoolError::Full`] before any caller needs to
+    /// trim. The fallback therefore fails open by design (it protects nothing); any future
+    /// caller that can reach this function in a production over-capacity state must go
+    /// through admission instead, or it silently converts the fail-closed guarantee into a
+    /// fail-open one.
+    fn enforce_max_size(&mut self, max_size: usize) -> usize {
         let mut n_evicted = 0;
         while self.len() > max_size {
-            self.remove_at(InternalId::new(rng.random_range(0..self.len())));
+            let iid = self
+                .pick_over_reservation()
+                .or_else(|| self.maps.by_insertion_time.iter().next().map(|(_, iid)| *iid))
+                .expect("pool is not empty");
+            self.remove_at(iid);
             n_evicted += 1;
         }
 
@@ -328,6 +529,23 @@ impl TxOrphanPool {
     /// Number of local-origin transactions in the orphan pool
     pub fn local_len(&self) -> usize {
         self.maps.local_count
+    }
+
+    /// Number of stored transactions with the given origin
+    pub fn origin_len(&self, origin: TxOrigin) -> usize {
+        self.maps.origin_stats.get(&origin).map_or(0, |s| s.count)
+    }
+
+    /// Total encoded size of stored transactions with the given origin
+    #[cfg(test)]
+    pub fn origin_size(&self, origin: TxOrigin) -> usize {
+        self.maps.origin_stats.get(&origin).map_or(0, |s| s.size)
+    }
+
+    /// Number of distinct origins currently tracked by the accounting map
+    #[cfg(test)]
+    pub fn tracked_origin_count(&self) -> usize {
+        self.maps.origin_stats.len()
     }
 }
 

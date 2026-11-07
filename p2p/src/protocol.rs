@@ -88,6 +88,12 @@ make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
 make_config_setting!(MaxAddrListResponseAddressCount, usize, 1000);
+make_config_setting!(ForkDownloadLimit, usize, 2000);
+make_config_setting!(
+    ForkDownloadRefillInterval,
+    std::time::Duration,
+    std::time::Duration::from_secs(600)
+);
 
 /// Protocol configuration. These values are supposed to be modified in tests only.
 ///
@@ -115,4 +121,10 @@ pub struct ProtocolConfig {
     pub max_message_size: MaxMessageSize,
     /// The maximum number of announcements (hashes) for which we haven't received transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
+    /// The maximum number of blocks that a peer can make us download for the header lists
+    /// it announces, before further announced header lists are deferred until the budget
+    /// is refilled.
+    pub max_fork_downloads_per_peer: ForkDownloadLimit,
+    /// How often the per-peer fork download budget is refilled.
+    pub fork_download_refill_interval: ForkDownloadRefillInterval,
 }

@@ -387,12 +387,9 @@ async fn tx_bigger_than_cluster_size(#[case] seed: Seed) -> anyhow::Result<()> {
         .build();
     let tx_size = tx.encoded_size();
     let mempool_config = MempoolConfig {
-        allow_local_orphans: Default::default(),
-        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         max_cluster_size_bytes: max_cluster_size.into(),
-
-        max_cluster_tx_count: Default::default(),
+        ..Default::default()
     };
     let mut mempool =
         setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
@@ -1421,12 +1418,10 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_child_txs = num_outputs;
 
     let mempool_config = MempoolConfig {
-        allow_local_orphans: Default::default(),
-        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: (num_child_txs + 1).into(),
-        max_cluster_size_bytes: Default::default(),
+        ..Default::default()
     };
     let mut mempool =
         setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
@@ -1558,12 +1553,9 @@ async fn accepted_tx_size(
     };
 
     let mempool_config = MempoolConfig {
-        allow_local_orphans: Default::default(),
-        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
         max_cluster_size_bytes: max_cluster_size.into(),
-
-        max_cluster_tx_count: Default::default(),
+        ..Default::default()
     };
     let mut mempool =
         setup_with_chainstate_generic(tf.chainstate(), mempool_config, Default::default());
@@ -1600,14 +1592,11 @@ async fn initial_values(#[case] seed: Seed) {
     let tf = TestFramework::builder(&mut rng).build();
 
     let mempool_config = MempoolConfig {
-        allow_local_orphans: Default::default(),
-        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: FeeRate::from_atoms_per_kb(
             rng.random_range(100_000..100_000_000_000_000),
         )
         .into(),
-        max_cluster_tx_count: Default::default(),
-        max_cluster_size_bytes: Default::default(),
+        ..Default::default()
     };
     let tx_pool =
         setup_with_chainstate_generic(tf.chainstate(), mempool_config.clone(), Default::default());
@@ -1682,11 +1671,10 @@ fn stack_overflow_on_transaction_addition(
         let mut mempool = setup_with_chainstate_generic(
             tf.chainstate(),
             MempoolConfig {
-                allow_local_orphans: Default::default(),
-                local_orphan_pool_capacity: Default::default(),
                 min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
                 max_cluster_size_bytes: usize::MAX.into(),
                 max_cluster_tx_count: max_cluster_tx_count.into(),
+                ..Default::default()
             },
             Default::default(),
         );
@@ -1844,12 +1832,10 @@ async fn storage_capacity_shrinkage(#[case] seed: Seed) {
     .collect();
 
     let mempool_config = MempoolConfig {
-        allow_local_orphans: Default::default(),
-        local_orphan_pool_capacity: Default::default(),
         min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
         // Make sure we don't hit the max cluster tx count limit.
         max_cluster_tx_count: txs.len().into(),
-        max_cluster_size_bytes: Default::default(),
+        ..Default::default()
     };
 
     let mut mempool = setup_with_chainstate_generic(

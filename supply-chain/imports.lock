@@ -996,8 +996,8 @@ user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
 [[publisher.mio]]
-version = "1.1.1"
-when = "2025-12-04"
+version = "1.2.4"
+when = "2026-10-03"
 user-id = 6025
 user-login = "Thomasdezeeuw"
 user-name = "Thomas de Zeeuw"
@@ -1330,6 +1330,13 @@ user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
+[[publisher.ring]]
+version = "0.17.11"
+when = "2025-02-22"
+user-id = 2751
+user-login = "ctz"
+user-name = "Joe Birr-Pixton"
+
 [[publisher.ripemd]]
 version = "0.1.3"
 when = "2022-09-23"
@@ -1562,8 +1569,8 @@ user-login = "Thomasdezeeuw"
 user-name = "Thomas de Zeeuw"
 
 [[publisher.socket2]]
-version = "0.6.2"
-when = "2026-01-23"
+version = "0.6.5"
+when = "2026-07-13"
 user-id = 6025
 user-login = "Thomasdezeeuw"
 user-name = "Thomas de Zeeuw"
@@ -1585,6 +1592,13 @@ user-name = "David Tolnay"
 [[publisher.syn]]
 version = "2.0.114"
 when = "2026-01-07"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "3.0.9"
+when = "2026-10-12"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1646,15 +1660,15 @@ user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
 [[publisher.tokio]]
-version = "1.50.0"
-when = "2026-03-03"
+version = "1.51.6"
+when = "2026-10-13"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
 [[publisher.tokio-macros]]
-version = "2.6.1"
-when = "2026-03-02"
+version = "2.7.2"
+when = "2026-07-29"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
@@ -1855,13 +1869,6 @@ user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
-[[publisher.unicode-width]]
-version = "0.2.2"
-when = "2025-10-06"
-user-id = 1139
-user-login = "Manishearth"
-user-name = "Manish Goregaokar"
-
 [[publisher.unicode-xid]]
 version = "0.2.6"
 when = "2024-09-19"
@@ -1956,11 +1963,11 @@ user-login = "ctz"
 user-name = "Joe Birr-Pixton"
 
 [[publisher.webpki-root-certs]]
-version = "1.0.10"
-when = "2026-10-19"
-user-id = 209038
-user-login = "cpu"
-user-name = "Daniel McCarney"
+version = "1.0.11"
+when = "2026-10-23"
+user-id = 2751
+user-login = "ctz"
+user-name = "Joe Birr-Pixton"
 
 [[publisher.winapi-util]]
 version = "0.1.11"
@@ -2110,13 +2117,6 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.windows-sys]]
-version = "0.60.2"
-when = "2025-06-12"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
-[[publisher.windows-sys]]
 version = "0.61.2"
 when = "2025-10-06"
 user-id = 64539
@@ -2140,13 +2140,6 @@ user-name = "Kenny Kerr"
 [[publisher.windows-targets]]
 version = "0.52.6"
 when = "2024-07-03"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
-[[publisher.windows-targets]]
-version = "0.53.5"
-when = "2025-10-06"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2179,13 +2172,6 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
-[[publisher.windows_aarch64_gnullvm]]
-version = "0.53.1"
-when = "2025-10-06"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
 [[publisher.windows_aarch64_msvc]]
 version = "0.42.2"
 when = "2023-03-13"
@@ -2207,13 +2193,6 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
-[[publisher.windows_aarch64_msvc]]
-version = "0.53.1"
-when = "2025-10-06"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
 [[publisher.windows_i686_gnu]]
 version = "0.42.2"
 when = "2023-03-13"
@@ -2231,13 +2210,6 @@ user-name = "Kenny Kerr"
 [[publisher.windows_i686_gnu]]
 version = "0.52.6"
 when = "2024-07-03"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
-[[publisher.windows_i686_gnu]]
-version = "0.53.1"
-when = "2025-10-06"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2249,13 +2221,6 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
-[[publisher.windows_i686_gnullvm]]
-version = "0.53.1"
-when = "2025-10-06"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
 [[publisher.windows_i686_msvc]]
 version = "0.42.2"
 when = "2023-03-13"
@@ -2273,13 +2238,6 @@ user-name = "Kenny Kerr"
 [[publisher.windows_i686_msvc]]
 version = "0.52.6"
 when = "2024-07-03"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
-[[publisher.windows_i686_msvc]]
-version = "0.53.1"
-when = "2025-10-06"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2305,13 +2263,6 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
-[[publisher.windows_x86_64_gnu]]
-version = "0.53.1"
-when = "2025-10-06"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
 [[publisher.windows_x86_64_gnullvm]]
 version = "0.42.2"
 when = "2023-03-13"
@@ -2333,13 +2284,6 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
-[[publisher.windows_x86_64_gnullvm]]
-version = "0.53.1"
-when = "2025-10-06"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
 [[publisher.windows_x86_64_msvc]]
 version = "0.42.2"
 when = "2023-03-13"
@@ -2357,13 +2301,6 @@ user-name = "Kenny Kerr"
 [[publisher.windows_x86_64_msvc]]
 version = "0.52.6"
 when = "2024-07-03"
-user-id = 64539
-user-login = "kennykerr"
-user-name = "Kenny Kerr"
-
-[[publisher.windows_x86_64_msvc]]
-version = "0.53.1"
-when = "2025-10-06"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -4135,6 +4072,11 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.9.0"
 
+[[audits.isrg.audits.chacha20]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.10.0"
+
 [[audits.isrg.audits.cpufeatures]]
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
@@ -4285,6 +4227,11 @@ who = "J.C. Jones <jc@divviup.org>"
 criteria = "safe-to-deploy"
 delta = "0.9.3 -> 0.9.5"
 
+[[audits.isrg.audits.rand_core]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.9.5 -> 0.10.0"
+
 [[audits.isrg.audits.rayon]]
 who = "Brandon Pitman <bran@bran.land>"
 criteria = "safe-to-deploy"
@@ -4379,6 +4326,11 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 delta = "0.5.0 -> 0.5.1"
 
+[[audits.isrg.audits.untrusted]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+
 [[audits.mozilla.wildcard-audits.core-foundation]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -4463,12 +4415,12 @@ notes = "All code written or reviewed by Manish"
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
 [[audits.mozilla.wildcard-audits.utf8_iter]]
-who = "Makoto Kato <m_kato@ga2.so-net.ne.jp>"
+who = "Henri Sivonen <hsivonen@hsivonen.fi>"
 criteria = "safe-to-deploy"
 user-id = 4484 # Henri Sivonen (hsivonen)
 start = "2022-04-19"
-end = "2024-06-16"
-notes = "Maintained by Henri Sivonen who works at Mozilla."
+end = "2027-10-30"
+notes = "I wrote this crate."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.allocator-api2]]
@@ -4609,6 +4561,12 @@ criteria = "safe-to-deploy"
 delta = "0.1.1 -> 0.2.1"
 notes = "Very minor changes."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.chacha20]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.10.2"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.core-foundation]]
 who = "Teodor Tanasoaia <ttanasoaia@mozilla.com>"
@@ -5172,6 +5130,12 @@ feature. No new dependencies or unsafe code.
 """
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.rand_core]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.10.1"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.raw-window-handle]]
 who = "Jim Blandy <jimb@red-bean.com>"
 criteria = "safe-to-deploy"
@@ -5209,6 +5173,13 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.5.3 -> 1.6.1"
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.ring]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.17.11 -> 0.17.14"
+notes = "Generated code changes based on Perl scripts taken from BoringSSL. Portions are superficial in nature: deprecating/renaming modules and functions. New unsafe code is necessary to call out to assembly."
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.rustc-hash]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -5309,6 +5280,13 @@ version = "2.5.0"
 notes = "The goal is to provide some constant-time correctness for cryptographic implementations. The approach is reasonable, it is known to be insufficient but this is pointed out in the documentation."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.sync_wrapper]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "1.0.2"
+notes = "Simple crate, nothing out of the ordinary."
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.synstructure]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
@@ -5352,10 +5330,24 @@ version = "0.7.5+spec-1.1.0"
 notes = "Pure data type crate with some datetime parsing. No unsafe."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.untrusted]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.7.1 -> 0.9.0"
+notes = "Mostly a refactor of existing code. No use of std, no unsafe, no dependencies."
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.utf8parse]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.1 -> 0.2.2"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.web-time]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "Reasonable dependencies, unsafe code denied. The only use of std is to forward std::time when used on non-wasm targets and to reuse a few std::time things that are still applicable."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.wgpu-types]]

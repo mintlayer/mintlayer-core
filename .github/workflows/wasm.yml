@@ -52,7 +52,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install TypeScript & Knip
-        run: npm install typescript knip
+        run: npm install typescript@5.9.3 knip@6.43.0
 
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
@@ -63,10 +63,7 @@ jobs:
 
       - name: Compile the tests
         working-directory: ./wasm-wrappers
-        # Invoke the binary installed at the repository root directly: this
-        # does not depend on how runner images compose PATH and fails with a
-        # clear "not found" error instead of resolving through the registry.
-        run: '"$GITHUB_WORKSPACE/node_modules/.bin/tsc" --project js-bindings-test/tsconfig.json'
+        run: npx --no-install tsc --project js-bindings-test/tsconfig.json
 
       - name: Run the tests
         working-directory: ./wasm-wrappers
@@ -74,7 +71,7 @@ jobs:
 
       - name: Run Knip
         working-directory: ./wasm-wrappers/js-bindings-test
-        run: '"$GITHUB_WORKSPACE/node_modules/.bin/knip"'
+        run: npx --no-install knip
 
   wasm_artifacts:
     runs-on: ubuntu-latest

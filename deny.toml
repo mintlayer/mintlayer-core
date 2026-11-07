@@ -52,4 +52,11 @@ ignore = [
     # the 0.26.x line (pulled in via `rustls-platform-verifier`) has no
     # release with the root removed yet.
     "RUSTSEC-2026-0383",
+
+    # "pin-utils" is unmaintained: the upstream repository was archived in
+    # October 2026 (shortly after releasing 0.1.1) and the advisory covers
+    # every published version, so no lockfile update can clear it. The crate
+    # is pulled in transitively by "futures", which requires the 0.1.x line;
+    # this entry can go away when "futures" drops the dependency.
+    "RUSTSEC-2026-0441",
 ]

@@ -1017,6 +1017,8 @@ Returns:
     "max_cluster_size_bytes": number,
     "allow_local_orphans": bool,
     "local_orphan_pool_capacity": number,
+    "remote_orphan_pool_capacity_per_peer": number,
+    "outbound_remote_orphan_pool_capacity_per_peer": number,
 }
 ```
 

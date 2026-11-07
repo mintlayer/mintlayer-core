@@ -472,12 +472,24 @@ impl ApiServerInMemoryStorage {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.get_delegation_at_or_below_height(delegation_id, None)
+    }
+
+    fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
         let delegation_result = self.delegation_table.get(&delegation_id);
         let delegation = match delegation_result {
             Some(data) => data,
             None => return Ok(None),
         };
-        Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
+        let latest = match max_height {
+            Some(max_height) => delegation.range(..=max_height).next_back().map(|(_, v)| v.clone()),
+            None => delegation.last_key_value().map(|(_, v)| v.clone()),
+        };
+        Ok(latest)
     }
 
     fn get_pool_block_stats(
@@ -509,13 +521,23 @@ impl ApiServerInMemoryStorage {
         &self,
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.get_pool_delegations_at_or_below_height(pool_id, None)
+    }
+
+    fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         Ok(self
             .delegation_table
             .iter()
             .filter_map(|(delegation_id, delegation)| {
-                let delegation = delegation.values().last().expect("must be present");
-                (*delegation.pool_id() == pool_id)
-                    .then_some((delegation_id.to_owned(), delegation.clone()))
+                let delegation = match max_height {
+                    Some(max_height) => delegation.range(..=max_height).next_back()?.1.clone(),
+                    None => delegation.values().last()?.clone(),
+                };
+                (*delegation.pool_id() == pool_id).then_some((*delegation_id, delegation))
             })
             .collect())
     }
@@ -801,11 +823,24 @@ impl ApiServerInMemoryStorage {
         &self,
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.get_pool_data_at_or_below_height(pool_id, None)
+    }
+
+    fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_data_result = self.pool_data_table.get(&pool_id);
-        match pool_data_result {
-            Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
-            None => Ok(None),
-        }
+        let by_height = match pool_data_result {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+        let latest = match max_height {
+            Some(max_height) => by_height.range(..=max_height).next_back().map(|(_, v)| v.clone()),
+            None => by_height.last_key_value().map(|(_, v)| v.clone()),
+        };
+        Ok(latest)
     }
 
     fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<Utxo>, ApiServerStorageError> {
