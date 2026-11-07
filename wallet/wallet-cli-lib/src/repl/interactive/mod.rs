@@ -22,6 +22,8 @@ use std::path::PathBuf;
 
 use clap::Command;
 use itertools::Itertools;
+use std::sync::Arc;
+
 use reedline::{
     ColumnarMenu, DefaultPrompt, DefaultValidator, EditMode, Emacs, FileBackedHistory, History,
     ListMenu, MenuBuilder, Reedline, ReedlineMenu, Signal, Vi, default_emacs_keybindings,
@@ -31,7 +33,8 @@ use reedline::{
 use tokio::sync::{mpsc, oneshot};
 use utils::once_destructor::OnceDestructor;
 use wallet_cli_commands::{
-    ChoiceMenu, ConsoleCommand, ManageableWalletCommand, get_repl_command, parse_input,
+    ChoiceMenu, ConsoleCommand, ManageableWalletCommand, build_repl_command, parse_input,
+    wizard::{DialoguerBackend, WizardError, WizardKind},
 };
 use wallet_rpc_lib::types::NodeInterface;
 
@@ -47,15 +50,16 @@ const COMPLETION_MENU_NAME: &str = "completion_menu";
 
 fn create_line_editor(
     printer: reedline::ExternalPrinter<String>,
-    commands: Vec<String>,
+    completer: wallet_completions::WalletCompletions,
     history: Option<Box<dyn History>>,
     vi_mode: bool,
 ) -> Reedline {
-    let completer = Box::new(wallet_completions::WalletCompletions::new(commands));
+    let hinter = wallet_completions::WalletHinter::new(completer.clone());
 
     let mut line_editor = Reedline::create()
         .with_external_printer(printer)
-        .with_completer(completer)
+        .with_completer(Box::new(completer))
+        .with_hinter(Box::new(hinter))
         .with_quick_completions(false)
         .with_partial_completions(true)
         .with_validator(Box::new(DefaultValidator))
@@ -92,10 +96,54 @@ fn create_line_editor(
     line_editor.with_edit_mode(edit_mode)
 }
 
+/// Outcome of offering a wizard for the entered line.
+enum WizardOutcome {
+    /// The line is not a wizard invocation; normal processing continues.
+    NotAWizard,
+    /// The wizard produced an equivalent one-liner to run.
+    Produced(String),
+    /// The user declined the wizard's summary; return to the prompt.
+    Cancelled,
+}
+
+fn run_wizard_for_line<N: NodeInterface>(line: &str) -> Result<WizardOutcome, WalletCliError<N>> {
+    let Some(tokens) = shlex::split(line) else {
+        return Ok(WizardOutcome::NotAWizard);
+    };
+    let token_refs: Vec<&str> = tokens.iter().map(String::as_str).collect();
+    let Some(kind) = WizardKind::parse_from_tokens(&token_refs) else {
+        return Ok(WizardOutcome::NotAWizard);
+    };
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        // The wizard dialogs read from the controlling terminal; under pipes
+        // and command files they would fail with a raw I/O error, so gate on
+        // the same condition the password prompt uses.
+        return Err(WalletCliError::<N>::InvalidInput(
+            "the wizard needs an interactive terminal; type the command directly instead"
+                .to_owned(),
+        ));
+    }
+    match kind.run(&mut DialoguerBackend) {
+        Ok(one_liner) => {
+            println!("You could also have run: {one_liner}");
+            Ok(WizardOutcome::Produced(one_liner))
+        }
+        Err(WizardError::Cancelled) => {
+            println!("Wizard cancelled.");
+            Ok(WizardOutcome::Cancelled)
+        }
+        Err(WizardError::InvalidInput(message)) => Err(WalletCliError::InvalidInput(message)),
+        // The original io::Error (e.g. "prompt failed: not a terminal") is kept so
+        // non-TTY contexts get a precise diagnosis instead of a generic message.
+        Err(WizardError::Io(err)) => Err(WalletCliError::TerminalIo(err)),
+    }
+}
+
 fn process_line<N: NodeInterface>(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event<N>>,
     sig: reedline::Signal,
+    assume_yes: bool,
 ) -> Result<Option<ConsoleCommand>, WalletCliError<N>> {
     let line = match sig {
         Signal::Success(line) => line,
@@ -108,6 +156,33 @@ fn process_line<N: NodeInterface>(
         }
     };
 
+    match run_wizard_for_line::<N>(&line)? {
+        WizardOutcome::NotAWizard => {}
+        WizardOutcome::Cancelled => return Ok(None),
+        WizardOutcome::Produced(one_liner) => {
+            let command_opt = parse_input(&one_liner, repl_command)?;
+            let command = match command_opt {
+                Some(command) => command,
+                // Wizard output is machine-generated and re-checked by tests, but
+                // an unexpected grammar drift must never crash the wallet.
+                None => {
+                    return Err(WalletCliError::InvalidInput(format!(
+                        "the wizard produced a command that failed to parse; please report this: \
+                         {one_liner}"
+                    )));
+                }
+            };
+            if !confirm_or_abort(&command, assume_yes)? {
+                return Ok(None);
+            }
+            return super::run_command_blocking(event_tx, command).map(Option::Some);
+        }
+    }
+
+    if let Some(listing) = super::grammar_view_request(&line, repl_command) {
+        return Ok(Some(ConsoleCommand::Print(listing)));
+    }
+
     let command_opt = parse_input(&line, repl_command)?;
 
     let command = match command_opt {
@@ -115,7 +190,58 @@ fn process_line<N: NodeInterface>(
         None => return Ok(None),
     };
 
+    if !confirm_or_abort(&command, assume_yes)? {
+        return Ok(None);
+    }
+
     super::run_command_blocking(event_tx, command).map(Option::Some)
+}
+
+/// Ask for confirmation before running a state-changing command. Returns
+/// `false` when the user declined and the command must not run.
+fn confirm_or_abort<N: NodeInterface>(
+    command: &ManageableWalletCommand,
+    assume_yes: bool,
+) -> Result<bool, WalletCliError<N>> {
+    if let Some(question) = wallet_cli_commands::confirm::confirmation_prompt(command) {
+        if assume_yes {
+            return Ok(true);
+        }
+        println!();
+        println!("{question}");
+        let confirmed = match dialoguer::Confirm::new()
+            .with_prompt("Proceed [y/N]?")
+            .default(false)
+            .interact()
+        {
+            Ok(confirmed) => confirmed,
+            // A prompt that cannot be shown cannot receive consent. On a real
+            // terminal treat the failure as a decline for this command instead
+            // of tearing down the whole session; without a terminal there is
+            // no interactive session to preserve, so fail the command with a
+            // distinct error instead of silently skipping the mutation.
+            Err(err) => {
+                // The prompt renders on standard error (dialoguer's default
+                // terminal target); without a prompt-capable terminal there is
+                // no way to obtain consent, so fail the command with a
+                // distinct error instead of silently skipping the mutation.
+                if !std::io::IsTerminal::is_terminal(&std::io::stdin())
+                    || !std::io::IsTerminal::is_terminal(&std::io::stderr())
+                {
+                    return Err(WalletCliError::ConfirmationRequired(format!(
+                        "cannot show the confirmation prompt ({err}); pass --yes or run interactively"
+                    )));
+                }
+                println!("The confirmation prompt is unavailable ({err}); treating as declined.");
+                false
+            }
+        };
+        if !confirmed {
+            println!("Aborted.");
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -128,14 +254,11 @@ pub fn run<N: NodeInterface>(
     vi_mode: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
     cold_wallet: bool,
+    assume_yes: bool,
 ) -> Result<(), WalletCliError<N>> {
-    let repl_command = get_repl_command(cold_wallet, true);
-
-    let commands = repl_command
-        .get_subcommands()
-        .filter(|command| !command.is_hide_set())
-        .map(|command| command.get_name().to_owned())
-        .collect::<Vec<_>>();
+    // The REPL thread is sized for grammar construction, so build the
+    // grammar directly instead of nesting another large-stack spawn.
+    let repl_command = Arc::new(build_repl_command(cold_wallet, true));
 
     let history = if let Some(file_name) = history_file {
         let h: Box<dyn History> = Box::new(
@@ -147,13 +270,21 @@ pub fn run<N: NodeInterface>(
         None
     };
 
-    let mut line_editor = create_line_editor(logger.printer().clone(), commands, history, vi_mode);
+    let mut line_editor = create_line_editor(
+        logger.printer().clone(),
+        // The grammar was built above; share it through the trusted path.
+        wallet_completions::WalletCompletions::from_built(Arc::clone(&repl_command)),
+        history,
+        vi_mode,
+    );
 
     let mut prompt = wallet_prompt::WalletPrompt::new();
 
     // first wait for the results of any startup command before processing the rest
     for res_rx in startup_command_futures {
-        let res = res_rx.blocking_recv().expect("Channel must be open");
+        let res = res_rx.blocking_recv().map_err(|_recv_error| {
+            WalletCliError::<N>::EventLoopShutdown("startup commands did not finish".to_owned())
+        })?;
         match handle_response(
             res.map(Some),
             &mut console,
@@ -170,9 +301,10 @@ pub fn run<N: NodeInterface>(
         }
     }
 
-    console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'help' to see the command categories.");
+    console.print_line("Use 'help full' to list every command with its subcommands.");
     console.print_line("Use 'help <command>' to learn more about the parameters of the command.");
-    console.print_line("Press TAB on your keyboard to auto-complete any command you write.");
+    console.print_line("Press TAB to see the commands and auto-complete what you write.");
     console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     let mut cmd = None;
@@ -184,7 +316,7 @@ pub fn run<N: NodeInterface>(
             let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
             logger.set_print_directly(true);
 
-            process_line(&repl_command, &event_tx, sig)
+            process_line(&repl_command, &event_tx, sig, assume_yes)
         };
 
         match handle_response(
@@ -224,6 +356,13 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
+        Ok(Some(ConsoleCommand::Json { text, value })) => {
+            let text = wallet_cli_commands::output::json_display_text(text, &value);
+            console.print_line(&text);
+        }
+        Ok(Some(ConsoleCommand::Warn(message))) => {
+            console.print_line(&message);
+        }
         Ok(Some(ConsoleCommand::PaginatedPrint { header, body })) => {
             paginate_output(header, body, line_editor, console, logger)
                 .expect("Should not fail normally");
@@ -247,8 +386,12 @@ fn handle_response<N: NodeInterface>(
         Ok(Some(ConsoleCommand::Exit)) => return CommandResponse::Exit,
 
         Ok(Some(ConsoleCommand::ChoiceMenu(choice))) => {
-            let line_editor_helper =
-                create_line_editor(logger.printer().clone(), vec![], None, vi_mode);
+            let line_editor_helper = create_line_editor(
+                logger.printer().clone(),
+                wallet_completions::WalletCompletions::empty(),
+                None,
+                vi_mode,
+            );
             let cmd = handle_choice_menu(choice.as_ref(), line_editor_helper);
             if let Some(cmd) = cmd {
                 return CommandResponse::Command(Box::new(cmd));
@@ -448,6 +591,52 @@ fn read_command(
             }
             crossterm::event::Event::Resize(_, _) => return Ok(PagginationCommand::TerminalResize),
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod view_hook_tests {
+    use super::*;
+    use reedline::Signal;
+    use rstest::rstest;
+
+    // The view lines must answer before the confirmation gate and without
+    // touching the event loop, so a dummy channel stands in for it. Grammar
+    // construction overflows the default 2 MiB test-thread stack, so build it
+    // on a large-stack thread.
+    #[rstest]
+    fn help_views_print_before_the_gate_in_interactive_mode(
+        #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
+            bool,
+            bool,
+        ),
+    ) {
+        let repl_command = wallet_cli_commands::run_with_large_stack(move || {
+            build_repl_command(cold_wallet, mutable_wallet)
+        });
+        let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+        // The cold grammars have no `wallet`/`address` groups, so their help
+        // paths target the nested spellings they do carry.
+        let lines: Vec<&str> = if cold_wallet {
+            vec!["help full", "legacy", "help", "help challenge sign"]
+        } else {
+            vec!["help full", "legacy", "help", "help wallet", "help address-new"]
+        };
+        for line in lines {
+            let outcome = process_line::<node_comm::node_traits::MockNodeInterface>(
+                &repl_command,
+                &event_tx,
+                Signal::Success(line.to_owned()),
+                false,
+            )
+            .expect("view lines must not fail in interactive mode");
+            match outcome {
+                Some(ConsoleCommand::Print(text)) => {
+                    assert!(!text.is_empty(), "`{line}` must render non-empty text")
+                }
+                other => panic!("`{line}` must print in interactive mode, got {other:?}"),
+            }
         }
     }
 }

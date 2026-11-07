@@ -33,16 +33,62 @@ use node_lib::node_controller::NodeController;
 use serialization::hex_encoded::HexEncoded;
 use utils::tokio_spawn;
 use wallet::{WalletError, account::transaction_list::TransactionList, wallet::Error};
-use wallet_cli_commands::{
-    CommandHandler, ConsoleCommand, ManageableWalletCommand, WalletCommand, get_repl_command,
-    parse_input,
-};
+use wallet_cli_commands::{CommandHandler, ConsoleCommand, ManageableWalletCommand, WalletCommand};
 use wallet_controller::{
     ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient, make_cold_wallet_rpc_client,
     types::{Balances, WalletCreationOptions, WalletExtraInfo, WalletTypeArgs},
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
 use wallet_rpc_lib::{EventStream, WalletRpc, WalletService, types::HardwareWalletType};
+
+/// A parsed GUI console line: a grammar view to print, nothing to do, or a
+/// command to execute.
+#[derive(Debug)]
+enum ParsedLine {
+    Command(ManageableWalletCommand),
+    View(String),
+    Empty,
+}
+
+#[derive(Debug)]
+enum ConsoleOutcome {
+    Print(ConsoleCommand),
+    Execute(ManageableWalletCommand),
+}
+
+/// Parse a GUI console line against the node's grammar, answering the grammar
+/// views (`help full`, `legacy`) before parsing — the same contract the CLI
+/// REPL modes follow.
+fn parse_console_line(line: String, cold_wallet: bool) -> Result<ParsedLine, BackendError> {
+    // The grammar build and the parse construct large augment frames; this
+    // runs on the caller's dedicated thread.
+    wallet_cli_commands::run_with_large_stack(move || {
+        let repl_command = wallet_cli_commands::build_repl_command(cold_wallet, false);
+        if let Some(view) = wallet_cli_commands::grammar_view_request(&line, &repl_command) {
+            return Ok(ParsedLine::View(view));
+        }
+        wallet_cli_commands::parse_input::<node_comm::rpc_client::ColdWalletClient>(
+            &line,
+            &repl_command,
+        )
+        .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))
+        .map(|parsed| match parsed {
+            Some(command) => ParsedLine::Command(command),
+            // Comments and blank lines stay a no-op.
+            None => ParsedLine::Empty,
+        })
+    })
+}
+
+/// Map a parsed console line to what the backend does with it: print a view,
+/// reject an empty line, or execute the command.
+fn console_outcome(parsed: ParsedLine) -> Result<ConsoleOutcome, BackendError> {
+    match parsed {
+        ParsedLine::View(view) => Ok(ConsoleOutcome::Print(ConsoleCommand::Print(view))),
+        ParsedLine::Empty => Err(BackendError::EmptyConsoleCommand),
+        ParsedLine::Command(command) => Ok(ConsoleOutcome::Execute(command)),
+    }
+}
 use wallet_types::{
     ImportOrCreate, scan_blockchain::ScanBlockchain, wallet_type::WalletType,
     with_locked::WithLocked,
@@ -292,6 +338,7 @@ impl Backend {
                         file_path.clone(),
                         wallet_args,
                         import,
+                        false,
                         wallet_events,
                     )
                     .await?;
@@ -320,6 +367,7 @@ impl Backend {
                         file_path.clone(),
                         wallet_args,
                         import,
+                        self.controller.is_cold(),
                         wallet_events,
                     )
                     .await?;
@@ -395,6 +443,7 @@ impl Backend {
         file_path: PathBuf,
         wallet_args: WalletTypeArgs,
         import: ImportOrCreate,
+        cold_wallet: bool,
         wallet_events: GuiWalletEvents,
     ) -> Result<
         (
@@ -445,6 +494,8 @@ impl Backend {
             ),
             "Forward events (create_wallet)",
         );
+        // The GUI console grammar is non-mutable on hot and cold wallets
+        // alike; the `legacy` listing must match it.
         let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,
@@ -452,6 +503,8 @@ impl Backend {
             },
             WalletRpcHandlesClient::new(wallet_rpc.clone(), None),
             None,
+            cold_wallet,
+            false,
         )
         .await;
         let best_block = wallet_rpc
@@ -516,6 +569,7 @@ impl Backend {
                 file_path.clone(),
                 wallet_events,
                 wallet_type,
+                false,
             )
             .await?;
 
@@ -550,6 +604,7 @@ impl Backend {
                         file_path.clone(),
                         wallet_events,
                         None,
+                        self.controller.is_cold(),
                     )
                     .await?;
 
@@ -612,6 +667,7 @@ impl Backend {
         file_path: PathBuf,
         wallet_events: GuiWalletEvents,
         hardware_wallet: Option<HardwareWalletType>,
+        cold_wallet: bool,
     ) -> Result<
         (
             WalletRpc<N>,
@@ -662,6 +718,8 @@ impl Backend {
             ),
             "Forward events (open_wallet)",
         );
+        // The GUI console grammar is non-mutable on hot and cold wallets
+        // alike; the `legacy` listing must match it.
         let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,
@@ -669,6 +727,8 @@ impl Backend {
             },
             WalletRpcHandlesClient::new(wallet_rpc.clone(), None),
             None,
+            cold_wallet,
+            false,
         )
         .await;
         let encryption_state = match wallet_rpc.remove_private_key_encryption().await {
@@ -1205,10 +1265,31 @@ impl Backend {
         account_id: AccountId,
         command: String,
     ) -> Result<ConsoleCommand, BackendError> {
-        let repl_command = get_repl_command(self.controller.is_cold(), false);
-        let command = parse_input::<ColdWalletClient>(&command, &repl_command)
-            .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))?
-            .ok_or(BackendError::EmptyConsoleCommand)?;
+        let cold_wallet = self.controller.is_cold();
+        // The grammar build and the input parse both construct large augment
+        // frames; run them on a sized thread without blocking the backend loop.
+        let parsed = tokio::task::spawn_blocking(move || parse_console_line(command, cold_wallet))
+            .await
+            .map_err(|e| {
+                if e.is_panic() {
+                    // An internal panic from the grammar build or parse thread is
+                    // not a user input problem; resume unwinding so it is reported
+                    // as such instead of as an invalid console command. (With the
+                    // workspace default of panic = "abort" this arm is mostly
+                    // relevant for unwind builds and tests.)
+                    std::panic::resume_unwind(e.into_panic());
+                }
+                // Cancellation (runtime shutdown) is not a user input problem either.
+                log::warn!("Console command parse task did not complete: {e}");
+                BackendError::ConsoleCommandInterrupted(e.to_string())
+            })?;
+        let parsed = parsed?;
+
+        let command = match console_outcome(parsed)? {
+            // A view line is the answer; print it and skip execution.
+            ConsoleOutcome::Print(view) => return Ok(view),
+            ConsoleOutcome::Execute(command) => command,
+        };
 
         let wallet = self
             .wallets
@@ -1551,5 +1632,90 @@ pub async fn run_cold(
 async fn forward_events(tx: GuiWalletEvents, mut rx: EventStream) {
     while rx.recv().await.is_some() {
         tx.notify()
+    }
+}
+
+#[cfg(test)]
+mod console_view_tests {
+    use super::*;
+
+    // Grammar construction overflows the default 2 MiB test-thread stack, so
+    // parse on a large-stack thread like the wallet CLI tests do.
+    fn parse_execute_line(line: &str) -> ManageableWalletCommand {
+        let line = line.to_owned();
+        wallet_cli_commands::run_with_large_stack(move || {
+            let repl_command = wallet_cli_commands::build_repl_command(false, false);
+            wallet_cli_commands::parse_input::<node_comm::rpc_client::ColdWalletClient>(
+                &line,
+                &repl_command,
+            )
+            .expect("console line must parse")
+            .expect("console line must parse to a command")
+        })
+    }
+
+    #[test]
+    fn view_lines_print_and_skip_execution() {
+        let outcome = console_outcome(ParsedLine::View("listing".to_owned()))
+            .expect("a view line must not fail");
+        match outcome {
+            ConsoleOutcome::Print(ConsoleCommand::Print(text)) => assert_eq!(text, "listing"),
+            other => panic!("a view line must map to a print, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_lines_are_rejected() {
+        assert!(matches!(
+            console_outcome(ParsedLine::Empty),
+            Err(BackendError::EmptyConsoleCommand)
+        ));
+    }
+
+    #[test]
+    fn commands_pass_through_to_execution() {
+        let command = parse_execute_line("wallet-info");
+        assert!(matches!(
+            console_outcome(ParsedLine::Command(command)),
+            Ok(ConsoleOutcome::Execute(_))
+        ));
+    }
+
+    #[test]
+    fn console_lines_answer_views_before_parsing() {
+        // The hot GUI grammar (cold=false, non-mutable) is the variant the
+        // console parses with on a hot node; the views must answer there too.
+        for line in ["help full", "legacy", "help", "help wallet"] {
+            match parse_console_line(line.to_owned(), false) {
+                Ok(ParsedLine::View(view)) => assert!(!view.is_empty()),
+                other => panic!("`{line}` must answer as a view, got {other:?}"),
+            }
+        }
+        // Regular commands still parse to execution...
+        assert!(matches!(
+            parse_console_line("wallet-info".to_owned(), false),
+            Ok(ParsedLine::Command(_))
+        ));
+        // ...and empty lines stay no-ops.
+        assert!(matches!(
+            parse_console_line("# comment".to_owned(), false),
+            Ok(ParsedLine::Empty)
+        ));
+    }
+
+    #[test]
+    fn cold_console_pairs_the_cold_grammar_with_its_views() {
+        // The cold GUI console (cold=true, non-mutable) answers the views and
+        // parses the cold flat spelling that is primary in that grammar.
+        match parse_console_line("help full".to_owned(), true) {
+            Ok(ParsedLine::View(view)) => {
+                assert!(view.contains("challenge sign"), "cold full listing\n{view}")
+            }
+            other => panic!("`help full` must answer as a view on cold, got {other:?}"),
+        }
+        assert!(matches!(
+            parse_console_line("wallet-info".to_owned(), true),
+            Ok(ParsedLine::Command(_))
+        ));
     }
 }

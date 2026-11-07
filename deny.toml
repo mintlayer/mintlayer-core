@@ -47,6 +47,12 @@ ignore = [
     # "paste" is no longer maintained.
     "RUSTSEC-2024-0436",
 
+    # Bundled root certificates include distrusted emSign intermediates. The
+    # 1.x copy of `webpki-root-certs` was updated past the affected versions;
+    # the 0.26.x line (pulled in via `rustls-platform-verifier`) has no
+    # release with the root removed yet.
+    "RUSTSEC-2026-0383",
+
     # "pin-utils" is unmaintained: the upstream repository was archived in
     # October 2026 (shortly after releasing 0.1.1) and the advisory covers
     # every published version, so no lockfile update can clear it. The crate

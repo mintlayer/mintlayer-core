@@ -35,6 +35,7 @@ humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
+dialoguer.workspace = true
 semver.workspace = true
 serde_json.workspace = true
 shlex.workspace = true
