@@ -335,6 +335,47 @@ pub struct CommandHandler<W> {
     legacy_table: std::sync::OnceLock<String>,
 }
 
+/// Compose the success message of `wallet create software`: the mnemonic is
+/// echoed only when freshly generated, and the implicit store-the-seed note
+/// is appended only when the storage choice was never made.
+fn create_wallet_success_message(mnemonic_info: &MnemonicInfo, implicit_storing: bool) -> String {
+    let mut msg = match mnemonic_info {
+        MnemonicInfo::NewlyGenerated { mnemonic } => format!(
+            "New wallet created successfully\nYour mnemonic: {}\n\
+            Please write it somewhere safe to be able to restore your wallet. \
+            It's recommended that you attempt to recover the wallet now as practice\
+            to check that you arrive at the same addresses, \
+            to ensure that you have done everything correctly.
+            ",
+            mnemonic
+        ),
+        MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
+    };
+    append_stored_seed_note(&mut msg, implicit_storing);
+    msg
+}
+
+/// Compose the success message of `wallet recover software`, including the
+/// implicit store-the-seed note when the storage choice was never made.
+fn recover_wallet_success_message(implicit_storing: bool) -> String {
+    let mut msg = "Wallet recovered successfully".to_owned();
+    append_stored_seed_note(&mut msg, implicit_storing);
+    msg
+}
+
+/// Surface the implicit store-the-seed default on the command output: the
+/// note is appended only when the storage choice was never made, so the
+/// sensitive side effect is observable without reading help text.
+fn append_stored_seed_note(msg: &mut String, implicit_storing: bool) {
+    if implicit_storing {
+        msg.push_str(&format!(
+            "\nNote: the seed phrase was stored in the wallet file \
+             ({} keeps it out).",
+            crate::STORE_OPT_OUT_HINT
+        ));
+    }
+}
+
 impl<W, E> CommandHandler<W>
 where
     W: WalletInterface<Error = E> + Send + Sync + 'static,
@@ -470,8 +511,9 @@ where
     {
         match command {
             WalletManagementCommand::CreateWallet { wallet } => {
-                let (wallet_path, wallet_args) = wallet.into_path_and_wallet_args();
-
+                let (wallet_path, wallet_args, implicit_storing) = wallet
+                    .into_path_and_wallet_args()
+                    .map_err(WalletCliCommandError::InvalidInput)?;
                 let response =
                     self.wallet().await?.create_wallet(wallet_path.clone(), wallet_args).await?;
 
@@ -488,20 +530,7 @@ where
 
                 self.wallet.update_wallet::<N>().await;
 
-                let msg = match response.mnemonic {
-                    MnemonicInfo::NewlyGenerated { mnemonic } => {
-                        format!(
-                            "New wallet created successfully\nYour mnemonic: {}\n\
-                            Please write it somewhere safe to be able to restore your wallet. \
-                            It's recommended that you attempt to recover the wallet now as practice\
-                            to check that you arrive at the same addresses, \
-                            to ensure that you have done everything correctly.
-                            ",
-                            mnemonic
-                        )
-                    }
-                    MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
-                };
+                let msg = create_wallet_success_message(&response.mnemonic, implicit_storing);
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -510,8 +539,9 @@ where
             }
 
             WalletManagementCommand::RecoverWallet { wallet } => {
-                let (wallet_path, wallet_args) = wallet.into_path_and_wallet_args();
-
+                let (wallet_path, wallet_args, implicit_storing) = wallet
+                    .into_path_and_wallet_args()
+                    .map_err(WalletCliCommandError::InvalidInput)?;
                 let response =
                     self.wallet().await?.recover_wallet(wallet_path.clone(), wallet_args).await?;
 
@@ -528,11 +558,11 @@ where
 
                 self.wallet.update_wallet::<N>().await;
 
-                let msg = "Wallet recovered successfully";
+                let msg = recover_wallet_success_message(implicit_storing);
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: msg.to_owned(),
+                    print_message: msg,
                 })
             }
 
@@ -5233,5 +5263,160 @@ mod legacy_dispatch_tests {
                 other => panic!("the legacy listing must print, got {other:?}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod stored_seed_note_tests {
+    use super::*;
+
+    #[test]
+    fn note_wiring_matches_the_resolved_implicit_flag_end_to_end() {
+        // End-to-end through the public pieces: parse both shapes, resolve
+        // them, compose the create message the handler would build, and
+        // assert the note appears exactly when the choice was implicit.
+        let cases: Vec<(&str, bool)> = vec![
+            ("wallet create software /tmp/wallet-file", true),
+            (
+                "wallet create software /tmp/wallet-file --store-seed-phrase=false",
+                false,
+            ),
+        ];
+        for (line, expect_note) in cases {
+            let implicit = crate::run_with_large_stack(move || {
+                let repl = crate::get_repl_command(false, true);
+                let command =
+                    crate::parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl)
+                        .expect("line must parse")
+                        .expect("line must parse to a command");
+                match command {
+                    ManageableWalletCommand::ManagementCommands(
+                        WalletManagementCommand::CreateWallet { wallet },
+                    )
+                    | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                        command: WalletGroupSubCommand::Create { wallet },
+                    }) => {
+                        let (_, _, implicit_storing) =
+                            wallet.into_path_and_wallet_args().expect("must resolve");
+                        implicit_storing
+                    }
+                    other => panic!("expected a create wallet command, got {other:?}"),
+                }
+            });
+            assert_eq!(implicit, expect_note, "implicit flag for `{line}`");
+            let composed = create_wallet_success_message(
+                &wallet_rpc_lib::types::MnemonicInfo::NewlyGenerated {
+                    mnemonic: "seed words".to_owned(),
+                },
+                implicit,
+            );
+            assert_eq!(
+                composed.contains("stored in the wallet file"),
+                expect_note,
+                "note visibility mismatch for `{line}`\n{composed}"
+            );
+        }
+    }
+
+    #[test]
+    fn recover_note_wiring_matches_the_resolved_implicit_flag() {
+        // Parse → resolve → compose through the same pieces the handler arm
+        // uses, for the recover command.
+        for (line, expect_note) in [
+            (
+                "wallet recover software /tmp/wallet-file --mnemonic \"twelve words here\"",
+                true,
+            ),
+            (
+                "wallet recover software /tmp/wallet-file do-not-store-seed-phrase \
+                 --store-seed-phrase=false --mnemonic \"twelve words here\"",
+                false,
+            ),
+        ] {
+            let msg = crate::run_with_large_stack(move || {
+                let repl = crate::get_repl_command(false, true);
+                let command =
+                    crate::parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl)
+                        .expect("line must parse")
+                        .expect("line must parse to a command");
+                match command {
+                    ManageableWalletCommand::ManagementCommands(
+                        WalletManagementCommand::RecoverWallet { wallet },
+                    )
+                    | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                        command: WalletGroupSubCommand::Recover { wallet },
+                    }) => {
+                        let (_, _, implicit_storing) =
+                            wallet.into_path_and_wallet_args().expect("wallet args must resolve");
+                        recover_wallet_success_message(implicit_storing)
+                    }
+                    other => panic!("expected a recover wallet command, got {other:?}"),
+                }
+            });
+            assert_eq!(
+                msg.contains("stored in the wallet file"),
+                expect_note,
+                "note visibility mismatch for `{line}`\n{msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn recover_message_carries_the_note_through_the_composition() {
+        let msg = recover_wallet_success_message(true);
+        assert!(msg.contains("Wallet recovered successfully"));
+        assert!(msg.contains("the seed phrase was stored in the wallet file"));
+
+        let msg = recover_wallet_success_message(false);
+        assert!(!msg.contains("stored in the wallet file"));
+    }
+
+    #[test]
+    fn the_note_is_appended_only_for_the_implicit_default() {
+        let mut msg = String::from("New wallet created successfully");
+        append_stored_seed_note(&mut msg, true);
+        assert!(
+            msg.contains("the seed phrase was stored in the wallet file"),
+            "the implicit default must surface the storage note\n{msg}"
+        );
+        assert!(msg.contains("--store-seed-phrase=false"));
+
+        let mut msg = String::from("New wallet created successfully");
+        append_stored_seed_note(&mut msg, false);
+        assert!(
+            !msg.contains("stored in the wallet file"),
+            "an explicit choice must not carry the storage note\n{msg}"
+        );
+    }
+
+    #[test]
+    fn create_message_carries_the_note_through_the_composition() {
+        use wallet_rpc_lib::types::MnemonicInfo;
+
+        let response = MnemonicInfo::NewlyGenerated {
+            mnemonic: "seed words".to_owned(),
+        };
+        let msg = create_wallet_success_message(&response, true);
+        assert!(
+            msg.contains("Your mnemonic: seed words"),
+            "the generated mnemonic must be echoed\n{msg}"
+        );
+        assert!(
+            msg.contains("the seed phrase was stored in the wallet file"),
+            "the implicit default must carry the storage note\n{msg}"
+        );
+
+        let msg = create_wallet_success_message(&response, false);
+        assert!(
+            !msg.contains("stored in the wallet file"),
+            "an explicit choice must not carry the storage note\n{msg}"
+        );
+
+        let msg = create_wallet_success_message(&MnemonicInfo::UserProvided, true);
+        assert!(
+            !msg.contains("Your mnemonic:"),
+            "a user-provided mnemonic must not be echoed\n{msg}"
+        );
+        assert!(msg.contains("the seed phrase was stored in the wallet file"));
     }
 }

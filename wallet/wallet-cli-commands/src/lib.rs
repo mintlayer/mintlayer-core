@@ -33,6 +33,7 @@ use common::{
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{PrivateKey, PublicKey, hdkd::u31::U31};
+use logging::log;
 use p2p_types::{PeerId, bannable_address::BannableAddress};
 use rpc::description::{Described, Module};
 use serialization::hex_encoded::HexEncoded;
@@ -41,6 +42,7 @@ use wallet_controller::types::WalletTypeArgs;
 #[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::FoundDevice;
 use wallet_rpc_lib::{ColdWalletRpcDescription, WalletRpcDescription, types::NodeInterface};
+use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::helper_types::{
     CliCurrency, CliOutputTimeLock, CliTokenTotalSupply, CliUnspecifiedCurrencyTransfer,
@@ -55,6 +57,187 @@ use self::helper_types::{
 pub use command_handler::CommandHandler;
 pub use errors::WalletCliCommandError;
 
+/// When the legacy storage slot is unfilled and the wallet path is exactly
+/// one of the legacy storage values (bare or as a file name), the user almost
+/// certainly omitted the wallet path (those invocations were parse errors
+/// before the slot became optional) — restore the loud failure instead of
+/// silently mis-binding. Note: for `wallet recover`, clap's
+/// `required_unless_present` mnemonic check fires first (naming `--mnemonic`);
+/// this guard still runs for the `--mnemonic`-provided variant.
+fn reject_legacy_storage_choice_as_path(
+    command: &str,
+    wallet_path: &std::path::Path,
+    legacy_positional: &Option<CliStoreSeedPhrase>,
+) -> Result<(), String> {
+    if legacy_positional.is_none() {
+        // The final path component is matched, so qualified lookalikes (e.g.
+        // sub/store-seed-phrase) are caught too; the remedy — filling the
+        // legacy slot — genuinely parses for every such shape.
+        let looks_like_storage_choice = wallet_path.file_name().is_some_and(|name| {
+            let name = name.to_string_lossy().to_lowercase();
+            name == "store-seed-phrase" || name == "do-not-store-seed-phrase"
+        });
+        if looks_like_storage_choice {
+            // The remedy mirrors the legacy-positional spelling — the only
+            // shape that parses with a lookalike path — and keeps the word
+            // the user typed as the file name.
+            let storage_word = if wallet_path.file_name().and_then(|name| name.to_str())
+                == Some("do-not-store-seed-phrase")
+            {
+                "do-not-store-seed-phrase"
+            } else {
+                "store-seed-phrase"
+            };
+            let path_str = wallet_path.to_string_lossy();
+            let mnemonic_hint = if command == "wallet recover" {
+                " (and the seed with --mnemonic)"
+            } else {
+                ""
+            };
+            return Err(format!(
+                "the wallet path looks like a legacy seed-phrase storage choice \
+                 ({path_str}); the wallet path is missing — to use this name, \
+                 pass the storage choice first: {command} software {path_str} \
+                 {storage_word}{mnemonic_hint}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// When the wallet path has no path separators and its whitespace-separated
+/// word count reaches the shortest valid seed (8 words), the user almost
+/// certainly typed a seed phrase into the path slot — that shape was a parse
+/// error before the slot became optional, and honoring it now would silently
+/// create a wallet file named after the seed while discarding the seed.
+/// Deliberate collateral: a wallet file genuinely named with that many words
+/// needs the legacy storage slot filled first, which the error spells out.
+fn reject_mnemonic_looking_path(
+    command: &str,
+    wallet_path: &std::path::Path,
+    legacy_positional: &Option<CliStoreSeedPhrase>,
+) -> Result<(), String> {
+    // The threshold intentionally over-approximates the backend mnemonic
+    // parser (12/15/18/21/24 words): near-miss pastes (7/8/11/13/14 words)
+    // are caught too, at the cost of rejecting rare multi-word file names.
+    // The guard fires whenever the legacy storage slot is unfilled — the
+    // shape that was a parse error before the slot became optional — so the
+    // seed cannot silently land in a file named after itself, regardless of
+    // how the mnemonic is supplied.
+    if legacy_positional.is_some() {
+        // The legacy storage slot was explicitly filled, so the path is a
+        // deliberate choice.
+        return Ok(());
+    }
+    // A mnemonic-looking path: no path separators (a typed seed contains
+    // none, while a genuine multi-component file path almost always has
+    // some) and a seed-shaped word count.
+    let path_str = wallet_path.to_string_lossy();
+    let looks_like_seed =
+        !path_str.contains(['/', '\\']) && path_str.split_whitespace().count() >= 8;
+    if looks_like_seed {
+        // The path may literally be the pasted seed: echo only the word
+        // count, never the words themselves, and give a remedy that uses the
+        // seed as the seed (not as a file name).
+        let word_count = path_str.split_whitespace().count();
+        return Err(format!(
+            "the wallet path looks like a mnemonic (seed) phrase ({word_count} \
+             words); the wallet path is missing. Do not paste the seed as the \
+             path — instead run: {command} software <wallet-path> --mnemonic \
+             \"<{word_count} words>\", with the wallet path passed first"
+        ));
+    }
+    Ok(())
+}
+
+/// Merge the positional mnemonic with the `--mnemonic` flag: the two spellings
+/// must agree when both are given, so a typo can never silently discard a
+/// different seed than the one the user typed.
+fn merge_mnemonic(
+    positional: Option<String>,
+    flag_values: &[String],
+) -> Result<Option<String>, String> {
+    let mut distinct = flag_values.to_owned();
+    distinct.sort();
+    distinct.dedup();
+    if distinct.len() > 1 {
+        return Err("the mnemonic was given multiple times with conflicting values".to_owned());
+    }
+    match (positional, distinct.pop()) {
+        (Some(positional), Some(flag)) if positional != flag => Err(
+            "the mnemonic was given twice (positionally and with --mnemonic) \
+             with different values"
+                .to_owned(),
+        ),
+        (Some(positional), _) => Ok(Some(positional)),
+        (None, flag) => Ok(flag),
+    }
+}
+
+/// The opt-out flag hint shared by the implicit-default surfaces (the
+/// resolve-time warn and the post-success note), so both cannot drift.
+pub const STORE_OPT_OUT_HINT: &str = "--store-seed-phrase=false";
+
+/// The execution-time notice for the implicit store-the-seed default.
+///
+/// Visibility note: this is logged at WARN level (stderr by default) rather
+/// than routed through the command result — the create/recover response is a
+/// single message, so the pre-execution notice would have to replace it.
+/// The guaranteed-visible disclosure is the post-success note appended by
+/// `append_stored_seed_note`; this log line is the earliest signal. Both
+/// this notice and the post-success note share [`STORE_OPT_OUT_HINT`].
+pub const IMPLICIT_STORE_WARNING: &str = "the seed phrase will be stored in the \
+    wallet file; pass --store-seed-phrase=false to keep it out of the file";
+
+/// Resolve the seed phrase storage choice for `wallet create/recover
+/// software`: the default (neither spelling given) is to store the seed
+/// phrase in the wallet file (surfaced via [`IMPLICIT_STORE_WARNING`]), and
+/// both spellings must agree when both are given.
+fn resolve_store_seed_phrase(
+    flag_values: &[bool],
+    legacy_positional: Option<CliStoreSeedPhrase>,
+) -> Result<(StoreSeedPhrase, bool), String> {
+    let store_of = |store: bool| {
+        if store {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        }
+    };
+    if flag_values.contains(&true) && flag_values.contains(&false) {
+        return Err(
+            "the seed phrase storage was given multiple times with conflicting values".to_owned(),
+        );
+    }
+    let from_flag = flag_values.first().map(|value| store_of(*value));
+    match (from_flag, legacy_positional) {
+        // Both spellings must agree; disagreement is the hard error below.
+        // Repeating a spelling is fine while the values agree.
+        (Some(from_flag), Some(legacy)) if from_flag != legacy.into() => Err(
+            "the seed phrase storage was given twice (positionally and with \
+             --store-seed-phrase) with different values"
+                .to_owned(),
+        ),
+        // The implicit default (neither spelling given) is surfaced next to
+        // the command output so the sensitive side effect (the seed phrase
+        // landing in the wallet file) is observable at execution time.
+        (from_flag, legacy_positional) => {
+            let implicit_storing = from_flag.is_none() && legacy_positional.is_none();
+            if implicit_storing {
+                log::warn!("{}", IMPLICIT_STORE_WARNING);
+            }
+            // A flag value wins; with no flag, an explicit legacy spelling is
+            // honored, and the security-relevant default (no spelling at all)
+            // is to store, spelled out explicitly rather than via a bool.
+            let store = from_flag.unwrap_or_else(|| match legacy_positional {
+                None => StoreSeedPhrase::Store,
+                Some(legacy) => legacy.into(),
+            });
+            Ok((store, implicit_storing))
+        }
+    }
+}
+
 #[derive(Debug, Subcommand, Clone)]
 pub enum CreateWalletSubCommand {
     /// Create a software wallet
@@ -63,8 +246,31 @@ pub enum CreateWalletSubCommand {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
+        /// The legacy positional spelling of the seed phrase storage choice;
+        /// both spellings must agree when both are given.
+        #[arg(hide = true, value_name = "store-seed-phrase|do-not-store-seed-phrase")]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
+
+        /// Mnemonic (seed) phrase (12, 15, 18, 21, or 24 words as a single quoted argument).
+        ///
+        /// If not specified, a new mnemonic phrase will be generated and printed.
+        /// Note: the legacy seed-phrase storage slot precedes this argument; to
+        /// skip that slot, pass the mnemonic with `--mnemonic` instead.
+        mnemonic: Option<String>,
+
+        /// Mnemonic (seed) phrase (12, 15, 18, 21, or 24 words as a single
+        /// quoted argument); an alternative to the positional spelling. Both
+        /// spellings must agree when both are given, and passing the mnemonic
+        /// positionally requires the legacy storage slot before it.
+        #[arg(long = "mnemonic", value_name = "words", action = clap::ArgAction::Append)]
+        mnemonic_flag: Vec<String>,
+
+        /// Passphrase along the mnemonic
+        #[arg(long = "passphrase")]
+        passphrase: Option<String>,
+
         /// Specifies whether the seed phrase should be stored in the wallet file or
-        /// only printed on the screen.
+        /// only printed on the screen (default: true).
         ///
         /// Not storing the seed phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that the seed phrase is reused
@@ -72,16 +278,12 @@ pub enum CreateWalletSubCommand {
         ///
         /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
         /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
-
-        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
-        ///
-        /// If not specified, a new mnemonic phrase will be generated and printed.
-        mnemonic: Option<String>,
-
-        /// Passphrase along the mnemonic
-        #[arg(long = "passphrase")]
-        passphrase: Option<String>,
+        #[arg(
+            long = "store-seed-phrase",
+            value_name = "true|false",
+            action = clap::ArgAction::Append
+        )]
+        store_seed_phrase: Vec<bool>,
     },
     /// (Beta) Create a wallet using a connected Trezor hardware wallet.
     ///
@@ -119,33 +321,52 @@ pub enum CreateWalletSubCommand {
 }
 
 impl CreateWalletSubCommand {
-    pub fn into_path_and_wallet_args(self) -> (PathBuf, WalletTypeArgs) {
+    /// Resolve into `(wallet_path, wallet_args, implicit_storing)`: the third
+    /// element is true only when neither storage spelling was given (the
+    /// implicit store-the-seed default was applied), so callers can surface
+    /// the storage disclosure note.
+    pub fn into_path_and_wallet_args(self) -> Result<(PathBuf, WalletTypeArgs, bool), String> {
         match self {
             Self::Software {
                 wallet_path,
-                whether_to_store_seed_phrase,
+                store_seed_phrase,
                 mnemonic,
+                mnemonic_flag,
                 passphrase,
+                whether_to_store_seed_phrase,
             } => {
-                let store_seed_phrase = whether_to_store_seed_phrase.into();
-                (
+                reject_legacy_storage_choice_as_path(
+                    "wallet create",
+                    &wallet_path,
+                    &whether_to_store_seed_phrase,
+                )?;
+                reject_mnemonic_looking_path(
+                    "wallet create",
+                    &wallet_path,
+                    &whether_to_store_seed_phrase,
+                )?;
+                let mnemonic = merge_mnemonic(mnemonic, &mnemonic_flag)?;
+                let (store_seed_phrase, implicit_storing) =
+                    resolve_store_seed_phrase(&store_seed_phrase, whether_to_store_seed_phrase)?;
+                Ok((
                     wallet_path,
                     WalletTypeArgs::Software {
                         mnemonic,
                         passphrase,
                         store_seed_phrase,
                     },
-                )
+                    implicit_storing,
+                ))
             }
 
             #[cfg(feature = "trezor")]
             Self::Trezor {
                 wallet_path,
                 device_id,
-            } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+            } => Ok((wallet_path, WalletTypeArgs::Trezor { device_id }, false)),
 
             #[cfg(feature = "ledger")]
-            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
+            Self::Ledger { wallet_path } => Ok((wallet_path, WalletTypeArgs::Ledger, false)),
         }
     }
 }
@@ -158,8 +379,34 @@ pub enum RecoverWalletSubCommand {
         /// File path of the wallet file
         wallet_path: PathBuf,
 
+        /// The legacy positional spelling of the seed phrase storage choice;
+        /// both spellings must agree when both are given.
+        #[arg(hide = true, value_name = "store-seed-phrase|do-not-store-seed-phrase")]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
+
+        /// Mnemonic (seed) phrase (12, 15, 18, 21, or 24 words as a single quoted
+        /// argument); required either positionally or via `--mnemonic`.
+        /// Note: the legacy seed-phrase storage slot precedes this argument; to
+        /// skip that slot, pass the mnemonic with `--mnemonic` instead.
+        mnemonic: Option<String>,
+
+        /// Mnemonic (seed) phrase (12, 15, 18, 21, or 24 words as a single
+        /// quoted argument); required unless the mnemonic is given
+        /// positionally. Both spellings must agree when both are given.
+        #[arg(
+            long = "mnemonic",
+            value_name = "words",
+            required_unless_present = "mnemonic",
+            action = clap::ArgAction::Append
+        )]
+        mnemonic_flag: Vec<String>,
+
+        /// Passphrase along the mnemonic
+        #[arg(long = "passphrase")]
+        passphrase: Option<String>,
+
         /// Specifies whether the seed phrase should be stored in the wallet file or
-        /// only printed on the screen.
+        /// only printed on the screen (default: true).
         ///
         /// Not storing the seed phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that the seed phrase is reused
@@ -167,14 +414,12 @@ pub enum RecoverWalletSubCommand {
         ///
         /// Note: if you decide to store the seed phrase, consider encrypting the wallet with
         /// the wallet-encrypt-private-keys command, which will also encrypt the seed phrase.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
-
-        /// Mnemonic (seed) phrase (12, 15, or 24 words as a single quoted argument).
-        mnemonic: String,
-
-        /// Passphrase along the mnemonic
-        #[arg(long = "passphrase")]
-        passphrase: Option<String>,
+        #[arg(
+            long = "store-seed-phrase",
+            value_name = "true|false",
+            action = clap::ArgAction::Append
+        )]
+        store_seed_phrase: Vec<bool>,
     },
     /// (Beta) Recover a wallet using a connected Trezor hardware wallet.
     ///
@@ -212,33 +457,53 @@ pub enum RecoverWalletSubCommand {
 }
 
 impl RecoverWalletSubCommand {
-    pub fn into_path_and_wallet_args(self) -> (PathBuf, WalletTypeArgs) {
+    /// Resolve into `(wallet_path, wallet_args, implicit_storing)`: the third
+    /// element is true only when neither storage spelling was given (the
+    /// implicit store-the-seed default was applied), so callers can surface
+    /// the storage disclosure note.
+    pub fn into_path_and_wallet_args(self) -> Result<(PathBuf, WalletTypeArgs, bool), String> {
         match self {
             Self::Software {
                 wallet_path,
-                whether_to_store_seed_phrase,
+                store_seed_phrase,
                 mnemonic,
+                mnemonic_flag,
                 passphrase,
+                whether_to_store_seed_phrase,
             } => {
-                let store_seed_phrase = whether_to_store_seed_phrase.into();
-                (
+                reject_legacy_storage_choice_as_path(
+                    "wallet recover",
+                    &wallet_path,
+                    &whether_to_store_seed_phrase,
+                )?;
+                reject_mnemonic_looking_path(
+                    "wallet recover",
+                    &wallet_path,
+                    &whether_to_store_seed_phrase,
+                )?;
+                let mnemonic = merge_mnemonic(mnemonic, &mnemonic_flag)?
+                    .ok_or("a mnemonic (seed) phrase is required to recover a wallet")?;
+                let (store_seed_phrase, implicit_storing) =
+                    resolve_store_seed_phrase(&store_seed_phrase, whether_to_store_seed_phrase)?;
+                Ok((
                     wallet_path,
                     WalletTypeArgs::Software {
                         mnemonic: Some(mnemonic),
                         passphrase,
                         store_seed_phrase,
                     },
-                )
+                    implicit_storing,
+                ))
             }
 
             #[cfg(feature = "trezor")]
             Self::Trezor {
                 wallet_path,
                 device_id,
-            } => (wallet_path, WalletTypeArgs::Trezor { device_id }),
+            } => Ok((wallet_path, WalletTypeArgs::Trezor { device_id }, false)),
 
             #[cfg(feature = "ledger")]
-            Self::Ledger { wallet_path } => (wallet_path, WalletTypeArgs::Ledger),
+            Self::Ledger { wallet_path } => Ok((wallet_path, WalletTypeArgs::Ledger, false)),
         }
     }
 }
@@ -3125,6 +3390,1107 @@ mod tests {
         let rest = &help_text[start..];
         let end = rest.find("\n\n").unwrap_or(rest.len());
         rest[..end].to_owned()
+    }
+
+    // Parse a wallet create/recover software line and resolve it to the seed
+    // storage choice and mnemonic the wallet would use.
+    fn software_wallet_args(line: &'static str) -> (StoreSeedPhrase, Option<String>, bool) {
+        crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl)
+                .expect("line must parse")
+                .expect("line must parse to a command");
+            // Every spelling (nested group and legacy flat) resolves through
+            // the same `into_path_and_wallet_args`.
+            let (path, args, implicit_storing) = match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args(),
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Recover { wallet },
+                }) => wallet.into_path_and_wallet_args(),
+                other => panic!("expected a create/recover wallet command, got {other:?}"),
+            }
+            .expect("wallet args must resolve");
+            assert_eq!(path, PathBuf::from("/tmp/wallet-file"));
+            match args {
+                WalletTypeArgs::Software {
+                    store_seed_phrase,
+                    mnemonic,
+                    passphrase,
+                } => {
+                    assert_eq!(passphrase, None);
+                    (store_seed_phrase, mnemonic, implicit_storing)
+                }
+                other => panic!("expected software wallet args, got {other:?}"),
+            }
+        })
+    }
+
+    #[test]
+    fn create_software_defaults_to_storing_the_seed_phrase() {
+        for line in [
+            "wallet create software /tmp/wallet-file",
+            "wallet-create software /tmp/wallet-file",
+        ] {
+            let (store, mnemonic, implicit) = software_wallet_args(line);
+            assert_eq!(store, StoreSeedPhrase::Store);
+            assert_eq!(mnemonic, None);
+            assert!(implicit, "the bare default stores implicitly");
+        }
+    }
+
+    #[test]
+    fn store_seed_phrase_flag_controls_the_choice() {
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=false",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=true",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        // The space-separated form the completion menu advertises stays
+        // parseable end to end.
+        let (store, _, _) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase false",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+    }
+
+    #[test]
+    fn recover_software_help_documents_the_flag_and_hides_the_legacy_positional() {
+        let output = help_output("help wallet recover software");
+        assert!(
+            output.contains("--store-seed-phrase"),
+            "help must document the flag\n{output}"
+        );
+        assert!(
+            output.contains("--mnemonic"),
+            "help must document the mnemonic flag\n{output}"
+        );
+        assert!(
+            output.contains("default: true"),
+            "help must document the default\n{output}"
+        );
+        assert!(
+            !output.contains("WHETHER_TO_STORE_SEED_PHRASE"),
+            "help must not show the legacy positional\n{output}"
+        );
+        assert!(
+            !output.contains("do-not-store-seed-phrase"),
+            "help must not show the legacy enum values\n{output}"
+        );
+    }
+
+    #[test]
+    fn mixed_order_space_form_with_trailing_positional_fails_loudly() {
+        // `--store-seed-phrase false "twelve words"` — the trailing words
+        // land in the hidden storage slot and fail loudly (never silently
+        // mis-parsed as a mnemonic or path).
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file --store-seed-phrase false \"twelve words here\"",
+                &repl,
+            ) {
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("must fail loudly, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("store-seed-phrase") || error.contains("twelve words"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn mnemonic_typed_into_the_storage_slot_fails_loudly() {
+        // The natural mistake (typing the seed where the storage choice goes)
+        // fails with the storage slot's name and its possible values, so the
+        // user sees exactly what the slot expects.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file \"twelve words here\"",
+                &repl,
+            ) {
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("the invalid value must fail parsing, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("store-seed-phrase|do-not-store-seed-phrase"),
+            "the error must name the storage slot's choices\n{error}"
+        );
+        assert!(
+            error.contains("do-not-store-seed-phrase"),
+            "the error must list the possible values\n{error}"
+        );
+    }
+
+    #[test]
+    fn explicit_flag_does_not_relax_the_lookalike_guards() {
+        // An explicit --store-seed-phrase does not legitimize a storage-choice
+        // lookalike path (documented strictness: both guards fire whenever the
+        // legacy slot is unfilled).
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software do-not-store-seed-phrase \
+                     --store-seed-phrase=false",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("looks like a legacy seed-phrase storage choice"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn separator_contained_paths_are_deliberate_paths() {
+        // A path whose final component is not a storage choice is a
+        // deliberate path, not a pasted seed: it parses.
+        let (path, args, _) = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software backups/my-wallet",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect("must parse"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert_eq!(path, PathBuf::from("backups/my-wallet"));
+        let store = match args {
+            WalletTypeArgs::Software {
+                store_seed_phrase, ..
+            } => store_seed_phrase,
+            other => panic!("expected software wallet args, got {other:?}"),
+        };
+        assert_eq!(store, StoreSeedPhrase::Store);
+    }
+
+    #[test]
+    fn mnemonic_looking_error_does_not_echo_the_seed_words() {
+        // The path may literally be the pasted seed: the error must not echo
+        // the words back (they would leak into copied bug reports).
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let seed = "one two three four five six seven eight nine ten eleven twelve";
+            let line = format!("wallet create software \"{seed}\"");
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(&line, &repl) {
+                Ok(Some(command)) => {
+                    let error = match command {
+                        ManageableWalletCommand::ManagementCommands(
+                            WalletManagementCommand::CreateWallet { wallet },
+                        )
+                        | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                            command: WalletGroupSubCommand::Create { wallet },
+                        }) => wallet.into_path_and_wallet_args().err(),
+                        other => panic!("expected a create wallet command, got {other:?}"),
+                    };
+                    error.expect("must reject the seed-in-path line")
+                }
+                other => panic!("expected the guard to fire, got {other:?}"),
+            }
+        });
+        assert!(
+            !error.contains("one two three four five six seven eight nine ten eleven twelve"),
+            "the error must not echo the seed words\n{error}"
+        );
+        assert!(error.contains("12"), "the error must name the word count");
+    }
+
+    #[test]
+    fn case_variant_storage_words_still_rejected() {
+        // Case-variant spellings of the storage words never parse as the
+        // legacy slot, so they must be rejected like the bare forms.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software Store-Seed-Phrase",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("looks like a legacy seed-phrase storage choice"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn recover_mnemonic_looking_wallet_path_is_rejected() {
+        // The recover arm runs the same seed-in-path guard: with the storage
+        // slot unfilled, a mnemonic-shaped path fails loudly even when the
+        // seed itself arrives via --mnemonic.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software \"one two three four five six seven eight nine ten eleven twelve\" \
+                     --mnemonic \"real seed words here\"",
+                &repl,
+            ) {
+                Ok(Some(command)) => {
+                    let error = match command {
+                        ManageableWalletCommand::ManagementCommands(
+                            WalletManagementCommand::RecoverWallet { wallet },
+                        ) => wallet.into_path_and_wallet_args().err(),
+                        ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                            command: WalletGroupSubCommand::Recover { wallet },
+                        }) => wallet.into_path_and_wallet_args().err(),
+                        other => panic!("expected a recover command, got {other:?}"),
+                    };
+                    error.expect("must reject the seed-in-path line")
+                }
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("must fail loudly, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("mnemonic (seed) phrase"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn recover_variant_of_the_storage_slot_failure_is_pinned() {
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file \"twelve words here\"",
+                &repl,
+            ) {
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("the invalid value must fail parsing, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("store-seed-phrase|do-not-store-seed-phrase"),
+            "the error must name the storage slot's choices\n{error}"
+        );
+    }
+
+    #[test]
+    fn storage_choice_looking_path_with_legacy_slot_still_parses() {
+        // A wallet file literally named after a storage choice, followed by
+        // the legacy storage slot, was valid before this change and stays
+        // valid: the guard must not fire while the slot is filled.
+        let (path, store_args, implicit) = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet-create software do-not-store-seed-phrase store-seed-phrase",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                ) => wallet.into_path_and_wallet_args().expect("must parse"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert_eq!(path, PathBuf::from("do-not-store-seed-phrase"));
+        let (store, implicit) = match store_args {
+            WalletTypeArgs::Software {
+                store_seed_phrase, ..
+            } => (store_seed_phrase, implicit),
+            other => panic!("expected software wallet args, got {other:?}"),
+        };
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert!(!implicit, "the legacy spelling is an explicit choice");
+    }
+
+    #[test]
+    fn mnemonic_looking_wallet_path_is_rejected_on_create() {
+        // A quoted seed typed into the path slot used to be a parse error; it
+        // must keep failing loudly instead of creating a file named after the
+        // seed.
+        for line in [
+            "wallet create software \"one two three four five six seven eight nine ten eleven twelve\"",
+            // Near-miss: an 11-word paste is caught by the >= 8 threshold.
+            "wallet create software \"w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11\" --store-seed-phrase=false",
+            "wallet create software \"w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15\" --store-seed-phrase=false",
+            "wallet create software \"w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24\"",
+        ] {
+            let error = crate::run_with_large_stack(move || {
+                let repl = grammar_with_large_stack(false, true);
+                match parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl) {
+                    Ok(Some(command)) => {
+                        let error = match command {
+                            ManageableWalletCommand::ManagementCommands(
+                                WalletManagementCommand::CreateWallet { wallet },
+                            ) => wallet.into_path_and_wallet_args().err(),
+                            ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                                command: WalletGroupSubCommand::Create { wallet },
+                            }) => wallet.into_path_and_wallet_args().err(),
+                            other => panic!("expected a create command, got {other:?}"),
+                        };
+                        error.expect("must reject the seed-in-path line")
+                    }
+                    Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                        clap_error.render().to_string()
+                    }
+                    other => panic!("`{line}` must fail loudly, got {other:?}"),
+                }
+            });
+            assert!(
+                error.contains("mnemonic"),
+                "`{line}` must name the likely seed-in-path mistake\n{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn storage_value_as_wallet_path_is_rejected() {
+        // Before the slot became optional, these invocations were parse
+        // errors; they must keep failing loudly instead of silently creating
+        // a wallet file named after the storage choice.
+        for line in [
+            "wallet create software do-not-store-seed-phrase --mnemonic \"seed x\"",
+            "wallet create software store-seed-phrase",
+            "wallet recover software do-not-store-seed-phrase --mnemonic \"seed x\"",
+        ] {
+            let error = crate::run_with_large_stack(move || {
+                let repl = grammar_with_large_stack(false, true);
+                match parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl) {
+                    Ok(Some(command)) => {
+                        let error = match command {
+                            ManageableWalletCommand::ManagementCommands(
+                                WalletManagementCommand::CreateWallet { wallet },
+                            ) => wallet.into_path_and_wallet_args().err(),
+                            ManageableWalletCommand::ManagementCommands(
+                                WalletManagementCommand::RecoverWallet { wallet },
+                            ) => wallet.into_path_and_wallet_args().err(),
+                            ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                                command: WalletGroupSubCommand::Create { wallet },
+                            }) => wallet.into_path_and_wallet_args().err(),
+                            ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                                command: WalletGroupSubCommand::Recover { wallet },
+                            }) => wallet.into_path_and_wallet_args().err(),
+                            other => panic!("expected a create/recover command, got {other:?}"),
+                        };
+                        error.expect("must reject the legacy-shaped line")
+                    }
+                    Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                        clap_error.render().to_string()
+                    }
+                    other => panic!("`{line}` must fail loudly, got {other:?}"),
+                }
+            });
+            assert!(
+                error.contains("looks like a legacy seed-phrase storage choice"),
+                "`{line}` must name the storage-choice lookalike problem\n{error}"
+            );
+            assert!(
+                error.contains("store-seed-phrase"),
+                "`{line}` must spell out the remedy\n{error}"
+            );
+            // The recover variant's remedy mentions the seed via --mnemonic;
+            // the create variant's does not (create generates the seed).
+            if line.contains("wallet recover") {
+                assert!(
+                    error.contains("--mnemonic"),
+                    "recover remedy must mention --mnemonic\n{error}"
+                );
+            } else {
+                assert!(
+                    !error.contains("--mnemonic"),
+                    "create remedy must not mention --mnemonic\n{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn passphrase_survives_the_new_flag_shapes() {
+        // The passphrase flag must survive threading the new storage flag and
+        // the hidden slot through into_path_and_wallet_args, in both spellings.
+        crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            for line in [
+                "wallet create software /tmp/wallet-file --store-seed-phrase=false \
+                     --passphrase x --mnemonic \"twelve words here\"",
+                "wallet-create software /tmp/wallet-file store-seed-phrase \
+                     --passphrase x --mnemonic \"twelve words here\"",
+            ] {
+                let command = parse_input::<node_comm::node_traits::MockNodeInterface>(line, &repl)
+                    .expect("line must parse")
+                    .expect("line must parse to a command");
+                match command {
+                    ManageableWalletCommand::ManagementCommands(
+                        WalletManagementCommand::CreateWallet { wallet },
+                    )
+                    | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                        command: WalletGroupSubCommand::Create { wallet },
+                    }) => {
+                        let (_, args, _) =
+                            wallet.into_path_and_wallet_args().expect("wallet args must resolve");
+                        match args {
+                            WalletTypeArgs::Software { passphrase, .. } => assert_eq!(
+                                passphrase.as_deref(),
+                                Some("x"),
+                                "the passphrase must survive in `{line}`"
+                            ),
+                            other => panic!("expected software wallet args, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected a create wallet command, got {other:?}"),
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn implicit_storing_is_true_only_for_the_default() {
+        let (store, _, implicit) = software_wallet_args("wallet create software /tmp/wallet-file");
+        assert_eq!((store, implicit), (StoreSeedPhrase::Store, true));
+        let (store, _, implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=true",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert!(!implicit, "an explicit choice is not implicit");
+        let (_, _, implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=false",
+        );
+        assert!(!implicit, "an explicit choice is not implicit");
+        let (_, _, implicit) =
+            software_wallet_args("wallet create software /tmp/wallet-file store-seed-phrase");
+        assert!(!implicit, "the legacy spelling is not implicit");
+    }
+
+    #[test]
+    fn recover_without_any_mnemonic_fails_for_programmatic_construction() {
+        // clap rejects this shape before dispatch (required_unless_present),
+        // so the resolve-time ok_or is defense for programmatic construction
+        // only; pin its message here.
+        let error = crate::run_with_large_stack(move || {
+            let wallet = RecoverWalletSubCommand::Software {
+                wallet_path: PathBuf::from("/tmp/wallet-file"),
+                whether_to_store_seed_phrase: None,
+                mnemonic: None,
+                mnemonic_flag: vec![],
+                passphrase: None,
+                store_seed_phrase: vec![],
+            };
+            wallet
+                .into_path_and_wallet_args()
+                .expect_err("the defensive ok_or must fire for programmatic construction")
+        });
+        assert!(
+            error.contains("a mnemonic (seed) phrase is required"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn resolve_store_seed_phrase_flags_the_implicit_default() {
+        // The implicit flag the note-append consumes is true only when the
+        // storage choice was never made.
+        let (store, implicit) = resolve_store_seed_phrase(&[], None).expect("must resolve");
+        assert_eq!((store, implicit), (StoreSeedPhrase::Store, true));
+        let (_, implicit) = resolve_store_seed_phrase(&[false], None).expect("must resolve");
+        assert!(!implicit);
+        let (_, implicit) =
+            resolve_store_seed_phrase(&[], Some(CliStoreSeedPhrase::DoNotStoreSeedPhrase))
+                .expect("must resolve");
+        assert!(!implicit);
+    }
+
+    #[test]
+    fn mnemonic_path_guard_fires_only_when_the_slot_is_unfilled() {
+        // With the legacy slot unfilled, a mnemonic-shaped path fails loudly
+        // (regardless of how the mnemonic itself is supplied).
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software \"one two three four five six seven eight nine ten eleven twelve\" \
+                     --store-seed-phrase=false",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("mnemonic (seed) phrase"),
+            "unexpected error: {error}"
+        );
+
+        // With the legacy slot filled, a mnemonic-shaped path is an explicit
+        // choice and resolves fine.
+        let ok = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software \"one two three four five six seven eight nine ten eleven twelve\" \
+                     store-seed-phrase",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect("must parse"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        match ok {
+            (
+                _,
+                WalletTypeArgs::Software {
+                    store_seed_phrase, ..
+                },
+                _,
+            ) => {
+                assert_eq!(store_seed_phrase, StoreSeedPhrase::Store);
+            }
+            other => panic!("expected software wallet args, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn implicit_store_warning_and_note_share_the_flag_hint() {
+        // The two surfaces of the implicit default (the execution-time warn
+        // and the post-success note) must both point at the opt-out flag, so
+        // they cannot drift apart.
+        assert!(
+            IMPLICIT_STORE_WARNING.contains("--store-seed-phrase=false"),
+            "the warning must name the opt-out flag"
+        );
+    }
+
+    #[test]
+    fn nested_spellings_resolve_the_new_flag_and_hidden_slot() {
+        // The nested grammar routes through the same fields: the flag and the
+        // hidden positional both resolve, in both seed-storage values.
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=false \
+                 --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file do-not-store-seed-phrase \
+                 \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file --store-seed-phrase=true \
+                 --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+    }
+
+    #[test]
+    fn legacy_positional_spelling_keeps_working() {
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file do-not-store-seed-phrase",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic, None);
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file store-seed-phrase \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // The agree-case merge for storage: the positional and the flag agree
+        // on do-not-store, for both commands.
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file do-not-store-seed-phrase \
+                 --store-seed-phrase=false",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file do-not-store-seed-phrase \
+                 --store-seed-phrase=false --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+
+        // Recover's default resolution (storage unspecified entirely) is to
+        // store, same as create.
+        let (store, mnemonic, implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        assert!(
+            implicit,
+            "recover with only --mnemonic still stores implicitly"
+        );
+
+        // The flat legacy spellings accept the new flag and --mnemonic too.
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet-create software /tmp/wallet-file --store-seed-phrase=false",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet-recover software /tmp/wallet-file --store-seed-phrase=false \
+                 --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // The flat legacy spellings hit the same failure modes as the nested
+        // ones: conflicting storage and conflicting mnemonic spellings.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet-create software /tmp/wallet-file do-not-store-seed-phrase \
+                     --store-seed-phrase=true",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("twice") && error.contains("--store-seed-phrase"),
+            "unexpected error: {error}"
+        );
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet-recover software /tmp/wallet-file store-seed-phrase \
+                     \"positional seed\" --mnemonic \"flag seed\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                ) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a recover wallet command, got {other:?}"),
+            }
+        });
+        assert!(error.contains("twice"), "unexpected error: {error}");
+
+        // The flagship backward-compat invocation: the flat spelling with the
+        // legacy positional storage choice and a positional mnemonic.
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet-recover software /tmp/wallet-file do-not-store-seed-phrase \
+                 \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        // Dropping the mnemonic from that shape fails at parse time, naming
+        // the --mnemonic flag (which is required unless the positional is
+        // given).
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet-recover software /tmp/wallet-file do-not-store-seed-phrase",
+                &repl,
+            ) {
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("the missing mnemonic must fail parsing, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("--mnemonic"),
+            "the parse error must name --mnemonic\n{error}"
+        );
+
+        // Recover's agree-case merges go through its own dispatch body.
+        let (store, mnemonic, _) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file store-seed-phrase \
+                 \"twelve words here\" --store-seed-phrase=true",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // The create agree-case with the store value.
+        let (store, _, _) = software_wallet_args(
+            "wallet create software /tmp/wallet-file store-seed-phrase \
+                 --store-seed-phrase=true",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        let (store, mnemonic, _) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file store-seed-phrase \
+                 \"twelve words here\" --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // The flat create shape with the legacy storage positional is
+        // exercised too.
+        let (store, mnemonic, _) = software_wallet_args(
+            "wallet-create software /tmp/wallet-file store-seed-phrase \
+                 \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // The `do-not-store-seed-phrase` value pairs with a positional
+        // mnemonic for both create and recover, exactly as before this change.
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file do-not-store-seed-phrase \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file do-not-store-seed-phrase \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+    }
+
+    #[test]
+    fn conflicting_seed_phrase_spellings_are_rejected() {
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file do-not-store-seed-phrase \
+                     --store-seed-phrase=true",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("twice") && error.contains("--store-seed-phrase"),
+            "unexpected error: {error}"
+        );
+
+        // The recover path rejects conflicting storage spellings identically.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file store-seed-phrase \
+                     \"twelve words here\" --store-seed-phrase=false",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Recover { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a recover wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("twice") && error.contains("--store-seed-phrase"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn repeated_flags_with_conflicting_values_are_rejected() {
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file \
+                     --store-seed-phrase=true --store-seed-phrase=false",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("multiple times with conflicting values"),
+            "unexpected error: {error}"
+        );
+
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file \
+                     --mnemonic \"seed a\" --mnemonic \"seed b\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("multiple times with conflicting values"),
+            "unexpected error: {error}"
+        );
+
+        // Agreeing repeats are fine.
+        let (store, _, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file \
+                 --store-seed-phrase=true --store-seed-phrase=true",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+
+        // The recover shape hits the same merge functions.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file --store-seed-phrase=true \
+                     --store-seed-phrase=false --mnemonic \"twelve words here\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Recover { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a recover wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("multiple times with conflicting values"),
+            "unexpected error: {error}"
+        );
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file \
+                     --mnemonic \"seed a\" --mnemonic \"seed b\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Recover { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a recover wallet command, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("multiple times with conflicting values"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn mnemonic_flag_merges_and_conflicts_are_rejected() {
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file --store-seed-phrase=false \
+             --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet recover software /tmp/wallet-file store-seed-phrase \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // A missing mnemonic is rejected at parse time, naming the --mnemonic
+        // flag rather than the hidden legacy positional.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            match parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file --store-seed-phrase=false",
+                &repl,
+            ) {
+                Err(WalletCliCommandError::InvalidCommandInput(clap_error)) => {
+                    clap_error.render().to_string()
+                }
+                other => panic!("the missing mnemonic must fail parsing, got {other:?}"),
+            }
+        });
+        assert!(
+            error.contains("--mnemonic"),
+            "the parse error must name --mnemonic\n{error}"
+        );
+        assert!(
+            !error.contains("do-not-store-seed-phrase"),
+            "the parse error must not name the hidden positional's values\n{error}"
+        );
+
+        // Create also accepts the flag-only mnemonic spelling (its positional
+        // mnemonic is optional), and both spellings given with identical
+        // values merge cleanly.
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file --store-seed-phrase=false \
+             --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::DoNotStore);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+        let (store, mnemonic, _implicit) = software_wallet_args(
+            "wallet create software /tmp/wallet-file store-seed-phrase \
+             \"twelve words here\" --mnemonic \"twelve words here\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("twelve words here"));
+
+        // Agreeing repeats of the --mnemonic flag dedup cleanly.
+        let (store, mnemonic, _) = software_wallet_args(
+            "wallet create software /tmp/wallet-file \
+                 --mnemonic \"seed x\" --mnemonic \"seed x\"",
+        );
+        assert_eq!(store, StoreSeedPhrase::Store);
+        assert_eq!(mnemonic.as_deref(), Some("seed x"));
+
+        // Conflicting spellings of the mnemonic are rejected.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet create software /tmp/wallet-file store-seed-phrase \
+                     \"positional seed\" --mnemonic \"flag seed\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::CreateWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Create { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a create wallet command, got {other:?}"),
+            }
+        });
+        assert!(error.contains("twice"), "unexpected error: {error}");
+
+        // The recover path rejects conflicting mnemonic spellings through the
+        // same merge.
+        let error = crate::run_with_large_stack(move || {
+            let repl = grammar_with_large_stack(false, true);
+            let command = parse_input::<node_comm::node_traits::MockNodeInterface>(
+                "wallet recover software /tmp/wallet-file do-not-store-seed-phrase \
+                     \"positional seed\" --mnemonic \"flag seed\"",
+                &repl,
+            )
+            .expect("line must parse")
+            .expect("line must parse to a command");
+            match command {
+                ManageableWalletCommand::ManagementCommands(
+                    WalletManagementCommand::RecoverWallet { wallet },
+                )
+                | ManageableWalletCommand::WalletCommands(WalletCommand::Wallet {
+                    command: WalletGroupSubCommand::Recover { wallet },
+                }) => wallet.into_path_and_wallet_args().expect_err("must fail"),
+                other => panic!("expected a recover wallet command, got {other:?}"),
+            }
+        });
+        assert!(error.contains("twice"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn create_software_help_documents_the_flag_and_hides_the_legacy_positional() {
+        let output = help_output("help wallet create software");
+        assert!(
+            output.contains("--store-seed-phrase"),
+            "help must document the flag\n{output}"
+        );
+        assert!(
+            output.contains("default: true"),
+            "help must document the default\n{output}"
+        );
+        assert!(
+            !output.contains("WHETHER_TO_STORE_SEED_PHRASE"),
+            "help must not show the legacy positional\n{output}"
+        );
+        assert!(
+            !output.contains("do-not-store-seed-phrase"),
+            "help must not show the legacy enum values\n{output}"
+        );
     }
 
     #[test]

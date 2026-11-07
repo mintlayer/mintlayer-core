@@ -26,6 +26,11 @@ use wallet_cli_commands::{expands_first_level, first_about_line, visible_first_l
 #[derive(Clone)]
 pub struct WalletCompletions {
     root: Arc<Command>,
+    /// When true (the ghost-hint channel), the leaf flag fallback is
+    /// suppressed: a dimmed hint trailing the cursor with `--mnemonic` after
+    /// a free-form token would read as an extension of the user's own input.
+    /// The TAB menu keeps the fallback.
+    hint_mode: bool,
 }
 
 impl WalletCompletions {
@@ -54,14 +59,27 @@ impl WalletCompletions {
                 );
             }
         }
-        Self { root }
+        Self {
+            root,
+            hint_mode: false,
+        }
     }
 
     /// Takes an already-built grammar and trusts the caller: use this where
     /// the [`Command`] is shared behind an [`std::sync::Arc`] and the builder
     /// contract is known to hold (as with `build_repl_command` output).
     pub fn from_built(root: Arc<Command>) -> Self {
-        Self { root }
+        Self {
+            root,
+            hint_mode: false,
+        }
+    }
+
+    /// Switch the completer into ghost-hint mode: the leaf flag fallback is
+    /// suppressed so the dimmed hint never trails the cursor with flags
+    /// after a free-form token. The TAB menu keeps the fallback.
+    pub fn set_hint_mode(&mut self, hint_mode: bool) {
+        self.hint_mode = hint_mode;
     }
 
     /// A completer without any candidates, used where completion is not
@@ -136,21 +154,39 @@ fn subcommand_candidates(cmd: &Command) -> Vec<Candidate> {
     candidates
 }
 
-/// Candidates for the positional argument at `index` (zero based) of `cmd`.
-fn positional_candidates(cmd: &Command, index: usize) -> Vec<Candidate> {
-    let positionals: Vec<&Arg> = cmd
-        .get_arguments()
-        .filter(|arg| arg.is_positional() && !arg.is_hide_set())
-        .collect();
+/// Candidates for the positional argument at `index` (zero based) of `cmd`,
+/// given the token the user is completing (`typed`).
+///
+/// `index` counts ALL positionals, hidden ones included: clap assigns tokens
+/// to positionals in declaration order regardless of hiding, and
+/// `resolve_level` counts tokens the same way. A hidden positional's values
+/// stay out of the advertised menu (a bare TAB yields nothing), but input
+/// that already prefix-matches one of them is finished, so the legacy compat
+/// spellings remain completable.
+fn positional_candidates(cmd: &Command, index: usize, typed: &str) -> Vec<Candidate> {
+    let positionals: Vec<&Arg> = cmd.get_arguments().filter(|arg| arg.is_positional()).collect();
     let arg = positionals.get(index).copied().or_else(|| {
         positionals
             .last()
             .copied()
-            .filter(|last| matches!(last.get_action(), ArgAction::Append))
+            .filter(|last| !last.is_hide_set() && matches!(last.get_action(), ArgAction::Append))
     });
     let Some(arg) = arg else {
         return Vec::new();
     };
+    if arg.is_hide_set() {
+        // A hidden positional's values stay out of the advertised menu; input
+        // of at least two characters that already prefix-matches one of them
+        // (the legacy compat spellings) is finished — completion on prefix is
+        // not advertisement, but a single keystroke would effectively be one.
+        if typed.chars().count() < 2 {
+            return Vec::new();
+        }
+        return possible_value_candidates(arg.get_possible_values())
+            .into_iter()
+            .filter(|candidate| candidate.value.starts_with(typed))
+            .collect();
+    }
     possible_value_candidates(arg.get_possible_values())
 }
 
@@ -208,6 +244,9 @@ struct Level<'a> {
     taken_flags: BTreeSet<String>,
     positional_index: usize,
     pending_value_flag: Option<&'a Arg>,
+    /// True once the walk descended through a `help` subcommand (root or
+    /// group-level): everything under it is a help topic, not a command.
+    through_help: bool,
 }
 
 fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
@@ -215,6 +254,7 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
     let mut taken_flags = BTreeSet::new();
     let mut positional_index = 0usize;
     let mut pending_value_flag: Option<&'a Arg> = None;
+    let mut through_help = false;
     for token in tokens {
         if let Some(stripped) = token.strip_prefix("--") {
             pending_value_flag = None;
@@ -264,6 +304,9 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
         // Hidden subcommands are still accepted by clap, so resolve them when
         // typed; `subcommand_candidates` keeps them out of the offered menu.
         if let Some(sub) = cmd.find_subcommand(token) {
+            if sub.get_name() == "help" {
+                through_help = true;
+            }
             cmd = sub;
             taken_flags.clear();
             positional_index = 0;
@@ -277,6 +320,7 @@ fn resolve_level<'a>(root: &'a Command, tokens: &[&str]) -> Level<'a> {
         taken_flags,
         positional_index,
         pending_value_flag,
+        through_help,
     }
 }
 
@@ -353,7 +397,27 @@ impl Completer for WalletCompletions {
                     ),
                 });
             }
-            candidates.extend(positional_candidates(level.cmd, level.positional_index));
+            let positional_values =
+                positional_candidates(level.cmd, level.positional_index, current);
+            // A leaf command's positional slot with no enumeration (a path,
+            // an address, a hex blob) offers nothing on its own; surface the
+            // command's flags instead, so the next step stays discoverable.
+            // Levels with subcommands keep offering those instead.
+            // Under any `help` command (root or group-level), the mirrored
+            // leaves are help topics, not commands: the fallback is
+            // suppressed there. The ghost-hint channel suppresses it too.
+            let at_leaf = level.cmd.get_subcommands().next().is_none();
+            if at_leaf && !self.hint_mode && !level.through_help && positional_values.is_empty() {
+                // The auto-added --help is not offered here: an exhausted
+                // command keeps its menu clean (it stays completable when the
+                // user explicitly types "--").
+                candidates.extend(
+                    flag_candidates(level.cmd, &level.taken_flags)
+                        .into_iter()
+                        .filter(|candidate| candidate.value != "--help"),
+                );
+            }
+            candidates.extend(positional_values);
             candidates
         };
 
@@ -394,6 +458,11 @@ pub struct WalletHinter {
 
 impl WalletHinter {
     pub fn new(completer: WalletCompletions) -> Self {
+        // The ghost-hint channel suppresses the leaf flag fallback: a dimmed
+        // hint trailing the cursor with `--mnemonic` after a free-form path
+        // token would read as an extension of the user's own input.
+        let mut completer = completer;
+        completer.set_hint_mode(true);
         Self {
             completer,
             current_hint: String::new(),
@@ -633,6 +702,135 @@ mod tests {
     }
 
     #[test]
+    fn enumerated_leaf_keeps_its_values_without_the_flag_fallback() {
+        let mut completer = completer();
+        // A leaf whose positional slot enumerates (`group status` -> full |
+        // short) keeps offering exactly those values; the flag fallback (which
+        // would surface --help) must not fire.
+        let suggestions = completer.complete("group status ", 13);
+        assert_eq!(values(&suggestions), vec!["full", "short"]);
+    }
+
+    #[test]
+    fn exhausted_enumerated_slot_gets_the_flag_fallback() {
+        let mut completer = completer();
+        // After an enumerated slot is consumed, previously-empty menus now
+        // surface the command's flags (minus --help, which the fallback
+        // filters).
+        let suggestions = completer.complete("group status full ", 18);
+        let offered = values(&suggestions);
+        assert!(
+            !offered.contains(&"full") && !offered.contains(&"short"),
+            "the consumed slot's values must not be re-offered\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"--help"),
+            "the fallback menu must not offer --help\n{offered:?}"
+        );
+    }
+
+    #[test]
+    fn non_leaf_levels_never_get_the_flag_fallback() {
+        let mut completer = completer();
+        // Subcommand levels keep offering subcommands only, even when their
+        // slot is otherwise empty.
+        let suggestions = completer.complete("group ", 6);
+        assert_eq!(values(&suggestions), vec!["help", "status"]);
+    }
+
+    #[test]
+    fn recover_variant_completes_the_storage_flag_values() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        let flag_value_suggestions =
+            completer.complete("wallet recover software p --store-seed-phrase ", 46);
+        assert_eq!(
+            values(&flag_value_suggestions),
+            vec!["false", "true"],
+            "the recover variant must complete the storage flag values"
+        );
+    }
+
+    #[test]
+    fn help_topic_levels_never_get_the_flag_fallback() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        // Under the root help topics, leaves mirror the tree but have no
+        // args; the fallback must not advertise flags there (inserting them
+        // would make `help` fail to parse).
+        let suggestions = completer.complete("help wallet create software ", 28);
+        assert!(
+            values(&suggestions).is_empty(),
+            "help topic leaves must not receive the flag fallback"
+        );
+    }
+
+    #[test]
+    fn hinter_on_real_grammar_suppresses_fallback_flags() {
+        // Pin the production wiring: WalletHinter::new sets hint mode on its
+        // completer clone, so the ghost hint after a path token stays empty
+        // even though the TAB menu offers fallback flags.
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut hinter = WalletHinter::new(WalletCompletions::new(grammar));
+        let hint = hinter.handle(
+            "wallet create software p ",
+            25,
+            &reedline::FileBackedHistory::default(),
+            false,
+            "",
+        );
+        assert!(
+            hint.is_empty() || !hint.contains("--mnemonic"),
+            "the ghost hint must not trail fallback flags\n{hint}"
+        );
+    }
+
+    #[test]
+    fn explicit_double_dash_still_offers_help() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        // The documented escape hatch: explicitly typing `--` at a leaf still
+        // offers --help (it is only filtered from the fallback menus).
+        let suggestions = completer.complete("send --", 7);
+        assert!(
+            values(&suggestions).contains(&"--help"),
+            "explicit `--` must still offer --help"
+        );
+    }
+
+    #[test]
+    fn group_level_help_topics_never_get_the_flag_fallback() {
+        // Group-level auto help (e.g. `wallet help create software `) mirrors
+        // the tree the same way the root help does: its leaves have no flags,
+        // so the fallback must stay suppressed there too.
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        let suggestions = completer.complete("wallet help create software ", 29);
+        assert!(
+            values(&suggestions).is_empty(),
+            "group-level help topics must not receive the flag fallback"
+        );
+    }
+
+    #[test]
+    fn inline_equals_form_completes_flag_values() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        let suggestions = completer.complete("wallet create software p --store-seed-phrase=f", 46);
+        assert_eq!(
+            values(&suggestions),
+            vec!["false"],
+            "the inline =-form must complete flag values"
+        );
+    }
+
+    #[test]
     fn flags_are_offered_and_taken_ones_skipped() {
         let mut completer = completer();
         let suggestions = completer.complete("broadcast --", 12);
@@ -696,6 +894,174 @@ mod tests {
         assert_eq!(suggestions[0].description.as_deref(), Some("Everything"));
     }
 
+    #[test]
+    fn create_software_completes_the_storage_flag_and_its_values() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+
+        // Double TAB after the command (and after the path) offers the flags:
+        // the storage flag and the passphrase flag; the hidden legacy
+        // positional and its values are not offered.
+        let suggestions = completer.complete("wallet create software ", 23);
+        let offered = values(&suggestions);
+        assert!(
+            offered.contains(&"--store-seed-phrase"),
+            "the storage flag must be offered\n{offered:?}"
+        );
+        assert!(
+            offered.contains(&"--passphrase"),
+            "the passphrase flag must be offered\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"store-seed-phrase"),
+            "the hidden positional's values must not be advertised\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"do-not-store-seed-phrase"),
+            "the hidden positional's values must not be advertised\n{offered:?}"
+        );
+        // ...but input that already prefix-matches one of them is finished.
+        // The hidden storage slot is the second positional: after the path is
+        // typed, a prefix that matches a legacy value finishes it.
+        // A single keystroke is not enough to surface the hidden values.
+        let prefix_suggestions = completer.complete("wallet create software p d", 27);
+        assert!(
+            values(&prefix_suggestions).is_empty(),
+            "a one-character prefix must not advertise hidden values"
+        );
+        let prefix_suggestions = completer.complete("wallet create software p do-", 28);
+        assert_eq!(
+            values(&prefix_suggestions),
+            vec!["do-not-store-seed-phrase"],
+            "the legacy value must be completable on prefix"
+        );
+        let prefix_suggestions = completer.complete("wallet create software p st", 27);
+        assert_eq!(
+            values(&prefix_suggestions),
+            vec!["store-seed-phrase"],
+            "the legacy value must be completable on prefix"
+        );
+
+        // After the path, the flags are still offered (including the
+        // headline --mnemonic); the auto --help stays out of the fallback
+        // menu, and the hidden legacy positional's values stay unadvertised.
+        let suggestions = completer.complete("wallet create software p ", 25);
+        let offered = values(&suggestions);
+        assert!(
+            offered.contains(&"--store-seed-phrase"),
+            "the storage flag must be offered\n{offered:?}"
+        );
+        assert!(
+            offered.contains(&"--mnemonic"),
+            "the mnemonic flag must be offered\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"store-seed-phrase"),
+            "the hidden positional's values must not be advertised\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"do-not-store-seed-phrase"),
+            "the hidden positional's values must not be advertised\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"--help"),
+            "the fallback menu must not offer --help\n{offered:?}"
+        );
+
+        // The flag's value completes to true/false.
+        let flag_suggestions =
+            completer.complete("wallet create software p --store-seed-phrase ", 45);
+        let after_flag = values(&flag_suggestions);
+        assert_eq!(after_flag, vec!["false", "true"]);
+
+        // A given flag is taken: it stops being offered while its siblings
+        // remain.
+        let suggestions = completer.complete("wallet create software p --passphrase x ", 40);
+        let offered = values(&suggestions);
+        assert!(
+            !offered.contains(&"--passphrase"),
+            "the taken flag must not be offered\n{offered:?}"
+        );
+        assert!(
+            offered.contains(&"--store-seed-phrase"),
+            "the storage flag must still be offered\n{offered:?}"
+        );
+
+        // An exhausted enumerated slot previously offered nothing; the
+        // fallback now offers the command's flags (minus --help).
+        let small =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut small_completer = WalletCompletions::new(small);
+        let suggestions = small_completer.complete("group status full ", 18);
+        let offered = values(&suggestions);
+        assert!(
+            !offered.contains(&"full") && !offered.contains(&"short"),
+            "the consumed slot's values must not be re-offered\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"--help"),
+            "the fallback menu must not offer --help\n{offered:?}"
+        );
+
+        // A second, unrelated real-grammar leaf also gains the flag fallback
+        // (guards against accidental menu drift on other commands).
+        let suggestions = completer.complete("send ", 5);
+        let offered = values(&suggestions);
+        assert!(
+            !offered.contains(&"--help"),
+            "the fallback menu must not offer --help\n{offered:?}"
+        );
+
+        // ...and positions under the root help topics never get the flag
+        // fallback: their leaves are help topics, not commands.
+        let suggestions = completer.complete("help wallet create ", 19);
+        assert!(
+            values(&suggestions).contains(&"software"),
+            "help topics stay completable\n{offered:?}"
+        );
+        let suggestions = completer.complete("help wallet create software ", 28);
+        assert!(
+            values(&suggestions).is_empty(),
+            "help topic leaves must not receive the flag fallback\n{offered:?}"
+        );
+
+        // The recover variant's hidden slot also stays unadvertised, while the
+        // --mnemonic flag (required there) stays offered.
+        let suggestions = completer.complete("wallet recover software p ", 26);
+        let offered = values(&suggestions);
+        assert!(
+            !offered.contains(&"store-seed-phrase"),
+            "recover's hidden slot values must not be advertised\n{offered:?}"
+        );
+        assert!(
+            !offered.contains(&"do-not-store-seed-phrase"),
+            "recover's hidden slot values must not be advertised\n{offered:?}"
+        );
+        assert!(
+            offered.contains(&"--mnemonic"),
+            "recover's fallback menu must offer --mnemonic\n{offered:?}"
+        );
+
+        // The headline --mnemonic flag is offered on the create side too.
+        let suggestions = completer.complete("wallet create software p ", 25);
+        let offered = values(&suggestions);
+        assert!(
+            offered.contains(&"--mnemonic"),
+            "the fallback menu must offer --mnemonic\n{offered:?}"
+        );
+
+        // The Append --store-seed-phrase flag remains offered after being
+        // given once (agreeing repeats are accepted).
+        let suggestions =
+            completer.complete("wallet create software p --store-seed-phrase=true ", 42);
+        let offered = values(&suggestions);
+        assert!(
+            offered.contains(&"--store-seed-phrase"),
+            "the repeatable storage flag must stay offered\n{offered:?}"
+        );
+    }
+
     #[rstest]
     fn advertised_help_views_stay_completable(
         #[values((false, true), (true, false), (true, true))] (cold_wallet, mutable_wallet): (
@@ -732,6 +1098,68 @@ mod tests {
             values(&completer.complete("group help f", 13)),
             Vec::<&str>::new()
         );
+    }
+
+    #[test]
+    fn hints_stay_clean_on_flag_fallback_menus() {
+        // The ghost-hint channel must not surface fallback flags: after a
+        // path token, the fallback menu offers --mnemonic etc., but the dimmed
+        // hint would trail the cursor and mid-token acceptance would corrupt
+        // the user's own path token.
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+
+        // After the path: the fallback offers flags, but the FIRST candidate
+        // (which is what the hint shows) is a path-completable token, not a
+        // flag; nothing flag-like is inserted by accepting the hint since the
+        // hint is suppressed below.
+        let suggestions = completer.complete("wallet create software p ", 25);
+        assert!(
+            suggestions.iter().any(|s| s.value == "--mnemonic"),
+            "the fallback menu offers --mnemonic (menu-level contract)"
+        );
+
+        // Mid-token on a path: the fallback must not produce flag candidates
+        // that would corrupt the user's own token.
+        let suggestions = completer.complete("wallet create software m", 26);
+        let mid_token = values(&suggestions);
+        assert!(
+            mid_token.iter().all(|value| !value.starts_with("--")),
+            "mid-token fallback candidates corrupt the path token: {mid_token:?}"
+        );
+    }
+
+    #[test]
+    fn hint_mode_suppresses_the_leaf_flag_fallback() {
+        let grammar =
+            wallet_cli_commands::run_with_large_stack(move || build_repl_command(false, true));
+        let mut completer = WalletCompletions::new(grammar);
+        completer.set_hint_mode(true);
+
+        // After a path token: the TAB menu offers the fallback flags; the
+        // ghost-hint channel is kept clean by hint-mode suppression plus the
+        // final prefix filter (not by candidate ordering).
+        let suggestions = completer.complete("wallet create software p ", 25);
+        assert!(
+            values(&suggestions).is_empty(),
+            "hint mode must suppress the leaf flag fallback\n{suggestions:?}"
+        );
+
+        // Mid-token on a free-form path: no flags may leak into the hint.
+        let suggestions = completer.complete("wallet create software m", 26);
+        assert!(
+            values(&suggestions).is_empty(),
+            "hint mode must not offer flags mid-token\n{suggestions:?}"
+        );
+
+        // Hint mode preserves enumerated-slot hints: the suppression is gated
+        // on the slot being empty, not applied blanket (TestCommand grammar:
+        // `group status` enumerates full | short).
+        let mut small = WalletCompletions::new(TestCommand::command());
+        small.set_hint_mode(true);
+        let suggestions = small.complete("group status ", 13);
+        assert_eq!(values(&suggestions), vec!["full", "short"]);
     }
 
     #[test]
