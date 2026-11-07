@@ -1,0 +1,9 @@
+[package]
+name = "is-empty"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+is-empty-derive = { path = "../is-empty-derive" }
