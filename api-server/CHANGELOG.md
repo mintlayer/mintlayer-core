@@ -4,10 +4,14 @@ All notable changes to the API server will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.4.5] - 2026-11-10
 
 ### Fixed
-- The Postgres storage returned the holders listings (`GET /statistics/{coin,token/:id}/holders`) in lexicographic atom-string order instead of balance order: the query selected `amount::text` while ordering by bare `amount`, which Postgres resolves to the text OUTPUT alias rather than the numeric column. The select now aliases the cast (`amount_text`) so the ordering is numeric (balance descending), consistent with the in-memory storage and the cursor predicate. Read-path fix only: no storage version change and no resync required.
+
+
+## [1.4.4] - 2026-10-31
+
+### Fixed
 - The scanner no longer credits block rewards on top of pool or delegation state written by higher (future) blocks when it reconnects blocks after an interrupted scan: all pool, delegation and delegation-shares reads performed while connecting a block at height h are now point-in-time reads (state as of h), so replaying a range of blocks always reproduces the same history as a clean scan instead of silently accumulating duplicated rewards.
 - Spending a delegation share with an amount larger than the delegation's balance, or an overflowing nonce, now fails with a typed PoS accounting error instead of panicking and crash-looping the scanner daemon.
 
