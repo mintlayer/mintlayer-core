@@ -11,6 +11,68 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-11-10
+
+### Added
+  - Node:
+    - Per-peer fork download budget in the block sync manager: after initial
+      sync, each peer may download a bounded number of header lists per refill
+      interval (defaults: 2000 downloads, 600 seconds), tip-anchored lists
+      included and initial sync exempt. Requests beyond the budget are deferred
+      without punishment and retried at the next refill, which bounds the cost
+      of adversarial fork announcements.
+
+  - Wallet:
+    - A read-only MCP server for the wallet RPC daemon (new `mcp-server` crate,
+      stdio transport), allowing MCP clients to inspect wallets. The server
+      validates the MCP protocol envelope and tool arguments, bounds requests
+      with a timeout, and resynchronizes the stream after an oversized message.
+
+  - Wallet CLI:
+    - Commands are reorganized into a nested grammar (for example
+      `wallet create`, `staking pool create`). The previous flat command names
+      keep working, but are hidden from help and tab completion.
+    - Command results carry a machine-readable payload alongside the
+      human-readable text; `wallet-cli exec` JSON output reflects the command
+      payload.
+    - Interactive wizards for complex commands, gated on an interactive terminal.
+    - Destructive commands go through a confirmation gate.
+    - The choice to store or only display the seed phrase at wallet creation is
+      now an optional flag.
+    - Block generation asks for confirmation first.
+
+### Security
+  - Wallet:
+    - Password file handling hardened: the file size cap is enforced before
+      reads, the size race between stat and read is closed, and unverifiable
+      password sources fail closed instead of falling back silently.
+
+## [1.4.4] - 2026-10-31
+
+### Added
+  - Node:
+    - The orphan pool now enforces a per-peer capacity limit for remote
+      orphans: peers reached through outbound connections get a larger orphan
+      quota, eviction honors per-peer reservations, occupancy is tracked per
+      origin, and the new quota fields are exposed through the mempool
+      config RPC.
+
+### Fixed
+  - Node:
+    - Orphan pool hardening: stale orphans are rejected before insertion and
+      expiry takes priority over capacity during admission, the
+      first-recorded origin class stays authoritative, the outbound tier is
+      honored by eviction reservations, quota configuration is validated,
+      and zero-count origin statistics are purged on teardown.
+  - Wallet:
+    - Remote orphan quota rejections are classified as transient errors
+      instead of permanent failures.
+
+### Security
+  - Node:
+    - Advisory-exposed dependencies were patched (rustls-webpki,
+      webpki-root-certs, tokio) and the cargo-vet imports refreshed.
+
 ## [1.4.1] - 2026-09-25
 
 ### Added
