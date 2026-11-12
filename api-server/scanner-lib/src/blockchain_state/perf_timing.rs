@@ -135,7 +135,11 @@ pub fn log_batch_summary() {
                 "{:>13}: {:>8.2} ms/block ({:>8.2} ms/tx)",
                 name,
                 d.as_millis() as f64 / blocks as f64,
-                if txs > 0 { d.as_millis() as f64 / txs as f64 } else { 0.0 },
+                if txs > 0 {
+                    d.as_millis() as f64 / txs as f64
+                } else {
+                    0.0
+                },
             )
         })
         .collect();
@@ -148,7 +152,11 @@ pub fn log_batch_summary() {
         txs,
         stmts,
         stmts as f64 / blocks as f64,
-        if txs > 0 { stmts as f64 / txs as f64 } else { 0.0 },
+        if txs > 0 {
+            stmts as f64 / txs as f64
+        } else {
+            0.0
+        },
         hits,
         misses,
         stmt_cache_hits,

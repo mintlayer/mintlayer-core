@@ -78,21 +78,24 @@ impl ApiServerPostgresTransactionalRo<'_> {
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
 
     pub async fn get_best_block(&mut self) -> Result<BlockAuxData, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_best_block().await?;
 
         Ok(res)
@@ -102,7 +105,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
@@ -112,7 +116,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block(block_id).await?;
 
         Ok(res)
@@ -122,7 +127,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
@@ -133,7 +139,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
@@ -143,7 +150,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)

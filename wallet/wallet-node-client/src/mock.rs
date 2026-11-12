@@ -26,8 +26,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        RpcOrderInfo,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        RpcOrderInfo, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, time::Time},

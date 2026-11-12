@@ -23,9 +23,8 @@ use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId,
-        PoolId, RpcOrderInfo,
-        SignedTransaction, Transaction,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, SignedTransaction, Transaction,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, time::Time},

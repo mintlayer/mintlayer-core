@@ -18,8 +18,8 @@ use common::{
     chain::{Block, BlockTxFees, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use node_comm::node_traits::NodeInterface as _;
 use mempool::FeeRate;
+use node_comm::node_traits::NodeInterface as _;
 use node_comm::{
     node_traits::NodeInterface,
     rpc_client::{NodeRpcClient, NodeRpcError},
@@ -45,10 +45,7 @@ pub trait RemoteNode {
     /// (experimental) Per-transaction fees of a mainchain block, persisted at
     /// connect time. Returns None if the block predates fee persistence; the
     /// scanner then falls back to recomputing fees locally.
-    async fn block_tx_fees(
-        &self,
-        block_id: Id<Block>,
-    ) -> Result<Option<BlockTxFees>, Self::Error>;
+    async fn block_tx_fees(&self, block_id: Id<Block>) -> Result<Option<BlockTxFees>, Self::Error>;
 
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
 
@@ -88,10 +85,7 @@ impl RemoteNode for NodeRpcClient {
         self.get_mainchain_blocks(from, max_count).await
     }
 
-    async fn block_tx_fees(
-        &self,
-        block_id: Id<Block>,
-    ) -> Result<Option<BlockTxFees>, Self::Error> {
+    async fn block_tx_fees(&self, block_id: Id<Block>) -> Result<Option<BlockTxFees>, Self::Error> {
         NodeInterface::get_block_tx_fees(self, block_id).await
     }
 

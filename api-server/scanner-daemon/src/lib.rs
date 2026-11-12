@@ -349,7 +349,9 @@ async fn supervise_sync<S: ApiServerStorage>(
             let local_is_on_node_chain = local_id == chain_info.best_block_id
                 || matches!(
                     api_blockchain_scanner_lib::sync::RemoteNode::last_common_ancestor(
-                        &client, local_id, chain_info.best_block_id,
+                        &client,
+                        local_id,
+                        chain_info.best_block_id,
                     )
                     .await,
                     Ok(Some(_))
@@ -357,9 +359,7 @@ async fn supervise_sync<S: ApiServerStorage>(
             let behind = chain_info.best_block_height > local_height;
             let mode = if behind
                 && local_is_on_node_chain
-                && chain_info.best_block_height
-                    .into_int()
-                    .saturating_sub(local_height.into_int())
+                && chain_info.best_block_height.into_int().saturating_sub(local_height.into_int())
                     > CATCH_UP_THRESHOLD
             {
                 api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp

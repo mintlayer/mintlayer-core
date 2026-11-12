@@ -19,7 +19,6 @@ use super::helpers::new_pub_key_destination;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
-use storage::StorageContents;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
     TestFramework, TestStore, TransactionBuilder, anyonecanspend_address,
@@ -44,6 +43,7 @@ use crypto::{
 use pos_accounting::PoSAccountingDeltaData;
 use randomness::RngExt;
 use rstest::rstest;
+use storage::StorageContents;
 use test_utils::random::{Seed, make_seedable_rng};
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.

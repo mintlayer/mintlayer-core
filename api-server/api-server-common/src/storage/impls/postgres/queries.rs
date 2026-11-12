@@ -148,10 +148,7 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
                     STMT_CACHE_MISSES.fetch_add(1, Relaxed);
                 }
                 let prepared = self.inner.prepare(statement).await?;
-                self.statements
-                    .lock()
-                    .unwrap()
-                    .insert(statement.to_string(), prepared.clone());
+                self.statements.lock().unwrap().insert(statement.to_string(), prepared.clone());
                 Ok(prepared)
             }
         }
@@ -263,7 +260,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
         statements: &'a StatementCache,
     ) -> Self {
-        Self { tx: CountingConnection::new(tx, statements) }
+        Self {
+            tx: CountingConnection::new(tx, statements),
+        }
     }
 
     fn block_height_to_postgres_friendly(block_height: BlockHeight) -> i64 {
@@ -2964,19 +2963,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             let block_height: i64 = row.get(3);
             let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
 
-            let utxo = UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Utxo deserialization failed in batched fetch: {}",
-                    e
-                ))
-            })?;
+            let utxo =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo deserialization failed in batched fetch: {}",
+                        e
+                    ))
+                })?;
             by_outpoint.insert(outpoint, Utxo::new_with_info(utxo, spent_at_block_height));
         }
 
-        Ok(outpoints
-            .iter()
-            .map(|op| by_outpoint.get(&op.encode()).cloned())
-            .collect())
+        Ok(outpoints.iter().map(|op| by_outpoint.get(&op.encode()).cloned()).collect())
     }
 
     pub async fn get_address_available_utxos(

@@ -132,7 +132,6 @@ async fn fetch_and_sync<R: RemoteNode, L: LocalBlockchainState + Send>(
     chain_config: &ChainConfig,
     rpc_client: &R,
     local_node: &mut L,
-
 ) -> Result<(), SyncError> {
     // TODO: use chain trust instead of height
     utils::ensure!(
@@ -209,8 +208,7 @@ async fn fetch_new_blocks<R: RemoteNode>(
     // chain before trusting it.
     for pair in blocks.windows(2) {
         utils::ensure!(
-            *pair[1].header().prev_block_id()
-                == Id::<GenBlock>::from(pair[0].header().block_id()),
+            *pair[1].header().prev_block_id() == Id::<GenBlock>::from(pair[0].header().block_id()),
             SyncError::InvalidPrevBlockId(
                 *pair[1].header().prev_block_id(),
                 pair[0].header().block_id().into(),

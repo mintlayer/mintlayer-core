@@ -32,6 +32,4 @@ impl rpc_description::HasValueHint for BlockTxFees {
     const HINT_DE: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }
 
-impl BlockTxFees {
-
-}
+impl BlockTxFees {}

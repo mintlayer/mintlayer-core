@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use futures::{TryStreamExt, stream::FuturesOrdered};
 
@@ -163,7 +166,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         blocks: Vec<Block>,
         trusted_fees: Vec<Option<Vec<Fee>>>,
     ) -> Result<(), Self::Error> {
-        assert_eq!(blocks.len(), trusted_fees.len(), "fees must align with blocks");
+        assert_eq!(
+            blocks.len(),
+            trusted_fees.len(),
+            "fees must align with blocks"
+        );
         let mut db_tx = self.storage.transaction_rw().await?;
 
         // Note: a reorg happened iff the local best block is above the common ancestor with the
@@ -302,9 +309,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             count_txs(block.transactions().len());
             for (idx, tx) in block.transactions().iter().enumerate() {
-                let trusted_fee = block_trusted_fees
-                    .as_ref()
-                    .and_then(|fees| fees.get(idx).copied());
+                let trusted_fee =
+                    block_trusted_fees.as_ref().and_then(|fees| fees.get(idx).copied());
                 let (tx_fee, tx_additional_info) = {
                     let _t = TimingGuard::stage(Stage::FeeCalc);
                     calculate_tx_fee_and_collect_token_info(
@@ -357,7 +363,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     block_id,
                     height: block_height,
                     timestamp: block_timestamp,
-                    tx_ids: block.transactions().iter().map(|tx| tx.transaction().get_id()).collect(),
+                    tx_ids: block
+                        .transactions()
+                        .iter()
+                        .map(|tx| tx.transaction().get_id())
+                        .collect(),
                 };
                 last_event_id = db_tx.append_stream_event(&event).await?;
 
@@ -489,19 +499,25 @@ fn amount_delta_i128(amount: &Amount) -> i128 {
 /// underflow surfaces as a scan error like it did before the aggregation
 /// refactor (address-balance paths keep the historical panic-for-parity via
 /// the caller).
-fn apply_delta(current: Amount, delta: i128, context: &str) -> Result<Amount, ApiServerStorageError> {
-    let current_atoms = i128::try_from(current.into_atoms())
-        .map_err(|_| ApiServerStorageError::LowLevelStorageError(format!("amount atoms do not fit i128: {context}")))?;
+fn apply_delta(
+    current: Amount,
+    delta: i128,
+    context: &str,
+) -> Result<Amount, ApiServerStorageError> {
+    let current_atoms = i128::try_from(current.into_atoms()).map_err(|_| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "amount atoms do not fit i128: {context}"
+        ))
+    })?;
     let new_atoms = current_atoms + delta;
     if new_atoms < 0 {
         return Err(ApiServerStorageError::LowLevelStorageError(format!(
             "Balance should not overflow {context}: would go negative"
         )));
     }
-    Ok(Amount::from_atoms(
-        u128::try_from(new_atoms)
-            .map_err(|_| ApiServerStorageError::LowLevelStorageError(format!("balance overflow: {context}")))?,
-    ))
+    Ok(Amount::from_atoms(u128::try_from(new_atoms).map_err(
+        |_| ApiServerStorageError::LowLevelStorageError(format!("balance overflow: {context}")),
+    )?))
 }
 
 impl BalanceAccumulator {
@@ -553,12 +569,9 @@ impl BalanceAccumulator {
             };
             // Address balances panicked on underflow before the aggregation
             // refactor; keep that parity.
-            let new_amount = apply_delta(
-                current,
-                delta,
-                &format!("{address:?} {coin_or_token_id:?}"),
-            )
-            .expect("address balance underflow");
+            let new_amount =
+                apply_delta(current, delta, &format!("{address:?} {coin_or_token_id:?}"))
+                    .expect("address balance underflow");
             db_tx
                 .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
                 .await?;
@@ -687,7 +700,6 @@ async fn decrease_statistic_amount(
     Ok(())
 }
 
-
 async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     chain_config: &ChainConfig,
@@ -774,8 +786,7 @@ fn previous_and_new_median_time_from_window(
         calculate_median_time_past_from_blocktimestamps(window.iter().copied());
     window.insert(0, block_timestamp);
     window.truncate(chainstate::MEDIAN_TIME_SPAN);
-    let new_median_time =
-        calculate_median_time_past_from_blocktimestamps(window.iter().copied());
+    let new_median_time = calculate_median_time_past_from_blocktimestamps(window.iter().copied());
 
     (previous_median_time, new_median_time)
 }
@@ -1152,9 +1163,8 @@ async fn fetch_utxo<T: ApiServerStorageRead>(
 ) -> Result<Option<TxOutput>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = cached_get_utxo(utxo_cache, outpoint, db_tx)
-                .await?
-                .expect("must be present");
+            let utxo =
+                cached_get_utxo(utxo_cache, outpoint, db_tx).await?.expect("must be present");
             Ok(Some(utxo.into_output()))
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
@@ -1937,8 +1947,13 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateOrder(_) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            decommission_pool_and_decrement_staked(db_tx, pool_id, block_height, acc)
-                                .await?;
+                            decommission_pool_and_decrement_staked(
+                                db_tx,
+                                pool_id,
+                                block_height,
+                                acc,
+                            )
+                            .await?;
                         }
                         TxOutput::IssueNft(token_id, _, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -2570,8 +2585,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-
-
 /// Decommissions a stake pool and removes its whole balance (pledge plus
 /// accumulated staker rewards, matching what the creation and block-reward
 /// paths added to the `Staked` statistic) from it. The balance is captured
@@ -2610,16 +2623,6 @@ async fn decommission_pool_and_decrement_staked<T: ApiServerStorageWrite>(
     .await?;
     Ok(pool_data)
 }
-
-
-
-
-
-
-
-
-
-
 
 async fn set_utxo<T: ApiServerStorageWrite>(
     outpoint: UtxoOutPoint,
@@ -2908,11 +2911,9 @@ mod median_window_tests {
     // from-scratch recomputation over the same history, for chains both
     // shorter and longer than MEDIAN_TIME_SPAN.
     use super::previous_and_new_median_time_from_window;
-    use chainstate::{
-        calculate_median_time_past_from_blocktimestamps, MEDIAN_TIME_SPAN,
-    };
-    use randomness::{CryptoRng, RngExt as _};
+    use chainstate::{MEDIAN_TIME_SPAN, calculate_median_time_past_from_blocktimestamps};
     use common::chain::block::timestamp::BlockTimestamp;
+    use randomness::{CryptoRng, RngExt as _};
     use test_utils::random::{Seed, make_seedable_rng};
 
     #[test]
@@ -2934,13 +2935,9 @@ mod median_window_tests {
             // From-scratch mirror of the per-block db query: the previous
             // median covers the history BEFORE this block; the new median
             // covers it after inserting this block at the front.
-            let previous = calculate_median_time_past_from_blocktimestamps(
-                history.iter().copied(),
-            );
+            let previous = calculate_median_time_past_from_blocktimestamps(history.iter().copied());
             history.insert(0, timestamp);
-            let new = calculate_median_time_past_from_blocktimestamps(
-                history.iter().copied(),
-            );
+            let new = calculate_median_time_past_from_blocktimestamps(history.iter().copied());
 
             let (rolled_previous, rolled_new) =
                 previous_and_new_median_time_from_window(&mut window, timestamp);

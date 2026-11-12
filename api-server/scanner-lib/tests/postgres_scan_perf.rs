@@ -27,11 +27,11 @@ use common::{
     },
     primitives::{Amount, BlockDistance, BlockHeight, H256, Id, Idable, per_thousand::PerThousand},
 };
-use randomness::CryptoRng;
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::CryptoRng;
 use test_utils::random::make_seedable_rng;
 
 /// Exercises the postgres get_utxos override against real data:
@@ -79,24 +79,23 @@ async fn assert_get_utxos_matches_single<S>(
         std::iter::once(missing.clone()).chain(outpoints.iter().cloned()).collect();
     let batched = db_tx.get_utxos(&requested).await.unwrap();
     assert_eq!(batched.len(), requested.len());
-    assert!(batched[0].is_none(), "missing outpoint must resolve to None");
+    assert!(
+        batched[0].is_none(),
+        "missing outpoint must resolve to None"
+    );
 
     for (position, outpoint) in requested.iter().enumerate().skip(1) {
         let single = db_tx.get_utxo(outpoint.clone()).await.unwrap().expect("must be present");
         let batched_utxo = batched[position].as_ref().expect("must be present");
         assert_eq!(
-            batched_utxo,
-            &single,
+            batched_utxo, &single,
             "batched fetch disagrees with single fetch for {outpoint:?}"
         );
     }
 
     // Duplicate request entries return identical values.
     let first_known = requested[1].clone();
-    let dup = db_tx
-        .get_utxos(&[first_known.clone(), first_known.clone()])
-        .await
-        .unwrap();
+    let dup = db_tx.get_utxos(&[first_known.clone(), first_known.clone()]).await.unwrap();
     assert_eq!(dup[0], dup[1]);
     assert!(dup[0].is_some());
 }
@@ -169,9 +168,7 @@ async fn postgres_scan_perf_summary() {
     .build();
     let target_block_time = chain_config.target_block_spacing();
 
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.clone())
-        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     tf.create_chain_pos(
@@ -205,10 +202,7 @@ async fn postgres_scan_perf_summary() {
     }
 
     let mut local_state = BlockchainState::new(Arc::clone(&chain_config), storage);
-    local_state
-        .scan_genesis(chain_config.genesis_block().as_ref())
-        .await
-        .unwrap();
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
 
     // All blocks above genesis, scanned in a single batch, like the sync loop
     // does with MAX_FETCH_BLOCK_COUNT=100.
@@ -217,14 +211,10 @@ async fn postgres_scan_perf_summary() {
         blocks.push(tf.block(*tf.index_at(height).block_id()));
     }
 
-    local_state
-        .scan_blocks(BlockHeight::zero(), blocks)
-        .await
-        .unwrap();
+    local_state.scan_blocks(BlockHeight::zero(), blocks).await.unwrap();
 
-    let scanned: Vec<common::chain::Block> = (1..=BLOCKS)
-        .map(|height| tf.block(*tf.index_at(height).block_id()))
-        .collect();
+    let scanned: Vec<common::chain::Block> =
+        (1..=BLOCKS).map(|height| tf.block(*tf.index_at(height).block_id())).collect();
     assert_get_utxos_matches_single(local_state.storage(), &scanned, &mut rng).await;
 
     // The (experimental scanner timing) summary, including the postgres
@@ -249,8 +239,7 @@ async fn postgres_scan_perf_summary_with_txs() {
     let mut tf = TestFramework::builder(&mut rng).build();
     let chain_config = tf.chain_config().clone();
 
-    tf.create_chain(&tf.genesis().get_id().into(), BLOCKS, &mut rng)
-        .unwrap();
+    tf.create_chain(&tf.genesis().get_id().into(), BLOCKS, &mut rng).unwrap();
 
     let chain_config = Arc::new(chain_config);
     reset_db("ml_scan_perf_tx").await;
@@ -273,23 +262,16 @@ async fn postgres_scan_perf_summary_with_txs() {
     }
 
     let mut local_state = BlockchainState::new(Arc::clone(&chain_config), storage);
-    local_state
-        .scan_genesis(chain_config.genesis_block().as_ref())
-        .await
-        .unwrap();
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
 
     let mut blocks = Vec::with_capacity(BLOCKS);
     for height in 1..=BLOCKS {
         blocks.push(tf.block(*tf.index_at(height).block_id()));
     }
 
-    local_state
-        .scan_blocks(BlockHeight::zero(), blocks)
-        .await
-        .unwrap();
+    local_state.scan_blocks(BlockHeight::zero(), blocks).await.unwrap();
 
-    let scanned: Vec<common::chain::Block> = (1..=BLOCKS)
-        .map(|height| tf.block(*tf.index_at(height).block_id()))
-        .collect();
+    let scanned: Vec<common::chain::Block> =
+        (1..=BLOCKS).map(|height| tf.block(*tf.index_at(height).block_id())).collect();
     assert_get_utxos_matches_single(local_state.storage(), &scanned, &mut rng).await;
 }

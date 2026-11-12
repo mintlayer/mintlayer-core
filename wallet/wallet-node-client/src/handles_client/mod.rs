@@ -26,8 +26,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        RpcOrderInfo,
-        SignedTransaction, Transaction,
+        RpcOrderInfo, SignedTransaction, Transaction,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, time::Time},
@@ -210,10 +209,7 @@ impl NodeInterface for WalletHandlesClient {
         &self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockTxFees>, Self::Error> {
-        let fees = self
-            .chainstate
-            .call(move |this| this.get_block_tx_fees(&block_id))
-            .await??;
+        let fees = self.chainstate.call(move |this| this.get_block_tx_fees(&block_id)).await??;
         Ok(fees)
     }
 

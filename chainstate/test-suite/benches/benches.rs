@@ -88,7 +88,7 @@ pub fn pos_ibd_linear_connect(c: &mut Criterion) {
     tf.create_chain_pos(
         &mut rng,
         &tf.genesis().get_id().into(),
-    5,
+        5,
         genesis_pool_id,
         &staking_sk,
         &vrf_sk,

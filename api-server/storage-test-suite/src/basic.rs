@@ -3089,7 +3089,6 @@ where
     Ok(())
 }
 
-
 /// Batched UTXO fetch must agree with the single fetch:
 /// - multiple versioned rows per outpoint resolve to the newest row,
 /// - duplicate outpoints in the request return the same value per position,
@@ -3116,8 +3115,7 @@ where
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let tx_id = Id::<Transaction>::random_using(&mut rng);
-        let outpoint =
-            UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), rng.random::<u32>());
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), rng.random::<u32>());
 
         // Two versioned rows for the same outpoint: an unspent row at the
         // lower height and a spent row at the higher height. The newest row
@@ -3165,11 +3163,7 @@ where
             rng.random::<u32>(),
         );
 
-        let requested = &[
-            missing_outpoint.clone(),
-            outpoint.clone(),
-            outpoint.clone(),
-        ];
+        let requested = &[missing_outpoint.clone(), outpoint.clone(), outpoint.clone()];
 
         let batched = db_tx.get_utxos(requested).await.unwrap();
         let single_0 = db_tx.get_utxo(missing_outpoint.clone()).await.unwrap();

@@ -15,6 +15,7 @@
 
 use super::*;
 use chainstate_storage::Transactional;
+use chainstate_storage::schema::{DBBlockTxFees, Schema};
 use chainstate_test_framework::{
     TestFramework, TestStore, TransactionBuilder, TxVerificationStrategy, anyonecanspend_address,
     create_stake_pool_data_with_all_reward_to_staker, empty_witness,
@@ -27,10 +28,9 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use storage::StorageContents;
 use storage::schema::HasDbMap;
-use chainstate_storage::schema::{DBBlockTxFees, Schema};
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use test_utils::token_utils::random_token_issuance_v1;
 
 // These tests prove that TransactionVerifiers hierarchy has homomorphic property: f(ab) == f(a)f(b)
@@ -411,12 +411,8 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
 /// (experimental step 9) Compare the full raw dumps of the two storages,
 /// excluding the strategy-dependent per-transaction fee records (the
 /// Disposable strategy skips full verification and cannot produce fees).
-fn assert_dumps_equal_excluding_fees(
-    storage1: &TestStore,
-    storage2: &TestStore,
-) {
-    let fee_map_index =
-        <Schema as HasDbMap<DBBlockTxFees, _>>::INDEX;
+fn assert_dumps_equal_excluding_fees(storage1: &TestStore, storage2: &TestStore) {
+    let fee_map_index = <Schema as HasDbMap<DBBlockTxFees, _>>::INDEX;
     let filter = |dump: &mut StorageContents<Schema>| {
         dump.retain(|map_id, _| map_id.as_core() != fee_map_index);
     };

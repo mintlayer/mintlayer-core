@@ -26,8 +26,7 @@ use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
     chain::{
         AccountNonce, AccountType, BlockTxFees, ChainConfig, Currency, DelegationId, OrderId,
-        PoolId,
-        RpcOrderInfo, TxInput, UtxoOutPoint,
+        PoolId, RpcOrderInfo, TxInput, UtxoOutPoint,
         block::{
             Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,

@@ -25,10 +25,10 @@ pub use crate::chain::{
 pub mod block_body;
 pub mod block_header;
 pub mod block_size;
-pub mod tx_fees;
 pub mod consensus_data;
 pub mod signed_block_header;
 pub mod timestamp;
+pub mod tx_fees;
 
 mod block_reward;
 mod block_v1;
