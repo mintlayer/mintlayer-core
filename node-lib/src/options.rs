@@ -334,12 +334,12 @@ pub struct RunOptions {
     /// Genesis. If used on a node that is not starting from Genesis,
     /// the node may produce blocks from the past, which will lead
     /// to being banned by the network.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
     pub blockprod_skip_ibd_check: Option<bool>,
 
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
     #[arg(hide = true)]
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
@@ -407,7 +407,7 @@ pub struct RunOptions {
     pub p2p_socks5_proxy: Option<String>,
 
     /// Disable p2p encryption (for tests only).
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
     #[arg(hide = true)]
     pub p2p_disable_noise: Option<bool>,
 
@@ -464,7 +464,7 @@ pub struct RunOptions {
     // remove them.
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
@@ -521,7 +521,7 @@ pub struct RunOptions {
     pub enable_chainstate_heavy_checks: Option<bool>,
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
-    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL", hide = true)]
     pub allow_checkpoints_mismatch: Option<bool>,
 
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
@@ -693,26 +693,28 @@ mod reckless_mode_option_tests {
     // `None` for the default to kick in.
     #[test]
     fn reckless_mode_flag_absent_yields_none() {
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, None);
+        // The other boolean options use the same explicit-value pattern; their absence must
+        // also yield `None` so that a value from the configuration file can take precedence.
+        assert_eq!(run_options.blockprod_skip_ibd_check, None);
+        assert_eq!(run_options.blockprod_use_current_time_if_non_pos, None);
+        assert_eq!(run_options.p2p_disable_noise, None);
         assert_eq!(
-            parse_mainnet_run_options(&["mainnet"]).enable_db_reckless_mode_in_ibd,
+            run_options.p2p_force_dns_query_if_no_global_addresses_known,
             None
         );
+        assert_eq!(run_options.allow_checkpoints_mismatch, None);
     }
 
     #[test]
     fn reckless_mode_flag_accepts_explicit_values() {
-        let run_options = parse_mainnet_run_options(&[
-            "mainnet",
-            "--enable-db-reckless-mode-in-ibd",
-            "true",
-        ]);
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "true"]);
         assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
 
-        let run_options = parse_mainnet_run_options(&[
-            "mainnet",
-            "--enable-db-reckless-mode-in-ibd",
-            "false",
-        ]);
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "false"]);
         assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
     }
 
