@@ -341,8 +341,9 @@ fn read_config_override_values() {
 }
 
 // Regression: a boolean option set in the config file must survive when the corresponding
-// command-line flag is absent. These flags used to be value-less (`ArgAction::SetTrue`),
-// so their absence materialized `Some(false)`, which silently overrode the config file.
+// command-line flag is absent. This pins the end-to-end path: clap leaves the flag as `None`
+// when it is absent (it used to materialize `Some(false)`, silently overruling the config
+// file), and the `or()` merge chain then lets the config file value win.
 #[test]
 fn config_file_boolean_value_survives_when_cli_flag_absent() {
     let data_dir = TempDir::new().unwrap();
@@ -355,7 +356,15 @@ fn config_file_boolean_value_survives_when_cli_flag_absent() {
     .unwrap();
 
     let chain_config = create_testnet();
-    let options = RunOptions::default();
+    let options =
+        match <node_lib::Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"])
+            .unwrap()
+            .with_resolved_command()
+            .command
+        {
+            node_lib::Command::Mainnet(run_options) => run_options,
+            _ => unreachable!("the mainnet subcommand was requested"),
+        };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
     assert_eq!(

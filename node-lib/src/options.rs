@@ -334,7 +334,7 @@ pub struct RunOptions {
     /// Genesis. If used on a node that is not starting from Genesis,
     /// the node may produce blocks from the past, which will lead
     /// to being banned by the network.
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub blockprod_skip_ibd_check: Option<bool>,
 
     /// If true, blocks with non-PoS consensus types will always be created with timestamps

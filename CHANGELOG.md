@@ -11,6 +11,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+  - Node:
+    - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
+      enabled by default during the initial block download or bootstrapping, which
+      significantly increases its speed at the cost of a potential db corruption if the
+      system crashes in the meantime; the node automatically switches back to the normal
+      mode of operation when the download/bootstrapping finishes.
+
+### Changed
+  - Node CLI:
+    - boolean node options now require an explicit `true`/`false` value (e.g.
+      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this
+      makes the absence of an option distinguishable from an explicit opt-out, so a value
+      from the configuration file is no longer silently overridden by the command line.
 ## [1.4.5] - 2026-11-10
 
 ### Added
@@ -183,12 +197,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
           was only available via node RPC).
 
       `node-daemon` and `node-gui`:
-        - `--enable-db-reckless-mode-in-ibd <true|false>` - explicitly enable/disable the
-          "reckless" mode of the chainstate database during initial block download or
-          bootstrapping, which significantly increases its speed at the cost of a potential
-          db corruption if the system crashes in the meantime. The mode is enabled by default
-          unless configured otherwise, and the node automatically switches back to the normal
-          mode of operation when the download/bootstrapping finishes.
+        - `--enable-db-reckless-mode-in-ibd` - this enables the "reckless" mode of the chainstate
+          database during initial block download or bootstrapping, which significantly increases
+          its speed at the cost of a potential db corruption if the system crashes in the meantime.
 
 ### Changed
   - Wallet RPC:
@@ -197,12 +208,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       `order_create`, `order_conclude`, `order_fill`, `order_freeze`.
 
   - The format of `PartiallySignedTransaction` was changed again.
-
-  - Node CLI:
-    - boolean node options now require an explicit `true`/`false` value (e.g.
-      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this
-      makes the absence of an option distinguishable from an explicit opt-out, so a value
-      from the configuration file is no longer silently overridden by the command line.
 
   - Node RPC:
     - The result of `chainstate_order_info` now also indicates whether the order is frozen.
