@@ -19,7 +19,6 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use mempool::FeeRate;
-use node_comm::node_traits::NodeInterface as _;
 use node_comm::{
     node_traits::NodeInterface,
     rpc_client::{NodeRpcClient, NodeRpcError},
