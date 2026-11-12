@@ -128,7 +128,7 @@ pub struct TopLevelOptions {
 
     /// Create the data directory if it is missing; the default value depends on whether
     /// a custom data directory is used (false for a custom directory, true for the default one).
-    #[clap(long = "create-datadir-if-missing", value_name = "VAL")]
+    #[clap(long = "create-datadir-if-missing", value_name = "VAL", action = clap::ArgAction::Set)]
     pub create_data_dir_if_missing: Option<bool>,
 
     /// Log to a file.
@@ -375,9 +375,12 @@ pub struct RunOptions {
     /// the system crashes in the process, always delete the db and re-sync, just in case.
     ///
     /// Note: the value must be explicit (`true`/`false`) because the node daemon enables the
-    /// reckless mode by default when this option is not set anywhere. A boolean flag without a
-    /// value would defeat that default: clap's `SetTrue` action materializes `false` for an
-    /// absent flag, which would look like an explicit `false` and override the default.
+    /// reckless mode by default when this option is not set anywhere; a value-less boolean
+    /// flag would make the flag's absence look like an explicit opt-out.
+    // Implementation note: an explicit `ArgAction::Set` is what makes the absence of the
+    // flag yield `None`. clap's `SetTrue` action on an `Option<bool>` materializes `Some(false)`
+    // for an absent flag, which would look like an explicit `false` to the code below and
+    // would defeat the daemon's default-on behavior as well as config-file values.
     #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
@@ -394,7 +397,7 @@ pub struct RunOptions {
     pub mempool_max_cluster_size_bytes: Option<usize>,
 
     /// Whether p2p networking should be enabled.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
     pub p2p_networking_enabled: Option<bool>,
 
     /// Addresses to bind P2P to.
@@ -490,7 +493,7 @@ pub struct RunOptions {
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
     pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
@@ -517,7 +520,7 @@ pub struct RunOptions {
 
     /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
     /// Defaults to true for regtest and false in other cases.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
     pub enable_chainstate_heavy_checks: Option<bool>,
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.

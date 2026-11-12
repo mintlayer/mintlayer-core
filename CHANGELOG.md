@@ -11,7 +11,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-### Added
+### Changed
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
       enabled by default during the initial block download or bootstrapping, which
@@ -19,7 +19,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       system crashes in the meantime; the node automatically switches back to the normal
       mode of operation when the download/bootstrapping finishes.
 
-### Changed
   - Node CLI:
     - boolean node options now require an explicit `true`/`false` value (e.g.
       `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this

@@ -351,7 +351,7 @@ fn config_file_boolean_value_survives_when_cli_flag_absent() {
     let config_path = data_dir.path().join(CONFIG_NAME);
     std::fs::write(
         &config_path,
-        "[chainstate]\nenable_db_reckless_mode_in_ibd = false\n",
+        "[chainstate]\nenable_db_reckless_mode_in_ibd = true\n",
     )
     .unwrap();
 
@@ -369,6 +369,6 @@ fn config_file_boolean_value_survives_when_cli_flag_absent() {
 
     assert_eq!(
         config.chainstate.unwrap().chainstate_config.enable_db_reckless_mode_in_ibd,
-        Some(false)
+        Some(true)
     );
 }
