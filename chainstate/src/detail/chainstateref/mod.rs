@@ -1317,7 +1317,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
         // (experimental) step 9: the block is no longer on the mainchain; its
         // persisted per-transaction fees are removed with it.
-        self.db_tx.del_block_tx_fees(&Id::<Block>::from(block.get_id()))?;
+        self.db_tx.del_block_tx_fees(&block.get_id())?;
 
         Ok(())
     }

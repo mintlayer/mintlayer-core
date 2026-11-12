@@ -389,7 +389,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             Some(checked_tip) => {
                 let current_tip = chainstate_ref
                     .get_best_block_id()
-                    .map_err(|e| BlockError::PropertyQueryError(e.into()))
+                    .map_err(BlockError::PropertyQueryError)
                     .map_err(BlockIntegrationError::OtherNonValidationError)?;
                 checked_tip == current_tip
             }
@@ -548,18 +548,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 let saved_block_index = get_existing_block_index(&chainstate_ref, &block_id)?;
 
                 assert!(saved_block_index.status().is_ok());
-                return Ok(reorg_occurred.then_some(saved_block_index));
+                Ok(reorg_occurred.then_some(saved_block_index))
             }
             Err(BlockIntegrationError::BlockCommitError(block_id, attempts_count, db_err)) => {
-                return Err(BlockError::DbCommitError(
+                Err(BlockError::DbCommitError(
                     attempts_count,
                     db_err,
                     DbCommittingContext::Block(block_id),
-                ));
+                ))
             }
-            Err(BlockIntegrationError::OtherNonValidationError(err)) => {
-                return Err(err);
-            }
+            Err(BlockIntegrationError::OtherNonValidationError(err)) => Err(err),
             Err(BlockIntegrationError::ConnectBlockErrorDuringReorg(
                 err,
                 status,
@@ -598,12 +596,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     );
                     // Don't save an "ok" status for a block that hasn't been persisted.
                 }
-                return Err(err);
+                Err(err)
             }
             Err(BlockIntegrationError::OtherReorgError(err, _status)) => {
                 log::warn!("An error occurred during reorg, but none of the blocks can be blamed");
                 // Don't save an "ok" status for a block that hasn't been persisted.
-                return Err(err);
+                Err(err)
             }
             Err(BlockIntegrationError::BlockCheckError(err, status)) => {
                 // The failure occurred during the integration of the new block itself.
@@ -626,9 +624,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     );
                     // Don't save an "ok" status for a block that hasn't been persisted.
                 }
-                return Err(err);
+                Err(err)
             }
-        };
+        }
     }
 
     /// If heavy checks are enabled, perform block index consistency check; panic if it's violated.
