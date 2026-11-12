@@ -378,7 +378,7 @@ pub struct RunOptions {
     /// reckless mode by default when this option is not set anywhere. A boolean flag without a
     /// value would defeat that default: clap's `SetTrue` action materializes `false` for an
     /// absent flag, which would look like an explicit `false` and override the default.
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.

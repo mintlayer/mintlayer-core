@@ -339,3 +339,27 @@ fn read_config_override_values() {
 
     assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);
 }
+
+// Regression: a boolean option set in the config file must survive when the corresponding
+// command-line flag is absent. These flags used to be value-less (`ArgAction::SetTrue`),
+// so their absence materialized `Some(false)`, which silently overrode the config file.
+#[test]
+fn config_file_boolean_value_survives_when_cli_flag_absent() {
+    let data_dir = TempDir::new().unwrap();
+
+    let config_path = data_dir.path().join(CONFIG_NAME);
+    std::fs::write(
+        &config_path,
+        "[chainstate]\nenable_db_reckless_mode_in_ibd = false\n",
+    )
+    .unwrap();
+
+    let chain_config = create_testnet();
+    let options = RunOptions::default();
+    let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
+
+    assert_eq!(
+        config.chainstate.unwrap().chainstate_config.enable_db_reckless_mode_in_ibd,
+        Some(false)
+    );
+}
