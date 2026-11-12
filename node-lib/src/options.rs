@@ -694,7 +694,10 @@ mod reckless_mode_option_tests {
     // runner treats as an explicit opt-out from the reckless-mode-by-default IBD
     // behavior. The flag now requires an explicit value, so its absence must yield
     // `None` for the default to kick in.
+    // These tests parse arguments, and parsing reads `ML_*` environment variables, so
+    // they must not run concurrently with the tests that set those variables.
     #[test]
+    #[serial_test::serial]
     fn reckless_mode_flag_absent_yields_none() {
         let run_options = parse_mainnet_run_options(&["mainnet"]);
         assert_eq!(run_options.enable_db_reckless_mode_in_ibd, None);
@@ -711,6 +714,7 @@ mod reckless_mode_option_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn reckless_mode_flag_accepts_explicit_values() {
         let run_options =
             parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "true"]);
@@ -722,9 +726,62 @@ mod reckless_mode_option_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn reckless_mode_flag_without_a_value_is_rejected() {
         let full_args = ["mintlayerd", "mainnet", "--enable-db-reckless-mode-in-ibd"];
         assert!(<Options as clap::Parser>::try_parse_from(full_args).is_err());
+    }
+
+    /// The env var name is derived from the long option name by
+    /// `clap_utils::env_adder`; the env layer of the precedence chain must keep working
+    /// (env var set to a valid value wins when the CLI flag is absent; an invalid value
+    /// must be rejected). Env access is `unsafe` in edition 2024 and mutates process
+    /// state, hence `serial` and the scoped blocks.
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_value_reaches_parsing() {
+        const ENV_VAR: &str = "ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD";
+
+        // SAFETY: this test is serialized against the other env-sensitive parsing
+        // tests and restores the environment before returning.
+        unsafe {
+            std::env::set_var(ENV_VAR, "true");
+        }
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        // SAFETY: see above.
+        unsafe {
+            std::env::set_var(ENV_VAR, "false");
+        }
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+
+        // SAFETY: see above.
+        unsafe {
+            std::env::remove_var(ENV_VAR);
+        }
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_with_invalid_value_is_rejected() {
+        const ENV_VAR: &str = "ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD";
+
+        // SAFETY: this test is serialized against the other env-sensitive parsing
+        // tests and restores the environment before returning.
+        unsafe {
+            std::env::set_var(ENV_VAR, "not-a-bool");
+        }
+        let result = <Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"]);
+        assert!(result.is_err());
+
+        // SAFETY: see above.
+        unsafe {
+            std::env::remove_var(ENV_VAR);
+        }
     }
 }
 

@@ -27,7 +27,8 @@ static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 fn enabled() -> bool {
     *ENABLED.get_or_init(|| {
-        std::env::var("ML_IBD_STAGE_TIMING").is_ok_and(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        std::env::var("ML_IBD_STAGE_TIMING")
+            .is_ok_and(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
     })
 }
 

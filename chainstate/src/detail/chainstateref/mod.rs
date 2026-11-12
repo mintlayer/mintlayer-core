@@ -38,8 +38,7 @@ use common::{
     Uint256,
     chain::{
         AccountNonce, AccountType, Block, BlockTxFees, ChainConfig, GenBlock, GenBlockId,
-        OrderAccountCommand,
-        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderAccountCommand, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{
             BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,
@@ -278,9 +277,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockTxFees>, PropertyQueryError> {
-        self.db_tx
-            .get_block_tx_fees(block_id)
-            .map_err(PropertyQueryError::from)
+        self.db_tx.get_block_tx_fees(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
@@ -1302,8 +1299,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
         // (experimental) step 9: persist the per-transaction fees computed
         // during connect, for serving to API consumers.
-        self.db_tx
-            .set_block_tx_fees(block_index.block_id(), &block_tx_fees)?;
+        self.db_tx.set_block_tx_fees(block_index.block_id(), &block_tx_fees)?;
 
         Ok(())
     }
@@ -1345,9 +1341,8 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             // (experimental) step 11: when the block to connect is the one
             // just persisted by the caller, reuse the in-memory copy instead
             // of reading it back from the storage and decoding it.
-            let preloaded = in_memory_block
-                .filter(|b| b.get_id() == *block_index.block_id())
-                .cloned();
+            let preloaded =
+                in_memory_block.filter(|b| b.get_id() == *block_index.block_id()).cloned();
 
             let block: WithId<Block> = match preloaded {
                 Some(block) => block,
@@ -1449,7 +1444,11 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             // Chain trust is higher than the best block
-            self.reorganize(&current_best_block_index.block_id(), new_block_index, in_memory_block)?;
+            self.reorganize(
+                &current_best_block_index.block_id(),
+                new_block_index,
+                in_memory_block,
+            )?;
             return Ok(true);
         }
 

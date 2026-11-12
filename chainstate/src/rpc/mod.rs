@@ -331,9 +331,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn get_block_tx_fees(&self, block_id: Id<Block>) -> RpcResult<Option<BlockTxFees>> {
-        rpc::handle_result(
-            self.call(move |this| this.get_block_tx_fees(&block_id)).await,
-        )
+        rpc::handle_result(self.call(move |this| this.get_block_tx_fees(&block_id)).await)
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {

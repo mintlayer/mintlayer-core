@@ -5707,6 +5707,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_with",
+ "serial_test",
  "storage-lmdb",
  "subsystem",
  "tempfile",

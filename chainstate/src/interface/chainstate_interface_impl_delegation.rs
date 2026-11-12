@@ -23,9 +23,8 @@ use std::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, BlockTxFees, Currency, DelegationId, GenBlock,
-        OrderId, PoolId,
-        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, Currency, DelegationId, GenBlock, OrderId,
+        PoolId, RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
