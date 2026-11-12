@@ -1536,6 +1536,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "storage",
  "strum 0.26.3",
  "test-utils",
  "tokens-accounting",
