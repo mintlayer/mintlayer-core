@@ -22,8 +22,8 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        AccountCommand, AccountNonce, BlockTxFees, Destination, OutPointSourceId, PoolId, TxInput,
-        TxOutput, UtxoOutPoint, make_delegation_id, make_token_id, output_value::OutputValue,
+        AccountCommand, AccountNonce, Destination, OutPointSourceId, PoolId, TxInput, TxOutput,
+        UtxoOutPoint, make_delegation_id, make_token_id, output_value::OutputValue,
         timelock::OutputTimeLock, tokens::TokenIssuance,
     },
     primitives::{Amount, Idable},

@@ -1,4 +1,3 @@
-use storage::StorageContents;
 // Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT

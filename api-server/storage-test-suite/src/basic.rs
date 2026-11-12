@@ -3093,7 +3093,7 @@ where
 /// - multiple versioned rows per outpoint resolve to the newest row,
 /// - duplicate outpoints in the request return the same value per position,
 /// - missing outpoints return None,
-/// and the result order matches the request order.
+///   and the result order matches the request order.
 pub async fn get_utxos_batch_semantics<S, Fut, F: Fn() -> Fut>(
     storage_maker: Arc<F>,
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
