@@ -29,6 +29,7 @@ pub mod consensus_data;
 pub mod signed_block_header;
 pub mod timestamp;
 pub mod tx_fees;
+pub use tx_fees::BlockTxFees;
 
 mod block_reward;
 mod block_v1;
@@ -469,5 +470,3 @@ mod tests {
         check_block_tag(&block);
     }
 }
-
-pub use tx_fees::BlockTxFees;

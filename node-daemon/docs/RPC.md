@@ -200,6 +200,27 @@ EITHER OF
      2) null
 ```
 
+### Method `chainstate_get_block_tx_fees`
+
+(experimental) Returns the per-transaction fees of a mainchain block,
+ordered by transaction index within the block. Fees are computed and
+persisted by the consensus layer at block connection time.
+
+Returns `None` (null) if the block predates fee persistence.
+
+
+Parameters:
+```
+{ "block_id": hex string }
+```
+
+Returns:
+```
+EITHER OF
+     1) object
+     2) null
+```
+
 ### Method `chainstate_submit_block`
 
 Submit a block to be included in the blockchain.
