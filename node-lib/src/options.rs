@@ -373,7 +373,12 @@ pub struct RunOptions {
     /// Additionally, the corruption may not be detectable by the db engine, in which case you'll
     /// end up having a malfunctioning node. Therefore, if you are using the reckless mode and
     /// the system crashes in the process, always delete the db and re-sync, just in case.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    ///
+    /// Note: the value must be explicit (`true`/`false`) because the node daemon enables the
+    /// reckless mode by default when this option is not set anywhere. A boolean flag without a
+    /// value would defeat that default: clap's `SetTrue` action materializes `false` for an
+    /// absent flag, which would look like an explicit `false` and override the default.
+    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
     pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.
@@ -664,6 +669,57 @@ mod tests {
             let chain_config = cmd.create_chain_config().unwrap();
             assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
         }
+    }
+}
+
+#[cfg(test)]
+mod reckless_mode_option_tests {
+    use super::*;
+
+    fn parse_mainnet_run_options(args: &[&str]) -> RunOptions {
+        let full_args = std::iter::once("mintlayerd").chain(args.iter().copied());
+        let options = <Options as clap::Parser>::try_parse_from(full_args)
+            .unwrap_or_else(|err| panic!("arguments must parse: {err}"));
+        match options.with_resolved_command().command {
+            Command::Mainnet(run_options) => run_options,
+            _ => panic!("expected the mainnet subcommand"),
+        }
+    }
+
+    // Regression: `--enable-db-reckless-mode-in-ibd` used to be a value-less flag
+    // (`ArgAction::SetTrue`), so not passing it produced `Some(false)`, which the node
+    // runner treats as an explicit opt-out from the reckless-mode-by-default IBD
+    // behavior. The flag now requires an explicit value, so its absence must yield
+    // `None` for the default to kick in.
+    #[test]
+    fn reckless_mode_flag_absent_yields_none() {
+        assert_eq!(
+            parse_mainnet_run_options(&["mainnet"]).enable_db_reckless_mode_in_ibd,
+            None
+        );
+    }
+
+    #[test]
+    fn reckless_mode_flag_accepts_explicit_values() {
+        let run_options = parse_mainnet_run_options(&[
+            "mainnet",
+            "--enable-db-reckless-mode-in-ibd",
+            "true",
+        ]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        let run_options = parse_mainnet_run_options(&[
+            "mainnet",
+            "--enable-db-reckless-mode-in-ibd",
+            "false",
+        ]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+    }
+
+    #[test]
+    fn reckless_mode_flag_without_a_value_is_rejected() {
+        let full_args = ["mintlayerd", "mainnet", "--enable-db-reckless-mode-in-ibd"];
+        assert!(<Options as clap::Parser>::try_parse_from(full_args).is_err());
     }
 }
 
