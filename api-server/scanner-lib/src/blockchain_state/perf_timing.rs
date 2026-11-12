@@ -108,6 +108,7 @@ pub fn count_cache_miss() {
 }
 
 /// Log and reset accumulated stage times; call at the end of scan_blocks.
+#[allow(clippy::float_arithmetic)] // percentages and ms/block of the report
 pub fn log_batch_summary() {
     if !enabled() {
         return;

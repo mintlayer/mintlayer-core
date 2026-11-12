@@ -219,6 +219,7 @@ enum ConnectionState {
 /// been restarted) are not fixed by reconnecting, so the client is kept and only the sync is
 /// retried, with the delay growing via `sync_error_backoff` so that a persistent failure (e.g.
 /// a broken database) cannot flood the logs.
+#[allow(clippy::items_after_statements)] // the catch-up threshold sits next to its use
 async fn supervise_sync<S: ApiServerStorage>(
     chain_config: &Arc<ChainConfig>,
     node_rpc_address: String,

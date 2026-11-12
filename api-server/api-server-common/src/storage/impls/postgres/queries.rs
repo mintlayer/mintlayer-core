@@ -135,7 +135,13 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
     ) -> Result<tokio_postgres::Statement, tokio_postgres::Error> {
         use std::sync::atomic::Ordering::Relaxed;
 
-        let cached = self.statements.lock().unwrap().get(statement).cloned();
+        // Degrade gracefully if the mutex is poisoned: never panic before the
+        // connection returns to the pool (matching the Drop paths in transactional).
+        let cached = self
+            .statements
+            .lock()
+            .ok()
+            .and_then(|statements| statements.get(statement).cloned());
         match cached {
             Some(prepared) => {
                 if stmt_counting_enabled() {
@@ -148,7 +154,9 @@ impl<'a, 'b> CountingConnection<'a, 'b> {
                     STMT_CACHE_MISSES.fetch_add(1, Relaxed);
                 }
                 let prepared = self.inner.prepare(statement).await?;
-                self.statements.lock().unwrap().insert(statement.to_string(), prepared.clone());
+                if let Ok(mut statements) = self.statements.lock() {
+                    statements.insert(statement.to_string(), prepared.clone());
+                }
                 Ok(prepared)
             }
         }

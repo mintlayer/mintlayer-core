@@ -130,6 +130,7 @@ impl Drop for WindowGuard {
     }
 }
 
+#[allow(clippy::float_arithmetic)] // percentages and ms/block of the report
 fn log_summary(window_blocks: usize, window: Duration) {
     let mut accounted_ns = 0u64;
     let stage_lines: Vec<String> = STAGES

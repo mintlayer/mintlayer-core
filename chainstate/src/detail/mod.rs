@@ -518,7 +518,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // integrate_block), so the verdict can never be applied against a
         // state that no longer matches the one it was validated against -
         // including across with_rw_tx retries and, later, batch commits.
-        let checked_against_tip = self.pre_checked_blocks.lock().unwrap().remove(&block_id);
+        let checked_against_tip = self
+            .pre_checked_blocks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&block_id);
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.

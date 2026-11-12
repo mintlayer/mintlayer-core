@@ -160,6 +160,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         self.scan_blocks_with_fees(common_block_height, blocks, fees).await
     }
 
+    #[allow(clippy::items_after_statements)] // the prefetch chunk size sits next to its use
     async fn scan_blocks_with_fees(
         &mut self,
         common_block_height: BlockHeight,
