@@ -21,9 +21,8 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
-        BlockTxFees,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
     },

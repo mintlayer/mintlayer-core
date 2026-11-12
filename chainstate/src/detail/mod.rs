@@ -1132,12 +1132,20 @@ impl DbRecklessModeCounter {
         storage: &S,
     ) -> Result<(), chainstate_storage::Error> {
         if config.db_reckless_mode_in_ibd_enabled() {
-            self.counter = self.counter.checked_sub(1).unwrap_or_else(|| {
-                debug_panic_or_log!("Reckless mode counter underflow");
-                self.counter
-            });
+            if self.counter == 1 {
+                // Switch the mode off first and only decrement on success, so that a
+                // failed sync (e.g. EIO/ENOSPC right after a big IBD) can be retried
+                // on a later call without underflowing the counter.
+                storage.set_reckless_mode(false)?;
+            }
 
-            if self.counter == 0 {
+            if self.counter > 0 {
+                self.counter -= 1;
+            } else {
+                // Underflow: recover by attempting the switch-off anyway, so that a
+                // previously failed switch-off cannot leave the node in reckless mode
+                // indefinitely.
+                log::warn!("Reckless mode counter underflow; retrying the switch-off");
                 storage.set_reckless_mode(false)?;
             }
         }

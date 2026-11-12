@@ -346,6 +346,12 @@ fn read_config_override_values() {
 // file), and the `or()` merge chain then lets the config file value win.
 #[test]
 fn config_file_boolean_value_survives_when_cli_flag_absent() {
+    // Parsing reads `ML_*` environment variables; clear the one this test is about so
+    // an ambient environment cannot interfere.
+    // SAFETY: this test binary never sets environment variables, so there is no
+    // concurrent mutation to serialize against.
+    unsafe { std::env::remove_var("ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD") };
+
     let data_dir = TempDir::new().unwrap();
 
     let config_path = data_dir.path().join(CONFIG_NAME);

@@ -22,8 +22,9 @@ use chainstate_types::{
     seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
 };
 use common::{
-    chain::{ BlockTxFees,
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
+    chain::{
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
