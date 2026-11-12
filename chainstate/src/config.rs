@@ -80,10 +80,9 @@ impl ChainstateConfig {
     }
 
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
-        // (review fix) The library default stays identical to master (opt-in):
-        // the experimental default-on behavior lives at the node-daemon layer
-        // (node-lib/src/runner.rs), so cherry-picked library code cannot
-        // silently change durability semantics.
+        // The library default stays identical to master (opt-in): the experimental
+        // default-on behavior lives at the node-daemon layer (node-lib/src/runner.rs),
+        // so cherry-picked library code cannot silently change durability semantics.
         self.enable_db_reckless_mode_in_ibd.unwrap_or(false)
     }
 

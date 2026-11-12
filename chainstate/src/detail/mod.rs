@@ -726,6 +726,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(best_block_index) = &best_block_index_opt {
             let best_block_index_ref = GenBlockIndexRef::Block(best_block_index);
+            // Note: while IBD is finishing, this can fail if the closing reckless-mode
+            // switch-off (forced db sync) keeps failing; the `?` then also skips the new
+            // tip event for this block. That is conservative degradation on a failing
+            // disk: the flag stays unset for retry, and tip events resume (including
+            // the pending block) once a sync succeeds.
             self.update_initial_block_download_flag(best_block_index_ref, false)?;
             self.broadcast_new_tip_event(best_block_index_ref, self.is_initial_block_download());
 
