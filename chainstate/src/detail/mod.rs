@@ -426,8 +426,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // makes visible.
         {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::SealIndex);
-            if let Err(err) = chainstate_ref
-                .index_block_seal_if_enabled(block, block_index.block_height())
+            if let Err(err) =
+                chainstate_ref.index_block_seal_if_enabled(block, block_index.block_height())
             {
                 log::error!(
                     "Failed to index the seal of the block {}: {err}",
@@ -942,12 +942,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     .inc(&self.chainstate_config, &self.chainstate_storage)?;
             }
         } else {
-            self.is_initial_block_download_finished.set();
-
+            // Decrement before consuming the set-once flag: if the forced sync inside `dec`
+            // fails (e.g. EIO/ENOSPC right after a big IBD), the error propagates and a
+            // later tip update will retry the transition. Setting the flag first would
+            // strand the node in reckless mode (no fsync on commit) permanently.
             if !initial_update {
                 self.reckless_mode_counter
                     .dec(&self.chainstate_config, &self.chainstate_storage)?;
             }
+            self.is_initial_block_download_finished.set();
         }
 
         Ok(())
