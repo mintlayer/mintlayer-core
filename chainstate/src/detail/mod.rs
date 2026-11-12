@@ -381,7 +381,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        // (review round 3) Re-verify the memoized check verdict against the
+        // Re-verify the memoized check verdict against the
         // tip as observed INSIDE this rw transaction: the verdict is only
         // trusted if the recorded tip is still the current one. This keeps
         // the skip stale-safe across retries and batch commits.
@@ -476,7 +476,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let result = self.attempt_to_process_block_inner(block, block_source);
-        // (review fix) count every processed block, on success and failure
+        // count every processed block, on success and failure
         // alike, so the timing window doesn't drift.
         perf_timing::on_block_processed();
         result

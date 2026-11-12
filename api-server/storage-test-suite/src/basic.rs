@@ -3090,7 +3090,7 @@ where
 }
 
 
-/// (review fix) Batched UTXO fetch must agree with the single fetch:
+/// Batched UTXO fetch must agree with the single fetch:
 /// - multiple versioned rows per outpoint resolve to the newest row,
 /// - duplicate outpoints in the request return the same value per position,
 /// - missing outpoints return None,

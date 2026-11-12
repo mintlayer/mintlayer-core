@@ -236,7 +236,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             }
         }
         let outpoint_list: Vec<UtxoOutPoint> = prefetch_outpoints.into_iter().collect();
-        // (review round 3) Chunk the prefetch so a transaction-heavy batch
+        // Chunk the prefetch so a transaction-heavy batch
         // cannot build one giant ANY($1) bind.
         const UTXO_PREFETCH_CHUNK: usize = 10_000;
         let mut utxo_cache: BTreeMap<UtxoOutPoint, Utxo> = BTreeMap::new();
@@ -485,7 +485,7 @@ fn amount_delta_i128(amount: &Amount) -> i128 {
     i128::try_from(amount.into_atoms()).expect("amount atoms do not fit i128")
 }
 
-/// (review round 3) Returns an error instead of panicking so a statistic
+/// Returns an error instead of panicking so a statistic
 /// underflow surfaces as a scan error like it did before the aggregation
 /// refactor (address-balance paths keep the historical panic-for-parity via
 /// the caller).

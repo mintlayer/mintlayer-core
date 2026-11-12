@@ -57,7 +57,7 @@ const VERSION_STR: &str = "version";
 // ML_SCANNER_STAGE_TIMING=1; the counter is read and reset per sync batch by
 // the scanner's perf_timing module.
 //
-// Caveat (review round 2, INFO): these counters are process-global across all
+// Caveat: these counters are process-global across all
 // postgres connections. Numbers are exact when the scanner is the only
 // postgres traffic in the process (dedicated scanner-daemon); if an api-server
 // serves requests in the same process, stmts/block absorbs that traffic too.
@@ -2941,7 +2941,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         }
 
         let encoded: Vec<Vec<u8>> = outpoints.iter().map(|op| op.encode()).collect();
-        // (review fix) The utxo table can hold multiple versioned rows per
+        // The utxo table can hold multiple versioned rows per
         // outpoint (one per height); DISTINCT ON with block_height DESC makes
         // the batched fetch pick the same newest row the single get_utxo
         // (ORDER BY block_height DESC LIMIT 1) would pick.

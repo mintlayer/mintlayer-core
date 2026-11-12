@@ -34,7 +34,7 @@ use crypto::{
 };
 use test_utils::random::make_seedable_rng;
 
-/// (review fix) Exercises the postgres get_utxos override against real data:
+/// Exercises the postgres get_utxos override against real data:
 /// batched results must match single fetches for every outpoint referenced by
 /// the scanned blocks (inputs and PoS kernel inputs), a missing outpoint must
 /// return None, and duplicate request entries must return identical values.
@@ -106,7 +106,7 @@ const BLOCKS: usize = 20;
 /// (experimental) Recreate a fresh database for a test so parallel tests don't
 /// clobber each other's schema.
 async fn reset_db(db_name: &str) {
-    // (review fix) identifiers cannot be bound as parameters; since this
+    // identifiers cannot be bound as parameters; since this
     // helper interpolates into destructive DDL, restrict the name to a safe
     // charset before use.
     assert!(
