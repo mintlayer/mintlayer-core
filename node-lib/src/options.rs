@@ -139,7 +139,7 @@ pub struct TopLevelOptions {
     /// The log level used in this case doesn't depend on the RUST_LOG env variable and is always INFO.
     ///
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
-    #[clap(long, action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
 
     /// If specified, the application will clean the data directory and exit immediately.
