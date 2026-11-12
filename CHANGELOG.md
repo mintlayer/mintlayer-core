@@ -21,6 +21,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
   - Node CLI:
     - boolean node options now require an explicit `true`/`false` value (e.g.
+      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; the
+      corresponding `ML_NODE_*` environment variables likewise now require an explicit
+      `true`/`false` value. This makes the absence of an option distinguishable from an
+      explicit opt-out, so a value from the configuration file is no longer silently
+      overridden by the command line or the environment.
       `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this
       makes the absence of an option distinguishable from an explicit opt-out, so a value
       from the configuration file is no longer silently overridden by the command line.

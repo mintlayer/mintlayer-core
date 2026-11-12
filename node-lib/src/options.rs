@@ -128,7 +128,7 @@ pub struct TopLevelOptions {
 
     /// Create the data directory if it is missing; the default value depends on whether
     /// a custom data directory is used (false for a custom directory, true for the default one).
-    #[clap(long = "create-datadir-if-missing", value_name = "VAL", action = clap::ArgAction::Set)]
+    #[clap(long = "create-datadir-if-missing", value_name = "true|false", action = clap::ArgAction::Set)]
     pub create_data_dir_if_missing: Option<bool>,
 
     /// Log to a file.
@@ -339,7 +339,7 @@ pub struct RunOptions {
 
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
@@ -397,7 +397,7 @@ pub struct RunOptions {
     pub mempool_max_cluster_size_bytes: Option<usize>,
 
     /// Whether p2p networking should be enabled.
-    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub p2p_networking_enabled: Option<bool>,
 
     /// Addresses to bind P2P to.
@@ -410,7 +410,7 @@ pub struct RunOptions {
     pub p2p_socks5_proxy: Option<String>,
 
     /// Disable p2p encryption (for tests only).
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_disable_noise: Option<bool>,
 
@@ -467,7 +467,7 @@ pub struct RunOptions {
     // remove them.
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL")]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
@@ -493,7 +493,7 @@ pub struct RunOptions {
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
-    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
@@ -520,11 +520,11 @@ pub struct RunOptions {
 
     /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
     /// Defaults to true for regtest and false in other cases.
-    #[clap(long, value_name = "VAL", action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub enable_chainstate_heavy_checks: Option<bool>,
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
-    #[clap(long, action = clap::ArgAction::Set, value_name = "VAL", hide = true)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false", hide = true)]
     pub allow_checkpoints_mismatch: Option<bool>,
 
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
