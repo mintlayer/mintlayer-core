@@ -368,7 +368,22 @@ async fn supervise_sync<S: ApiServerStorage>(
                 api_blockchain_scanner_lib::blockchain_state::ScanMode::Full
             };
             if local_block.scan_mode() != mode {
-                logging::log::info!("(experimental) scanner scan mode: {:?}", mode);
+                // Blocks scanned in CatchingUp mode skip the secondary history
+                // and statistics tables, and the backfill pass that rebuilds
+                // them is not implemented yet, so both transitions are
+                // surfaced loudly instead of failing silently.
+                if mode == api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp {
+                    logging::log::warn!(
+                        "(experimental) scanner entering fast catch-up mode: address/token \
+                         history and statistics will not be indexed for blocks scanned in this mode"
+                    );
+                } else {
+                    logging::log::warn!(
+                        "(experimental) scanner leaving fast catch-up mode: any range indexed \
+                         while catching up lacks history/statistics rows until a backfill pass \
+                         (not yet implemented) is provided"
+                    );
+                }
                 local_block.set_scan_mode(mode);
             }
         }
