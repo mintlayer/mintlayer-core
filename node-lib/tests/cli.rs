@@ -339,3 +339,41 @@ fn read_config_override_values() {
 
     assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);
 }
+// Regression: a boolean option set in the config file must survive when the corresponding
+// command-line flag is absent. This pins the end-to-end path: clap leaves the flag as `None`
+// when it is absent (it used to materialize `Some(false)`, silently overruling the config
+// file), and the `or()` merge chain then lets the config file value win.
+#[test]
+fn config_file_boolean_value_survives_when_cli_flag_absent() {
+    // Parsing reads `ML_*` environment variables; clear the one this test is about so
+    // an ambient environment cannot interfere.
+    // SAFETY: this test binary never sets environment variables, so there is no
+    // concurrent mutation to serialize against.
+    unsafe { std::env::remove_var("ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD") };
+
+    let data_dir = TempDir::new().unwrap();
+
+    let config_path = data_dir.path().join(CONFIG_NAME);
+    std::fs::write(
+        &config_path,
+        "[chainstate]\nenable_db_reckless_mode_in_ibd = true\n",
+    )
+    .unwrap();
+
+    let chain_config = create_testnet();
+    let options =
+        match <node_lib::Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"])
+            .unwrap()
+            .with_resolved_command()
+            .command
+        {
+            node_lib::Command::Mainnet(run_options) => run_options,
+            _ => unreachable!("the mainnet subcommand was requested"),
+        };
+    let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
+
+    assert_eq!(
+        config.chainstate.unwrap().chainstate_config.enable_db_reckless_mode_in_ibd,
+        Some(true)
+    );
+}

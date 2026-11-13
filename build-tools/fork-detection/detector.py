@@ -138,7 +138,7 @@ class Handler():
         self.node_cmd += [
             "--datadir", self.cur_attempt_node_data_dir,
             args.chain_type,
-            "--allow-checkpoints-mismatch",
+            "--allow-checkpoints-mismatch=true",
             "--rpc-bind-address", args.node_rpc_bind_address,
             "--rpc-username", NODE_RPC_USER,
             "--rpc-password", NODE_RPC_PWD,

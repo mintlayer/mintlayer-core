@@ -11,6 +11,24 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+  - Node:
+    - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
+      enabled by default during the initial block download or bootstrapping, which
+      significantly increases its speed at the cost of a potential db corruption if the
+      system crashes in the meantime; the node automatically switches back to the normal
+      mode of operation when the download/bootstrapping finishes.
+
+### Changed
+  - Node CLI:
+    - boolean node options now require an explicit `true`/`false` value (e.g.
+      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; the
+      corresponding environment variables (`ML_NODE_*` for top-level options and
+      `ML_MAINNET_NODE_*` / `ML_TESTNET_NODE_*` / `ML_REGTEST_NODE_*` for per-network ones)
+      likewise now require an explicit `true`/`false` value. This makes the absence of an
+      option distinguishable from an explicit opt-out, so a value from the configuration
+      file is no longer silently overridden by the command line or the environment.
+
 ## [1.4.5] - 2026-11-10
 
 ### Added
