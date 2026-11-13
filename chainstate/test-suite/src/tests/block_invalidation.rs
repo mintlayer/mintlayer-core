@@ -1150,3 +1150,53 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
         assert_eq!(&events.take(), &[]);
     });
 }
+
+// A block whose check verdict was memoized against the current best tip must
+// still be rejected after its parent is invalidated, because invalidating a
+// non-mainchain block marks it failed without moving the best tip:
+// G----m0----m1----m2----m3
+//  \----P----X
+#[rstest]
+#[case(Seed::from_entropy())]
+#[trace]
+fn test_memoized_check_rejected_after_parent_invalidation(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        let m_tip_id = tf.create_chain(&genesis_id.into(), 4, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), m_tip_id);
+
+        let (p_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+        assert_eq!(tf.best_block_id(), m_tip_id);
+
+        // Run the preliminary check for X so its verdict is memoized against
+        // the current best tip while P is still valid.
+        let x_block = build_block(&mut tf, &p_id.into(), &mut rng);
+        let x_id = x_block.get_id();
+        let _: Block = tf.chainstate.preliminary_block_check(x_block.clone()).unwrap();
+
+        // Invalidate the fork block P; the best tip stays on the main chain.
+        tf.chainstate.invalidate_block(&p_id).unwrap();
+        assert_eq!(tf.best_block_id(), m_tip_id);
+
+        // The memoized verdict is stale: X must fall back to the full check
+        // and be rejected for its invalid parent instead of being persisted
+        // with an ok status above P.
+        let err = tf.process_block(x_block, BlockSource::Local).unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidParent {
+                    block_id: x_id,
+                    parent_block_id: p_id.into(),
+                },
+            ))
+        );
+        // The rejected block must still get a persisted index with a failed
+        // status, exactly like a non-memoized rejection.
+        assert_bad_blocks_at_stage(&tf, &[x_id], BlockValidationStage::Unchecked);
+    });
+}

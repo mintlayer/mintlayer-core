@@ -132,8 +132,9 @@ pub struct Chainstate<S, V> {
     /// (experimental) step 11: blocks whose `check_block` already passed in
     /// this process (via `preliminary_block_check`), mapped to the tip they
     /// were checked against. Consumed by `integrate_block` to skip the
-    /// duplicate check; entries are stale-safe because the recorded tip must
-    /// still be the current one.
+    /// duplicate check; entries are stale-safe because `integrate_block`
+    /// re-verifies both that the recorded tip is still current and that the
+    /// parent block still has an ok status before trusting the verdict.
     pre_checked_blocks: Mutex<BTreeMap<Id<Block>, Id<GenBlock>>>,
 }
 
@@ -383,8 +384,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Re-verify the memoized check verdict against the
         // tip as observed INSIDE this rw transaction: the verdict is only
-        // trusted if the recorded tip is still the current one. This keeps
-        // the skip stale-safe across retries and batch commits.
+        // trusted if the recorded tip is still the current one and the
+        // block's parent still has an ok status. This keeps the skip
+        // stale-safe across retries and batch commits.
         let already_checked = match checked_against_tip {
             Some(checked_tip) => {
                 let current_tip = chainstate_ref
@@ -392,6 +394,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     .map_err(BlockError::PropertyQueryError)
                     .map_err(BlockIntegrationError::OtherNonValidationError)?;
                 checked_tip == current_tip
+                    // Invalidating a non-mainchain block marks it failed without
+                    // moving the best tip, which the tip comparison above cannot
+                    // observe. Re-verify the parent so that a block checked before
+                    // such an invalidation falls back to the full check instead of
+                    // being persisted with an ok status above an invalid parent.
+                    && chainstate_ref.check_block_parent(block.header()).is_ok()
             }
             None => false,
         };
@@ -514,10 +522,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // (experimental) step 11: the block may have been fully checked
         // (preliminary_block_check); take the recorded tip out of the memo.
-        // The tip is re-verified INSIDE the rw transaction (see
-        // integrate_block), so the verdict can never be applied against a
-        // state that no longer matches the one it was validated against -
-        // including across with_rw_tx retries and, later, batch commits.
+        // `integrate_block` re-verifies the tip INSIDE the rw transaction and
+        // additionally re-checks the parent status, so the verdict can never
+        // be applied against a state that no longer matches the one it was
+        // validated against - including across with_rw_tx retries and, later,
+        // batch commits.
         let checked_against_tip = self
             .pre_checked_blocks
             .lock()

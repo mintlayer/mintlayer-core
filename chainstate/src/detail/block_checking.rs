@@ -39,7 +39,8 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
         chainstate_ref.check_block(&block).log_err()?;
         // (experimental) step 11: remember that this block was fully checked,
         // along with the tip it was validated against, so integrate_block can
-        // skip the duplicate check if the tip is unchanged by then.
+        // skip the duplicate check after re-verifying the tip and the parent
+        // status.
         {
             let tip = chainstate_ref.get_best_block_id().map_err(BlockError::PropertyQueryError)?;
             let mut memo =
