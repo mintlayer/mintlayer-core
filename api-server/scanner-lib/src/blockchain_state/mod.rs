@@ -68,6 +68,13 @@ pub enum BlockchainStateError {
     StorageError(#[from] ApiServerStorageError),
     #[error("PoS accounting error: {0}")]
     PosAccountingError(#[from] PosError),
+    /// The trusted fee list supplied alongside a block batch does not align
+    /// with the batch; scanning is aborted instead of indexing partial data.
+    #[error("Trusted fee count mismatch: {fee_count} fee entries for {block_count} blocks")]
+    TrustedFeeCountMismatch {
+        block_count: usize,
+        fee_count: usize,
+    },
 }
 
 /// (experimental step 10) The indexing mode of the scanner.
@@ -167,11 +174,12 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         blocks: Vec<Block>,
         trusted_fees: Vec<Option<Vec<Fee>>>,
     ) -> Result<(), Self::Error> {
-        assert_eq!(
-            blocks.len(),
-            trusted_fees.len(),
-            "fees must align with blocks"
-        );
+        if blocks.len() != trusted_fees.len() {
+            return Err(BlockchainStateError::TrustedFeeCountMismatch {
+                block_count: blocks.len(),
+                fee_count: trusted_fees.len(),
+            });
+        }
         let mut db_tx = self.storage.transaction_rw().await?;
 
         // Note: a reorg happened iff the local best block is above the common ancestor with the
@@ -2975,5 +2983,43 @@ mod median_window_tests {
                 window.truncate(keep.min(MEDIAN_TIME_SPAN));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod fee_alignment_tests {
+    use super::*;
+    use crate::sync::local_state::LocalBlockchainState;
+    use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
+    use common::chain::config::create_mainnet;
+    use common::primitives::BlockHeight;
+
+    type TestStorage = TransactionalApiServerInMemoryStorage;
+
+    fn new_state() -> BlockchainState<TestStorage> {
+        let chain_config = Arc::new(create_mainnet());
+        let storage = TestStorage::new(&chain_config);
+        BlockchainState::new(chain_config, storage)
+    }
+
+    // A fee list whose length does not match the block batch must be rejected
+    // before any indexing happens instead of silently indexing partial data.
+    #[tokio::test]
+    async fn trusted_fee_count_mismatch_is_rejected() {
+        let mut state = new_state();
+        let err = state
+            .scan_blocks_with_fees(BlockHeight::from(0), Vec::new(), vec![None])
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                BlockchainStateError::TrustedFeeCountMismatch {
+                    block_count: 0,
+                    fee_count: 1,
+                }
+            ),
+            "unexpected error: {err:?}"
+        );
     }
 }
