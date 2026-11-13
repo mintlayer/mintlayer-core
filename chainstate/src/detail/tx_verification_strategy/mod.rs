@@ -18,7 +18,7 @@ pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::id::WithId,
 };
 use orders_accounting::OrdersAccountingView;
@@ -46,6 +46,11 @@ impl<C, S, U, A, T, O, F> TransactionVerifierMakerFn<C, S, U, A, T, O> for F whe
 }
 
 /// A trait that specifies how a block will be verified
+/// The output of [`TransactionVerificationStrategy::connect_block`]: the
+/// transaction verifier for the connected block, and the per-transaction
+/// fees of the block.
+type ConnectBlockOutput<C, S, U, A, T, O> = (TransactionVerifier<C, S, U, A, T, O>, BlockTxFees);
+
 pub trait TransactionVerificationStrategy: Sized + Send {
     /// Connect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -62,7 +67,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
+    ) -> Result<ConnectBlockOutput<C, S, U, A, T, O>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,

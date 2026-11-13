@@ -273,6 +273,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokens-accounting",
  "tokio",
+ "tokio-postgres",
  "tx-verifier",
  "utils",
 ]
@@ -1535,6 +1536,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "storage",
  "strum 0.26.3",
  "test-utils",
  "tokens-accounting",
@@ -5705,6 +5707,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_with",
+ "serial_test",
  "storage-lmdb",
  "subsystem",
  "tempfile",

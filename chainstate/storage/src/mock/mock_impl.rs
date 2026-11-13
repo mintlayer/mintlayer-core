@@ -23,7 +23,8 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
@@ -73,6 +74,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
@@ -207,7 +209,9 @@ mockall::mock! {
         fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn del_block_tx_fees(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
@@ -398,6 +402,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -532,6 +537,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -655,7 +661,9 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn del_block_tx_fees(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;

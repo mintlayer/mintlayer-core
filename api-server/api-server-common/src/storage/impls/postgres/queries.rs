@@ -49,10 +49,162 @@ use crate::streaming::{
     StreamEventId, StreamEventReadError,
 };
 
+use std::collections::HashMap;
+
 const VERSION_STR: &str = "version";
 
+// (experimental) Statement counting for scanner profiling. Enabled via
+// ML_SCANNER_STAGE_TIMING=1; the counter is read and reset per sync batch by
+// the scanner's perf_timing module.
+//
+// Caveat: these counters are process-global across all
+// postgres connections. Numbers are exact when the scanner is the only
+// postgres traffic in the process (dedicated scanner-daemon); if an api-server
+// serves requests in the same process, stmts/block absorbs that traffic too.
+static STMT_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STMT_COUNT_ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+fn stmt_counting_enabled() -> bool {
+    *STMT_COUNT_ENABLED.get_or_init(|| {
+        std::env::var("ML_SCANNER_STAGE_TIMING")
+            .is_ok_and(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+    })
+}
+
+/// Returns and resets the number of postgres statements issued since the last
+/// call. Meaningful only when ML_SCANNER_STAGE_TIMING is enabled.
+pub fn take_postgres_statement_count() -> u64 {
+    if stmt_counting_enabled() {
+        STMT_COUNT.swap(0, std::sync::atomic::Ordering::Relaxed)
+    } else {
+        0
+    }
+}
+
+// (experimental) step 7: per-transaction prepared statement cache.
+// tokio_postgres::Statement is an Arc handle holding only a Weak reference to
+// the client, so cached statements are plain safe Rust and stay valid for the
+// lifetime of the cache; they are cleared when the transaction struct is
+// dropped, before its connection returns to the pool.
+pub type StatementCache = std::sync::Mutex<HashMap<String, tokio_postgres::Statement>>;
+
+static STMT_CACHE_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STMT_CACHE_MISSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Returns and resets (cache hits, cache misses) since the last call.
+/// Meaningful only when ML_SCANNER_STAGE_TIMING is enabled.
+pub fn take_postgres_statement_cache_stats() -> (u64, u64) {
+    if stmt_counting_enabled() {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            STMT_CACHE_HITS.swap(0, Relaxed),
+            STMT_CACHE_MISSES.swap(0, Relaxed),
+        )
+    } else {
+        (0, 0)
+    }
+}
+
+/// Thin forwarding wrapper around a pooled postgres connection that counts
+/// issued statements. Method signatures mirror the tokio-postgres ones used by
+/// `QueryFromConnection`, so call sites don't change.
+pub struct CountingConnection<'a, 'b> {
+    inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+    statements: &'a StatementCache,
+}
+
+impl<'a, 'b> CountingConnection<'a, 'b> {
+    pub fn new(
+        inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self { inner, statements }
+    }
+
+    fn count(&self) {
+        if stmt_counting_enabled() {
+            STMT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Prepares the statement unless it is already in this transaction's
+    /// cache; saves one Parse+Describe round trip per execution.
+    async fn cached_statement(
+        &self,
+        statement: &str,
+    ) -> Result<tokio_postgres::Statement, tokio_postgres::Error> {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        // Degrade gracefully if the mutex is poisoned: never panic before the
+        // connection returns to the pool (matching the Drop paths in transactional).
+        let cached = self
+            .statements
+            .lock()
+            .ok()
+            .and_then(|statements| statements.get(statement).cloned());
+        match cached {
+            Some(prepared) => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_HITS.fetch_add(1, Relaxed);
+                }
+                Ok(prepared)
+            }
+            None => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_MISSES.fetch_add(1, Relaxed);
+                }
+                let prepared = self.inner.prepare(statement).await?;
+                if let Ok(mut statements) = self.statements.lock() {
+                    statements.insert(statement.to_string(), prepared.clone());
+                }
+                Ok(prepared)
+            }
+        }
+    }
+
+    pub async fn execute(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.execute(&prepared, params).await
+    }
+
+    pub async fn query(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query(&prepared, params).await
+    }
+
+    pub async fn query_opt(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_opt(&prepared, params).await
+    }
+
+    pub async fn query_one(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_one(&prepared, params).await
+    }
+}
+
 pub struct QueryFromConnection<'a, 'b> {
-    tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+    tx: CountingConnection<'a, 'b>,
 }
 
 /// Largest `$n` placeholder index across up to four query-text fragments
@@ -112,8 +264,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
     }
 
-    pub fn new(tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self {
+            tx: CountingConnection::new(tx, statements),
+        }
     }
 
     fn block_height_to_postgres_friendly(block_height: BlockHeight) -> i64 {
@@ -2775,6 +2932,56 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some(Utxo::new_with_info(output, spent_at_block_height)))
+    }
+
+    /// (experimental) Batched variant of `get_utxo`; one query for all
+    /// outpoints. Rows are matched back to the requested outpoints, so the
+    /// result order mirrors the input order.
+    pub async fn get_utxos(
+        &mut self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        use std::collections::BTreeMap;
+
+        if outpoints.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let encoded: Vec<Vec<u8>> = outpoints.iter().map(|op| op.encode()).collect();
+        // The utxo table can hold multiple versioned rows per
+        // outpoint (one per height); DISTINCT ON with block_height DESC makes
+        // the batched fetch pick the same newest row the single get_utxo
+        // (ORDER BY block_height DESC LIMIT 1) would pick.
+        let rows = self
+            .tx
+            .query(
+                "SELECT DISTINCT ON (outpoint) outpoint, utxo, spent, block_height \
+                 FROM ml.utxo WHERE outpoint = ANY($1) \
+                 ORDER BY outpoint, block_height DESC;",
+                &[&encoded],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut by_outpoint: BTreeMap<Vec<u8>, Utxo> = BTreeMap::new();
+        for row in rows {
+            let outpoint: Vec<u8> = row.get(0);
+            let serialized_data: Vec<u8> = row.get(1);
+            let spent: bool = row.get(2);
+            let block_height: i64 = row.get(3);
+            let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
+
+            let utxo =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo deserialization failed in batched fetch: {}",
+                        e
+                    ))
+                })?;
+            by_outpoint.insert(outpoint, Utxo::new_with_info(utxo, spent_at_block_height));
+        }
+
+        Ok(outpoints.iter().map(|op| by_outpoint.get(&op.encode()).cloned()).collect())
     }
 
     pub async fn get_address_available_utxos(

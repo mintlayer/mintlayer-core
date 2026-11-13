@@ -91,10 +91,22 @@ async fn initialize(
     let mut manager = subsystem::Manager::new_with_config(manager_config);
 
     // Chainstate subsystem
+    // (experimental) step 12: the node daemon enables reckless db mode
+    // (no-sync commits during IBD, forced sync when IBD finishes) unless the
+    // user configured it explicitly. The library default remains opt-in, so
+    // this branch's behavior cannot leak through cherry-picked library code.
+    let mut chainstate_config = node_config.chainstate.clone().unwrap_or_default();
+    if chainstate_config.chainstate_config.enable_db_reckless_mode_in_ibd.is_none() {
+        log::info!(
+            "db reckless mode enabled by default during IBD (db sync disabled); \
+             set --enable-db-reckless-mode-in-ibd=false to opt out"
+        );
+        chainstate_config.chainstate_config.enable_db_reckless_mode_in_ibd = Some(true);
+    }
     let chainstate_maker = chainstate_launcher::create_chainstate_maker(
         data_dir,
         Arc::clone(&chain_config),
-        node_config.chainstate.unwrap_or_default().into(),
+        chainstate_config.into(),
     )?;
     let chainstate = manager
         .add_custom_subsystem("chainstate", async move |_, shutdown_initiated_rx| {

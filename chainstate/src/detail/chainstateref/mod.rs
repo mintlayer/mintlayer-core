@@ -37,8 +37,8 @@ use chainstate_types::{
 use common::{
     Uint256,
     chain::{
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OrderAccountCommand,
-        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, ChainConfig, GenBlock, GenBlockId,
+        OrderAccountCommand, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{
             BlockReward, ConsensusData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,
@@ -269,6 +269,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block(&self, block_id: &Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
+    }
+
+    /// (experimental) Per-transaction fees of a mainchain block, as persisted
+    /// at connect time. None if the block predates fee persistence.
+    pub fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, PropertyQueryError> {
+        self.db_tx.get_block_tx_fees(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
@@ -1228,6 +1237,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         &mut self,
         best_block_id: &Id<GenBlock>,
         new_block_index: &BlockIndex,
+        in_memory_block: Option<&WithId<Block>>,
     ) -> Result<(), ReorgError> {
         let new_chain = self
             .get_new_chain(new_block_index)
@@ -1255,7 +1265,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
         // Connect the new chain
         for block_index in new_chain {
-            self.connect_tip(&block_index)
+            self.connect_tip(&block_index, in_memory_block)
                 .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
                 .log_err()?;
         }
@@ -1272,7 +1282,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let connected_txs = self
+        let (connected_txs, block_tx_fees) = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
@@ -1286,6 +1296,10 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
+
+        // (experimental) step 9: persist the per-transaction fees computed
+        // during connect, for serving to API consumers.
+        self.db_tx.set_block_tx_fees(block_index.block_id(), &block_tx_fees)?;
 
         Ok(())
     }
@@ -1301,12 +1315,20 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 
+        // (experimental) step 9: the block is no longer on the mainchain; its
+        // persisted per-transaction fees are removed with it.
+        self.db_tx.del_block_tx_fees(&block.get_id())?;
+
         Ok(())
     }
 
     // Connect new block
     #[log_error]
-    fn connect_tip(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn connect_tip(
+        &mut self,
+        block_index: &BlockIndex,
+        in_memory_block: Option<&WithId<Block>>,
+    ) -> Result<(), BlockError> {
         let (block, block_status) = {
             let mut block_status = block_index.status();
             ensure!(
@@ -1316,18 +1338,27 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 )
             );
 
-            let block: WithId<Block> = self
-                .get_block_from_index(block_index)
-                .map_err(BlockError::StorageError)?
-                .ok_or_else(|| {
-                    let id = *block_index.block_id();
-                    log::warn!(
-                        "Missing block data for block {id} with a valid status {block_status}"
-                    );
-                    BlockError::BlockDataMissingForValidBlockIndex(id)
-                })
-                .log_err()?
-                .into();
+            // (experimental) step 11: when the block to connect is the one
+            // just persisted by the caller, reuse the in-memory copy instead
+            // of reading it back from the storage and decoding it.
+            let preloaded =
+                in_memory_block.filter(|b| b.get_id() == *block_index.block_id()).cloned();
+
+            let block: WithId<Block> = match preloaded {
+                Some(block) => block,
+                None => self
+                    .get_block_from_index(block_index)
+                    .map_err(BlockError::StorageError)?
+                    .ok_or_else(|| {
+                        let id = *block_index.block_id();
+                        log::warn!(
+                            "Missing block data for block {id} with a valid status {block_status}"
+                        );
+                        BlockError::BlockDataMissingForValidBlockIndex(id)
+                    })
+                    .log_err()?
+                    .into(),
+            };
 
             if block_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
                 self.check_block(&block)?;
@@ -1406,13 +1437,18 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
+        in_memory_block: Option<&WithId<Block>>,
     ) -> Result<bool, ReorgError> {
         let current_best_block_index =
             self.get_best_block_index().map_err(BlockError::BestBlockIndexQueryError)?;
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             // Chain trust is higher than the best block
-            self.reorganize(&current_best_block_index.block_id(), new_block_index)?;
+            self.reorganize(
+                &current_best_block_index.block_id(),
+                new_block_index,
+                in_memory_block,
+            )?;
             return Ok(true);
         }
 

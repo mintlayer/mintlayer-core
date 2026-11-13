@@ -17,6 +17,7 @@
 
 mod internal;
 pub mod raw;
+pub use raw::StorageContents;
 
 use std::borrow::Cow;
 

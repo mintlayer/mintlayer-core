@@ -208,7 +208,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                     let block_index =
                         get_existing_block_index(chainstate_ref, candidate.block_id())?;
                     let reorg_occured = chainstate_ref
-                        .activate_best_chain(&block_index)
+                        .activate_best_chain(&block_index, None)
                         .map_err(ReorgDuringInvalidationError::ReorgError)?;
                     assert!(reorg_occured);
                     Ok(())

@@ -26,6 +26,9 @@ use test_utils::random::make_seedable_rng;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
+/// (experimental) Number of PoS blocks appended to the tip per benchmark iteration.
+const POS_IBD_BLOCKS_PER_ITER: usize = 100;
+
 pub fn pow_reorg(c: &mut Criterion) {
     let mut rng = make_seedable_rng(1111.into());
     let mut tf = TestFramework::builder(&mut rng)
@@ -44,6 +47,69 @@ pub fn pow_reorg(c: &mut Criterion) {
     c.bench_function("PoW reorg", |b| {
         b.iter(|| {
             tf.create_chain(&common_block_id, 1001, &mut rng).unwrap();
+        })
+    });
+}
+
+/// (experimental) Measures the linear-connect (IBD) throughput of PoS blocks:
+/// each iteration appends `POS_IBD_BLOCKS_PER_ITER` empty PoS blocks to the tip,
+/// exactly the code path an initial block download takes.
+pub fn pos_ibd_linear_connect(c: &mut Criterion) {
+    let mut rng = make_seedable_rng(2222.into());
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+    let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
+    let stake_pool_data = StakePoolData::new(
+        stake_pool_pledge,
+        Destination::PublicKey(staking_pk),
+        vrf_pk,
+        Destination::AnyoneCanSpend,
+        PerThousand::new(1000).unwrap(),
+        Amount::ZERO,
+    );
+    let mint_amount = Amount::from_atoms(1000);
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
+        mint_amount,
+        genesis_pool_id,
+        stake_pool_data,
+    )
+    .max_depth_for_reorg(BlockDistance::new(5000))
+    .build();
+    let target_block_time = chain_config.target_block_spacing();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+    // Warm-up chain so the benchmark measures steady-state linear connect.
+    tf.create_chain_pos(
+        &mut rng,
+        &tf.genesis().get_id().into(),
+        5,
+        genesis_pool_id,
+        &staking_sk,
+        &vrf_sk,
+    )
+    .unwrap();
+
+    c.bench_function("PoS IBD linear connect", |b| {
+        b.iter(|| {
+            let tip = tf.best_block_id();
+            tf.progress_time_seconds_since_epoch(
+                target_block_time.as_secs() * u64::try_from(POS_IBD_BLOCKS_PER_ITER).unwrap(),
+            );
+            tf.create_chain_pos(
+                &mut rng,
+                &tip,
+                POS_IBD_BLOCKS_PER_ITER,
+                genesis_pool_id,
+                &staking_sk,
+                &vrf_sk,
+            )
+            .unwrap();
         })
     });
 }
@@ -114,5 +180,5 @@ pub fn pos_reorg(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, pow_reorg, pos_reorg);
+criterion_group!(benches, pow_reorg, pos_reorg, pos_ibd_linear_connect);
 criterion_main!(benches);

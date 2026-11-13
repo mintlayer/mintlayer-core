@@ -20,7 +20,7 @@ use common::{
 pub mod local_state;
 mod remote_node;
 
-use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
+pub use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
@@ -82,7 +82,7 @@ pub async fn sync_once<R, L>(
 ) -> Result<(), SyncError>
 where
     R: RemoteNode,
-    L: LocalBlockchainState,
+    L: LocalBlockchainState + Send,
 {
     loop {
         let chain_info = rpc_client.chainstate().await.map_err(|e| remote_node_error::<R>(e))?;
@@ -102,7 +102,7 @@ where
             best_block_id
         );
 
-        fetch_and_sync::<R>(
+        fetch_and_sync::<R, L>(
             chain_info.clone(),
             best_block_id,
             best_block_height,
@@ -125,13 +125,13 @@ fn remote_node_error<R: RemoteNode>(error: R::Error) -> SyncError {
     }
 }
 
-async fn fetch_and_sync<R: RemoteNode>(
+async fn fetch_and_sync<R: RemoteNode, L: LocalBlockchainState + Send>(
     chain_info: chainstate::ChainInfo,
     best_block_id: Id<GenBlock>,
     best_block_height: BlockHeight,
     chain_config: &ChainConfig,
     rpc_client: &R,
-    local_node: &mut impl LocalBlockchainState,
+    local_node: &mut L,
 ) -> Result<(), SyncError> {
     // TODO: use chain trust instead of height
     utils::ensure!(
@@ -151,8 +151,21 @@ async fn fetch_and_sync<R: RemoteNode>(
     )
     .await?;
 
+    // (experimental step 9) Fetch trusted per-block fees from the node; a
+    // missing record (block predates fee persistence) falls back to the
+    // scanner's local fee recomputation.
+    let mut block_fees = Vec::with_capacity(blocks.len());
+    for block in &blocks {
+        let fees = rpc_client
+            .block_tx_fees(common::primitives::Idable::get_id(block))
+            .await
+            .map_err(|e| remote_node_error::<R>(e))?
+            .map(|block_tx_fees| block_tx_fees.0.into_iter().map(|(_, fee)| fee).collect());
+        block_fees.push(fees);
+    }
+
     local_node
-        .scan_blocks(common_block_height, blocks)
+        .scan_blocks_with_fees(common_block_height, blocks, block_fees)
         .await
         .map_err(|e| SyncError::LocalNode(e.to_string()))
 }
@@ -186,6 +199,21 @@ async fn fetch_new_blocks<R: RemoteNode>(
             SyncError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
         ),
         None => return Err(SyncError::NoNewBlocksFound),
+    }
+
+    // (experimental) hardening: the scanner derives every row's block height
+    // from the position in this batch, so a gap or an internal fork in the
+    // returned list would silently index blocks under wrong heights and
+    // corrupt the versioned tables. Verify the whole batch is a contiguous
+    // chain before trusting it.
+    for pair in blocks.windows(2) {
+        utils::ensure!(
+            *pair[1].header().prev_block_id() == Id::<GenBlock>::from(pair[0].header().block_id()),
+            SyncError::InvalidPrevBlockId(
+                *pair[1].header().prev_block_id(),
+                pair[0].header().block_id().into(),
+            )
+        );
     }
 
     Ok(FetchedBlocks {
