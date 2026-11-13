@@ -1287,7 +1287,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
     inputs_utxos: &[Option<TxOutput>],
     db_tx: &T,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let pools = prefetch_pool_data(&inputs_utxos, db_tx, block_height).await?;
+    let pools = prefetch_pool_data(inputs_utxos, db_tx, block_height).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
 
@@ -2762,12 +2762,15 @@ mod replay_regression_tests {
         let mut db_tx = storage.transaction_rw().await.unwrap();
         db_tx.reinitialize_storage(chain_config).await.unwrap();
         let genesis = chain_config.genesis_block().as_ref();
+        let mut acc = BalanceAccumulator::default();
         update_tables_from_block_reward(
             Arc::clone(chain_config),
             &mut db_tx,
             BlockHeight::new(0),
             genesis.utxos(),
             genesis.get_id().into(),
+            None,
+            &mut acc,
         )
         .await
         .unwrap();
@@ -2782,15 +2785,20 @@ mod replay_regression_tests {
         block: &Block,
     ) {
         let mut db_tx = storage.transaction_rw().await.unwrap();
+        let mut utxo_cache = BTreeMap::new();
+        let mut acc = BalanceAccumulator::default();
         update_tables_from_block(
             Arc::clone(chain_config),
             &mut db_tx,
             block_height,
             block,
             Fee(Amount::ZERO),
+            &mut utxo_cache,
+            &mut acc,
         )
         .await
         .unwrap();
+        acc.flush(&mut db_tx, block_height).await.unwrap();
         db_tx.commit().await.unwrap();
     }
 
@@ -2923,7 +2931,10 @@ mod replay_regression_tests {
         let corrupted_balance =
             pool_staker_balance_at(&storage, pool_id, BlockHeight::new(2)).await;
         assert_eq!(clean_balance, corrupted_balance);
+    }
+}
 
+#[cfg(test)]
 mod median_window_tests {
     // Focused coverage for the in-memory median-time
     // window: the rolling window must produce identical medians to a

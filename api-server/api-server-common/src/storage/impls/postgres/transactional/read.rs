@@ -195,7 +195,8 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         delegation_id: DelegationId,
         block_height: BlockHeight,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn
             .get_delegation_at_or_below_height(
                 delegation_id,
@@ -235,7 +236,8 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         pool_id: PoolId,
         block_height: BlockHeight,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn
             .get_pool_delegations_at_or_below_height(
                 pool_id,
@@ -322,7 +324,8 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         pool_id: PoolId,
         block_height: BlockHeight,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn
             .get_pool_data_at_or_below_height(pool_id, Some(block_height), &self.chain_config)
             .await?;
