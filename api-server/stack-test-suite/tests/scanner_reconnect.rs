@@ -41,9 +41,10 @@ use api_server_common::storage::{
 };
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::GenBlock,
+    chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use mempool::FeeRate;
 use randomness::RngExt as _;
 use rpc::test_support::{INTERNAL_ERROR_CODE, RpcModule, RpcResult, Server};
 use rpc::{Error as ErrorObjectOwned, RpcAuthData};
@@ -63,7 +64,7 @@ const TIP_TIMEOUT: Duration = Duration::from_secs(30);
 /// several backoff steps of the scanner's reconnection attempts).
 const OUTAGE_DURATION: Duration = Duration::from_secs(4);
 
-/// The four `chainstate` RPC methods used by the scanner, served by a real WebSocket RPC server
+/// The five `chainstate` RPC methods used by the scanner, served by a real WebSocket RPC server
 /// backed by the chainstate of a [`TestFramework`]. The method names and the request/response
 /// formats match the ones of the real node's RPC, so the scanner cannot tell the difference.
 fn make_chainstate_rpc_module(
@@ -75,6 +76,36 @@ fn make_chainstate_rpc_module(
         .register_async_method("chainstate_info", |_params, state, _| async move {
             call_chainstate(Arc::clone(&state), |tf| tf.chainstate.info()).await
         })
+        .unwrap();
+
+    module
+        .register_async_method(
+            "chainstate_get_block_tx_fees",
+            |params, state, _| async move {
+                // The jsonrpsee client sends named params as an object.
+                #[derive(serde::Deserialize)]
+                struct GetBlockTxFeesParams {
+                    block_id: Id<Block>,
+                }
+                let params = params.parse::<GetBlockTxFeesParams>()?;
+                call_chainstate(Arc::clone(&state), move |tf| {
+                    tf.chainstate.get_block_tx_fees(&params.block_id)
+                })
+                .await
+            },
+        )
+        .unwrap();
+
+    module
+        .register_async_method(
+            "mempool_get_fee_rate_points",
+            |_params, _state, _| async move {
+                Ok::<Vec<(usize, FeeRate)>, ErrorObjectOwned>(vec![(
+                    1usize,
+                    FeeRate::from_amount_per_kb(common::primitives::Amount::from_atoms(1)),
+                )])
+            },
+        )
         .unwrap();
 
     module
