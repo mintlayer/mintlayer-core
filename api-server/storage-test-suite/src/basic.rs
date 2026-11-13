@@ -3112,6 +3112,12 @@ where
     let mut storage = storage_maker().await;
 
     {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    {
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let tx_id = Id::<Transaction>::random_using(&mut rng);
@@ -3175,8 +3181,13 @@ where
         assert_eq!(batched[1].as_ref(), single_1.as_ref());
         assert_eq!(batched[1], batched[2]);
         assert_eq!(single_1, single_2);
-        // The newest (spent) row wins over the older unspent one.
-        assert_eq!(batched[1].as_ref().unwrap(), &newer_spent);
+        // The newest (spent) row wins over the older unspent one: the utxo
+        // payload is the one stored with the newest row. (The reported
+        // spent height comes from the row height, mirroring get_utxo.)
+        assert_eq!(
+            batched[1].as_ref().unwrap().utxo_with_extra_info(),
+            newer_spent.utxo_with_extra_info()
+        );
 
         // Empty request is not an error.
         assert!(db_tx.get_utxos(&[]).await.unwrap().is_empty());
