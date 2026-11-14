@@ -35,6 +35,9 @@ use super::{TransactionalApiServerPostgresStorage, queries::QueryFromConnection}
 const CONN_ERR: &str = "CRITICAL: failed to get postgres tx connection. Invariant broken.";
 
 pub struct ApiServerPostgresTransactionalRo<'a> {
+    // (experimental) step 7: prepared statements for this transaction (see the
+    // Rw struct comment).
+    statements: crate::storage::impls::postgres::queries::StatementCache,
     // Note: This is an Option due to needing to pry the connection out of Self in Drop
     connection: Option<PooledConnection<'static, PostgresConnectionManager<NoTls>>>,
     finished: bool,
@@ -56,6 +59,7 @@ impl ApiServerPostgresTransactionalRo<'_> {
         chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
+            statements: Default::default(),
             connection: Some(connection),
             finished: false,
             db_tx_sender,
@@ -74,21 +78,24 @@ impl ApiServerPostgresTransactionalRo<'_> {
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
 
     pub async fn get_best_block(&mut self) -> Result<BlockAuxData, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_best_block().await?;
 
         Ok(res)
@@ -98,7 +105,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
@@ -108,7 +116,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block(block_id).await?;
 
         Ok(res)
@@ -118,7 +127,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
@@ -129,7 +139,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
@@ -139,7 +150,8 @@ impl ApiServerPostgresTransactionalRo<'_> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
@@ -147,6 +159,10 @@ impl ApiServerPostgresTransactionalRo<'_> {
 }
 
 pub struct ApiServerPostgresTransactionalRw<'a> {
+    // (experimental) step 7: prepared statements for this transaction. Kept
+    // before `connection` and cleared first in Drop, so all statements are
+    // gone before the connection returns to the pool.
+    statements: crate::storage::impls::postgres::queries::StatementCache,
     // Note: This is an Option due to needing to pry the connection out of Self in Drop
     connection: Option<PooledConnection<'static, PostgresConnectionManager<NoTls>>>,
     finished: bool,
@@ -161,6 +177,13 @@ pub struct ApiServerPostgresTransactionalRw<'a> {
 
 impl Drop for ApiServerPostgresTransactionalRw<'_> {
     fn drop(&mut self) {
+        // (experimental) step 7: drop prepared statements before the
+        // connection goes back to the pool.
+        // degrade gracefully if the mutex is poisoned: never
+        // panic in Drop before the connection returns to the pool.
+        if let Ok(mut statements) = self.statements.lock() {
+            statements.clear();
+        }
         if !self.finished {
             self.db_tx_sender
                 .send(self.connection.take().expect(CONN_ERR))
@@ -182,6 +205,7 @@ impl ApiServerPostgresTransactionalRw<'_> {
         chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
+            statements: Default::default(),
             connection: Some(connection),
             finished: false,
             db_tx_sender,
@@ -234,6 +258,13 @@ impl ApiServerTransactionRo for ApiServerPostgresTransactionalRo<'_> {
 
 impl Drop for ApiServerPostgresTransactionalRo<'_> {
     fn drop(&mut self) {
+        // (experimental) step 7: drop prepared statements before the
+        // connection goes back to the pool.
+        // degrade gracefully if the mutex is poisoned: never
+        // panic in Drop before the connection returns to the pool.
+        if let Ok(mut statements) = self.statements.lock() {
+            statements.clear();
+        }
         if !self.finished {
             self.db_tx_sender
                 .send(self.connection.take().expect(CONN_ERR))

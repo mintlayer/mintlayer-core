@@ -128,7 +128,7 @@ pub struct TopLevelOptions {
 
     /// Create the data directory if it is missing; the default value depends on whether
     /// a custom data directory is used (false for a custom directory, true for the default one).
-    #[clap(long = "create-datadir-if-missing", value_name = "VAL")]
+    #[clap(long = "create-datadir-if-missing", value_name = "true|false", action = clap::ArgAction::Set)]
     pub create_data_dir_if_missing: Option<bool>,
 
     /// Log to a file.
@@ -139,7 +139,7 @@ pub struct TopLevelOptions {
     /// The log level used in this case doesn't depend on the RUST_LOG env variable and is always INFO.
     ///
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
-    #[clap(long, action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
 
     /// If specified, the application will clean the data directory and exit immediately.
@@ -334,12 +334,12 @@ pub struct RunOptions {
     /// Genesis. If used on a node that is not starting from Genesis,
     /// the node may produce blocks from the past, which will lead
     /// to being banned by the network.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub blockprod_skip_ibd_check: Option<bool>,
 
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
@@ -373,7 +373,15 @@ pub struct RunOptions {
     /// Additionally, the corruption may not be detectable by the db engine, in which case you'll
     /// end up having a malfunctioning node. Therefore, if you are using the reckless mode and
     /// the system crashes in the process, always delete the db and re-sync, just in case.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    ///
+    /// Note: the value must be explicit (`true`/`false`) because the node daemon enables the
+    /// reckless mode by default when this option is not set anywhere; a value-less boolean
+    /// flag would make the flag's absence look like an explicit opt-out.
+    // Implementation note: an explicit `ArgAction::Set` is what makes the absence of the
+    // flag yield `None`. clap's `SetTrue` action on an `Option<bool>` materializes `Some(false)`
+    // for an absent flag, which would look like an explicit `false` to the code below and
+    // would defeat the daemon's default-on behavior as well as config-file values.
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.
@@ -389,7 +397,7 @@ pub struct RunOptions {
     pub mempool_max_cluster_size_bytes: Option<usize>,
 
     /// Whether p2p networking should be enabled.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub p2p_networking_enabled: Option<bool>,
 
     /// Addresses to bind P2P to.
@@ -402,7 +410,7 @@ pub struct RunOptions {
     pub p2p_socks5_proxy: Option<String>,
 
     /// Disable p2p encryption (for tests only).
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_disable_noise: Option<bool>,
 
@@ -459,7 +467,7 @@ pub struct RunOptions {
     // remove them.
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
@@ -485,7 +493,7 @@ pub struct RunOptions {
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
@@ -512,11 +520,11 @@ pub struct RunOptions {
 
     /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
     /// Defaults to true for regtest and false in other cases.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub enable_chainstate_heavy_checks: Option<bool>,
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
-    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false", hide = true)]
     pub allow_checkpoints_mismatch: Option<bool>,
 
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
@@ -664,6 +672,122 @@ mod tests {
             let chain_config = cmd.create_chain_config().unwrap();
             assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
         }
+    }
+}
+
+#[cfg(test)]
+mod reckless_mode_option_tests {
+    use super::*;
+
+    const RECKLESS_MODE_ENV_VAR: &str = "ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD";
+
+    /// Clears the variable on construction (so an ambient environment cannot interfere
+    /// with a test) and on drop (so a failing assertion cannot leak it into sibling
+    /// tests). Must only be used from `#[serial_test::serial]`-serialized tests.
+    struct EnvVarGuard(&'static str);
+
+    impl EnvVarGuard {
+        fn cleared(name: &'static str) -> Self {
+            // SAFETY: the tests using this guard are `#[serial_test::serial]`-serialized.
+            unsafe { std::env::remove_var(name) };
+            Self(name)
+        }
+
+        fn set(&self, value: &str) {
+            // SAFETY: see `cleared`.
+            unsafe { std::env::set_var(self.0, value) };
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `cleared`.
+            unsafe { std::env::remove_var(self.0) };
+        }
+    }
+
+    fn parse_mainnet_run_options(args: &[&str]) -> RunOptions {
+        let full_args = std::iter::once("mintlayerd").chain(args.iter().copied());
+        let options = <Options as clap::Parser>::try_parse_from(full_args)
+            .unwrap_or_else(|err| panic!("arguments must parse: {err}"));
+        match options.with_resolved_command().command {
+            Command::Mainnet(run_options) => run_options,
+            _ => panic!("expected the mainnet subcommand"),
+        }
+    }
+
+    // Regression: `--enable-db-reckless-mode-in-ibd` used to be a value-less flag
+    // (`ArgAction::SetTrue`), so not passing it produced `Some(false)`, which the node
+    // runner treats as an explicit opt-out from the reckless-mode-by-default IBD
+    // behavior. The flag now requires an explicit value, so its absence must yield
+    // `None` for the default to kick in.
+    // These tests parse arguments, and parsing reads `ML_*` environment variables, so
+    // they must not run concurrently with the tests that set those variables.
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_absent_yields_none() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, None);
+        // The other boolean options use the same explicit-value pattern; their absence must
+        // also yield `None` so that a value from the configuration file can take precedence.
+        assert_eq!(run_options.blockprod_skip_ibd_check, None);
+        assert_eq!(run_options.blockprod_use_current_time_if_non_pos, None);
+        assert_eq!(run_options.p2p_disable_noise, None);
+        assert_eq!(
+            run_options.p2p_force_dns_query_if_no_global_addresses_known,
+            None
+        );
+        assert_eq!(run_options.allow_checkpoints_mismatch, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_accepts_explicit_values() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "true"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "false"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_without_a_value_is_rejected() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let full_args = ["mintlayerd", "mainnet", "--enable-db-reckless-mode-in-ibd"];
+        assert!(<Options as clap::Parser>::try_parse_from(full_args).is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_value_reaches_parsing() {
+        // The env var name is derived from the long option name by
+        // `clap_utils::env_adder`; the env layer of the precedence chain must keep
+        // working: an env var with a valid value wins when the CLI flag is absent,
+        // and an invalid value must be rejected.
+        let env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+
+        env_guard.set("true");
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        env_guard.set("false");
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_with_invalid_value_is_rejected() {
+        let env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+
+        env_guard.set("not-a-bool");
+        let result = <Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"]);
+        assert!(result.is_err());
     }
 }
 

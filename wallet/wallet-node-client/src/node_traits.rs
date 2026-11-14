@@ -24,8 +24,8 @@ use futures::stream::Stream;
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, time::Time},
@@ -92,6 +92,13 @@ pub trait NodeInterface {
         from: BlockHeight,
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error>;
+
+    /// (experimental) Per-transaction fees of a mainchain block, persisted at
+    /// connect time. None if the block predates fee persistence.
+    async fn get_block_tx_fees(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error>;
     async fn get_block_ids_as_checkpoints(
         &self,
         start_height: BlockHeight,

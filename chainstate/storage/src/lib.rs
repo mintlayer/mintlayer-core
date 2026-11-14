@@ -29,7 +29,7 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, GenBlock,
+        AccountNonce, AccountType, Block, BlockTxFees, GenBlock,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
@@ -106,6 +106,10 @@ pub trait BlockchainStorageRead:
     fn get_block_id_by_height(&self, height: BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
     fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+
+    /// (experimental) Per-transaction fees of the given block, as persisted at
+    /// connect time. None if the block predates fee persistence.
+    fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
     /// Get token creation tx
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
@@ -222,6 +226,11 @@ pub trait BlockchainStorageWrite:
 
     fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> Result<()>;
     fn del_undo_data(&mut self, id: &Id<Block>) -> Result<()>;
+
+    /// (experimental) Persist the per-transaction fees of a block at connect
+    /// time / remove them at disconnect time.
+    fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> Result<()>;
+    fn del_block_tx_fees(&mut self, id: &Id<Block>) -> Result<()>;
 
     /// Set data associated with token issuance (and ACL changes in the future)
     fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> Result<()>;

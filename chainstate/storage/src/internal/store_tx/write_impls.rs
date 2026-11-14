@@ -21,8 +21,8 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
     },
@@ -102,6 +102,16 @@ impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
         self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
+    }
+
+    #[log_error]
+    fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> crate::Result<()> {
+        self.write::<db::DBBlockTxFees, _, _, _>(id, fees)
+    }
+
+    #[log_error]
+    fn del_block_tx_fees(&mut self, id: &Id<Block>) -> crate::Result<()> {
+        self.del::<db::DBBlockTxFees, _, _>(id)
     }
 
     #[log_error]

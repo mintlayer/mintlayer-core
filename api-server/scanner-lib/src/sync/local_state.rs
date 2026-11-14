@@ -37,5 +37,29 @@ pub trait LocalBlockchainState {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::Error>
+    where
+        Self: Send,
+    {
+        // (experimental step 9) Backends that don't consume trusted fees fall
+        // back to the per-tx local fee computation.
+        let fees = vec![None; blocks.len()];
+        self.scan_blocks_with_fees(common_block_height, blocks, fees).await
+    }
+
+    /// Same as `scan_blocks`, but consumes trusted per-block fees from the
+    /// node when available (aligned with `blocks`; None = fall back to local
+    /// fee recomputation for that block).
+    async fn scan_blocks_with_fees(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        fees: Vec<Option<Vec<common::primitives::Fee>>>,
+    ) -> Result<(), Self::Error>
+    where
+        Self: Send,
+    {
+        let _ = fees;
+        self.scan_blocks(common_block_height, blocks).await
+    }
 }

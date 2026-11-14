@@ -25,6 +25,10 @@ mod orphan_blocks;
 pub mod ban_score;
 pub mod block_checking;
 pub mod block_invalidation;
+pub(crate) mod perf_timing;
+
+use std::collections::BTreeMap;
+use std::sync::Mutex;
 pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
@@ -125,6 +129,13 @@ pub struct Chainstate<S, V> {
     is_initial_block_download_finished: SetFlag,
     shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     reckless_mode_counter: DbRecklessModeCounter,
+    /// (experimental) step 11: blocks whose `check_block` already passed in
+    /// this process (via `preliminary_block_check`), mapped to the tip they
+    /// were checked against. Consumed by `integrate_block` to skip the
+    /// duplicate check; entries are stale-safe because `integrate_block`
+    /// re-verifies both that the recorded tip is still current and that the
+    /// parent block still has an ok status before trusting the verdict.
+    pre_checked_blocks: Mutex<BTreeMap<Id<Block>, Id<GenBlock>>>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -249,6 +260,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             is_initial_block_download_finished: SetFlag::new(),
             shutdown_initiated_rx,
             reckless_mode_counter: DbRecklessModeCounter::new(),
+            pre_checked_blocks: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -343,7 +355,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 }
             };
 
-            let db_commit_result = chainstate_ref.commit_db_tx();
+            let db_commit_result = {
+                let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Commit);
+                chainstate_ref.commit_db_tx()
+            };
 
             match db_commit_result {
                 Ok(()) => return Ok(result),
@@ -363,13 +378,39 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
         block_index: BlockIndex,
+        checked_against_tip: Option<Id<GenBlock>>,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        chainstate_ref
-            .check_block(block)
-            .map_err(BlockError::CheckBlockFailed)
-            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        // Re-verify the memoized check verdict against the
+        // tip as observed INSIDE this rw transaction: the verdict is only
+        // trusted if the recorded tip is still the current one and the
+        // block's parent still has an ok status. This keeps the skip
+        // stale-safe across retries and batch commits.
+        let already_checked = match checked_against_tip {
+            Some(checked_tip) => {
+                let current_tip = chainstate_ref
+                    .get_best_block_id()
+                    .map_err(BlockError::PropertyQueryError)
+                    .map_err(BlockIntegrationError::OtherNonValidationError)?;
+                checked_tip == current_tip
+                    // Invalidating a non-mainchain block marks it failed without
+                    // moving the best tip, which the tip comparison above cannot
+                    // observe. Re-verify the parent so that a block checked before
+                    // such an invalidation falls back to the full check instead of
+                    // being persisted with an ok status above an invalid parent.
+                    && chainstate_ref.check_block_parent(block.header()).is_ok()
+            }
+            None => false,
+        };
+
+        if !already_checked {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::CheckBlock);
+            chainstate_ref
+                .check_block(block)
+                .map_err(BlockError::CheckBlockFailed)
+                .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        }
 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
         let block_status = block_status;
@@ -378,23 +419,29 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // succeeds, we'll save both the index and the block itself via the same db tx;
         // and if it fails, neither will be saved.
         let block_index = block_index.with_status(block_status).make_persisted();
-        chainstate_ref
-            .set_new_block_index(&block_index)
-            .and_then(|_| chainstate_ref.persist_block(block))
-            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Persist);
+            chainstate_ref
+                .set_new_block_index(&block_index)
+                .and_then(|_| chainstate_ref.persist_block(block))
+                .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
+        }
 
         // Seal duplication tracking is observational: it feeds no validation
         // rule, so its failure (e.g. a storage issue in the seal tables) must
         // not reject an otherwise valid block and harm the liveness of the
         // node. The indexing of the affected block is lost, which the logging
         // makes visible.
-        if let Err(err) =
-            chainstate_ref.index_block_seal_if_enabled(block, block_index.block_height())
         {
-            log::error!(
-                "Failed to index the seal of the block {}: {err}",
-                block.get_id()
-            );
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::SealIndex);
+            if let Err(err) =
+                chainstate_ref.index_block_seal_if_enabled(block, block_index.block_height())
+            {
+                log::error!(
+                    "Failed to index the seal of the block {}: {err}",
+                    block.get_id()
+                );
+            }
         }
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
@@ -402,11 +449,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // checked. It's activate_best_chain's responsibility to update their statuses.
         // Likewise, we don't set the failure flag here, because the activation could also fail
         // due to a bad parent. This will be done by the caller code.
-        let result = chainstate_ref.activate_best_chain(&block_index);
+        let result = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Connect);
+            chainstate_ref.activate_best_chain(&block_index, Some(block))
+        };
 
-        chainstate_ref
-            .update_min_height_with_allowed_reorg()
-            .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::MinHeight);
+            chainstate_ref
+                .update_min_height_with_allowed_reorg()
+                .map_err(BlockIntegrationError::OtherNonValidationError)?;
+        };
 
         result.map_err(|err| match err {
             ReorgError::ConnectTipFailed(block_id, block_err) => {
@@ -430,12 +483,29 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let block = self.check_legitimate_orphan(block_source, block)?;
+        let result = self.attempt_to_process_block_inner(block, block_source);
+        // count every processed block, on success and failure
+        // alike, so the timing window doesn't drift.
+        perf_timing::on_block_processed();
+        result
+    }
+
+    fn attempt_to_process_block_inner(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let _window = perf_timing::WindowGuard::start();
+        let block = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
+            self.check_legitimate_orphan(block_source, block)?
+        };
         let block_id = block.get_id();
 
         // Ensure that the block being submitted is new to us. If not, bail out immediately,
         // otherwise create a new block index and continue.
         let block_index = {
+            let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::RoTx);
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
             let existing_block_index = get_block_index(&chainstate_ref, &block_id)?;
 
@@ -450,10 +520,30 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
         };
 
+        // (experimental) step 11: the block may have been fully checked
+        // (preliminary_block_check); take the recorded tip out of the memo.
+        // `integrate_block` re-verifies the tip INSIDE the rw transaction and
+        // additionally re-checks the parent status, so the verdict can never
+        // be applied against a state that no longer matches the one it was
+        // validated against - including across with_rw_tx retries and, later,
+        // batch commits.
+        let checked_against_tip = self
+            .pre_checked_blocks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&block_id);
+
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
         let integrate_block_result = self.with_rw_tx(
-            |chainstate_ref| Self::integrate_block(chainstate_ref, &block, block_index.clone()),
+            |chainstate_ref| {
+                Self::integrate_block(
+                    chainstate_ref,
+                    &block,
+                    block_index.clone(),
+                    checked_against_tip,
+                )
+            },
             |attempt_number| {
                 log::info!("Processing block {block_id}, attempt #{attempt_number}");
             },
@@ -471,18 +561,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 let saved_block_index = get_existing_block_index(&chainstate_ref, &block_id)?;
 
                 assert!(saved_block_index.status().is_ok());
-                return Ok(reorg_occurred.then_some(saved_block_index));
+                Ok(reorg_occurred.then_some(saved_block_index))
             }
             Err(BlockIntegrationError::BlockCommitError(block_id, attempts_count, db_err)) => {
-                return Err(BlockError::DbCommitError(
+                Err(BlockError::DbCommitError(
                     attempts_count,
                     db_err,
                     DbCommittingContext::Block(block_id),
-                ));
+                ))
             }
-            Err(BlockIntegrationError::OtherNonValidationError(err)) => {
-                return Err(err);
-            }
+            Err(BlockIntegrationError::OtherNonValidationError(err)) => Err(err),
             Err(BlockIntegrationError::ConnectBlockErrorDuringReorg(
                 err,
                 status,
@@ -521,12 +609,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     );
                     // Don't save an "ok" status for a block that hasn't been persisted.
                 }
-                return Err(err);
+                Err(err)
             }
             Err(BlockIntegrationError::OtherReorgError(err, _status)) => {
                 log::warn!("An error occurred during reorg, but none of the blocks can be blamed");
                 // Don't save an "ok" status for a block that hasn't been persisted.
-                return Err(err);
+                Err(err)
             }
             Err(BlockIntegrationError::BlockCheckError(err, status)) => {
                 // The failure occurred during the integration of the new block itself.
@@ -549,9 +637,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     );
                     // Don't save an "ok" status for a block that hasn't been persisted.
                 }
-                return Err(err);
+                Err(err)
             }
-        };
+        }
     }
 
     /// If heavy checks are enabled, perform block index consistency check; panic if it's violated.
@@ -649,6 +737,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(best_block_index) = &best_block_index_opt {
             let best_block_index_ref = GenBlockIndexRef::Block(best_block_index);
+            // Note: while IBD is finishing, this can fail if the closing reckless-mode
+            // switch-off (forced db sync) keeps failing; the `?` then also skips the new
+            // tip event for this block. That is conservative degradation on a failing
+            // disk: the flag stays unset for retry, and tip events resume (including
+            // the pending block) once a sync succeeds.
             self.update_initial_block_download_flag(best_block_index_ref, false)?;
             self.broadcast_new_tip_event(best_block_index_ref, self.is_initial_block_download());
 
@@ -865,12 +958,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     .inc(&self.chainstate_config, &self.chainstate_storage)?;
             }
         } else {
-            self.is_initial_block_download_finished.set();
-
+            // Decrement before consuming the set-once flag: if the forced sync inside `dec`
+            // fails (e.g. EIO/ENOSPC right after a big IBD), the error propagates and a
+            // later tip update will retry the transition. Setting the flag first would
+            // strand the node in reckless mode (no fsync on commit) permanently.
             if !initial_update {
                 self.reckless_mode_counter
                     .dec(&self.chainstate_config, &self.chainstate_storage)?;
             }
+            self.is_initial_block_download_finished.set();
         }
 
         Ok(())
@@ -1052,12 +1148,20 @@ impl DbRecklessModeCounter {
         storage: &S,
     ) -> Result<(), chainstate_storage::Error> {
         if config.db_reckless_mode_in_ibd_enabled() {
-            self.counter = self.counter.checked_sub(1).unwrap_or_else(|| {
-                debug_panic_or_log!("Reckless mode counter underflow");
-                self.counter
-            });
+            if self.counter == 1 {
+                // Switch the mode off first and only decrement on success, so that a
+                // failed sync (e.g. EIO/ENOSPC right after a big IBD) can be retried
+                // on a later call without underflowing the counter.
+                storage.set_reckless_mode(false)?;
+            }
 
-            if self.counter == 0 {
+            if self.counter > 0 {
+                self.counter -= 1;
+            } else {
+                // Underflow: recover by attempting the switch-off anyway, so that a
+                // previously failed switch-off cannot leave the node in reckless mode
+                // indefinitely.
+                log::warn!("Reckless mode counter underflow; retrying the switch-off");
                 storage.set_reckless_mode(false)?;
             }
         }

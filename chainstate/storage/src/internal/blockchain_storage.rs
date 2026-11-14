@@ -41,12 +41,13 @@ pub trait BlockchainStorage: for<'tx> Transactional<'tx> + Send {
 #[cfg(feature = "lmdb")]
 impl BlockchainStorageBackendImpl for LmdbImpl {
     fn set_reckless_mode(&self, set: bool) -> crate::Result<()> {
-        // When switching the reckless mode off, do a sync immediately.
-        let force_sync = self.in_reckless_mode()? && !set;
-
+        // Note: when switching the reckless mode off, always do a sync immediately, even
+        // if a previous switch-off attempt already cleared `no_sync_on_commit` but failed
+        // to sync (e.g. because of an IO error): the sync is idempotent, and skipping it
+        // would leave the database unsynced while reporting success.
         self.set_no_sync_on_commit(set);
 
-        if force_sync {
+        if !set {
             self.force_sync()?;
         }
 
