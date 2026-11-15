@@ -747,6 +747,7 @@ fn check_reckless_mode(
                 enable_heavy_checks: Default::default(),
                 allow_checkpoints_mismatch: Default::default(),
                 pos_seal_duplication_tracking: Default::default(),
+                pos_seal_activation_gate: Default::default(),
             })
             .build();
         // library default stays opt-in, matching master.

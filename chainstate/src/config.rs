@@ -22,6 +22,7 @@ make_config_setting!(MaxDbCommitAttempts, usize, 10);
 make_config_setting!(MaxOrphanBlocks, usize, 512);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(PosSealDuplicationTracking, bool, true);
+make_config_setting!(PosSealActivationGate, bool, false);
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
@@ -52,6 +53,11 @@ pub struct ChainstateConfig {
     /// If true, the seals (stake pool id + VRF output) of the processed PoS blocks will be
     /// indexed and the evidence of a seal seen on more than one block will be recorded.
     pub pos_seal_duplication_tracking: PosSealDuplicationTracking,
+
+    /// If true, a chain whose newly activated segment consists entirely of blocks whose
+    /// PoS consensus proofs are duplicates of already-known proofs will not be activated.
+    /// Defaults to false.
+    pub pos_seal_activation_gate: PosSealActivationGate,
 }
 
 impl ChainstateConfig {
@@ -77,6 +83,10 @@ impl ChainstateConfig {
 
     pub fn pos_seal_duplication_tracking_enabled(&self) -> bool {
         *self.pos_seal_duplication_tracking
+    }
+
+    pub fn pos_seal_activation_gate_enabled(&self) -> bool {
+        *self.pos_seal_activation_gate
     }
 
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
