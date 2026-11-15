@@ -17,7 +17,6 @@
 
 use rstest::rstest;
 
-use crate::tests::helpers::pos::calculate_new_target_for_chain;
 use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
 use chainstate_test_framework::{
@@ -25,12 +24,14 @@ use chainstate_test_framework::{
 };
 use chainstate_types::{BlockSeal, pos_randomness::PoSRandomness};
 use common::{
+    Uint256,
     chain::{
-        Destination, OutPointSourceId, PoolId, TxOutput, UtxoOutPoint,
-        block::{ConsensusData, timestamp::BlockTimestamp},
+        Destination, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        block::{ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
+        config::Builder as ConfigBuilder,
         signature::inputsig::InputWitness,
     },
-    primitives::{Id, Idable},
+    primitives::{Compact, Id, Idable},
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
@@ -40,8 +41,10 @@ use randomness::CryptoRng;
 use test_utils::random::{Seed, make_seedable_rng};
 
 use super::helpers::pos::{
-    FIRST_POS_BLOCK_HEIGHT, calculate_new_target, get_pos_chain_config, produce_kernel_signature,
-    setup_chain_with_stake_pool, setup_chain_with_stake_pool_with_chainstate_config,
+    FIRST_POS_BLOCK_HEIGHT, add_block_with_stake_pool, calculate_new_target,
+    calculate_new_target_for_chain, consensus_upgrades_with_pos_at_height, get_pos_chain_config,
+    produce_kernel_signature, setup_chain_with_stake_pool,
+    setup_chain_with_stake_pool_with_chainstate_config,
 };
 
 /// Mine two PoS consensus datas for the same slot by calling `pos_mine` twice with
@@ -208,7 +211,8 @@ fn mine_and_process_same_seal_twins_on_parent(
         .block_height();
     let new_block_height = parent_height.next_height();
     let pos_randomness = tf.pos_randomness_for_height(&new_block_height);
-    let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+    let current_difficulty =
+        calculate_new_target_for_chain(tf, &parent_id.into(), new_block_height).unwrap();
     let final_supply = chain_config.final_supply().unwrap();
     let pos_config = get_pos_chain_config(chain_config, new_block_height);
     let initial_timestamp = BlockTimestamp::from_time(tf.current_time())
@@ -659,15 +663,15 @@ fn activation_gate_bypassed_for_invalidation_recovery(#[case] seed: Seed) {
     );
 }
 
-// -+
+// ---------------------------------------------------------------
 // S5 — containment suite for the PoS seal activation gate
 //
 // Scenarios derived from the design note's reuse narratives: tip
 // equivocation races, withheld-variant release, partition halves, honest
 // resealing, and the variant cap. The gate must never fire on segments that
-// contain at least one fresh proof, must never
-// prevent the storage or retrieval of any variant, and must leave the
-// ordinary trust comparison in charge of every race.
+// contain at least one fresh proof, must never prevent the storage or
+// retrieval of any variant, and must leave the ordinary trust comparison in
+// charge of every race that contains a fresh proof.
 // ---------------------------------------------------------------
 
 /// Tip equivocation race: the pool equivocates at two consecutive heights and
@@ -1130,8 +1134,8 @@ fn duplicate_proof_variants_are_capped_but_all_stored(#[case] seed: Seed) {
 }
 
 /// A same-pool chain keeps progressing (with decayed trust): the asymptote
-/// penalizes same-pool repeats in the trust comparison but never makes such
-/// blocks invalid or their chains stuck.
+/// weights each block by its timestamp gap, so sparse same-pool progress adds
+/// less trust but never makes such blocks invalid or their chains stuck.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1200,14 +1204,218 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     }
 }
 
-// The gate's refusal short-circuit itself is not exercised end-to-end, and
-// cannot be: through normal block processing, a newly mined block always
-// carries a first-sighting proof (the gate passes it), a twin-only chain has
-// trust exactly equal to the incumbent (the strict trust comparison never
-// attempts it), and a pure-duplicate rebuild of an existing chain carries
-// trust identical to that chain by construction (same heights, same pool
-// sequence, same timestamps). The one state that reaches the refusal — a
-// pure-duplicate segment as the best recovery candidate after user-initiated
-// invalidation — is covered by the bypass test above with the gate enabled.
-// The refusal semantics are pinned by the predicate unit tests; the wiring is
-// the four-line short-circuit reviewed in the S4 rounds.
+// Note on mining-based constructions: a newly mined block always carries a
+// first-sighting proof (the gate passes it), and a twin-only chain has trust
+// exactly equal to the incumbent (the strict trust comparison never attempts
+// it), so the refusal cannot be reached by mining twins alone. It IS reached
+// by grafting a copied proof: a block whose consensus data re-uses the VRF
+// data of an already-sighted block (the seal binds the pool, the epoch
+// randomness and the timestamp, not the parent or the block content), built
+// as an extension of the incumbent chain — see the test below.
+
+/// The gate's refusal in normal block processing. The seal binds the pool,
+/// the epoch randomness and the block timestamp — not the parent or the block
+/// content — so a block whose consensus data re-uses the VRF data of an
+/// already-sighted block extends the incumbent chain with a strictly higher
+/// trust while carrying a duplicate proof. The epoch length of this chain is
+/// large enough that the copied block's transcript (epoch, randomness,
+/// timestamp) is also valid at the new height.
+///
+/// With the gate enabled, the activation of this chain is refused: the tip
+/// stays on the incumbent, the reworked block stays stored, and the reused
+/// proof carries its evidence record. With the gate disabled, the same block
+/// activates and becomes the new tip.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn activation_gate_refuses_reused_proof_extension(#[case] seed: Seed) {
+    // Gate on: the extension is refused; the incumbent stays the best chain.
+    let (best_with_gate, reworked_id, incumbent_id) =
+        run_reused_proof_extension_scenario(seed, true);
+    assert_eq!(
+        best_with_gate,
+        Id::<common::chain::GenBlock>::from(incumbent_id)
+    );
+    assert_ne!(incumbent_id, reworked_id);
+
+    // Gate off: the same extension activates and becomes the best chain (the
+    // refusal above is the gate's doing, not a validation failure).
+    let (best_without_gate, reworked_id_off, incumbent_id_off) =
+        run_reused_proof_extension_scenario(seed, false);
+    assert_eq!(reworked_id_off, reworked_id);
+    assert_eq!(incumbent_id_off, incumbent_id);
+    assert_eq!(
+        best_without_gate,
+        Id::<common::chain::GenBlock>::from(reworked_id)
+    );
+}
+
+/// Runs the reused-proof-extension scenario deterministically: mines the
+/// incumbent chain (A, then B on A), a losing sibling C of B at a later
+/// timestamp, and the reworked block D (B's child carrying C's VRF data).
+/// Returns the best block id, the reworked block id and the incumbent tip id.
+fn run_reused_proof_extension_scenario(
+    seed: Seed,
+    gate_enabled: bool,
+) -> (
+    Id<common::chain::GenBlock>,
+    Id<common::chain::Block>,
+    Id<common::chain::Block>,
+) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    // A chain with a long epoch, so the VRF transcript of a block stays valid
+    // at the next height (the transcript binds the epoch index).
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(consensus_upgrades_with_pos_at_height(
+            FIRST_POS_BLOCK_HEIGHT,
+        ))
+        .epoch_length(std::num::NonZeroU64::new(100).unwrap())
+        .sealed_epoch_distance_from_tip(0)
+        .build();
+    let chainstate_config = if gate_enabled {
+        gate_enabled_config()
+    } else {
+        ChainstateConfig {
+            pos_seal_duplication_tracking: true.into(),
+            ..Default::default()
+        }
+    };
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_chainstate_config(chainstate_config)
+        .build();
+
+    let (stake_pool_data, staking_sk) =
+        chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk,
+        );
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    // The incumbent chain: A at the first PoS height, then B as its child.
+    let pool_block = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let block_a = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        pool_block,
+        60,
+    );
+    let block_b = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        block_a,
+        61,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(block_b)
+    );
+
+    // A losing sibling of B at a later timestamp: stored as a side block, and
+    // its proof is the (so far single) sighting of its seal.
+    let block_c = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        block_a,
+        100,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(block_b)
+    );
+
+    // The reworked block: B's child whose consensus data re-uses the VRF data
+    // of the side block (the transcript does not bind the parent, the height
+    // or the block content), with the target required at the new height. It is
+    // a fully valid block that carries strictly higher trust than the
+    // incumbent chain.
+    let c_block = tf.storage.transaction_ro().unwrap().get_block(&block_c).unwrap().unwrap();
+    let c_pos_data = match c_block.header().consensus_data() {
+        ConsensusData::PoS(data) => data,
+        _ => panic!("the side block is a PoS block"),
+    };
+    let c_timestamp = c_block.header().timestamp();
+
+    let kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_b.into()), 0);
+    let kernel_sig = produce_block_reward_kernel_signature(
+        &tf,
+        &mut rng,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        block_b.into(),
+        kernel_outpoint.clone(),
+    );
+
+    let next_height = FIRST_POS_BLOCK_HEIGHT.next_height().next_height();
+    let required_target =
+        calculate_new_target_for_chain(&tf, &block_b.into(), next_height).unwrap();
+
+    let pos_data = PoSData::new(
+        vec![TxInput::from_utxo(kernel_outpoint.source_id(), kernel_outpoint.output_index())],
+        vec![InputWitness::Standard(kernel_sig)],
+        pool_id,
+        c_pos_data.vrf_data().clone(),
+        required_target,
+    );
+
+    let reworked_block = tf
+        .make_block_builder()
+        .with_parent(block_b.into())
+        .with_consensus_data(ConsensusData::PoS(pos_data.into()))
+        .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(c_timestamp)
+        .with_reward(reward_outputs.clone())
+        .build(&mut rng);
+    let reworked_id = reworked_block.get_id();
+
+    let reused_seal =
+        BlockSeal::from_consensus_data(reworked_block.header().consensus_data()).unwrap();
+    assert_eq!(
+        Some(reused_seal.clone()),
+        BlockSeal::from_consensus_data(c_block.header().consensus_data())
+    );
+
+    // The block is accepted (it is fully valid); whether its chain is
+    // activated depends on the gate.
+    tf.process_block(reworked_block, BlockSource::Local).unwrap();
+
+    // The reworked block stays stored either way, and the reused proof
+    // carries its evidence record with both signed headers.
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    assert!(db_tx.get_block(&reworked_id).unwrap().is_some());
+    let index_entry = db_tx.get_seal_index_entry(&reused_seal).unwrap().unwrap();
+    assert_eq!(index_entry.blocks().len(), 2);
+    let evidence = db_tx.get_duplicate_seal_evidence(&reused_seal).unwrap().unwrap();
+    assert_eq!(
+        evidence.headers().iter().map(|header| header.get_id()).collect::<Vec<_>>(),
+        vec![block_c, reworked_id],
+    );
+    drop(db_tx);
+
+    (tf.best_block_id(), reworked_id, block_b)
+}
