@@ -648,7 +648,7 @@ fn equivocation_race_converges_via_fresh_proofs(#[case] seed: Seed) {
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
 
-    let (seal2, twin_main, twin_side) = process_two_blocks_with_same_seal(
+    let (seal2, _twin_main, twin_side) = process_two_blocks_with_same_seal(
         &mut rng,
         &mut tf,
         &vrf_sk,
@@ -798,7 +798,7 @@ fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
 
     // The two equivocations use different randomness streams, so the halves
     // hold different blocks (different ids) that share the same proof.
-    let parent_1 = tf1
+    let _parent_1 = tf1
         .best_block_id()
         .classify(tf1.chainstate.get_chain_config())
         .chain_block_id()
@@ -815,7 +815,7 @@ fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
         );
         (seal, main, side)
     };
-    let parent_2 = tf2
+    let _parent_2 = tf2
         .best_block_id()
         .classify(tf2.chainstate.get_chain_config())
         .chain_block_id()
