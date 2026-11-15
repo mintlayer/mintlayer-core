@@ -771,8 +771,8 @@ mod tests {
                 .collect(),
         );
 
-        // Case: an empty segment never refuses.
-        let mut db = MockStoreTxRw::new();
+        // Case: an empty segment never refuses (no lookups happen).
+        let db = MockStoreTxRw::new();
         assert!(!segment_seals_all_duplicated(&db, &[]).unwrap());
 
         // Case: a single block with an unindexed (fresh) proof never refuses.
