@@ -111,7 +111,7 @@ const MAINNET_FORK_HEIGHT_2_ORDERS_V1: BlockHeight = BlockHeight::new(517_700);
 // * Using mismatched kernel utxo and PoSData is no longer allowed.
 // * Transferring zero amount of a token is no longer allowed.
 // * In AccountCommand::ChangeTokenMetadataUri, using a URI with invalid characters is no longer allowed.
-const MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(999_999_999);
+const MAINNET_FORK_HEIGHT_3_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(806_500);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
