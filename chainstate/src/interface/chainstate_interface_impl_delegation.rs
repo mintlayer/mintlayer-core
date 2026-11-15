@@ -511,6 +511,7 @@ mod tests {
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
                 pos_seal_duplication_tracking: Default::default(),
+                pos_seal_activation_gate: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

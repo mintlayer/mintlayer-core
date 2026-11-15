@@ -19,11 +19,13 @@ use rstest::rstest;
 
 use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
-use chainstate_test_framework::{TestFramework, pos_mine};
+use chainstate_test_framework::{
+    TestFramework, pos_mine, produce_kernel_signature as produce_block_reward_kernel_signature,
+};
 use chainstate_types::{BlockSeal, pos_randomness::PoSRandomness};
 use common::{
     chain::{
-        Destination, PoolId, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, PoolId, TxOutput, UtxoOutPoint,
         block::{ConsensusData, timestamp::BlockTimestamp},
         signature::inputsig::InputWitness,
     },
@@ -309,5 +311,160 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
     assert_eq!(
         evidence.headers().iter().map(|header| header.get_id()).collect::<Vec<_>>(),
         vec![block_id_a, block_id_b]
+    );
+}
+
+// ---------------------------------------------------------------
+// PoS seal activation gate
+//
+// The gate (disabled by default in this release) refuses to activate a chain
+// whose newly activated segment consists entirely of blocks reusing
+// already-known PoS consensus proofs. It never fires on a segment that
+// contains at least one block with a fresh proof, and it is bypassed for the
+// initial block download and for the reorgs of the user-initiated block
+// invalidation path.
+
+fn gate_enabled_config() -> ChainstateConfig {
+    ChainstateConfig {
+        pos_seal_activation_gate: true.into(),
+        ..Default::default()
+    }
+}
+
+/// Mine and process a fresh-proof PoS block on top of `parent_id`. The block is
+/// mined from a timestamp well after the current framework time, so its seal
+/// (which binds the timestamp) differs from the seals of all previously
+/// processed blocks.
+fn mine_and_process_fresh_proof_block(
+    rng: &mut impl CryptoRng,
+    tf: &mut TestFramework,
+    vrf_sk: &VRFPrivateKey,
+    stake_pool_outpoint: &UtxoOutPoint,
+    pool_id: PoolId,
+    staking_sk: &PrivateKey,
+    parent_id: Id<common::chain::Block>,
+) -> Id<common::chain::Block> {
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    // The kernel of a PoS block that follows another PoS block is the
+    // `ProduceBlockFromStake` reward output of that previous block, not the
+    // original pool creation output (which the previous block's kernel
+    // consumed).
+    let kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(parent_id.into()), 0);
+    let kernel_sig = produce_block_reward_kernel_signature(
+        tf,
+        rng,
+        staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        parent_id.into(),
+        kernel_outpoint.clone(),
+    );
+
+    let chain_config = tf.chainstate.get_chain_config();
+    let initial_randomness = chain_config.initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+    let final_supply = chain_config.final_supply().unwrap();
+    let pos_config = get_pos_chain_config(chain_config, new_block_height);
+    let initial_timestamp =
+        BlockTimestamp::from_time(tf.current_time()).add_int_seconds(120).unwrap();
+
+    let (pos_data, block_timestamp) = pos_mine(
+        rng,
+        &tf.storage.transaction_ro().unwrap(),
+        &pos_config,
+        initial_timestamp,
+        kernel_outpoint,
+        InputWitness::Standard(kernel_sig),
+        vrf_sk,
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        final_supply,
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let block = tf
+        .make_block_builder()
+        .with_parent(parent_id.into())
+        .with_consensus_data(ConsensusData::PoS(pos_data.into()))
+        .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(block_timestamp)
+        .with_reward(reward_outputs)
+        .build(rng);
+    let block_id = block.get_id();
+    tf.process_block(block, BlockSource::Local).unwrap();
+    block_id
+}
+
+/// Gate on: a duplicate-proof side twin extended by a block with a fresh proof
+/// reorganizes the chain. The candidate segment contains a fresh proof, so the
+/// gate must not fire and the duplicate-proof block is activated together with
+/// its fresh child under the ordinary trust comparison.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn activation_gate_does_not_block_segment_with_fresh_proof(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    let (_, _twin_main_id, twin_side_id) = process_two_blocks_with_same_seal(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+    );
+
+    let fresh_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        twin_side_id,
+    );
+
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(fresh_id)
+    );
+}
+
+/// Gate on: after the user-initiated invalidation of the mainchain twin, the
+/// recovery re-activates the best remaining chain even though its segment is a
+/// single duplicate-proof block (the gate is bypassed for the invalidation
+/// recovery; without the bypass this activation would be refused).
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn activation_gate_bypassed_for_invalidation_recovery(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    let (_, twin_main_id, twin_side_id) = process_two_blocks_with_same_seal(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+    );
+
+    tf.chainstate.invalidate_block(&twin_main_id).unwrap();
+
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(twin_side_id)
     );
 }
