@@ -492,6 +492,7 @@ fn gate_enabled_config() -> ChainstateConfig {
 /// mined from a timestamp well after the current framework time, so its seal
 /// (which binds the timestamp) differs from the seals of all previously
 /// processed blocks.
+#[allow(clippy::too_many_arguments)]
 fn mine_and_process_fresh_proof_block(
     rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
@@ -515,8 +516,7 @@ fn mine_and_process_fresh_proof_block(
     let parent_reward_outputs = tf.outputs_from_genblock(parent_id.into());
     let parent_is_pos = parent_reward_outputs
         .get(&OutPointSourceId::BlockReward(parent_id.into()))
-        .map(|outputs| !outputs.is_empty())
-        .unwrap_or(false);
+        .is_some_and(|outputs| !outputs.is_empty());
 
     let chain_config = tf.chainstate.get_chain_config();
     let parent_height = tf
