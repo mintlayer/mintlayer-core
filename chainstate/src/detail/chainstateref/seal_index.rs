@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn seal_activation_gate_bypass_matrix() {
-        use super::ChainActivationContext;
+        use crate::detail::chainstateref::ChainActivationContext;
 
         // Normal block processing: the gate applies unless the node is in the
         // initial block download.
@@ -691,5 +691,138 @@ mod tests {
         // The reorgs of the user-initiated block invalidation path are never
         // gated (ground rule: the gate must never fire there).
         assert!(ChainActivationContext::InvalidationRecovery.seal_activation_gate_bypassed());
+    }
+
+    /// Pin the load-bearing classification semantics of the PoS seal activation
+    /// gate: empty segments are never refused, any non-duplicate (fresh proof,
+    /// unindexed proof, or missing seal) breaks the refusal, an index entry at
+    /// the cap still classifies as duplicated, and a fully duplicated segment is
+    /// refused.
+    #[test]
+    fn segment_seals_all_duplicated_classification() {
+        use super::super::segment_seals_all_duplicated;
+        use chainstate_types::BlockStatus;
+        use common::{Uint256, chain::GenBlock};
+
+        let mut rng =
+            test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let chain_config =
+            ConfigBuilder::test_chain().epoch_length(NonZeroU64::new(3).unwrap()).build();
+
+        let block_a = make_pos_block(
+            H256::from_low_u64_be(1),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(42),
+        );
+        let block_a_twin = make_pos_block(
+            H256::from_low_u64_be(1),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(42),
+        );
+        let block_b = make_pos_block(
+            H256::from_low_u64_be(2),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(43),
+        );
+        assert_ne!(block_a.get_id(), block_a_twin.get_id());
+
+        let seal_a = BlockSeal::from_consensus_data(block_a.header().consensus_data()).unwrap();
+        let index_a = block_a.get_id();
+        let index_a_twin = block_a_twin.get_id();
+
+        // A non-PoS (or otherwise seal-less) block.
+        let plain_block = WithId::new(
+            common::chain::Block::new(
+                vec![],
+                chain_config.genesis_block_id(),
+                BlockTimestamp::from_int_seconds(1),
+                ConsensusData::None,
+                BlockReward::new(vec![]),
+            )
+            .unwrap(),
+        );
+
+        let make_index = |block: &WithId<Block>| {
+            chainstate_types::BlockIndex::new(
+                block,
+                Uint256::ZERO,
+                chain_config.genesis_block_id(),
+                TEST_HEIGHT,
+                BlockTimestamp::from_int_seconds(1),
+                0,
+                BlockStatus::new(),
+            )
+        };
+
+        // An index entry at the cap: a seal seen on MAX_BLOCKS_PER_SEAL blocks
+        // still classifies every one of its blocks as duplicated.
+        let at_cap_entry = SealIndexEntry::new(
+            seal_a.clone(),
+            (0..MAX_BLOCKS_PER_SEAL.get())
+                .map(|i| (if i == 0 { index_a } else { index_a_twin }, TEST_HEIGHT))
+                .collect(),
+        );
+
+        // Case: an empty segment never refuses.
+        let mut db = MockStoreTxRw::new();
+        assert!(!segment_seals_all_duplicated(&db, &[]).unwrap());
+
+        // Case: a single block with an unindexed (fresh) proof never refuses.
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
+        let segment = vec![make_index(&block_a)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a single block whose seal has only one known block (its twin is
+        // unknown) never refuses.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a, TEST_HEIGHT)],
+            ))));
+        let segment = vec![make_index(&block_a)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a block without a well-formed seal never refuses (fail-open).
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(0);
+        let segment = vec![make_index(&plain_block)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a fully duplicated segment is refused; an index entry at the
+        // cap still classifies as duplicated.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        let entry = at_cap_entry;
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(entry)));
+        let segment = vec![make_index(&block_a)];
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: one duplicate and one fresh block in the same segment never
+        // refuses (the fresh block carries the ordinary trust comparison).
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a, TEST_HEIGHT), (index_a_twin, TEST_HEIGHT)],
+            ))));
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
+        let segment = vec![make_index(&block_a), make_index(&block_b)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
     }
 }

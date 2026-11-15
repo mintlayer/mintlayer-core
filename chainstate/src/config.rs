@@ -56,7 +56,8 @@ pub struct ChainstateConfig {
 
     /// If true, a chain whose newly activated segment consists entirely of blocks whose
     /// PoS consensus proofs are duplicates of already-known proofs will not be activated.
-    /// Defaults to false.
+    /// Only effective together with `pos_seal_duplication_tracking`, which maintains the
+    /// index this gate classifies against. Defaults to false.
     pub pos_seal_activation_gate: PosSealActivationGate,
 }
 
