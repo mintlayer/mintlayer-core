@@ -12,6 +12,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Consensus:
+    - the mainnet activation height of the consensus tightening rules (kernel
+      utxo and PoS data pool id mismatch, zero-amount token transfers, and
+      invalid characters in `ChangeTokenMetadataUri` URIs) is scheduled at
+      block height 806,500 (activating in early March 2027, with lead time for operators;
+      testnet activated the same rules at height 787,640).
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
       enabled by default during the initial block download or bootstrapping, which
