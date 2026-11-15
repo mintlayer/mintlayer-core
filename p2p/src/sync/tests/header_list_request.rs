@@ -293,6 +293,27 @@ async fn locator_must_be_from_peers_known_best_block(#[case] seed: Seed) {
                 )),
             );
 
+            // While the fork blocks are being downloaded, the node keeps its header
+            // look-ahead topped up and immediately asks for more headers. The request is
+            // anchored at the last block known to the node's chainstate (the last common
+            // block), which at this point lags the fork continuation.
+            log::debug!("Expecting the look-ahead top-up HeaderListRequest");
+            let actual_top_up_header_list_req = assert_matches_return_val!(
+                node.get_sent_block_sync_message().await.1,
+                BlockSyncMessage::HeaderListRequest(req),
+                req
+            );
+            let expected_top_up_locator = match common_blocks_count.checked_sub(1) {
+                Some(last_common_idx) => {
+                    node.get_locator_from_block_id(&node_blocks[last_common_idx].get_id()).await
+                }
+                None => node.get_locator_from_best_block().await,
+            };
+            assert_eq!(
+                actual_top_up_header_list_req.locator(),
+                &expected_top_up_locator
+            );
+
             for block in blocks_to_send {
                 log::debug!("Peer sends BlockResponse");
                 peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
