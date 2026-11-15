@@ -186,7 +186,9 @@ fn mine_and_process_same_seal_twins_on_parent(
     // The kernel depends on the parent: a PoS parent's stake lives in its
     // `ProduceBlockFromStake` reward output (the pool creation output was
     // consumed by the first PoS block of the chain), while a non-PoS parent
-    // leaves the pool creation output in place.
+    // leaves the pool creation output in place. The PoS-ness of the parent is
+    // detected via its block-reward outputs, which is exact for every parent
+    // shape used in this suite.
     let parent_reward_outpoint =
         UtxoOutPoint::new(OutPointSourceId::BlockReward(parent_id.into()), 0);
     let parent_reward_outputs = tf.outputs_from_genblock(parent_id.into());
@@ -271,6 +273,9 @@ fn mine_and_process_same_seal_twins_on_parent(
     .expect("should be able to mine");
 
     assert_eq!(block_timestamp_1, block_timestamp_2);
+    // The VRF proofs differ (they are randomized per signing), so the blocks
+    // are distinct while sharing the seal.
+    assert_ne!(pos_data_1.vrf_data(), pos_data_2.vrf_data());
 
     let consensus_data_1 = ConsensusData::PoS(pos_data_1.into());
     let consensus_data_2 = ConsensusData::PoS(pos_data_2.into());
@@ -583,7 +588,7 @@ fn activation_gate_does_not_block_segment_with_fresh_proof(#[case] seed: Seed) {
         pool_id,
         &staking_sk,
         twin_side_id,
-        120,
+        90,
     );
 
     assert_eq!(
@@ -848,16 +853,134 @@ fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
         Id::<common::chain::GenBlock>::from(main_2)
     );
 
-    // Both halves recorded the evidence and stored every variant.
+    // Both halves recorded the evidence and stored every variant, with the
+    // index retaining the arrival order of the sightings.
     for (db_tx, main, side) in [
         (tf1.storage.transaction_ro().unwrap(), main_1, side_1),
         (tf2.storage.transaction_ro().unwrap(), main_2, side_2),
     ] {
         let index_entry = db_tx.get_seal_index_entry(&seal_1).unwrap().unwrap();
         assert_eq!(index_entry.blocks().len(), 2);
+        assert_eq!(index_entry.blocks()[0].0, main);
+        assert_eq!(index_entry.blocks()[1].0, side);
         assert!(db_tx.get_block(&main).unwrap().is_some());
         assert!(db_tx.get_block(&side).unwrap().is_some());
         assert!(db_tx.get_duplicate_seal_evidence(&seal_1).unwrap().is_some());
+    }
+}
+
+/// Honest resealing: the same pool produces blocks for consecutive heights with
+/// different timestamps (e.g. after one of its blocks was orphaned). The two
+/// blocks carry different proofs, are not duplicates of each other, produce no
+/// evidence, and are both accepted on the main chain.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn honest_reseal_at_same_height_is_not_flagged(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    // First reseal: the pool creation output is still unspent (no PoS block
+    // has been produced yet), so the block is mined with the tx-based kernel.
+    let parent = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+    let kernel_sig = produce_kernel_signature(
+        &mut rng,
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        stake_pool_outpoint.clone(),
+    );
+    let chain_config = tf.chainstate.get_chain_config();
+    let reseal_height = FIRST_POS_BLOCK_HEIGHT;
+    let current_difficulty = calculate_new_target(&tf, reseal_height).unwrap();
+    let final_supply = chain_config.final_supply().unwrap();
+    let pos_config = get_pos_chain_config(chain_config, reseal_height);
+    let pos_randomness = tf.pos_randomness_for_height(&reseal_height);
+    let (pos_data, block_timestamp) = pos_mine(
+        &mut rng,
+        &tf.storage.transaction_ro().unwrap(),
+        &pos_config,
+        BlockTimestamp::from_time(tf.current_time()).add_int_seconds(90).unwrap(),
+        stake_pool_outpoint.clone(),
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        pos_randomness,
+        pool_id,
+        final_supply,
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    let first_reseal = tf
+        .make_block_builder()
+        .with_parent(parent.into())
+        .with_consensus_data(ConsensusData::PoS(pos_data.into()))
+        .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(block_timestamp)
+        .with_reward(reward_outputs.clone())
+        .build(&mut rng);
+    let first_reseal_id = first_reseal.get_id();
+    let first_reseal_seal =
+        BlockSeal::from_consensus_data(first_reseal.header().consensus_data()).unwrap();
+    tf.process_block(first_reseal, BlockSource::Local).unwrap();
+
+    // Second reseal: two minutes later, on top of the first reseal, with the
+    // kernel taken from the first reseal's stake reward. A different
+    // timestamp gives a different proof, so the two blocks are not duplicates.
+    tf.progress_time_seconds_since_epoch(120);
+    let second_reseal_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        pool_id,
+        &staking_sk,
+        first_reseal_id,
+        90,
+    );
+    let second_reseal = tf
+        .storage
+        .transaction_ro()
+        .unwrap()
+        .get_block(&second_reseal_id)
+        .unwrap()
+        .unwrap();
+    let second_reseal_seal =
+        BlockSeal::from_consensus_data(second_reseal.header().consensus_data()).unwrap();
+
+    // Both blocks are on the main chain and carry different, unindexed proofs:
+    // no seal-index entries with multiplicity, and no duplicate evidence.
+    assert_ne!(first_reseal_seal, second_reseal_seal);
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    for (height, expected_id, expected_seal) in [
+        (reseal_height, first_reseal_id, &first_reseal_seal),
+        (
+            reseal_height.next_height(),
+            second_reseal_id,
+            &second_reseal_seal,
+        ),
+    ] {
+        let id_at_height = db_tx.get_block_id_by_height(height).unwrap().unwrap();
+        assert_eq!(
+            Id::<common::chain::GenBlock>::from(expected_id),
+            id_at_height
+        );
+        let entry = db_tx.get_seal_index_entry(expected_seal).unwrap();
+        assert!(
+            entry.is_none()
+                || entry.as_ref().unwrap().blocks().len() == 1
+                    && entry.as_ref().unwrap().blocks()[0].0 == expected_id,
+        );
+        assert!(db_tx.get_duplicate_seal_evidence(expected_seal).unwrap().is_none());
     }
 }
 
@@ -953,14 +1076,20 @@ fn duplicate_proof_variants_are_capped_but_all_stored(#[case] seed: Seed) {
     let db_tx = tf.storage.transaction_ro().unwrap();
     let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
     assert_eq!(index_entry.blocks().len(), 8);
+    // The index retains the first 8 variants in arrival order; the ninth stays
+    // stored but is no longer indexed.
+    assert_eq!(
+        index_entry.blocks().iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+        variant_ids[..8].to_vec(),
+    );
     for block_id in &variant_ids {
         assert!(
-            index_entry.blocks().iter().any(|(id, _)| id == block_id)
-                || db_tx.get_block(block_id).unwrap().is_some(),
-            "variant {block_id} must be known to the node",
+            db_tx.get_block(block_id).unwrap().is_some(),
+            "variant {block_id} must be stored",
         );
     }
-    assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_some());
+    let evidence = db_tx.get_duplicate_seal_evidence(&seal).unwrap().unwrap();
+    assert!(evidence.headers().len() <= 8);
 }
 
 /// A same-pool chain keeps progressing (with decayed trust): the asymptote
@@ -1000,4 +1129,27 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     let h4 =
         mine_and_process_fresh_proof_block(&mut rng, &mut tf, &vrf_sk, pool_id, &staking_sk, h3, 2);
     assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h4));
+
+    // The reseals carry distinct, unindexed proofs: no seal-index entries with
+    // multiplicity and no evidence records (honest same-pool progress is never
+    // flagged).
+    let db_tx_seals = tf.storage.transaction_ro().unwrap();
+    let seal_h3 = BlockSeal::from_consensus_data(
+        db_tx_seals.get_block(&h3).unwrap().unwrap().header().consensus_data(),
+    )
+    .unwrap();
+    let seal_h4 = BlockSeal::from_consensus_data(
+        db_tx_seals.get_block(&h4).unwrap().unwrap().header().consensus_data(),
+    )
+    .unwrap();
+    assert_ne!(seal_h3, seal_h4);
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    for seal in [&seal_h3, &seal_h4] {
+        let entry = db_tx.get_seal_index_entry(seal).unwrap();
+        assert!(
+            entry.is_none() || entry.as_ref().unwrap().blocks().len() == 1,
+            "a single same-pool block must not be a duplicate sighting"
+        );
+        assert!(db_tx.get_duplicate_seal_evidence(seal).unwrap().is_none());
+    }
 }
