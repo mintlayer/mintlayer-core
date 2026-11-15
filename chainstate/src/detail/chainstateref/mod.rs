@@ -30,8 +30,8 @@ use thiserror::Error;
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    BlockIndex, BlockIndexHandle, BlockStatus, BlockValidationStage, EpochData, EpochDataCache,
-    GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
+    BlockIndex, BlockIndexHandle, BlockSeal, BlockStatus, BlockValidationStage, EpochData,
+    EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
     block_index_ancestor_getter, get_skip_height,
 };
 use common::{
@@ -1438,11 +1438,19 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         &mut self,
         new_block_index: &BlockIndex,
         in_memory_block: Option<&WithId<Block>>,
+        activation_context: ChainActivationContext,
     ) -> Result<bool, ReorgError> {
         let current_best_block_index =
             self.get_best_block_index().map_err(BlockError::BestBlockIndexQueryError)?;
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
+            if self.reorg_segment_activation_refused(
+                new_block_index,
+                &current_best_block_index.block_id(),
+                activation_context,
+            )? {
+                return Ok(false);
+            }
             // Chain trust is higher than the best block
             self.reorganize(
                 &current_best_block_index.block_id(),
@@ -1453,6 +1461,78 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         }
 
         Ok(false)
+    }
+
+    /// Classifies whether the activation of the candidate chain must be refused
+    /// because its new segment consists entirely of duplicate-seal blocks (PoS
+    /// consensus proofs that were already seen on other known blocks).
+    ///
+    /// This is the PoS seal activation gate
+    /// (`ChainstateConfig::pos_seal_activation_gate`): it is disabled by default,
+    /// it never fires during the initial block download or on the reorgs of the
+    /// user-initiated block invalidation path, and it is fail-open: a block that
+    /// does not yield a well-formed seal (PoW, genesis, malformed PoS data) is
+    /// never classified as a duplicate, and a segment that contains at least one
+    /// non-duplicate block proceeds under the ordinary trust comparison.
+    ///
+    /// A refusal is a no-op: the candidate chain stays stored, valid and
+    /// relayable, and every later activation attempt re-runs this classification,
+    /// so a refused branch that gains a block with a fresh seal becomes
+    /// activatable.
+    fn reorg_segment_activation_refused(
+        &mut self,
+        new_block_index: &BlockIndex,
+        best_block_id: &Id<GenBlock>,
+        activation_context: ChainActivationContext,
+    ) -> Result<bool, ReorgError> {
+        if !self.chainstate_config.pos_seal_activation_gate_enabled() {
+            return Ok(false);
+        }
+        if activation_context.seal_activation_gate_bypassed() {
+            return Ok(false);
+        }
+
+        let new_chain = self
+            .get_new_chain(new_block_index)
+            .map_err(|e| {
+                BlockError::InvariantErrorFailedToFindNewChainPath(
+                    (*new_block_index.block_id()).into(),
+                    *best_block_id,
+                    e,
+                )
+            })
+            .log_err()?;
+
+        let mut segment_seals_all_duplicated = true;
+        for block_index in &new_chain {
+            let seal =
+                match BlockSeal::from_consensus_data(block_index.block_header().consensus_data()) {
+                    Some(seal) => seal,
+                    // The block does not yield a well-formed seal, so it cannot be
+                    // classified as a duplicate and the segment is not fully
+                    // duplicated.
+                    None => return Ok(false),
+                };
+            let duplicated =
+                match self.db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
+                    Some(entry) => entry.blocks().len() > 1,
+                    None => false,
+                };
+            if !duplicated {
+                segment_seals_all_duplicated = false;
+                break;
+            }
+        }
+
+        if !segment_seals_all_duplicated {
+            return Ok(false);
+        }
+
+        log::info!(
+            "Not activating a chain whose new segment consists only of blocks reusing \
+             already-known PoS consensus proofs"
+        );
+        Ok(true)
     }
 
     #[log_error]
@@ -1612,6 +1692,33 @@ pub enum ReorgError {
     ConnectTipFailed(Id<Block>, BlockError),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
+}
+
+/// The context of a best-chain activation attempt.
+///
+/// The PoS seal activation gate (see
+/// `ChainstateConfig::pos_seal_activation_gate`) must never influence chain
+/// re-activations driven by the user-initiated block invalidation path, nor the
+/// initial block download, where the liveness of the bootstrap outweighs
+/// containment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainActivationContext {
+    /// A newly processed block is being connected during normal operation.
+    BlockProcessing { in_initial_block_download: bool },
+    /// The best chain is being re-activated after user-initiated block invalidation.
+    InvalidationRecovery,
+}
+
+impl ChainActivationContext {
+    /// Whether the PoS seal activation gate must be bypassed for this activation.
+    fn seal_activation_gate_bypassed(&self) -> bool {
+        match self {
+            ChainActivationContext::BlockProcessing {
+                in_initial_block_download,
+            } => *in_initial_block_download,
+            ChainActivationContext::InvalidationRecovery => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

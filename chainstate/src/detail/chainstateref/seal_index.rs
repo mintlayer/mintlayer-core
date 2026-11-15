@@ -663,4 +663,33 @@ mod tests {
         db.expect_set_duplicate_seal_evidence().times(0);
         index_block_seal_if_enabled(&chainstate_config, &mut db, &block, TEST_HEIGHT).unwrap();
     }
+
+    #[test]
+    fn seal_activation_gate_is_disabled_by_default() {
+        assert!(!ChainstateConfig::default().pos_seal_activation_gate_enabled());
+    }
+
+    #[test]
+    fn seal_activation_gate_bypass_matrix() {
+        use super::ChainActivationContext;
+
+        // Normal block processing: the gate applies unless the node is in the
+        // initial block download.
+        assert!(
+            !ChainActivationContext::BlockProcessing {
+                in_initial_block_download: false
+            }
+            .seal_activation_gate_bypassed()
+        );
+        assert!(
+            ChainActivationContext::BlockProcessing {
+                in_initial_block_download: true
+            }
+            .seal_activation_gate_bypassed()
+        );
+
+        // The reorgs of the user-initiated block invalidation path are never
+        // gated (ground rule: the gate must never fire there).
+        assert!(ChainActivationContext::InvalidationRecovery.seal_activation_gate_bypassed());
+    }
 }

@@ -746,6 +746,7 @@ fn initial_block_download(
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
                 pos_seal_duplication_tracking: Default::default(),
+                pos_seal_activation_gate: Default::default(),
             })
             .with_initial_time_since_genesis(2)
             .build();
