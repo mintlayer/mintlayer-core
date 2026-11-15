@@ -158,6 +158,158 @@ fn process_two_blocks_with_same_seal(
     (seal, block_id_1, block_id_2)
 }
 
+/// Mine and process two same-seal PoS blocks on top of the given parent (both
+/// fully valid, the second one a side block of the first one), mirroring
+/// `process_two_blocks_with_same_seal` but with an explicit parent, so twins
+/// can be released on side branches and below the current tip.
+#[allow(clippy::too_many_arguments)]
+fn mine_and_process_same_seal_twins_on_parent(
+    rng: &mut impl CryptoRng,
+    tf: &mut TestFramework,
+    vrf_sk: &VRFPrivateKey,
+    stake_pool_outpoint: &UtxoOutPoint,
+    pool_id: PoolId,
+    staking_sk: &PrivateKey,
+    parent_id: Id<common::chain::Block>,
+    timestamp_offset_seconds: u64,
+    process_second: bool,
+) -> (
+    BlockSeal,
+    Id<common::chain::Block>,
+    Id<common::chain::Block>,
+    Option<common::chain::Block>,
+) {
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    // The kernel depends on the parent: a PoS parent's stake lives in its
+    // `ProduceBlockFromStake` reward output (the pool creation output was
+    // consumed by the first PoS block of the chain), while a non-PoS parent
+    // leaves the pool creation output in place.
+    let parent_reward_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(parent_id.into()), 0);
+    let parent_reward_outputs = tf.outputs_from_genblock(parent_id.into());
+    let parent_is_pos = parent_reward_outputs
+        .get(&OutPointSourceId::BlockReward(parent_id.into()))
+        .map(|outputs| !outputs.is_empty())
+        .unwrap_or(false);
+
+    let chain_config = tf.chainstate.get_chain_config();
+    let parent_height = tf
+        .storage
+        .transaction_ro()
+        .unwrap()
+        .get_block_index(&parent_id)
+        .unwrap()
+        .expect("parent block index is present")
+        .block_height();
+    let new_block_height = parent_height.next_height();
+    let pos_randomness = tf.pos_randomness_for_height(&new_block_height);
+    let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+    let final_supply = chain_config.final_supply().unwrap();
+    let pos_config = get_pos_chain_config(chain_config, new_block_height);
+    let initial_timestamp = BlockTimestamp::from_time(tf.current_time())
+        .add_int_seconds(timestamp_offset_seconds)
+        .unwrap();
+    let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+
+    let (kernel_sig, kernel_outpoint) = if parent_is_pos {
+        let kernel_outpoint = parent_reward_outpoint.clone();
+        let kernel_sig = produce_block_reward_kernel_signature(
+            tf,
+            rng,
+            staking_sk,
+            reward_outputs.as_slice(),
+            staking_destination.clone(),
+            parent_id.into(),
+            kernel_outpoint.clone(),
+        );
+        (kernel_sig, kernel_outpoint)
+    } else {
+        let kernel_outpoint = stake_pool_outpoint.clone();
+        let kernel_sig = produce_kernel_signature(
+            rng,
+            tf,
+            staking_sk,
+            reward_outputs.as_slice(),
+            staking_destination.clone(),
+            kernel_outpoint.clone(),
+        );
+        (kernel_sig, kernel_outpoint)
+    };
+
+    let (pos_data_1, block_timestamp_1) = pos_mine(
+        rng,
+        &tf.storage.transaction_ro().unwrap(),
+        &pos_config,
+        initial_timestamp,
+        kernel_outpoint.clone(),
+        InputWitness::Standard(kernel_sig.clone()),
+        vrf_sk,
+        pos_randomness,
+        pool_id,
+        final_supply,
+        epoch_index,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let (pos_data_2, block_timestamp_2) = pos_mine(
+        rng,
+        &tf.storage.transaction_ro().unwrap(),
+        &pos_config,
+        initial_timestamp,
+        kernel_outpoint,
+        InputWitness::Standard(kernel_sig),
+        vrf_sk,
+        pos_randomness,
+        pool_id,
+        final_supply,
+        epoch_index,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    assert_eq!(block_timestamp_1, block_timestamp_2);
+
+    let consensus_data_1 = ConsensusData::PoS(pos_data_1.into());
+    let consensus_data_2 = ConsensusData::PoS(pos_data_2.into());
+    let seal = BlockSeal::from_consensus_data(&consensus_data_1).unwrap();
+    assert_eq!(
+        BlockSeal::from_consensus_data(&consensus_data_2),
+        Some(seal.clone())
+    );
+
+    let block_1 = tf
+        .make_block_builder()
+        .with_parent(parent_id.into())
+        .with_consensus_data(consensus_data_1)
+        .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(block_timestamp_1)
+        .with_reward(reward_outputs.clone())
+        .build(rng);
+    let block_id_1 = block_1.get_id();
+    tf.process_block(block_1, BlockSource::Local).unwrap();
+
+    let block_2 = tf
+        .make_block_builder()
+        .with_parent(parent_id.into())
+        .with_consensus_data(consensus_data_2)
+        .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(block_timestamp_2)
+        .with_reward(reward_outputs)
+        .build(rng);
+    let block_id_2 = block_2.get_id();
+    assert_ne!(block_id_1, block_id_2);
+    if process_second {
+        tf.process_block(block_2.clone(), BlockSource::Local).unwrap();
+        (seal, block_id_1, block_id_2, None)
+    } else {
+        (seal, block_id_1, block_id_2, Some(block_2))
+    }
+}
+
 // Create a chain genesis <- block_1(StakePool), then process two blocks (block_2a and
 // block_2b) that carry the same PoS seal (same pool and same VRF output) on top of
 // block_1. Both blocks are fully valid; block_2b remains a side block.
@@ -342,6 +494,7 @@ fn mine_and_process_fresh_proof_block(
     pool_id: PoolId,
     staking_sk: &PrivateKey,
     parent_id: Id<common::chain::Block>,
+    timestamp_offset_seconds: u64,
 ) -> Id<common::chain::Block> {
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(staking_sk));
     let reward_outputs =
@@ -363,13 +516,15 @@ fn mine_and_process_fresh_proof_block(
     );
 
     let chain_config = tf.chainstate.get_chain_config();
-    let initial_randomness = chain_config.initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
+    let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+    let pos_randomness = tf.pos_randomness_for_height(&new_block_height);
     let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
     let final_supply = chain_config.final_supply().unwrap();
     let pos_config = get_pos_chain_config(chain_config, new_block_height);
-    let initial_timestamp =
-        BlockTimestamp::from_time(tf.current_time()).add_int_seconds(120).unwrap();
+    let initial_timestamp = BlockTimestamp::from_time(tf.current_time())
+        .add_int_seconds(timestamp_offset_seconds)
+        .unwrap();
 
     let (pos_data, block_timestamp) = pos_mine(
         rng,
@@ -379,10 +534,10 @@ fn mine_and_process_fresh_proof_block(
         kernel_outpoint,
         InputWitness::Standard(kernel_sig),
         vrf_sk,
-        PoSRandomness::new(initial_randomness),
+        pos_randomness,
         pool_id,
         final_supply,
-        1,
+        epoch_index,
         current_difficulty,
     )
     .expect("should be able to mine");
@@ -429,6 +584,7 @@ fn activation_gate_does_not_block_segment_with_fresh_proof(#[case] seed: Seed) {
         pool_id,
         &staking_sk,
         twin_side_id,
+        120,
     );
 
     assert_eq!(
@@ -465,4 +621,384 @@ fn activation_gate_bypassed_for_invalidation_recovery(#[case] seed: Seed) {
         tf.best_block_id(),
         Id::<common::chain::GenBlock>::from(twin_side_id)
     );
+}
+
+// ---------------------------------------------------------------
+// S5 — adversarial suite for the PoS seal activation gate
+//
+// Scenarios derived from the design note's attack narratives: tip
+// equivocation races, withheld-variant release, partition halves, honest
+// resealing at the same height, and the variant cap. The gate must never
+// fire on segments that contain at least one fresh proof, must never
+// prevent the storage or retrieval of any variant, and must leave the
+// ordinary trust comparison in charge of every race.
+// ---------------------------------------------------------------
+
+/// Tip equivocation race: the pool equivocates at two consecutive heights and
+/// both branches grow. The branch that collects a fresh proof first wins, the
+/// loser's twin becomes a side block, and the gate never fires (every winning
+/// segment contains the fresh proof that decided the race). Evidence is
+/// recorded for both equivocated proofs.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn equivocation_race_converges_via_fresh_proofs(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    let (seal2, twin_main, twin_side) = process_two_blocks_with_same_seal(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+    );
+
+    // The side branch collects a fresh proof and wins the race.
+    let fresh_on_side = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        pool_id,
+        &staking_sk,
+        twin_side,
+        60,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(fresh_on_side)
+    );
+
+    // The pool equivocates again on the new tip: the first-processed twin wins
+    // the next round under the ordinary trust comparison.
+    let (seal3, twin3_main, _twin3_side, _unprocessed3) =
+        mine_and_process_same_seal_twins_on_parent(
+            &mut rng,
+            &mut tf,
+            &vrf_sk,
+            &stake_pool_outpoint,
+            pool_id,
+            &staking_sk,
+            fresh_on_side,
+            100,
+            true,
+        );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(twin3_main)
+    );
+
+    // Both equivocated proofs carry their own evidence record.
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    assert_eq!(
+        db_tx.get_seal_index_entry(&seal2).unwrap().unwrap().blocks().len(),
+        2
+    );
+    assert_eq!(
+        db_tx.get_seal_index_entry(&seal3).unwrap().unwrap().blocks().len(),
+        2
+    );
+    assert!(db_tx.get_duplicate_seal_evidence(&seal2).unwrap().is_some());
+    assert!(db_tx.get_duplicate_seal_evidence(&seal3).unwrap().is_some());
+}
+
+/// Withheld-variant release: a duplicate variant released after the incumbent
+/// chain has moved on never displaces the incumbent (its segment has lower
+/// trust), stays stored, and keeps its evidence record.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn withheld_variant_release_keeps_incumbent_stable(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    // Mine the twins, but withhold the second one (do not process it yet).
+    let withheld_parent = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let (seal, twin_main, _twin_side, withheld_block) = mine_and_process_same_seal_twins_on_parent(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        withheld_parent,
+        0,
+        false,
+    );
+    let withheld_id = withheld_block.as_ref().map(|b| b.get_id()).unwrap();
+
+    // The incumbent chain extends with a fresh proof.
+    let fresh_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        pool_id,
+        &staking_sk,
+        twin_main,
+        60,
+    );
+
+    // The withheld variant is released: it is stored and its evidence exists,
+    // but it never displaces the incumbent chain.
+    tf.process_block(withheld_block.unwrap(), BlockSource::Local).unwrap();
+
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(fresh_id)
+    );
+
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
+    assert_eq!(index_entry.blocks().len(), 2);
+    let stored = db_tx.get_block(&withheld_id).unwrap().unwrap();
+    assert_eq!(stored.get_id(), withheld_id);
+    assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_some());
+}
+
+/// Partition halves: two identical nodes (same keys, same pool) process the
+/// two variants of an equivocation in opposite orders, with each node's
+/// variants being distinct blocks. The interim tips differ (there is no
+/// content-based canonicalization), every variant stays stored in its half
+/// (no first-seen drop), and both halves record the evidence. The halves keep
+/// their own valid chains: convergence comes from fresh proofs of other pools
+/// (see `equivocation_race_converges_via_fresh_proofs`).
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(
+        &mut test_utils::random::make_seedable_rng(seed),
+        VRFKeyKind::Schnorrkel,
+    );
+
+    // Two identical setups (same seed, same keys, same pool).
+    let mut rng1 = make_seedable_rng(seed);
+    let mut rng2 = make_seedable_rng(seed);
+    let (mut tf1, stake_pool_outpoint1, pool_id1, staking_sk1) =
+        setup_chain_with_stake_pool_with_chainstate_config(
+            &mut rng1,
+            vrf_pk.clone(),
+            gate_enabled_config(),
+        );
+    let (mut tf2, stake_pool_outpoint2, pool_id2, staking_sk2) =
+        setup_chain_with_stake_pool_with_chainstate_config(
+            &mut rng2,
+            vrf_pk,
+            gate_enabled_config(),
+        );
+
+    // The two equivocations use different randomness streams, so the halves
+    // hold different blocks (different ids) that share the same proof.
+    let parent_1 = tf1
+        .best_block_id()
+        .classify(tf1.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let (seal_1, main_1, side_1) = {
+        let mut rng = make_seedable_rng(seed);
+        let (seal, main, side) = process_two_blocks_with_same_seal(
+            &mut rng,
+            &mut tf1,
+            &vrf_sk,
+            &stake_pool_outpoint1,
+            pool_id1,
+            &staking_sk1,
+        );
+        (seal, main, side)
+    };
+    let parent_2 = tf2
+        .best_block_id()
+        .classify(tf2.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let (seal_2, main_2, side_2) = {
+        // A different randomness stream: the proofs differ from half 1's, so
+        // the variants are different blocks (the seal itself is identical,
+        // since the transcript does not involve randomness).
+        let mut rng = make_seedable_rng(Seed::from_u64(seed.0 ^ 0xA5A5_A5A5));
+        let (seal, main, side) = process_two_blocks_with_same_seal(
+            &mut rng,
+            &mut tf2,
+            &vrf_sk,
+            &stake_pool_outpoint2,
+            pool_id2,
+            &staking_sk2,
+        );
+        (seal, main, side)
+    };
+    assert_eq!(seal_1, seal_2);
+    assert_ne!(main_1, main_2);
+
+    // Each half keeps its own first-processed variant as the tip: the choice
+    // is arrival-order based, never content-based.
+    assert_eq!(
+        tf1.best_block_id(),
+        Id::<common::chain::GenBlock>::from(main_1)
+    );
+    assert_eq!(
+        tf2.best_block_id(),
+        Id::<common::chain::GenBlock>::from(main_2)
+    );
+
+    // Both halves recorded the evidence and stored every variant.
+    for (db_tx, main, side) in [
+        (tf1.storage.transaction_ro().unwrap(), main_1, side_1),
+        (tf2.storage.transaction_ro().unwrap(), main_2, side_2),
+    ] {
+        let index_entry = db_tx.get_seal_index_entry(&seal_1).unwrap().unwrap();
+        assert_eq!(index_entry.blocks().len(), 2);
+        assert!(db_tx.get_block(&main).unwrap().is_some());
+        assert!(db_tx.get_block(&side).unwrap().is_some());
+        assert!(db_tx.get_duplicate_seal_evidence(&seal_1).unwrap().is_some());
+    }
+}
+
+/// Variant cap: an equivocating pool floods the node with same-proof variants.
+/// The index entry stops at the cap, the evidence record stays bounded, every
+/// variant stays stored and fully valid, and the first-processed variant is
+/// never displaced.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn duplicate_proof_variants_are_capped_but_all_stored(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    let kernel_sig = produce_kernel_signature(
+        &mut rng,
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        stake_pool_outpoint.clone(),
+    );
+
+    let chain_config = tf.chainstate.get_chain_config();
+    let initial_randomness = chain_config.initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = chain_config.final_supply().unwrap();
+    let pos_config = get_pos_chain_config(chain_config, new_block_height);
+    let initial_timestamp = BlockTimestamp::from_time(tf.current_time());
+    let parent_id = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+
+    // Mine and process one more variant than the cap (the seal index cap is 8
+    // entries per proof; see `MAX_BLOCKS_PER_SEAL` in the chainstate crate).
+    let variant_count = 8 + 1;
+    let mut variant_ids = Vec::new();
+    let mut seal = None;
+    for _ in 0..variant_count {
+        let (pos_data, block_timestamp) = pos_mine(
+            &mut rng,
+            &tf.storage.transaction_ro().unwrap(),
+            &pos_config,
+            initial_timestamp,
+            stake_pool_outpoint.clone(),
+            InputWitness::Standard(kernel_sig.clone()),
+            &vrf_sk,
+            PoSRandomness::new(initial_randomness),
+            pool_id,
+            final_supply,
+            1,
+            current_difficulty,
+        )
+        .expect("should be able to mine");
+
+        let consensus_data = ConsensusData::PoS(pos_data.into());
+        let this_seal = BlockSeal::from_consensus_data(&consensus_data).unwrap();
+        match &seal {
+            Some(s) => assert_eq!(s, &this_seal),
+            None => seal = Some(this_seal),
+        }
+
+        let block = tf
+            .make_block_builder()
+            .with_parent(parent_id.into())
+            .with_consensus_data(consensus_data)
+            .with_block_signing_key(staking_sk.clone())
+            .with_timestamp(block_timestamp)
+            .with_reward(reward_outputs.clone())
+            .build(&mut rng);
+        let block_id = block.get_id();
+        tf.process_block(block, BlockSource::Local).unwrap();
+        variant_ids.push(block_id);
+    }
+    let seal = seal.unwrap();
+
+    // The first-processed variant remains the best chain.
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(variant_ids[0])
+    );
+
+    // The index entry is capped; every variant is stored; the evidence exists.
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
+    assert_eq!(index_entry.blocks().len(), 8);
+    for block_id in &variant_ids {
+        assert!(
+            index_entry.blocks().iter().any(|(id, _)| id == block_id)
+                || db_tx.get_block(block_id).unwrap().is_some(),
+            "variant {block_id} must be known to the node",
+        );
+    }
+    assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_some());
+}
+
+/// A same-pool chain keeps progressing (with decayed trust): the asymptote
+/// penalizes same-pool repeats in the trust comparison but never makes such
+/// blocks invalid or their chains stuck.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
+
+    let (_, twin_main, twin_side) = process_two_blocks_with_same_seal(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+    );
+
+    // Two consecutive same-pool blocks on the winning branch: the tip advances
+    // with each one.
+    let h3 = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        pool_id,
+        &staking_sk,
+        twin_main,
+        1,
+    );
+    assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h3));
+
+    let h4 =
+        mine_and_process_fresh_proof_block(&mut rng, &mut tf, &vrf_sk, pool_id, &staking_sk, h3, 2);
+    assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h4));
 }
