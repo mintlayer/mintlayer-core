@@ -1506,8 +1506,8 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         if new_chain.is_empty() {
             // Unreachable through the current callers: a candidate with strictly
             // higher trust is never part of the main chain, so the walk to it is
-            // non-empty. Kept explicit so a future caller gets a silent no-op
-            // instead of a refusal.
+            // non-empty. The gate declines to refuse here; the ordinary path
+            // below then enforces its own empty-chain invariant.
             return Ok(false);
         }
 
