@@ -192,8 +192,7 @@ fn mine_and_process_same_seal_twins_on_parent(
     let parent_reward_outputs = tf.outputs_from_genblock(parent_id.into());
     let parent_is_pos = parent_reward_outputs
         .get(&OutPointSourceId::BlockReward(parent_id.into()))
-        .map(|outputs| !outputs.is_empty())
-        .unwrap_or(false);
+        .is_some_and(|outputs| !outputs.is_empty());
 
     let chain_config = tf.chainstate.get_chain_config();
     let parent_height = tf
@@ -976,7 +975,7 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, gate_enabled_config());
 
-    let (_, twin_main, twin_side) = process_two_blocks_with_same_seal(
+    let (_, twin_main, _twin_side) = process_two_blocks_with_same_seal(
         &mut rng,
         &mut tf,
         &vrf_sk,
