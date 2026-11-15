@@ -24,14 +24,13 @@ use chainstate_test_framework::{
 };
 use chainstate_types::{BlockSeal, pos_randomness::PoSRandomness};
 use common::{
-    Uint256,
     chain::{
         Destination, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
         block::{ConsensusData, consensus_data::PoSData, timestamp::BlockTimestamp},
         config::Builder as ConfigBuilder,
         signature::inputsig::InputWitness,
     },
-    primitives::{Compact, Id, Idable},
+    primitives::{Id, Idable},
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
