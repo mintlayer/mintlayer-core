@@ -58,6 +58,17 @@ pub fn calculate_new_target(
     calculate_new_pos_compact_target(tf, block_height, &tf.best_block_id())
 }
 
+/// Same as `calculate_new_target`, but the recalculation window is the chain
+/// ending at `chain_tip_id` instead of the best chain: needed when mining a
+/// block whose parent is a side block.
+pub fn calculate_new_target_for_chain(
+    tf: &TestFramework,
+    chain_tip_id: &common::primitives::Id<common::chain::GenBlock>,
+    block_height: BlockHeight,
+) -> Result<Compact, ConsensusPoSError> {
+    calculate_new_pos_compact_target(tf, block_height, chain_tip_id)
+}
+
 pub fn create_custom_genesis_with_stake_pool(
     staker_pk: PublicKey,
     vrf_pk: VRFPublicKey,

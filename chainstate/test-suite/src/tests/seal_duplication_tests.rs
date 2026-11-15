@@ -17,6 +17,7 @@
 
 use rstest::rstest;
 
+use crate::tests::helpers::pos::calculate_new_target_for_chain;
 use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
 use chainstate_test_framework::{
@@ -495,6 +496,7 @@ fn mine_and_process_fresh_proof_block(
     rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     vrf_sk: &VRFPrivateKey,
+    stake_pool_outpoint: &UtxoOutPoint,
     pool_id: PoolId,
     staking_sk: &PrivateKey,
     parent_id: Id<common::chain::Block>,
@@ -504,31 +506,60 @@ fn mine_and_process_fresh_proof_block(
     let reward_outputs =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
-    // The kernel of a PoS block that follows another PoS block is the
-    // `ProduceBlockFromStake` reward output of that previous block, not the
-    // original pool creation output (which the previous block's kernel
-    // consumed).
-    let kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(parent_id.into()), 0);
-    let kernel_sig = produce_block_reward_kernel_signature(
-        tf,
-        rng,
-        staking_sk,
-        reward_outputs.as_slice(),
-        staking_destination,
-        parent_id.into(),
-        kernel_outpoint.clone(),
-    );
+    // The kernel depends on the parent: a PoS parent's stake lives in its
+    // `ProduceBlockFromStake` reward output (the pool creation output was
+    // consumed by the first PoS block of the chain), while a non-PoS parent
+    // leaves the pool creation output in place.
+    let parent_reward_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(parent_id.into()), 0);
+    let parent_reward_outputs = tf.outputs_from_genblock(parent_id.into());
+    let parent_is_pos = parent_reward_outputs
+        .get(&OutPointSourceId::BlockReward(parent_id.into()))
+        .map(|outputs| !outputs.is_empty())
+        .unwrap_or(false);
 
     let chain_config = tf.chainstate.get_chain_config();
-    let new_block_height = tf.best_block_index().block_height().next_height();
+    let parent_height = tf
+        .storage
+        .transaction_ro()
+        .unwrap()
+        .get_block_index(&parent_id)
+        .unwrap()
+        .expect("parent block index is present")
+        .block_height();
+    let new_block_height = parent_height.next_height();
     let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
     let pos_randomness = tf.pos_randomness_for_height(&new_block_height);
-    let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+    let current_difficulty =
+        calculate_new_target_for_chain(tf, &parent_id.into(), new_block_height).unwrap();
     let final_supply = chain_config.final_supply().unwrap();
     let pos_config = get_pos_chain_config(chain_config, new_block_height);
     let initial_timestamp = BlockTimestamp::from_time(tf.current_time())
         .add_int_seconds(timestamp_offset_seconds)
         .unwrap();
+
+    let (kernel_sig, kernel_outpoint) = if parent_is_pos {
+        let kernel_sig = produce_block_reward_kernel_signature(
+            tf,
+            rng,
+            staking_sk,
+            reward_outputs.as_slice(),
+            staking_destination.clone(),
+            parent_id.into(),
+            parent_reward_outpoint.clone(),
+        );
+        (kernel_sig, parent_reward_outpoint)
+    } else {
+        let kernel_sig = produce_kernel_signature(
+            rng,
+            tf,
+            staking_sk,
+            reward_outputs.as_slice(),
+            staking_destination.clone(),
+            stake_pool_outpoint.clone(),
+        );
+        (kernel_sig, stake_pool_outpoint.clone())
+    };
 
     let (pos_data, block_timestamp) = pos_mine(
         rng,
@@ -552,7 +583,7 @@ fn mine_and_process_fresh_proof_block(
         .with_consensus_data(ConsensusData::PoS(pos_data.into()))
         .with_block_signing_key(staking_sk.clone())
         .with_timestamp(block_timestamp)
-        .with_reward(reward_outputs)
+        .with_reward(reward_outputs.clone())
         .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
@@ -585,6 +616,7 @@ fn activation_gate_does_not_block_segment_with_fresh_proof(#[case] seed: Seed) {
         &mut rng,
         &mut tf,
         &vrf_sk,
+        &stake_pool_outpoint,
         pool_id,
         &staking_sk,
         twin_side_id,
@@ -627,13 +659,13 @@ fn activation_gate_bypassed_for_invalidation_recovery(#[case] seed: Seed) {
     );
 }
 
-// ---------------------------------------------------------------
-// S5 — adversarial suite for the PoS seal activation gate
+// -+
+// S5 — containment suite for the PoS seal activation gate
 //
-// Scenarios derived from the design note's attack narratives: tip
+// Scenarios derived from the design note's reuse narratives: tip
 // equivocation races, withheld-variant release, partition halves, honest
-// resealing at the same height, and the variant cap. The gate must never
-// fire on segments that contain at least one fresh proof, must never
+// resealing, and the variant cap. The gate must never fire on segments that
+// contain at least one fresh proof, must never
 // prevent the storage or retrieval of any variant, and must leave the
 // ordinary trust comparison in charge of every race.
 // ---------------------------------------------------------------
@@ -666,6 +698,7 @@ fn equivocation_race_converges_via_fresh_proofs(#[case] seed: Seed) {
         &mut rng,
         &mut tf,
         &vrf_sk,
+        &stake_pool_outpoint,
         pool_id,
         &staking_sk,
         twin_side,
@@ -745,6 +778,7 @@ fn withheld_variant_release_keeps_incumbent_stable(#[case] seed: Seed) {
         &mut rng,
         &mut tf,
         &vrf_sk,
+        &stake_pool_outpoint,
         pool_id,
         &staking_sk,
         twin_main,
@@ -876,7 +910,7 @@ fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn honest_reseal_at_same_height_is_not_flagged(#[case] seed: Seed) {
+fn honest_reseal_at_consecutive_heights_is_not_flagged(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
@@ -942,6 +976,7 @@ fn honest_reseal_at_same_height_is_not_flagged(#[case] seed: Seed) {
         &mut rng,
         &mut tf,
         &vrf_sk,
+        &stake_pool_outpoint,
         pool_id,
         &staking_sk,
         first_reseal_id,
@@ -984,7 +1019,7 @@ fn honest_reseal_at_same_height_is_not_flagged(#[case] seed: Seed) {
     }
 }
 
-/// Variant cap: an equivocating pool floods the node with same-proof variants.
+/// Variant cap: a pool reusing one proof across many variants.
 /// The index entry stops at the cap, the evidence record stays bounded, every
 /// variant stays stored and fully valid, and the first-processed variant is
 /// never displaced.
@@ -1089,7 +1124,9 @@ fn duplicate_proof_variants_are_capped_but_all_stored(#[case] seed: Seed) {
         );
     }
     let evidence = db_tx.get_duplicate_seal_evidence(&seal).unwrap().unwrap();
-    assert!(evidence.headers().len() <= 8);
+    // Sightings 2..=8 extend the evidence to exactly the cap; the ninth
+    // sighting is log-only.
+    assert_eq!(evidence.headers().len(), 8);
 }
 
 /// A same-pool chain keeps progressing (with decayed trust): the asymptote
@@ -1119,6 +1156,7 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
         &mut rng,
         &mut tf,
         &vrf_sk,
+        &stake_pool_outpoint,
         pool_id,
         &staking_sk,
         twin_main,
@@ -1126,8 +1164,16 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     );
     assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h3));
 
-    let h4 =
-        mine_and_process_fresh_proof_block(&mut rng, &mut tf, &vrf_sk, pool_id, &staking_sk, h3, 2);
+    let h4 = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        h3,
+        2,
+    );
     assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h4));
 
     // The reseals carry distinct, unindexed proofs: no seal-index entries with
@@ -1153,3 +1199,15 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
         assert!(db_tx.get_duplicate_seal_evidence(seal).unwrap().is_none());
     }
 }
+
+// The gate's refusal short-circuit itself is not exercised end-to-end, and
+// cannot be: through normal block processing, a newly mined block always
+// carries a first-sighting proof (the gate passes it), a twin-only chain has
+// trust exactly equal to the incumbent (the strict trust comparison never
+// attempts it), and a pure-duplicate rebuild of an existing chain carries
+// trust identical to that chain by construction (same heights, same pool
+// sequence, same timestamps). The one state that reaches the refusal — a
+// pure-duplicate segment as the best recovery candidate after user-initiated
+// invalidation — is covered by the bypass test above with the gate enabled.
+// The refusal semantics are pinned by the predicate unit tests; the wiring is
+// the four-line short-circuit reviewed in the S4 rounds.
