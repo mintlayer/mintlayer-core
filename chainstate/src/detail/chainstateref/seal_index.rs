@@ -702,7 +702,7 @@ mod tests {
     fn segment_seals_all_duplicated_classification() {
         use super::super::segment_seals_all_duplicated;
         use chainstate_types::BlockStatus;
-        use common::{Uint256, chain::GenBlock};
+        use common::Uint256;
 
         let mut rng =
             test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
@@ -717,8 +717,11 @@ mod tests {
             &vrf_pk,
             H256::from_low_u64_be(42),
         );
+        // The twin differs structurally (different parent) so the different
+        // block id does not rely on the randomization of the VRF proof bytes;
+        // the seal (pool id + VRF output) is identical, as required.
         let block_a_twin = make_pos_block(
-            H256::from_low_u64_be(1),
+            H256::from_low_u64_be(2),
             &vrf_sk,
             &vrf_pk,
             H256::from_low_u64_be(42),
