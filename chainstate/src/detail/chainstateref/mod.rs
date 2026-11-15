@@ -1503,36 +1503,23 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             })
             .log_err()?;
 
-        let mut segment_seals_all_duplicated = true;
-        for block_index in &new_chain {
-            let seal =
-                match BlockSeal::from_consensus_data(block_index.block_header().consensus_data()) {
-                    Some(seal) => seal,
-                    // The block does not yield a well-formed seal, so it cannot be
-                    // classified as a duplicate and the segment is not fully
-                    // duplicated.
-                    None => return Ok(false),
-                };
-            let duplicated =
-                match self.db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
-                    Some(entry) => entry.blocks().len() > 1,
-                    None => false,
-                };
-            if !duplicated {
-                segment_seals_all_duplicated = false;
-                break;
-            }
-        }
-
-        if !segment_seals_all_duplicated {
+        if new_chain.is_empty() {
+            // Unreachable through the current callers: a candidate with strictly
+            // higher trust is never part of the main chain, so the walk to it is
+            // non-empty. Kept explicit so a future caller gets a silent no-op
+            // instead of a refusal.
             return Ok(false);
         }
 
-        log::info!(
-            "Not activating a chain whose new segment consists only of blocks reusing \
-             already-known PoS consensus proofs"
-        );
-        Ok(true)
+        if segment_seals_all_duplicated(&self.db_tx, &new_chain)? {
+            log::info!(
+                "Not activating a chain whose new segment consists only of blocks reusing \
+                 already-known PoS consensus proofs"
+            );
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     #[log_error]
@@ -1719,6 +1706,37 @@ impl ChainActivationContext {
             ChainActivationContext::InvalidationRecovery => true,
         }
     }
+}
+
+/// Classifies whether every block of the given activation segment carries a
+/// duplicate-seal PoS consensus proof (a proof already seen on another known
+/// block, per the seal duplication index). A block that does not yield a
+/// well-formed seal is never classified as a duplicate, and an empty segment is
+/// never refused.
+fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
+    db_tx: &S,
+    new_chain: &[BlockIndex],
+) -> Result<bool, BlockError> {
+    if new_chain.is_empty() {
+        return Ok(false);
+    }
+    for block_index in new_chain {
+        let Some(seal) =
+            BlockSeal::from_consensus_data(block_index.block_header().consensus_data())
+        else {
+            // The block does not yield a well-formed seal, so it cannot be
+            // classified as a duplicate and the segment is not fully duplicated.
+            return Ok(false);
+        };
+        let duplicated = match db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
+            Some(entry) => entry.blocks().len() > 1,
+            None => false,
+        };
+        if !duplicated {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
