@@ -237,14 +237,17 @@ fn select_coins_srd(
             .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         weight += group.weight;
 
-        // If the selection weight exceeds the maximum allowed size, remove the least valuable inputs until we
-        // are below max weight.
+        // If the selection weight exceeds the maximum allowed size, remove the
+        // highest-effective-value inputs until the tracked weight is within max weight. The
+        // loop condition is checked before each removal, so a group is only ever popped
+        // together with the bookkeeping of its value and weight: the tracked totals always
+        // match the remaining heap contents.
         if weight > max_weight {
             max_tx_weight_exceeded = true; // mark it in case we don't find any useful result.
-            while let Some(group) = heap.pop() {
-                if weight <= max_weight {
+            while weight > max_weight {
+                let Some(group) = heap.pop() else {
                     break;
-                }
+                };
                 selected_eff_value = (selected_eff_value - group.0.get_effective_value(pay_fees))
                     .ok_or(UtxoSelectorError::AmountArithmeticError)?;
                 weight -= group.0.weight;
@@ -254,14 +257,14 @@ fn select_coins_srd(
         // Now check if we are above the target
         if selected_eff_value >= target_value {
             // Result found. The heap is ordered by effective value, so add only the most
-            // valuable groups needed to reach the target. Groups that were drawn earlier but
-            // turned out to be redundant (because a larger one was drawn afterwards) are left
-            // out instead of being included in the selection.
+            // valuable groups needed to reach the target; the remaining heap entries are
+            // left out instead of being included in the selection.
             let mut added_eff_value = Amount::ZERO;
             while added_eff_value < target_value {
-                let group = heap
-                    .pop()
-                    .expect("heap total reached the target, so it can't be emptied first");
+                // The tracked selected value matches the heap total, which has already
+                // reached the target, so the heap cannot be emptied first; the error is a
+                // defensive fallback in case that invariant is ever broken.
+                let group = heap.pop().ok_or(UtxoSelectorError::NoSolutionFound)?;
                 added_eff_value = (added_eff_value + group.0.get_effective_value(pay_fees))
                     .ok_or(UtxoSelectorError::AmountArithmeticError)?;
                 result.add_input(&group.0, pay_fees)?;

@@ -483,3 +483,151 @@ fn test_srd_solver_omits_redundant_utxos(#[case] seed: Seed) {
     assert_eq!(result.num_selected_inputs(), 1);
     assert_eq!(result.effective_value, Amount::from_atoms(100));
 }
+
+/// Regression test for the SRD trim loop: when the weight cap is tripped mid-draw,
+/// the removal loop must keep the tracked selected value consistent with the heap
+/// contents. The historical bug popped one group without accounting for it, so the
+/// tracked value could claim the target was reached while the heap no longer held
+/// enough value, breaking the early-stop loop. Run over many seeds so every draw
+/// order of the pool is covered with near-certainty; every run must produce a valid
+/// selection.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_srd_solver_trim_before_early_stop(#[case] seed: Seed) {
+    // A pool where the weight cap forces trimming on some draw orders and an
+    // exact solution exists (C+B = 110 >= 100 at weight 20 <= 25).
+    let mut groups = vec![];
+    let add_group = |value: u128, weight: usize, groups: &mut Vec<OutputGroup>| {
+        let outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
+            0,
+        );
+        let tx_output = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(value)),
+            Destination::AnyoneCanSpend,
+        );
+        groups.push(OutputGroup {
+            outputs: vec![(outpoint.into(), tx_output)],
+            value: Amount::from_atoms(value),
+            fee: Amount::ZERO,
+            long_term_fee: Amount::ZERO,
+            weight,
+        });
+    };
+    add_group(40, 10, &mut groups);
+    add_group(50, 10, &mut groups);
+    add_group(60, 10, &mut groups);
+    add_group(30, 5, &mut groups);
+
+    let target_value = Amount::from_atoms(100);
+    let cost_of_change = Amount::ZERO;
+    let max_weight = 25;
+
+    // Cover the draw orders (near-certainly all of them across 200 seeds): on
+    // the unfixed code some orders panicked at the early-stop; on the fixed
+    // code every order returns a valid selection.
+    for seed_u64 in 0..200u64 {
+        let mut shuffle_rng =
+            test_utils::random::make_seedable_rng(Seed::from_u64(seed_u64 ^ seed.0));
+        let result = select_coins_srd(
+            &groups,
+            target_value,
+            &mut shuffle_rng,
+            cost_of_change,
+            max_weight,
+            PayFee::PayFeeWithThisCurrency,
+        )
+        .unwrap_or_else(|e| panic!("seed {seed_u64}: unexpected error {e:?}"));
+
+        assert!(
+            result.effective_value >= target_value,
+            "seed {seed_u64}: selection below target"
+        );
+        assert!(
+            result.get_weight() <= max_weight,
+            "seed {seed_u64}: selection above the weight cap"
+        );
+    }
+}
+
+/// The top-level coin selection compares the candidate solutions and picks the
+/// least wasteful one, preferring fewer inputs on equal waste. With an exact
+/// no-change solution available (a single 100 UTXO for a 100 target) and a
+/// non-zero change cost, every seed must return it: one input, no overshoot,
+/// no change — anything else is strictly more wasteful.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_select_random_coins_prefers_exact_solution(#[case] _seed: Seed) {
+    let mut groups = vec![];
+    add_output(Amount::from_atoms(100), &mut groups);
+    add_output(Amount::from_atoms(60), &mut groups);
+    add_output(Amount::from_atoms(60), &mut groups);
+
+    let target_value = Amount::from_atoms(100);
+    // Making change costs one atom, so overshooting selections (which need
+    // change) are strictly more wasteful than the exact solution.
+    let cost_of_change = Amount::from_atoms(1);
+    let max_weight = 100;
+
+    for seed_u64 in 0..100u64 {
+        // select_random_coins uses its own pseudo rng; the exact solution is
+        // seed-independent because it is the unique minimal-waste outcome.
+        let result = select_random_coins(
+            groups.clone(),
+            target_value,
+            cost_of_change,
+            PayFee::PayFeeWithThisCurrency,
+            max_weight,
+        )
+        .unwrap_or_else(|e| panic!("seed {seed_u64}: unexpected error {e:?}"));
+
+        assert_eq!(
+            result.effective_value, target_value,
+            "seed {seed_u64}: expected the exact solution"
+        );
+        assert_eq!(
+            result.num_selected_inputs(),
+            1,
+            "seed {seed_u64}: expected the single-input exact solution"
+        );
+    }
+}
+
+/// The fewer-inputs tie-break itself: with zero change cost, SRD frequently
+/// produces the two-input exact solution {50, 50} while the single UTXO of
+/// 100 is an equally economical one-input solution — dropping the
+/// num-inputs tie-break from the selection key would return the former on
+/// roughly a third of seeds, enough that this loop fails with near-certainty
+/// without the tie-break.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_select_random_coins_prefers_fewer_inputs_on_equal_waste(#[case] _seed: Seed) {
+    let mut groups = vec![];
+    add_output(Amount::from_atoms(100), &mut groups);
+    add_output(Amount::from_atoms(50), &mut groups);
+    add_output(Amount::from_atoms(50), &mut groups);
+
+    let target_value = Amount::from_atoms(100);
+    let cost_of_change = Amount::ZERO;
+    let max_weight = 100;
+
+    for seed_u64 in 0..100u64 {
+        let result = select_random_coins(
+            groups.clone(),
+            target_value,
+            cost_of_change,
+            PayFee::PayFeeWithThisCurrency,
+            max_weight,
+        )
+        .unwrap_or_else(|e| panic!("seed {seed_u64}: unexpected error {e:?}"));
+
+        assert_eq!(
+            result.num_selected_inputs(),
+            1,
+            "seed {seed_u64}: expected the tie-break to prefer the single-input solution"
+        );
+    }
+}
