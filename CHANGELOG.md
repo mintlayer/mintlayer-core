@@ -12,6 +12,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Wallet:
+    - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
+      as the target is met, and among equally economical solutions the one spending
+      fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
+      change.
+
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
       enabled by default during the initial block download or bootstrapping, which
