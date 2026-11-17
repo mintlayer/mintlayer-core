@@ -23,6 +23,24 @@ use test_utils::random::{Seed, make_seedable_rng};
 
 use super::*;
 
+fn add_output_with_weight(value: Amount, weight: usize, groups: &mut Vec<OutputGroup>) {
+    let outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
+        0,
+    );
+    let tx_output = TxOutput::Transfer(OutputValue::Coin(value), Destination::AnyoneCanSpend);
+
+    let outputs = vec![(outpoint.into(), tx_output)];
+
+    groups.push(OutputGroup {
+        outputs,
+        value,
+        fee: Amount::ZERO,
+        long_term_fee: Amount::ZERO,
+        weight,
+    });
+}
+
 fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
@@ -506,6 +524,51 @@ fn test_prefer_confirmed_without_preference_uses_full_pool() {
 
     let result = select_coins_preferring_confirmed(
         None,
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_exceeds_weight_cap() {
+    // Every confirmed utxo is too heavy for the weight cap, so selection from the
+    // confirmed pool fails; the full pool's lighter utxos cover the target.
+    let mut confirmed = vec![];
+    add_output_with_weight(Amount::from_atoms(100), 2, &mut confirmed);
+    let mut full = vec![];
+    add_output_with_weight(Amount::from_atoms(60), 1, &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        1,
+    )
+    .unwrap();
+
+    // The exact full-pool value proves the fallback produced this selection.
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_on_empty_confirmed_bucket() {
+    // An empty confirmed bucket (no confirmed utxos of this currency) is not a
+    // preference failure: selection falls back to the full pool.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(vec![]),
         full,
         Amount::from_atoms(50),
         PayFee::PayFeeWithThisCurrency,

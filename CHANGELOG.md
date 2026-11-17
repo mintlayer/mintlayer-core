@@ -11,6 +11,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Changed
+  - Wallet:
+    - coin selection now prefers confirmed UTXOs, reducing the chance that a
+      send is rejected for forming an oversized mempool cluster; the full UTXO set
+      is still used when the confirmed UTXOs cannot cover the payment.
+
 ## [1.4.0] - 2026-07-09
 
 ### Added

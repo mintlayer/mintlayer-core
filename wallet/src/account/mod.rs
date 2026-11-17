@@ -289,12 +289,26 @@ impl<K: AccountKeyChains> Account<K> {
             // mempool cluster, which is size limited, so building on top of confirmed utxos
             // reduces the chance of producing a tx that the mempool would reject (see issue
             // #2066). The confirmed-only set is tried first, with a fallback to the full set.
-            let confirmed_utxos = self.get_utxos(
-                utxo_types,
-                median_time,
-                UtxoState::Confirmed.into(),
-                WithLocked::Unlocked,
-            );
+            //
+            // The confirmed-only query filters by the state of the transaction that produced
+            // an utxo, and its state mask is also used to decide whether an utxo has already
+            // been consumed. That mask alone would therefore re-admit utxos of confirmed
+            // transactions that the wallet has already spent in its own pending (in-mempool)
+            // or evicted transactions. Intersecting with the full set keeps the confirmed
+            // pool a subset of it, so such utxos stay excluded from selection.
+            let confirmed_utxos = {
+                let full_outpoints: BTreeSet<_> =
+                    utxos.iter().map(|(outpoint, _)| outpoint.clone()).collect();
+                self.get_utxos(
+                    utxo_types,
+                    median_time,
+                    UtxoState::Confirmed.into(),
+                    WithLocked::Unlocked,
+                )
+                .into_iter()
+                .filter(|(outpoint, _)| full_outpoints.contains(outpoint))
+                .collect()
+            };
             (
                 utxos,
                 Some(confirmed_utxos),

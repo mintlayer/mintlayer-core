@@ -745,6 +745,9 @@ pub fn select_coins(
 ///
 /// `confirmed_pool` is `None` when there is no preference to apply, for example when the caller
 /// selected the inputs explicitly; in that case `full_pool` is used directly.
+///
+/// This deliberately ignores waste: a selection from the confirmed pool is used even when the
+/// full pool admits a cheaper one.
 pub fn select_coins_preferring_confirmed(
     confirmed_pool: Option<Vec<OutputGroup>>,
     full_pool: Vec<OutputGroup>,
