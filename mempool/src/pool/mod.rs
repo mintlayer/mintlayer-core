@@ -42,6 +42,8 @@ use crate::{
     tx_origin::{RemoteTxOrigin, TxOrigin},
 };
 
+use p2p_types::peer_id::PeerId;
+
 use self::{
     entry::TxEntry,
     fee::Fee,
@@ -155,6 +157,11 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 } = state;
                 let chain_config = Arc::clone(&*chain_config);
                 let mempool_config = std::mem::take(mempool_config);
+                let local_orphan_pool_capacity = *mempool_config.local_orphan_pool_capacity;
+                let remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.remote_orphan_pool_capacity_per_peer;
+                let outbound_remote_orphan_pool_capacity_per_peer =
+                    *mempool_config.outbound_remote_orphan_pool_capacity_per_peer;
                 let chainstate_handle = chainstate_handle.shallow_clone();
                 let clock = clock.shallow_clone();
                 let memory_usage_estimator = memory_usage_estimator.shallow_clone();
@@ -171,7 +178,11 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
 
                 *self = Self(MempoolState::AfterIbd(MempoolStateAfterIbd {
                     tx_pool,
-                    orphans: orphans::TxOrphanPool::new(),
+                    orphans: orphans::TxOrphanPool::new(
+                        local_orphan_pool_capacity,
+                        remote_orphan_pool_capacity_per_peer,
+                        outbound_remote_orphan_pool_capacity_per_peer,
+                    ),
                     work_queue: WorkQueue::new(),
                     events_broadcast,
                     clock,
@@ -403,7 +414,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         match orphan {
             Some(Ok(orphan)) => {
-                let orphan = orphan.map_origin(TxOrigin::from);
                 let orphan_id = *orphan.tx_id();
                 log::trace!("Re-processing orphan transaction {orphan_id:x}");
                 if let Err(err) = state.add_transaction(orphan) {
@@ -529,6 +539,14 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                 state.best_block_id = block_id;
             }
             MempoolState::AfterIbd(state) => {
+                // The rebuild below may enqueue orphans for reprocessing (e.g. parked
+                // local-origin transactions whose parents have just been re-added from
+                // blocks). Pump a bounded number of work units afterwards so they don't
+                // have to wait for an external trigger, while keeping per-event
+                // processing latency bounded; the rest stays in the work queue for the
+                // round-based scheduler.
+                const MAX_WORK_UNITS_PER_TIP: usize = 64;
+
                 log::debug!("New tip {block_id:x} at height {height} (AfterIbd)");
 
                 let mut finalizer = TxFinalizer::new(
@@ -546,6 +564,13 @@ impl<M: MemoryUsageEstimator + ShallowClone> Mempool<M> {
                         }
                     }
                 })?;
+
+                for _ in 0..MAX_WORK_UNITS_PER_TIP {
+                    if !self.has_work() {
+                        break;
+                    }
+                    self.perform_work_unit();
+                }
             }
         };
 
@@ -601,6 +626,10 @@ enum TxFinalizerEventsMode<'a> {
     Silent,
     Broadcast(&'a mut EventsBroadcast),
 }
+
+// Sentinel peer ID used to enqueue local-origin orphans for processing. Real peer IDs start
+// from 1 (see `PeerId::new`), so the sentinel never collides with an actual peer.
+pub(crate) const LOCAL_ORIGIN_PEER_ID: PeerId = PeerId::from_u64(0);
 
 impl<'a> TxFinalizer<'a> {
     pub fn new(
@@ -695,9 +724,17 @@ impl<'a> TxFinalizer<'a> {
     pub fn enqueue_children(&mut self, tx: &TxEntry) {
         for orphan in self.orphan_pool.children_of(tx) {
             let orphan_id = *orphan.tx_id();
-            let peer_id = orphan.origin().peer_id();
+            // Local-origin orphans have no peer; enqueue them under the sentinel peer ID so
+            // that they still get picked up for processing.
+            let peer_id = match orphan.origin() {
+                TxOrigin::Remote(remote_origin) => remote_origin.peer_id(),
+                TxOrigin::Local(_) => LOCAL_ORIGIN_PEER_ID,
+            };
             if self.work_queue.insert(peer_id, orphan_id) {
-                log::trace!("Added orphan {orphan_id:x} to peer{peer_id}'s work queue");
+                log::trace!(
+                    "Added orphan {orphan_id:x} originating in {} to the work queue",
+                    orphan.origin()
+                );
             }
         }
     }
@@ -709,22 +746,69 @@ impl<'a> TxFinalizer<'a> {
         error: chainstate::ConnectTransactionError,
     ) -> Result<TxStatus, Error> {
         let orphan_type = OrphanType::from_error(error)?;
-        let transaction = Self::check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
+        // Reclaim capacity from expired entries before evaluating the policy. The quota
+        // checks below read current occupancy; without this sweep a peer whose parked
+        // orphans have all expired would be rejected against stale counts until some
+        // other event sweeps the pool.
+        self.orphan_pool.remove_expired(self.cur_time);
+        let transaction = self.check_orphan_pool_policy(transaction, orphan_type, tx_pool)?;
         Ok(self.orphan_pool.insert_and_enforce_limits(transaction, self.cur_time)?)
     }
 
+    /// Evaluate the orphan-pool admission policy. Occupancy must be fresh: expired entries
+    /// count against the caps unless swept first, and the only caller
+    /// ([`Self::try_add_orphan`]) sweeps immediately before calling this.
     fn check_orphan_pool_policy<M: MemoryUsageEstimator>(
+        &self,
         transaction: TxEntry,
         orphan_type: OrphanType,
         tx_pool: &TxPool<M>,
-    ) -> Result<TxEntry<RemoteTxOrigin>, OrphanPoolError> {
-        // Only remote transactions are allowed in the orphan pool
-        let transaction = transaction
-            .try_map_origin(|origin| match origin {
-                TxOrigin::Local(o) => Err(OrphanPoolError::NotSupportedForLocalOrigin(o)),
-                TxOrigin::Remote(o) => Ok(o),
-            })
-            .map_err(|(_, e)| e)?;
+    ) -> Result<TxEntry, OrphanPoolError> {
+        // Only remote transactions are allowed in the orphan pool, unless local orphans are
+        // explicitly enabled in the mempool config.
+        if let TxOrigin::Local(local_origin) = transaction.origin() {
+            if !*tx_pool.mempool_config().allow_local_orphans {
+                return Err(OrphanPoolError::NotSupportedForLocalOrigin(local_origin));
+            }
+
+            // Keep local-origin orphans from crowding out remote peers' orphans. Resubmissions
+            // of already-parked transactions bypass the capacity check so that they keep
+            // yielding the idempotent `InOrphanPoolDuplicate` status instead of an error.
+            let local_capacity = *tx_pool.mempool_config().local_orphan_pool_capacity;
+            if !self.orphan_pool.contains(transaction.tx_id())
+                && self.orphan_pool.local_len() >= local_capacity
+            {
+                return Err(OrphanPoolError::LocalCapacityExceeded(local_capacity));
+            }
+        }
+
+        // Keep any single remote peer from filling the shared orphan pool and starving other
+        // peers' orphans out of it. Outbound (node-selected) peers get a larger share. Same as
+        // the local check above, resubmissions of already-parked transactions bypass the
+        // capacity check so that they keep yielding the idempotent `InOrphanPoolDuplicate`
+        // status instead of an error.
+        if let TxOrigin::Remote(remote_origin) = transaction.origin() {
+            // Admission and eviction must agree on the origin's tier. The pool records the
+            // tier per origin (upgrade-only, see `TxOrphanPoolMaps::insert`); the
+            // newcomer's own outbound flag can only raise the admitted tier, and the pool
+            // then records that upgrade on insert, so the reservation protecting the
+            // origin never lags behind the quota its entries were admitted under.
+            let recorded_capacity = self.orphan_pool.origin_reservation(&transaction.origin());
+            let entry_tier_capacity = if transaction.options().origin_peer_is_outbound() {
+                *tx_pool.mempool_config().outbound_remote_orphan_pool_capacity_per_peer
+            } else {
+                *tx_pool.mempool_config().remote_orphan_pool_capacity_per_peer
+            };
+            let per_peer_capacity = recorded_capacity.max(entry_tier_capacity);
+            if !self.orphan_pool.contains(transaction.tx_id())
+                && self.orphan_pool.origin_len(transaction.origin()) >= per_peer_capacity
+            {
+                return Err(OrphanPoolError::RemoteCapacityExceeded(
+                    remote_origin,
+                    per_peer_capacity,
+                ));
+            }
+        }
 
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.

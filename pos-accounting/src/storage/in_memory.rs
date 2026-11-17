@@ -36,6 +36,12 @@ pub struct InMemoryPoSAccounting {
     delegation_data: BTreeMap<DelegationId, DelegationData>,
 }
 
+impl Default for InMemoryPoSAccounting {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryPoSAccounting {
     pub fn new() -> Self {
         Self {

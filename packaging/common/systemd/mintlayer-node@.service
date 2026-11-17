@@ -1,0 +1,46 @@
+# Template unit: one instance per chain.
+#   systemctl enable --now mintlayer-node@mainnet.service
+#   systemctl enable --now mintlayer-node@testnet.service
+[Unit]
+Description=Mintlayer Node Daemon (%i)
+Documentation=https://github.com/mintlayer/mintlayer-core
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mintlayer
+Group=mintlayer
+EnvironmentFile=-/etc/mintlayer/%i/node.env
+ExecStart=/usr/bin/mintlayer-node-daemon --datadir /var/lib/mintlayer/%i %i
+
+# Node state (blockchain storage, p2p state) lives under /var/lib/mintlayer/%i
+StateDirectory=mintlayer
+
+Restart=on-failure
+RestartSec=10s
+
+# Initial sync can take a long time; give the node room to shut down cleanly.
+TimeoutStopSec=300s
+LimitNOFILE=65535
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

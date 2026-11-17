@@ -36,7 +36,7 @@ use utils::app_version_with_git_info;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoStates, UtxoType,
     types::{
         CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletCreationOptions,
         WalletInfo, WalletTypeArgs,
@@ -404,7 +404,9 @@ where
         self.wallet_rpc
             .get_balance(
                 account_index,
-                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                // An omitted or empty filter means "all states", matching
+                // the account_balance RPC's server-side default.
+                (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
                 with_locked,
             )
             .await
@@ -420,25 +422,31 @@ where
     ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
-            .get_multisig_utxos(
+            .get_multisig_utxos_with_states(
                 account_index,
                 (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
+                // Parity with the standalone_multisig_utxos RPC, whose
+                // server-side default for an omitted/empty filter is
+                // Confirmed-only (unlike account_utxos, which defaults to
+                // all states).
                 (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
                 with_locked,
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        let token_ids =
-            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_ids = collect_token_v1_ids_from_output_values_holders(
+            utxos.iter().map(|(_, output, _)| output),
+        );
         let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
 
         Ok(utxos
             .into_iter()
-            .map(|(utxo_outpoint, tx_ouput)| {
+            .map(|(utxo_outpoint, tx_output, state)| {
                 UtxoInfo::new(
                     utxo_outpoint,
-                    tx_ouput,
+                    tx_output,
+                    state,
                     self.wallet_rpc.chain_config(),
                     &token_decimals,
                 )
@@ -455,25 +463,31 @@ where
     ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
-            .get_utxos(
+            .get_utxos_with_states(
                 account_index,
                 (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
-                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                // An omitted or empty filter means "all states", matching
+                // the account_utxos RPC's server-side default. (Before the
+                // utxo_states parameter existed here, an empty filter fell
+                // back to Confirmed-only — inconsistent with the RPC docs.)
+                (&utxo_states).try_into().unwrap_or(UtxoStates::ALL),
                 with_locked,
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 
-        let token_ids =
-            collect_token_v1_ids_from_output_values_holders(utxos.iter().map(|(_, output)| output));
+        let token_ids = collect_token_v1_ids_from_output_values_holders(
+            utxos.iter().map(|(_, output, _)| output),
+        );
         let token_decimals = self.wallet_rpc.get_tokens_decimals(token_ids).await?;
 
         Ok(utxos
             .into_iter()
-            .map(|(utxo_outpoint, tx_ouput)| {
+            .map(|(utxo_outpoint, tx_output, state)| {
                 UtxoInfo::new(
                     utxo_outpoint,
-                    tx_ouput,
+                    tx_output,
+                    state,
                     self.wallet_rpc.chain_config(),
                     &token_decimals,
                 )

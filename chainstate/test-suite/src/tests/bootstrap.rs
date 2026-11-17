@@ -746,8 +746,10 @@ fn check_reckless_mode(
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Default::default(),
                 allow_checkpoints_mismatch: Default::default(),
+                pos_seal_duplication_tracking: Default::default(),
             })
             .build();
+        // library default stays opt-in, matching master.
         let use_reckless_mode = enable_db_reckless_mode_in_ibd.unwrap_or(false);
         let dest_tf_store = dest_tf.storage.clone();
 

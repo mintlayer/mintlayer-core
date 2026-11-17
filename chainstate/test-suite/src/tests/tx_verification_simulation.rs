@@ -16,13 +16,14 @@
 use std::{collections::BTreeMap, num::NonZeroU64};
 
 use super::*;
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{
         ChainstateUpgradeBuilder, ConsensusUpgrade, NetUpgrades, PoSChainConfigBuilder,
         TokenIdGenerationVersion, UtxoOutPoint,
     },
-    primitives::BlockCount,
+    primitives::{BlockCount, id::WithId},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -163,7 +164,20 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             let mut db_tx = reference_tf.storage.transaction_rw(None).unwrap();
             for (block, block_index) in all_blocks {
                 db_tx.set_block_index(&block_index).unwrap();
+                // Wrap the block without the deep copy that `.into()` from a
+                // reference would need; `WithId<Block>` derefs to `Block`.
+                let block = WithId::new(block);
                 db_tx.add_block(&block).unwrap();
+                // The single shared helper keeps the seal-index gating identical to
+                // the integration path (`chainstate/src/detail/mod.rs`), so the
+                // storage dump comparison cannot diverge on the seal tables.
+                chainstate::index_block_seal_if_enabled(
+                    &reference_tf.chainstate.get_chainstate_config(),
+                    &mut db_tx,
+                    &block,
+                    block_index.block_height(),
+                )
+                .unwrap();
             }
             db_tx.commit().unwrap();
         }
@@ -211,9 +225,21 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             db_tx.commit().unwrap();
         }
 
-        assert_eq!(
-            tf.storage.transaction_ro().unwrap().dump_raw(),
-            reference_tf.storage.transaction_ro().unwrap().dump_raw()
-        );
+        // (experimental step 9) Exclude the strategy-dependent per-transaction
+        // fee records from the dump comparison (see homomorphism.rs).
+        {
+            use chainstate_storage::schema::{DBBlockTxFees, Schema};
+            use storage::schema::HasDbMap;
+            let fee_map_index = <Schema as HasDbMap<DBBlockTxFees, _>>::INDEX;
+            let filter =
+                |dump: &mut storage::StorageContents<chainstate_storage::schema::Schema>| {
+                    dump.retain(|map_id, _| map_id.as_core() != fee_map_index);
+                };
+            let mut left = tf.storage.transaction_ro().unwrap().dump_raw().unwrap();
+            let mut right = reference_tf.storage.transaction_ro().unwrap().dump_raw().unwrap();
+            filter(&mut left);
+            filter(&mut right);
+            assert_eq!(left, right);
+        }
     });
 }

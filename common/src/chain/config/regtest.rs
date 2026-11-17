@@ -42,11 +42,23 @@ const GENESIS_STAKE_PRIVATE_KEY: &str =
     "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638";
 const GENESIS_VRF_PRIVATE_KEY: &str = "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e";
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct GenesisStakingSettings {
     pool_id: PoolId,
     stake_private_key: PrivateKey,
     vrf_private_key: VRFPrivateKey,
+}
+
+// The private keys are omitted so debug formatting of the chain options cannot disclose
+// staking key material; the pool id is not sensitive and stays visible.
+impl std::fmt::Debug for GenesisStakingSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GenesisStakingSettings")
+            .field("pool_id", &self.pool_id)
+            .field("stake_private_key", &"<redacted>")
+            .field("vrf_private_key", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -180,7 +192,38 @@ impl FromStr for GenesisStakingSettings {
     }
 }
 
+#[cfg(test)]
+mod genesis_staking_settings_tests {
+    use super::*;
+
+    #[test]
+    fn debug_output_omits_private_keys() {
+        let settings = GenesisStakingSettings::from_str(&format!(
+            "pool_id:{GENESIS_POOL_ID},stake_private_key:{GENESIS_STAKE_PRIVATE_KEY},\
+             vrf_private_key:{GENESIS_VRF_PRIVATE_KEY}"
+        ))
+        .unwrap();
+        let rendering = format!("{settings:?}");
+        assert!(rendering.contains("<redacted>"), "{rendering}");
+        assert!(rendering.contains(GENESIS_POOL_ID), "{rendering}");
+        assert!(
+            !rendering.contains("8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"),
+            "{rendering}"
+        );
+        assert!(!rendering.contains("3fcf7b813bec2a29"), "{rendering}");
+        assert!(!rendering.contains("Scalar"), "{rendering}");
+        assert!(!rendering.contains("Schnorrkel"), "{rendering}");
+    }
+}
+
 impl Display for GenesisStakingSettings {
+    // This rendering deliberately includes the private keys: it is the value format of
+    // the --chain-genesis-staking-settings option (rendered as the clap default and
+    // parsed back by FromStr). It is an input format, never a log format, and must not
+    // be used in diagnostics; Debug above prints the redacted form. Rendering the
+    // default in --help is intentional as well: the shipped defaults are public
+    // constants in this repository, and the rendering doubles as the format example
+    // for operators supplying their own settings.
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut values = vec![];
 

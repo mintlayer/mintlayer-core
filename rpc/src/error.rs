@@ -27,6 +27,52 @@ pub type RpcClientResult<T> = std::result::Result<T, jsonrpsee::core::ClientErro
 pub type Error = ErrorObjectOwned;
 pub type ClientError = jsonrpsee::core::ClientError;
 
+/// Classification of client errors into connection-level and application-level failures.
+///
+/// A connection-level error means that the underlying connection is broken or cannot be
+/// established; such failures are recoverable by dropping the client and re-establishing the
+/// connection. An application-level error, in contrast, is not evidence of a broken connection
+/// (the client and its connection may still be perfectly usable) and must not trigger a
+/// reconnection by itself.
+///
+/// Note: "connection-level" does not imply that a request always went unprocessed; callers
+/// retrying non-idempotent requests must handle that themselves (e.g. the wallet tracks which
+/// transactions were already submitted before rebroadcasting them).
+pub trait ClientErrorExt {
+    /// Returns `true` if the error indicates a broken or unusable connection to the node.
+    fn is_connection_error(&self) -> bool;
+}
+
+impl ClientErrorExt for ClientError {
+    fn is_connection_error(&self) -> bool {
+        match self {
+            // The connection to the node failed (e.g. the node is unreachable).
+            ClientError::Transport(_) => true,
+            // The background task of the WS client has terminated; the client is permanently
+            // broken and every subsequent call would fail until a new client is created.
+            // Note: the jsonrpsee-generated message ends with "; restart required", which is
+            // only true for clients that cannot be re-created.
+            ClientError::RestartNeeded(_) => true,
+            // Note: `RequestTimeout` is deliberately application-level. jsonrpsee does not
+            // terminate the background task on a timeout, so the connection may still be
+            // perfectly usable; tearing down a healthy client after one slow response would
+            // churn connections under transient load. Genuinely dead connections are detected
+            // by the WS ping (failed pings terminate the background task -> `RestartNeeded`).
+            ClientError::RequestTimeout => false,
+            // The RPC service got disconnected from its backend.
+            ClientError::ServiceDisconnect => true,
+            ClientError::Call(_)
+            | ClientError::ParseError(_)
+            | ClientError::InvalidSubscriptionId
+            | ClientError::InvalidRequestId(_)
+            | ClientError::Custom(_)
+            | ClientError::HttpNotImplemented
+            | ClientError::EmptyBatchRequest(_)
+            | ClientError::RegisterMethod(_) => false,
+        }
+    }
+}
+
 /// Handle RPC result
 ///
 /// This is a generic way of converting the likes of:

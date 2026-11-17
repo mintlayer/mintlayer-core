@@ -71,7 +71,7 @@ pub fn using_proptest<B: Backend, F: BackendFactory<B>, S: proptest::prelude::St
         test(backend_factory.create(), val);
         Ok(())
     });
-    result.unwrap_or_else(|e| panic!("{}{}", &e, &runner))
+    result.unwrap_or_else(|e| panic!("{}{}", e, runner))
 }
 
 /// This is only needed so that we can pass None as the second parameter for

@@ -84,6 +84,7 @@ use wallet_types::{
 
 use crate::{
     SendRequest, WalletError, WalletResult,
+    account::output_cache::StaleInMempool,
     account::utxo_selector::{OutputGroup, select_coins_preferring_confirmed},
     destination_getters::{HtlcSpendingCondition, get_tx_output_destination},
     key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains},
@@ -2195,14 +2196,30 @@ impl<K: AccountKeyChains> Account<K> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Vec<(UtxoOutPoint, &TxOutput)> {
+        self.get_multisig_utxos_with_states(utxo_types, median_time, utxo_states, with_locked)
+            .into_iter()
+            .map(|(outpoint, output, _state)| (outpoint, output))
+            .collect()
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub fn get_multisig_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
-            self.is_watched_multisig_output(txo)
-                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        })
+        self.output_cache
+            .utxos_with_states(current_block_info, utxo_states, with_locked, |txo| {
+                self.is_watched_multisig_output(txo)
+                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            })
     }
 
     pub fn get_utxos(
@@ -2212,13 +2229,29 @@ impl<K: AccountKeyChains> Account<K> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Vec<(UtxoOutPoint, &TxOutput)> {
+        self.get_utxos_with_states(utxo_types, median_time, utxo_states, with_locked)
+            .into_iter()
+            .map(|(outpoint, output, _state)| (outpoint, output))
+            .collect()
+    }
+
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub fn get_utxos_with_states(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, &TxOutput, UtxoState)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
-            self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        })
+        self.output_cache
+            .utxos_with_states(current_block_info, utxo_states, with_locked, |txo| {
+                self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            })
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {
@@ -2593,7 +2626,38 @@ impl<K: AccountKeyChains> Account<K> {
         tx_id: Id<Transaction>,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
-        let abandoned_txs = self.output_cache.abandon_transaction(&self.chain_config, tx_id)?;
+        self.abandon_transaction_impl(tx_id, db_tx, StaleInMempool::Reject)
+    }
+
+    /// Prune a transaction that is known to be dead (probed missing from the
+    /// mempool with its parent present, or otherwise deterministically rejected),
+    /// together with its pending descendants. Unlike [`Self::abandon_transaction`],
+    /// this tolerates a stale `InMempool` cache state.
+    ///
+    /// # Caller obligation
+    ///
+    /// See [`OutputCache::prune_dead_transaction`]: the caller must have
+    /// verified the transaction is dead; the verification is racy and a
+    /// too-late re-entry self-heals on confirmation or rescan.
+    pub fn prune_dead_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        self.abandon_transaction_impl(tx_id, db_tx, StaleInMempool::Tolerate)
+    }
+
+    fn abandon_transaction_impl(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        stale_in_mempool: StaleInMempool,
+    ) -> WalletResult<()> {
+        let abandoned_txs = if stale_in_mempool == StaleInMempool::Tolerate {
+            self.output_cache.prune_dead_transaction(&self.chain_config, tx_id)?
+        } else {
+            self.output_cache.abandon_transaction(&self.chain_config, tx_id)?
+        };
         let acc_id = self.get_account_id();
 
         for (tx_id, tx) in abandoned_txs {

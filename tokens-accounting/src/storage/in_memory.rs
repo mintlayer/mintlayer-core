@@ -28,6 +28,12 @@ pub struct InMemoryTokensAccounting {
     circulating_supply: BTreeMap<TokenId, Amount>,
 }
 
+impl Default for InMemoryTokensAccounting {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryTokensAccounting {
     pub fn new() -> Self {
         Self {

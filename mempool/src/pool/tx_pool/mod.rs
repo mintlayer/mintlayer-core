@@ -66,7 +66,6 @@ use crate::{
         },
     },
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
-    tx_origin::RemoteTxOrigin,
 };
 
 use self::{
@@ -404,7 +403,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
         }
     }
 
-    pub fn orphan_rbf_checks(&self, tx: &TxEntry<RemoteTxOrigin>) -> Result<(), OrphanPoolError> {
+    pub fn orphan_rbf_checks(&self, tx: &TxEntry) -> Result<(), OrphanPoolError> {
         let mut conflicts = self.conflicting_tx_ids(tx).peekable();
         if conflicts.peek().is_none() {
             // Early exit if there are no conflicts

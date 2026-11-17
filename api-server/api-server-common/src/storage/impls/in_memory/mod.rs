@@ -26,6 +26,7 @@ use itertools::Itertools as _;
 
 use common::{
     address::Address,
+    address::traits::Addressable,
     chain::{
         Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
         UtxoOutPoint,
@@ -37,8 +38,9 @@ use common::{
 
 use crate::storage::storage_api::{
     AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-    FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-    TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    FungibleTokenData, LockedUtxo, NftWithOwner, ORDER_BOOK_MAX_ORDERS, Order, PoolBlockStats,
+    PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+    UtxoLock, UtxoWithExtraInfo,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
 
@@ -59,7 +61,21 @@ impl Ord for TokenTransactionOrderedByTxId {
     }
 }
 
+/// An offset that doesn't fit a usize is past the end of any in-memory result set.
+/// Skipping by usize::MAX yields an empty page instead of wrapping to a small number
+/// (which would return the first page) on targets with a narrower pointer width.
+fn offset_to_usize(offset: u64) -> usize {
+    usize::try_from(offset).unwrap_or(usize::MAX)
+}
+
 #[derive(Debug, Clone)]
+/// An in-memory api-server storage, meant for tests.
+///
+/// The listing reads (pool listings, top holders, order book) scan and sort their full
+/// tables on every call instead of maintaining the incrementally-updated caches the
+/// postgres backend has (`ml.latest_pool_data_cache`, `ml.address_amount`,
+/// `ml.latest_orders_cache`); the contracts (ordering, filters, caps) are identical,
+/// only the asymptotics differ, which is acceptable for test-sized data.
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
@@ -85,6 +101,9 @@ struct ApiServerInMemoryStorage {
     genesis_block: Arc<WithId<Genesis>>,
     number_of_coin_decimals: u8,
     storage_version: u32,
+    // kept so that order/pool identifiers can be encoded exactly like the postgres
+    // backend does (bech32 address strings), keeping tie-break orders identical
+    chain_config: ChainConfig,
 }
 
 impl ApiServerInMemoryStorage {
@@ -112,7 +131,31 @@ impl ApiServerInMemoryStorage {
             genesis_block: chain_config.genesis_block().clone(),
             number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: CURRENT_STORAGE_VERSION,
+            chain_config: chain_config.clone(),
         }
+    }
+
+    /// Encoded (bech32) form of an addressable object id — the exact string the
+    /// postgres backend stores and orders by, keeping tie-break orders identical
+    /// across backends. Shared by the pool-id and order-id sort keys.
+    fn id_sort_key<T: Addressable + Copy + std::fmt::Display>(
+        &self,
+        id: T,
+        label: &str,
+    ) -> Result<String, ApiServerStorageError> {
+        Address::new(&self.chain_config, id)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!("invalid {label} {id}: {e}"))
+            })
+            .map(|address| address.as_str().to_owned())
+    }
+
+    fn pool_id_sort_key(&self, pool_id: &PoolId) -> Result<String, ApiServerStorageError> {
+        self.id_sort_key(*pool_id, "pool id")
+    }
+
+    fn order_id_sort_key(&self, order_id: &OrderId) -> Result<String, ApiServerStorageError> {
+        self.id_sort_key(*order_id, "order id")
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
@@ -131,6 +174,38 @@ impl ApiServerInMemoryStorage {
                 || Ok(None),
                 |by_height| Ok(by_height.values().last().copied()),
             )
+    }
+
+    fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        let mut holders = self
+            .address_balance_table
+            .iter()
+            .filter_map(|(address, by_coin_or_token)| {
+                by_coin_or_token
+                    .get(&coin_or_token_id)
+                    .and_then(|by_height| by_height.values().last())
+                    .filter(|amount| **amount != Amount::ZERO)
+                    .map(|amount| (address.clone(), *amount))
+            })
+            .collect::<Vec<_>>();
+
+        holders.sort_by(|(l_address, l_amount), (r_address, r_amount)| {
+            (r_amount, r_address.as_str()).cmp(&(l_amount, l_address.as_str()))
+        });
+
+        if let Some((cursor_address, cursor_amount)) = cursor {
+            holders.retain(|(address, amount)| {
+                *amount < cursor_amount
+                    || (*amount == cursor_amount && address.as_str() < cursor_address.as_str())
+            });
+        }
+
+        Ok(holders.into_iter().take(len as usize).collect())
     }
 
     fn get_address_balances(
@@ -198,7 +273,7 @@ impl ApiServerInMemoryStorage {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
         Ok(self
             .token_transactions_table
@@ -212,7 +287,7 @@ impl ApiServerInMemoryStorage {
                         txs.sort_by_key(|tx| std::cmp::Reverse(tx.tx_global_index));
                         txs
                     })
-                    .flat_map(|tx| (tx.tx_global_index < tx_global_index).then_some(tx))
+                    .skip(offset_to_usize(offset))
                     .cloned()
                     .take(len as usize)
                     .collect()
@@ -265,7 +340,7 @@ impl ApiServerInMemoryStorage {
                     },
                 )
             })
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .collect())
     }
@@ -397,12 +472,24 @@ impl ApiServerInMemoryStorage {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.get_delegation_at_or_below_height(delegation_id, None)
+    }
+
+    fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
         let delegation_result = self.delegation_table.get(&delegation_id);
         let delegation = match delegation_result {
             Some(data) => data,
             None => return Ok(None),
         };
-        Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
+        let latest = match max_height {
+            Some(max_height) => delegation.range(..=max_height).next_back().map(|(_, v)| v.clone()),
+            None => delegation.last_key_value().map(|(_, v)| v.clone()),
+        };
+        Ok(latest)
     }
 
     fn get_pool_block_stats(
@@ -434,13 +521,23 @@ impl ApiServerInMemoryStorage {
         &self,
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.get_pool_delegations_at_or_below_height(pool_id, None)
+    }
+
+    fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         Ok(self
             .delegation_table
             .iter()
             .filter_map(|(delegation_id, delegation)| {
-                let delegation = delegation.values().last().expect("must be present");
-                (*delegation.pool_id() == pool_id)
-                    .then_some((delegation_id.to_owned(), delegation.clone()))
+                let delegation = match max_height {
+                    Some(max_height) => delegation.range(..=max_height).next_back()?.1.clone(),
+                    None => delegation.values().last()?.clone(),
+                };
+                (*delegation.pool_id() == pool_id).then_some((*delegation_id, delegation))
             })
             .collect())
     }
@@ -457,7 +554,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
 
         if offset >= self.orders_table.len() {
             return Ok(vec![]);
@@ -490,7 +587,7 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
+        let offset = offset_to_usize(offset);
 
         let mut order_data: Vec<_> = self
             .orders_table
@@ -518,32 +615,147 @@ impl ApiServerInMemoryStorage {
         Ok(latest_orders)
     }
 
+    fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        let entries: Vec<_> = self
+            .orders_table
+            .iter()
+            .filter_map(|(order_id, by_height)| Some((order_id, by_height.values().last()?)))
+            .filter(|(_order_id, order)| {
+                order.ask_currency == ask_currency
+                    && order.give_currency == give_currency
+                    && !order.is_frozen
+                    && order.ask_balance != Amount::ZERO
+                    && order.give_balance != Amount::ZERO
+            })
+            .collect();
+
+        // deepest orders first, ties broken by the encoded order id (byte order) and
+        // capped exactly like the postgres query; has_more reports the truncation.
+        // the sort key is encoded once per entry, not once per comparison
+        let mut decorated: Vec<(String, Amount, Amount)> = entries
+            .into_iter()
+            .map(|(order_id, order)| {
+                Ok((
+                    self.order_id_sort_key(order_id)?,
+                    order.ask_balance,
+                    order.give_balance,
+                ))
+            })
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(key_a, ask_a, _), (key_b, ask_b, _)| {
+            (Reverse(ask_a.into_atoms()), Reverse(&**key_a))
+                .cmp(&(Reverse(ask_b.into_atoms()), Reverse(&**key_b)))
+        });
+        let has_more = decorated.len() > ORDER_BOOK_MAX_ORDERS;
+        decorated.truncate(ORDER_BOOK_MAX_ORDERS);
+
+        Ok((
+            decorated
+                .into_iter()
+                .map(|(_key, ask_balance, give_balance)| (ask_balance, give_balance))
+                .collect(),
+            has_more,
+        ))
+    }
+
+    /// The live pools (non-zero pledge), newest creation height first, ties broken
+    /// by the encoded pool address in DESCENDING byte order (`Reverse`, matching
+    /// the postgres listing's `pool_id COLLATE "C" DESC` tie-break); the sort key
+    /// is encoded once per entry. Shared by the offset and the keyset (cursor)
+    /// listings so their ordering cannot diverge.
+    fn sorted_live_pools(
+        &self,
+    ) -> Result<Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>
+    {
+        let mut decorated: Vec<(BlockHeight, String, PoolId, PoolDataWithExtraInfo)> = self
+            .pool_data_table
+            .iter()
+            .filter_map(|(pool_id, by_height)| {
+                // a pool in the table always carries at least one versioned row; empty
+                // maps (never produced by the current write paths) are skipped instead
+                // of panicking in a read path, and the cheap zero-balance filter runs
+                // before the (allocating) sort-key encoding, so decommissioned pools
+                // skip the bech32 work entirely
+                let (Some(created_height), Some(latest_data)) =
+                    (by_height.keys().next(), by_height.values().last())
+                else {
+                    return None;
+                };
+                let created_height = *created_height;
+                let latest_data = latest_data.clone();
+                latest_data.staker_balance().is_ok_and(|b| b != Amount::ZERO).then_some((
+                    *pool_id,
+                    created_height,
+                    latest_data,
+                ))
+            })
+            .map(|(pool_id, created_height, latest_data)| {
+                Ok((
+                    created_height,
+                    self.pool_id_sort_key(&pool_id)?,
+                    pool_id,
+                    latest_data,
+                ))
+            })
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(height_a, key_a, _, _), (height_b, key_b, _, _)| {
+            (Reverse(*height_a), Reverse(&**key_a)).cmp(&(Reverse(*height_b), Reverse(&**key_b)))
+        });
+        Ok(decorated)
+    }
+
     fn get_latest_pool_ids(
         &self,
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
-        let mut pool_data: Vec<_> = self
-            .pool_data_table
-            .iter()
-            .map(|(pool_id, by_height)| {
-                let created_height = by_height.keys().next().expect("not empty");
-                let latest_data = by_height.values().last().expect("not empty");
-                (pool_id, (created_height, latest_data))
-            })
-            .filter(|(_pool_id, data)| !data.1.is_decommissioned())
-            .collect();
-
-        pool_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
-        if offset >= pool_data.len() {
+        let offset = offset_to_usize(offset);
+        let decorated = self.sorted_live_pools()?;
+        if offset >= decorated.len() {
             return Ok(vec![]);
         }
 
-        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+        let latest_pools = decorated[offset..std::cmp::min(offset + len, decorated.len())]
             .iter()
-            .map(|(pool_id, data)| (**pool_id, (data.1).clone()))
+            .map(|(_height, _key, pool_id, data)| (*pool_id, data.clone()))
+            .collect();
+
+        Ok(latest_pools)
+    }
+
+    fn get_latest_pool_ids_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        let len = len as usize;
+        let mut decorated = self.sorted_live_pools()?;
+        let cursor_key = cursor
+            .map(|(cursor_height, cursor_pool_id)| {
+                Ok::<_, ApiServerStorageError>((
+                    cursor_height,
+                    self.pool_id_sort_key(&cursor_pool_id)?,
+                ))
+            })
+            .transpose()?;
+        decorated.retain(|(height, key, _pool_id, _data)| match &cursor_key {
+            Some((cursor_height, cursor_pool_key)) => {
+                *height < *cursor_height || (*height == *cursor_height && *key < *cursor_pool_key)
+            }
+            None => true,
+        });
+
+        let latest_pools = decorated
+            .iter()
+            .take(len)
+            .map(|(height, _key, pool_id, data)| (*height, *pool_id, data.clone()))
             .collect();
 
         Ok(latest_pools)
@@ -555,22 +767,41 @@ impl ApiServerInMemoryStorage {
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as usize;
-        let offset = offset as usize;
-        let mut pool_data: Vec<_> = self
+        let offset = offset_to_usize(offset);
+        // deepest pledge first, ties broken by the encoded pool address (byte order),
+        // exactly like the postgres listing; the balance and the sort key are decoded
+        // once per entry, and a pool whose stored balance fails to decode is surfaced
+        // as a storage error instead of silently shrinking the listing (the
+        // empty-history skip below stays silent because no write path produces one)
+        let mut decorated: Vec<(Amount, String, PoolId, PoolDataWithExtraInfo)> = self
             .pool_data_table
             .iter()
-            .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
-            .filter(|(_pool_id, data)| !data.is_decommissioned())
-            .collect();
-
-        pool_data.sort_by_key(|(_, data)| Reverse(data.staker_balance().expect("no overflow")));
-        if offset >= pool_data.len() {
+            .filter_map(|(pool_id, by_height)| {
+                let data = by_height.values().last()?.clone();
+                let balance = match data.staker_balance() {
+                    Ok(balance) => balance,
+                    Err(e) => {
+                        return Some(Err(ApiServerStorageError::DeserializationError(format!(
+                            "pool {pool_id} has an invalid staker balance: {e}"
+                        ))));
+                    }
+                };
+                (balance != Amount::ZERO)
+                    .then(|| Ok((balance, self.pool_id_sort_key(pool_id)?, *pool_id, data)))
+            })
+            .collect::<Result<Vec<_>, ApiServerStorageError>>()?;
+        // comparing references avoids re-allocating sort keys
+        decorated.sort_by(|(balance_a, key_a, _, _), (balance_b, key_b, _, _)| {
+            (Reverse(balance_a.into_atoms()), Reverse(&**key_a))
+                .cmp(&(Reverse(balance_b.into_atoms()), Reverse(&**key_b)))
+        });
+        if offset >= decorated.len() {
             return Ok(vec![]);
         }
 
-        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+        let latest_pools = decorated[offset..std::cmp::min(offset + len, decorated.len())]
             .iter()
-            .map(|(pool_id, data)| (**pool_id, (*data).clone()))
+            .map(|(_balance, _key, pool_id, data)| (*pool_id, data.clone()))
             .collect();
 
         Ok(latest_pools)
@@ -592,11 +823,24 @@ impl ApiServerInMemoryStorage {
         &self,
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.get_pool_data_at_or_below_height(pool_id, None)
+    }
+
+    fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_data_result = self.pool_data_table.get(&pool_id);
-        match pool_data_result {
-            Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
-            None => Ok(None),
-        }
+        let by_height = match pool_data_result {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+        let latest = match max_height {
+            Some(max_height) => by_height.range(..=max_height).next_back().map(|(_, v)| v.clone()),
+            None => by_height.last_key_value().map(|(_, v)| v.clone()),
+        };
+        Ok(latest)
     }
 
     fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<Utxo>, ApiServerStorageError> {
@@ -750,7 +994,7 @@ impl ApiServerInMemoryStorage {
             .fungible_token_data
             .keys()
             .chain(self.nft_token_issuances.keys())
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .copied()
             .collect())
@@ -781,7 +1025,7 @@ impl ApiServerInMemoryStorage {
                     String::from_utf8_lossy(value_ticker).to_ascii_lowercase();
                 (lowercased_value_ticker.contains(&lowercased_ticker)).then_some(key)
             }))
-            .skip(offset as usize)
+            .skip(offset_to_usize(offset))
             .take(len as usize)
             .copied()
             .collect())

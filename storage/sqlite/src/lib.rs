@@ -15,6 +15,30 @@
 
 //! A `Backend` implementation for Sqlite whose transactions are `Send`, so it's usable
 //! in an async context.
+//!
+//! # Security notes (Unix)
+//!
+//! The database can contain highly sensitive data (wallet databases store private keys
+//! and optionally the seed phrase), so on Unix this backend takes care to never expose
+//! it to other local users:
+//!
+//! * a missing database directory (including any missing parent components) is created
+//!   with owner-only permissions (0700);
+//! * the database file is created with owner-only permissions (0600) and, if a
+//!   pre-existing database file is exposed to group/other users, its permissions are
+//!   repaired to 0600 on open;
+//! * symlinks and non-regular files at the database path are rejected rather than
+//!   followed.
+//!
+//! Note that the permissions of pre-existing directories are left untouched, since they
+//! may be shared with unrelated data. Keep in mind that the auxiliary files that Sqlite
+//! itself creates next to the database (rollback journal, WAL, shared-memory) inherit
+//! umask-derived default permissions and are only protected by the permissions of the
+//! containing directory, so a pre-existing world-accessible database directory may
+//! briefly expose those files.
+//!
+//! On non-Unix platforms the file-level hardening is not implemented (known gap); the
+//! files are created by Sqlite with the platform-default permissions.
 
 extern crate core;
 
@@ -32,6 +56,97 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 use error::process_sqlite_error;
 use storage_core::{Data, DbDesc, DbMapId, backend};
+
+/// Ensure that the directory of the database file exists. If the directory (or any of its
+/// missing parents) does not exist, it is created with owner-only permissions (0700),
+/// which also protects the auxiliary files that Sqlite creates (rollback journal, WAL,
+/// shared-memory, temporary files). The permissions of pre-existing directories are left
+/// untouched, since they may be shared with unrelated data.
+#[cfg(unix)]
+fn ensure_private_directory(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    // Create the missing components one by one, tightening each directory created by
+    // this call to 0700 immediately. This avoids both the window in which a freshly
+    // created directory exists with umask-derived permissions (TOCTOU) and the issue of
+    // `create_dir_all` leaving intermediate components with such permissions.
+    let mut prefix = PathBuf::new();
+    for component in dir.components() {
+        prefix.push(component);
+        match std::fs::create_dir(&prefix) {
+            Ok(()) => {
+                std::fs::set_permissions(&prefix, std::fs::Permissions::from_mode(0o700))?;
+            }
+            // The component already exists; its permissions are deliberately left
+            // untouched (it may be shared with unrelated data).
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+            // All the previous components exist (we have processed them above), so a
+            // `NotFound` here could only be caused by a concurrent change, which we
+            // don't try to paper over.
+            Err(err) => return Err(err),
+        }
+    }
+
+    Ok(())
+}
+
+/// Ensure that the parent directory of the database file exists. On Unix it is created
+/// with owner-only permissions (see [`ensure_private_directory`]); on other platforms
+/// the platform-default permissions are used, as the file-level hardening is not
+/// implemented there (see the security notes in the module documentation).
+#[cfg(unix)]
+fn ensure_parent_dir(parent: &Path) -> std::io::Result<()> {
+    ensure_private_directory(parent)
+}
+
+#[cfg(not(unix))]
+fn ensure_parent_dir(parent: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(parent)
+}
+
+/// Create the database file atomically with owner-only permissions (0600), so that its
+/// (temporarily empty) contents are never observable by other users. Note that the
+/// `mode` of `OpenOptions` is masked by the process umask, so an explicit
+/// `set_permissions` call is needed to enforce 0600 in any environment.
+///
+/// If the file already exists:
+/// * a non-regular file (e.g. a directory or a symlink) is rejected with an error
+///   instead of being followed;
+/// * if its permissions are exposed to group/other users, they are repaired to 0600.
+///   Other (already private) permissions are left untouched, so that an intentionally
+///   chosen, non-exposed mode is not silently overwritten.
+///
+/// Returns whether the file was created.
+#[cfg(unix)]
+fn create_private_file(path: &Path) -> std::io::Result<bool> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    match std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path) {
+        Ok(_file) => {
+            // `.mode(0o600)` is masked by the umask, so enforce the mode explicitly.
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+            Ok(true)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            // Sensitive wallet data must not end up behind a symlink, and "repairing"
+            // something that isn't a regular file (e.g. a directory) would produce a
+            // confusing error from Sqlite later, so reject such paths up front.
+            if !std::fs::symlink_metadata(path)?.is_file() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "database path exists but is not a regular file",
+                ));
+            }
+            // Only repair the permissions if the file is exposed to group/other users.
+            let mode = std::fs::metadata(path)?.permissions().mode();
+            if mode & 0o077 != 0 {
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+            }
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
+}
 
 use crate::queries::SqliteQueries;
 
@@ -441,7 +556,7 @@ impl backend::Backend for Sqlite {
 
         if let SqliteStorageMode::File(ref path) = self.backend {
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
+                ensure_parent_dir(parent).map_err(error::process_io_error)?;
             } else {
                 return Err(storage_core::error::Fatal::Io(
                     std::io::ErrorKind::NotFound,
@@ -449,6 +564,14 @@ impl backend::Backend for Sqlite {
                 )
                 .into());
             }
+
+            // Pre-create the database file with owner-only permissions so that Sqlite never
+            // creates it with the default (world-readable) permissions.
+            // Note: this hardening is Unix-only; on other platforms the file is created by
+            // Sqlite with the platform-default permissions (see the security notes in the
+            // module documentation).
+            #[cfg(unix)]
+            create_private_file(path).map_err(error::process_io_error)?;
         }
 
         let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);

@@ -16,11 +16,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::db;
-use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, SealedStorageTag, TipStorageTag};
+use chainstate_types::{
+    BlockIndex, EpochData, EpochStorageRead, SealedStorageTag, TipStorageTag,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
+};
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
@@ -157,6 +160,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
     }
 
     #[log_error]
+    fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>> {
+        self.read::<db::DBBlockTxFees, _, _>(id)
+    }
+
+    #[log_error]
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
@@ -251,6 +259,19 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRo<'_, B
         let map = self.0.get::<db::DBBlockByHeight, _>();
         let items = map.prefix_iter_decoded(&())?;
         Ok(items.collect::<BTreeMap<_, _>>())
+    }
+
+    #[log_error]
+    fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>> {
+        self.read::<db::DBSealIndex, _, _>(seal)
+    }
+
+    #[log_error]
+    fn get_duplicate_seal_evidence(
+        &self,
+        seal: &BlockSeal,
+    ) -> crate::Result<Option<DuplicateSealEvidence>> {
+        self.read::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 
@@ -484,6 +505,11 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
     }
 
     #[log_error]
+    fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>> {
+        self.read::<db::DBBlockTxFees, _, _>(id)
+    }
+
+    #[log_error]
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
@@ -583,6 +609,19 @@ impl<B: storage::SharedBackend> BlockchainStorageRead for super::StoreTxRw<'_, B
         let map = self.get_map::<db::DBBlockByHeight, _>()?;
         let items = map.prefix_iter_decoded(&())?;
         Ok(items.collect::<BTreeMap<_, _>>())
+    }
+
+    #[log_error]
+    fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>> {
+        self.read::<db::DBSealIndex, _, _>(seal)
+    }
+
+    #[log_error]
+    fn get_duplicate_seal_evidence(
+        &self,
+        seal: &BlockSeal,
+    ) -> crate::Result<Option<DuplicateSealEvidence>> {
+        self.read::<db::DBDuplicateSealEvidence, _, _>(seal)
     }
 }
 

@@ -384,6 +384,20 @@ impl FromStr for CliUtxoOutPoint {
     }
 }
 
+impl std::fmt::Display for CliUtxoOutPoint {
+    /// Renders the outpoint in the same `tx(<id>,<index>)` notation the CLI
+    /// accepts, so prompts and errors can quote it back verbatim.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.source_id {
+            // `Id`'s `Display` elides the hash (`0000…36c`); `LowerHex`
+            // emits the full 64-hex-digit form `H256::from_str` accepts,
+            // so the rendered outpoint parses back through `FromStr`.
+            OutPointSourceId::Transaction(id) => write!(f, "tx({id:x},{})", self.output_index),
+            OutPointSourceId::BlockReward(id) => write!(f, "block({id:x},{})", self.output_index),
+        }
+    }
+}
+
 impl From<CliUtxoOutPoint> for UtxoOutPoint {
     fn from(value: CliUtxoOutPoint) -> Self {
         Self::new(value.source_id, value.output_index)
@@ -832,7 +846,7 @@ mod tests {
 
     use common::{
         address::pubkeyhash::PublicKeyHash,
-        chain::{self, Destination, tokens::TokenId},
+        chain::{self, Destination, GenBlock, Transaction, tokens::TokenId},
     };
     use randomness::RngExt;
     use test_utils::{
@@ -842,6 +856,32 @@ mod tests {
     use wallet_rpc_lib::types::RpcAmountIn;
 
     use super::*;
+
+    #[test]
+    fn outpoint_display_round_trips_through_from_str() {
+        let mut rng = make_seedable_rng(Seed::from(42u64));
+        let tx_id = Id::<Transaction>::new(H256::random_using(&mut rng));
+        let outpoint = CliUtxoOutPoint {
+            source_id: OutPointSourceId::Transaction(tx_id),
+            output_index: 7,
+        };
+        let rendered = outpoint.to_string();
+        let parsed: CliUtxoOutPoint = rendered.parse().expect("display must round-trip");
+        assert_eq!(parsed.source_id, outpoint.source_id);
+        assert_eq!(parsed.output_index, 7);
+        assert!(rendered.starts_with("tx("));
+
+        let block_id = Id::<GenBlock>::new(H256::random_using(&mut rng));
+        let outpoint = CliUtxoOutPoint {
+            source_id: OutPointSourceId::BlockReward(block_id),
+            output_index: 3,
+        };
+        let rendered = outpoint.to_string();
+        assert!(rendered.starts_with("block("), "{rendered}");
+        let parsed: CliUtxoOutPoint = rendered.parse().expect("display must round-trip");
+        assert_eq!(parsed.source_id, outpoint.source_id);
+        assert_eq!(parsed.output_index, 3);
+    }
 
     #[rstest]
     #[trace]

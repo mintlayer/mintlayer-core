@@ -1,6 +1,6 @@
 # RPC documentation for Mintlayer node
 
-Version `1.4.0`.
+Version `1.4.5`.
 
 ## Module `node`
 
@@ -191,6 +191,27 @@ Parameters:
             },
     "index": number,
 } }
+```
+
+Returns:
+```
+EITHER OF
+     1) object
+     2) null
+```
+
+### Method `chainstate_get_block_tx_fees`
+
+(experimental) Returns the per-transaction fees of a mainchain block,
+ordered by transaction index within the block. Fees are computed and
+persisted by the consensus layer at block connection time.
+
+Returns `None` (null) if the block predates fee persistence.
+
+
+Parameters:
+```
+{ "block_id": hex string }
 ```
 
 Returns:
@@ -1015,6 +1036,10 @@ Returns:
     "min_tx_relay_fee_rate": { "amount_per_kb": { "atoms": number string } },
     "max_cluster_tx_count": number,
     "max_cluster_size_bytes": number,
+    "allow_local_orphans": bool,
+    "local_orphan_pool_capacity": number,
+    "remote_orphan_pool_capacity_per_peer": number,
+    "outbound_remote_orphan_pool_capacity_per_peer": number,
 }
 ```
 

@@ -83,6 +83,19 @@ impl LoadedStorage {
     }
 
     fn load_storage_v3<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
+        {
+            // Rewrite any rows written by an older version under the mapped spelling of an
+            // IPv4 address, so the stored keys match the canonical form used at runtime.
+            let mut write_tx = storage.transaction_rw()?;
+            // Commit only when rows were actually rewritten, so the common case of an
+            // already-canonical database stays read-only.
+            if write_tx.normalize_legacy_mapped_address_keys()? {
+                write_tx.commit()?;
+            }
+            // TODO: once older databases are no longer expected, replace this
+            // every-startup scan with a one-time versioned migration or a stored marker.
+        }
+
         let tx = storage.transaction_ro()?;
 
         let known_addresses = tx.get_known_addresses()?.into_iter().collect::<BTreeMap<_, _>>();

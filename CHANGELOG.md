@@ -13,6 +13,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Changed
   - Wallet:
+    - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
+      as the target is met, and among equally economical solutions the one spending
+      fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
+      change.
+
     - coin selection now prefers confirmed UTXOs, reducing the chance that a
       send is rejected for forming an oversized mempool cluster; the full UTXO set
       is still used when the confirmed UTXOs cannot cover the payment.
