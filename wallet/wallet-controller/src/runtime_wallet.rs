@@ -365,6 +365,63 @@ where
         }
     }
 
+    /// Same as [`Self::get_utxos`], but also returns the [`UtxoState`] of the
+    /// transaction that created each output.
+    pub fn get_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, WalletError> {
+        match self {
+            RuntimeWallet::Software(w) => {
+                w.get_utxos_with_states(account_index, utxo_types, utxo_states, with_locked)
+            }
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => {
+                w.get_utxos_with_states(account_index, utxo_types, utxo_states, with_locked)
+            }
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => {
+                w.get_utxos_with_states(account_index, utxo_types, utxo_states, with_locked)
+            }
+        }
+    }
+
+    /// Same as [`Self::get_multisig_utxos`], but also returns the [`UtxoState`]
+    /// of the transaction that created each output.
+    pub fn get_multisig_utxos_with_states(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput, UtxoState)>, WalletError> {
+        match self {
+            RuntimeWallet::Software(w) => w.get_multisig_utxos_with_states(
+                account_index,
+                utxo_types,
+                utxo_states,
+                with_locked,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.get_multisig_utxos_with_states(
+                account_index,
+                utxo_types,
+                utxo_states,
+                with_locked,
+            ),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_multisig_utxos_with_states(
+                account_index,
+                utxo_types,
+                utxo_states,
+                with_locked,
+            ),
+        }
+    }
+
     pub fn get_transactions_to_be_broadcast(
         &mut self,
     ) -> Result<Vec<SignedTransaction>, WalletError> {
@@ -641,6 +698,32 @@ where
             RuntimeWallet::Trezor(w) => w.abandon_transaction(account_index, tx_id),
             #[cfg(feature = "ledger")]
             RuntimeWallet::Ledger(w) => w.abandon_transaction(account_index, tx_id),
+        }
+    }
+
+    pub fn prune_dead_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        match self {
+            RuntimeWallet::Software(w) => w.prune_dead_transaction(account_index, tx_id),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.prune_dead_transaction(account_index, tx_id),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.prune_dead_transaction(account_index, tx_id),
+        }
+    }
+
+    pub fn get_unconfirmed_transactions_per_account(
+        &self,
+    ) -> WalletResult<BTreeMap<U31, Vec<SignedTransaction>>> {
+        match self {
+            RuntimeWallet::Software(w) => w.get_unconfirmed_transactions_per_account(),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.get_unconfirmed_transactions_per_account(),
+            #[cfg(feature = "ledger")]
+            RuntimeWallet::Ledger(w) => w.get_unconfirmed_transactions_per_account(),
         }
     }
 

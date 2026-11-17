@@ -407,9 +407,24 @@ trait WalletRpc {
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances>;
 
-    /// Lists all the utxos owned by this account
+    /// Lists all the utxos owned by this account.
+    ///
+    /// When `utxo_states` is omitted (or given as an empty array), utxos in
+    /// all states are returned. Each utxo carries the state of the transaction
+    /// that created it, so the results can be filtered further client-side.
+    /// With identical `utxo_states` and `with_locked` values, the coin sum of
+    /// the returned Transfer/LockThenTransfer outputs equals `account_balance`
+    /// called with the same values (other utxo types are listed but not
+    /// counted towards the balance). When `with_locked` is omitted, locked
+    /// utxos are excluded.
     #[method(name = "account_utxos")]
-    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>>;
+    async fn get_utxos(
+        &self,
+        account: AccountArg,
+        utxo_types: Option<Vec<RpcUtxoType>>,
+        utxo_states: Option<Vec<RpcUtxoState>>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<UtxoInfo>>;
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     #[method(name = "node_submit_transaction")]

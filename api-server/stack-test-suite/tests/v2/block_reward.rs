@@ -33,7 +33,7 @@ async fn invalid_block_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid block Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn block_not_found() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Block not found");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -115,6 +115,7 @@ async fn no_reward(#[case] seed: Seed) {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
+                    stream_events: Default::default(),
                 }
             };
 
@@ -140,7 +141,7 @@ async fn no_reward(#[case] seed: Seed) {
 
     assert!(body.is_empty());
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -219,6 +220,7 @@ async fn has_reward(#[case] seed: Seed) {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
                     time_getter: Default::default(),
+                    stream_events: Default::default(),
                 }
             };
 
@@ -243,5 +245,5 @@ async fn has_reward(#[case] seed: Seed) {
 
     assert_eq!(body, expected_reward);
 
-    task.abort();
+    shutdown_task(task).await;
 }

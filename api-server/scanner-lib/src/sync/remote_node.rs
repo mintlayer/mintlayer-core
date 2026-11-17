@@ -15,7 +15,7 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, BlockTxFees, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use mempool::FeeRate;
@@ -27,7 +27,7 @@ use node_comm::{
 /// An abstraction for a node that can be called to retrieve information about the blockchain.
 #[async_trait::async_trait]
 pub trait RemoteNode {
-    type Error: std::error::Error;
+    type Error: std::error::Error + Send + Sync + 'static;
 
     async fn chainstate(&self) -> Result<ChainInfo, Self::Error>;
     async fn last_common_ancestor(
@@ -41,7 +41,24 @@ pub trait RemoteNode {
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error>;
 
+    /// (experimental) Per-transaction fees of a mainchain block, persisted at
+    /// connect time. Returns None if the block predates fee persistence; the
+    /// scanner then falls back to recomputing fees locally.
+    async fn block_tx_fees(&self, block_id: Id<Block>) -> Result<Option<BlockTxFees>, Self::Error>;
+
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
+
+    /// Returns `true` if the given error indicates a connection-level failure between the
+    /// scanner and the node (a broken or unusable connection), as opposed to an
+    /// application-level error reported by the node. Connection-level failures are recoverable
+    /// by dropping the client and establishing a new connection.
+    ///
+    /// Note: this must be implemented explicitly by every implementor. Returning `false` for
+    /// connection-level failures silently disables the reconnect-based recovery of the
+    /// consumers, treating every outage as a permanent application error instead.
+    fn is_connection_error(error: &Self::Error) -> bool
+    where
+        Self: Sized;
 }
 
 #[async_trait::async_trait]
@@ -67,7 +84,15 @@ impl RemoteNode for NodeRpcClient {
         self.get_mainchain_blocks(from, max_count).await
     }
 
+    async fn block_tx_fees(&self, block_id: Id<Block>) -> Result<Option<BlockTxFees>, Self::Error> {
+        NodeInterface::get_block_tx_fees(self, block_id).await
+    }
+
     async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         self.mempool_get_fee_rate_points().await
+    }
+
+    fn is_connection_error(error: &NodeRpcError) -> bool {
+        NodeRpcError::is_connection_error(error)
     }
 }

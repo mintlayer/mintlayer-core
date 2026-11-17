@@ -45,8 +45,8 @@ pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
 pub fn create_mempool_config() -> MempoolConfig {
     MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
-        max_cluster_tx_count: Default::default(),
-        max_cluster_size_bytes: Default::default(),
+        allow_local_orphans: false.into(),
+        ..Default::default()
     }
 }
 
@@ -90,7 +90,9 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 }
 
 pub fn make_test_tx_entry(clock: &TimeGetter, tx: SignedTransaction) -> TxEntry {
-    let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
+    let origin = TxOrigin::Remote(crate::tx_origin::RemoteTxOrigin::new(
+        p2p_types::PeerId::from_u64(1),
+    ));
     let creation_time = clock.get_time();
     let options = TxOptions::default_for(origin);
     TxEntry::new(tx, creation_time, origin, options)
@@ -321,7 +323,7 @@ pub fn generate_transaction_graph_generic(
                 .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
         );
 
-        let origin = RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
+        let origin = crate::tx_origin::RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
         let options = crate::TxOptions::default_for(origin);
         let entry = TxEntry::new(tx, time, origin, options);
         Some(TxEntryWithFee::new(
@@ -379,8 +381,8 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: fee_rate.into(),
-        max_cluster_tx_count: Default::default(),
-        max_cluster_size_bytes: Default::default(),
+        allow_local_orphans: false.into(),
+        ..Default::default()
     };
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(

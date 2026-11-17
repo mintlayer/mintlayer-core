@@ -22,7 +22,8 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        AccountType, Block, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction, TxOutput,
+        AccountType, Block, BlockTxFees, Currency, GenBlock, OrderId, RpcOrderInfo, Transaction,
+        TxOutput,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         output_value::{OutputValue, RpcOutputValue},
         tokens::{
@@ -438,6 +439,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {
         self.chainstate_ref.get_token_id_from_issuance_tx(tx_id)
+    }
+
+    /// (experimental) Per-transaction fees of a mainchain block, as persisted
+    /// at connect time. None if the block predates fee persistence.
+    pub fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, PropertyQueryError> {
+        self.chainstate_ref.get_block_tx_fees(block_id)
     }
 
     pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {

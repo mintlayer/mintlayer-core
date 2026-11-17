@@ -83,6 +83,13 @@ impl IsGlobalIp for std::net::Ipv6Addr {
             (addr.segments()[0] == 0x2001) && (addr.segments()[1] == 0xdb8)
         }
 
+        // An IPv4-mapped address is semantically an IPv4 address; judge it by the embedded
+        // IPv4 rules. Without this, `::ffff:127.0.0.1` or `::ffff:10.0.0.1` pass the IPv6
+        // checks despite representing non-routable IPv4 addresses.
+        if let Some(ipv4) = self.to_ipv4_mapped() {
+            return ipv4.is_global_unicast_ip();
+        }
+
         // Copied from the unstable method `std::net::Ipv6Addr::is_unicast_global`.
         !self.is_multicast()
             && !self.is_loopback()
@@ -151,5 +158,29 @@ mod tests {
                 "{ip} is expected to be not global unicast IP address"
             );
         }
+    }
+
+    #[test]
+    fn ipv4_mapped_ipv6_addresses_are_judged_by_the_embedded_ipv4() {
+        let non_global_mapped = [
+            "::ffff:127.0.0.1",   // Loopback
+            "::ffff:10.0.0.1",    // Private
+            "::ffff:192.168.1.1", // Private
+            "::ffff:172.16.0.1",  // Private
+            "::ffff:169.254.1.1", // Link-local
+            "::ffff:0.0.0.0",     // Unspecified
+            "::ffff:224.0.0.1",   // Multicast
+        ];
+        for ip in non_global_mapped {
+            assert!(
+                !is_global_unicast(ip),
+                "{ip} is expected to be not global unicast IP address"
+            );
+        }
+
+        assert!(
+            is_global_unicast("::ffff:8.8.8.8"),
+            "mapped global IPv4 is expected to be global unicast IP address"
+        );
     }
 }

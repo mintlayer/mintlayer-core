@@ -47,12 +47,16 @@ ignore = [
     # "paste" is no longer maintained.
     "RUSTSEC-2024-0436",
 
-    # "bincode" is no longer maintained.
-    "RUSTSEC-2025-0141",
+    # Bundled root certificates include distrusted emSign intermediates. The
+    # 1.x copy of `webpki-root-certs` was updated past the affected versions;
+    # the 0.26.x line (pulled in via `rustls-platform-verifier`) has no
+    # release with the root removed yet.
+    "RUSTSEC-2026-0383",
 
-    # `rand` is unsound. Note that this has been patched in versions 0.10.1, 0.9.3 and 0.8.6, but we still
-    # have one place where `rand` 0.7.x is used - it's a dependency of `probabilistic-collections` v0.7.0.
-    # But we don't use any code from `probabilistic-collections` that actually creates an RNG, so our code
-    # is still sound.
-    "RUSTSEC-2026-0097"
+    # "pin-utils" is unmaintained: the upstream repository was archived in
+    # October 2026 (shortly after releasing 0.1.1) and the advisory covers
+    # every published version, so no lockfile update can clear it. The crate
+    # is pulled in transitively by "futures", which requires the 0.1.x line;
+    # this entry can go away when "futures" drops the dependency.
+    "RUSTSEC-2026-0441",
 ]

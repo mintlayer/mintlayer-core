@@ -158,6 +158,12 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
     }
 }
 
+impl<K: Ord + Copy, T: Clone + Eq> Default for DeltaDataCollection<K, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
 fn combine_delta_data<T: Clone + Eq>(
     lhs: DataDelta<T>,

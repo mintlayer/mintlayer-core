@@ -109,3 +109,74 @@ fn empty_chainstate_no_genesis() {
         let _ = chainstate.query().unwrap().get_best_block_id();
     })
 }
+
+/// A failed switch-off of the reckless mode (e.g. an IO error during the forced sync
+/// right after a large IBD) must not consume the counter nor panic on retry: the next
+/// `dec` must retry the switch-off, and a spurious extra decrement must recover instead
+/// of underflowing.
+#[test]
+fn reckless_mode_counter_retry_after_failed_switch_off() {
+    use chainstate_storage::mock::MockStore;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let config = crate::config::ChainstateConfig {
+        enable_db_reckless_mode_in_ibd: Some(true),
+        ..Default::default()
+    };
+
+    let mut storage = MockStore::default();
+    let fail_next_switch_off = AtomicBool::new(true);
+    let mut seq = mockall::Sequence::new();
+
+    // inc: switch the mode on
+    storage
+        .expect_set_reckless_mode()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|set: bool| {
+            assert!(set);
+            Ok(())
+        });
+    // dec #1: the forced sync fails, simulating an IO error after a big IBD
+    storage.expect_set_reckless_mode().times(1).in_sequence(&mut seq).returning(
+        move |_set: bool| {
+            if fail_next_switch_off.swap(false, Ordering::SeqCst) {
+                Err(chainstate_storage::Error::Storage(
+                    storage::error::Recoverable::TransactionFailed,
+                ))
+            } else {
+                Ok(())
+            }
+        },
+    );
+    // dec #2: the retry succeeds
+    storage
+        .expect_set_reckless_mode()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_set: bool| Ok(()));
+    // dec #3: a spurious extra decrement attempts the (idempotent) switch-off again
+    storage
+        .expect_set_reckless_mode()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_set: bool| Ok(()));
+
+    let mut counter = DbRecklessModeCounter::new();
+
+    counter.inc(&config, &storage).unwrap();
+    assert_eq!(counter.counter, 1);
+
+    // The failed switch-off must propagate its error without decrementing the counter.
+    assert!(counter.dec(&config, &storage).is_err());
+    assert_eq!(counter.counter, 1);
+
+    // The retry must succeed and empty the counter.
+    counter.dec(&config, &storage).unwrap();
+    assert_eq!(counter.counter, 0);
+
+    // A spurious extra decrement must not panic (including debug builds) and must
+    // attempt the switch-off again.
+    counter.dec(&config, &storage).unwrap();
+    assert_eq!(counter.counter, 0);
+}

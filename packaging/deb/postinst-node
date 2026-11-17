@@ -1,0 +1,42 @@
+#!/bin/sh
+# postinst for mintlayer-node
+set -e
+
+case "$1" in
+    configure)
+        # Create the system user if systemd-sysusers has not done it already.
+        if ! getent passwd mintlayer >/dev/null 2>&1; then
+            adduser --system --group --home /var/lib/mintlayer \
+                --no-create-home --quiet mintlayer || true
+        fi
+        if command -v systemd-sysusers >/dev/null 2>&1; then
+            systemd-sysusers mintlayer.conf || true
+        fi
+        # The daemon user needs its state directory; recreate it if an admin
+        # removed it between installs (adduser runs with --no-create-home).
+        if [ ! -d /var/lib/mintlayer ]; then
+            mkdir -p /var/lib/mintlayer
+            chown mintlayer:mintlayer /var/lib/mintlayer || true
+        fi
+
+        # Load the hardware wallet udev rules.
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules >/dev/null 2>&1 || true
+            udevadm trigger --subsystem-match=hidraw >/dev/null 2>&1 || true
+        fi
+
+        # Enable the mainnet node (matching the shipped preset policy); all
+        # other units are opt-in. deb-systemd-helper works with or without
+        # systemd running.
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper enable mintlayer-node@mainnet.service >/dev/null || true
+        fi
+        # Start (or start again after upgrade); stderr stays visible so a
+        # failing install is diagnosable.
+        if [ -d /run/systemd/system ] && command -v deb-systemd-invoke >/dev/null 2>&1; then
+            deb-systemd-invoke start mintlayer-node@mainnet.service 1>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

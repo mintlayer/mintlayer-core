@@ -4,9 +4,45 @@ All notable changes to the API server will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.4.5] - 2026-11-10
 
 ### Fixed
+
+
+## [1.4.4] - 2026-10-31
+
+### Fixed
+- The scanner no longer credits block rewards on top of pool or delegation state written by higher (future) blocks when it reconnects blocks after an interrupted scan: all pool, delegation and delegation-shares reads performed while connecting a block at height h are now point-in-time reads (state as of h), so replaying a range of blocks always reproduces the same history as a clean scan instead of silently accumulating duplicated rewards.
+- Spending a delegation share with an amount larger than the delegation's balance, or an overflowing nonce, now fails with a typed PoS accounting error instead of panicking and crash-looping the scanner daemon.
+
+### Changed
+- The api-server storage version was bumped from 27 to 28 (point-in-time replay reads); the scanner re-initializes the database when it finds a different version, as before. Full resync is required, which also repairs databases whose stored balances already drifted from the chain through the replay bug above.
+
+## [1.4.1]
+
+### Added
+- Pending transactions are now served through the regular REST endpoints: `GET /v2/transaction/{id}` falls back to the mempool of the connected node when the transaction is not confirmed yet, and a new `GET /v2/mempool/transactions` endpoint lists the pending transactions (paginated with `offset`/`items`, with an optional `order=dependency` parameter that lists transactions after the transactions they depend on).\
+  The responses have the same shape as the confirmed ones, except that for a pending transaction the `block_id`/`timestamp`/`confirmations` fields are `null` (the values are not applicable until the transaction is confirmed), the `fee` field is omitted, and the spent utxos of the inputs are not populated. The decimals of a transferred token are resolved from the api-server storage; if the token is not indexed yet, i.e. its issuance may be pending in the mempool itself, the decimals are taken from the issuing transaction of the mempool listing (fetched only in that case), and a token that cannot be resolved at all is rendered with zero decimals. The endpoints proxy the mempool of the connected node, so the data reflects the view of that node and disappears once the transactions are confirmed, evicted or reorganized away. Unlike the other GET endpoints, the cost of `GET /v2/mempool/transactions` is proportional to the size of the node's mempool (which is capped by the node configuration) rather than the size of the requested page, and `GET /v2/transaction/{id}` pays that cost too when it has to resolve the decimals of a token that is not indexed yet.
+- New endpoint `/v2/stream` (Server-Sent Events) that streams `tx_seen`, `block` and `reorg` events in real time, with an optional `types` filter parameter.\
+  The stream carries keepalive comments, an in-stream reconnection hint, and a `lag` advisory for clients that fall behind; there is no replay, so missed events must be recovered through the regular REST endpoints.
+- New web server options: `--stream-events-broadcast-capacity`, `--stream-events-max-subscribers`, `--stream-events-poll-interval-secs`, `--stream-events-keepalive-interval-secs`.
+- The scanner now emits block/reorg events into a new `ml.emitted_events` table (transactionally consistent with the indexed data) and notifies listeners on commit.\
+  Transactions seen in the node's mempool are bridged into `tx_seen` events by the web server.
+
+### Changed
+- The `items` query parameter is now validated the same way on every paginated `v2` endpoint: `items=0` is rejected with `400 invalid num items` instead of returning an empty page. Previously the offset-based endpoints returned an empty listing for `items=0`; the new keyset-paginated endpoints (pools, transactions, holders, order book) reject it from the start.
+- The api-server storage version was bumped from 25 to 26 (new `ml.emitted_events` table); the scanner re-initializes the database when it finds a different version, as before. Full resync is required.
+- `RemoteNode::is_connection_error` is now a required trait method (no default); external implementors of the `RemoteNode` trait must provide it. `ClientErrorExt::is_connection_error` now classifies `ClientError::RequestTimeout` as application-level (the connection may still be usable), and the node WS client enables WS-level pings and pins its request timeout to 60 seconds, so half-dead connections are detected and reconnected instead of wedging.
+- The stream event retention pruning no longer deletes events that the event pump has not consumed yet: the pump records its progress in the database and the pruning never overtakes it (with a hard limit of 100k retained events before the first progress record or during a pump outage, logged as an error when it kicks in).
+- A terminated streaming background task (the event pump or the mempool bridge) now brings the web server process down instead of leaving the event stream silently dead while the REST endpoints keep working.
+- The streaming CLI options are validated (`clap` range checks) instead of silently clamping invalid values, and an SSE connection above `--stream-events-max-subscribers` is rejected with `429 Too Many Requests`.
+- A `lag` advisory (`skipped: 0`) is now broadcast when the node's mempool subscription is lost or an event cannot be decoded, so clients can detect gaps; a single undecodable event no longer stalls the whole stream.
+
+### Fixed
+- The scanner daemon no longer requires a manual restart when the WebSocket connection to the node is lost.\
+  Connection-level failures (the node being unreachable, closing the connection or timing out) are now recovered in place: the daemon re-establishes the connection with an exponential backoff (1s doubling up to 60s, jittered by ±20%, only reset by a successful sync), logs each reconnection attempt and resumes indexing from the tip stored in the database. Errors that reconnecting cannot fix (e.g. an invalid RPC configuration) still terminate the process, and persistent non-connection sync failures back off exponentially instead of logging at a fixed rate.
+- The web server's mempool bridge runs on its own connection to the node and recovers from connection loss in place.\
+  Previously it shared the WebSocket client with the REST endpoints and re-subscribed on it after a loss, which cannot succeed: once the node closes the connection, a jsonrpsee WS client stays broken forever. Now the bridge keeps the connection parameters, re-creates its client whenever a connection-level failure is detected and resumes the `tx_seen` stream (with the usual `lag` advisory for the gap); the REST traffic is unaffected by the subscription channel and vice versa. Note that the REST client itself is still created once at startup and is not re-created.
 - `/v2/token` and `/v2/token/ticker/{ticker}` no longer return the same id more than once.\
   Both tokens and NFTs are stored with a row per block height they changed at, and every one
   of those rows was being listed. Tokens that were updated, and NFTs that changed owner, now

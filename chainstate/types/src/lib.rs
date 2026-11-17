@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod pos_randomness;
+pub mod seal;
 pub mod storage_result;
 pub mod vrf_tools;
 
@@ -33,6 +34,7 @@ pub use crate::{
     gen_block_index::{GenBlockIndex, GenBlockIndexRef},
     height_skip::get_skip_height,
     locator::Locator,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
 };
 
 mod ancestor;

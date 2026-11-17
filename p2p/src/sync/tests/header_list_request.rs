@@ -235,6 +235,7 @@ async fn locator_must_be_from_peers_known_best_block(#[case] seed: Seed) {
             msg_max_locator_count: Default::default(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            ..Default::default()
         }));
 
         let node_blocks = make_new_blocks(

@@ -35,6 +35,7 @@ humantime.workspace = true
 hex.workspace = true
 itertools.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
+dialoguer.workspace = true
 semver.workspace = true
 serde_json.workspace = true
 shlex.workspace = true
@@ -51,6 +52,7 @@ futures.workspace = true
 prettytable-rs = "0.10"
 
 [dev-dependencies]
+utils = { path = "../../utils", features = ["test-util"] }
 blockprod = { path = "../../blockprod" }
 chainstate-storage = { path = "../../chainstate/storage" }
 crypto = { path = "../../crypto" }

@@ -1,0 +1,36 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ocr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Fork PRs cannot read secrets; skip them cleanly.
+    if: github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: alibaba/open-code-review@494bf1c8d7a19196ab166960a06fef38d69a1d16 # v1.12.0
+        with:
+          llm_url: https://api.z.ai/api/coding/paas/v4
+          llm_auth_token: ${{ secrets.OCR_LLM_TOKEN }}
+          llm_model: glm-5.3-flash
+          llm_use_anthropic: false
+          # GLM-5.3 family rejects thinking.type=disabled, which is the
+          # action's default extra_body — this override is required.
+          llm_extra_body: '{"thinking": {"type": "enabled"}}'
+          llm_reasoning_effort: low
+          incremental: 'true'
+          route_severity_below: 'low'
+          max_tokens_budget: '500000'
+          review_task_timeout: '15'
+          stream_progress: 'true'

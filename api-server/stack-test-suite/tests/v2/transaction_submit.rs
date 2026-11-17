@@ -40,6 +40,7 @@ async fn dissabled_post_route() {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -65,7 +66,7 @@ async fn dissabled_post_route() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Forbidden endpoint");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -89,6 +90,7 @@ async fn invalid_transaction() {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -117,7 +119,7 @@ async fn invalid_transaction() {
         "Invalid signed transaction"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -144,6 +146,7 @@ async fn ok(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -183,5 +186,5 @@ async fn ok(#[case] seed: Seed) {
     let body = body.as_object().unwrap();
     assert_eq!(body.get("tx_id").unwrap(), &tx_id);
 
-    task.abort();
+    shutdown_task(task).await;
 }

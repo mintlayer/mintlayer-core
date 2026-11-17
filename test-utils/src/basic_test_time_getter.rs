@@ -82,3 +82,9 @@ impl BasicTestTimeGetter {
         Arc::ptr_eq(&self.current_time_millis, &other.current_time_millis)
     }
 }
+
+impl Default for BasicTestTimeGetter {
+    fn default() -> Self {
+        Self::new()
+    }
+}

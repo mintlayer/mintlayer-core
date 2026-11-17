@@ -372,7 +372,10 @@ where
 
         if let Some(transaction) = tx {
             let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
-            let options = TxOptions::default_for(origin.into());
+            // Outbound peers carry the node's main transaction feed, so their submitted
+            // orphans get the larger outbound per-peer capacity in the mempool.
+            let options = TxOptions::default_for(origin.into())
+                .with_origin_peer_outbound(matches!(self.direction, ConnectionDirection::Outbound));
             let txid = transaction.transaction().get_id();
             let tx_status = self
                 .mempool_handle

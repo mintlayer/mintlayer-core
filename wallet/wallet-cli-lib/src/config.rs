@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use common::chain::config::{ChainType, regtest_options::ChainConfigOptions};
 use crypto::key::hdkd::u31::U31;
@@ -25,14 +25,49 @@ use wallet_rpc_lib::cmdline::CliHardwareWalletType;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "MAINNET_WALLET",
+        WALLET_SECRET_OPTIONS
+    )))]
     Mainnet(CliArgs),
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "TESTNET_WALLET",
+        WALLET_SECRET_OPTIONS
+    )))]
     Testnet(CliArgs),
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "REGTEST_WALLET",
+        WALLET_SECRET_OPTIONS
+    )))]
     Regtest(Box<RegtestOptions>),
-    #[clap(mut_args(clap_utils::env_adder("SIGNET_WALLET")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "SIGNET_WALLET",
+        WALLET_SECRET_OPTIONS
+    )))]
     Signet(CliArgs),
+}
+
+/// Options whose values can hold a secret; their environment-sourced values are hidden
+/// from the help output.
+const WALLET_SECRET_OPTIONS: &[&str] = &[
+    "node-rpc-username",
+    "node-rpc-password",
+    "wallet-rpc-username",
+    "wallet-rpc-password",
+    "wallet-password",
+    "remote-rpc-wallet-username",
+    "remote-rpc-wallet-password",
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn every_secret_option_has_its_env_value_hidden() {
+        clap_utils::assert_secret_options_hidden(&WalletCliArgs::command(), WALLET_SECRET_OPTIONS);
+    }
 }
 
 #[derive(Args, Clone, Debug)]
@@ -44,7 +79,7 @@ pub struct RegtestOptions {
 }
 
 #[derive(Parser, Debug)]
-#[clap(mut_args(clap_utils::env_adder("WALLET")))]
+#[clap(mut_args(clap_utils::env_adder_hiding_env_values("WALLET", WALLET_SECRET_OPTIONS)))]
 #[clap(version(app_version_with_git_info!().to_pretty_string()))]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {
@@ -63,6 +98,16 @@ impl WalletCliArgs {
             Network::Regtest(args) => args.run_options,
         })
     }
+}
+
+/// Output format for one-shot (`--exec`) runs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum CliOutputFormat {
+    /// Human-readable text.
+    #[default]
+    Text,
+    /// A single JSON object on standard output.
+    Json,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -118,6 +163,27 @@ pub struct CliArgs {
     /// Run commands from the file
     #[clap(long)]
     pub commands_file: Option<PathBuf>,
+
+    /// Run a single wallet command and exit.
+    ///
+    /// The command is spelled exactly as in the interactive wallet, e.g.
+    /// `--exec "account create name"`. The exit status is 0 when the command
+    /// succeeded and 1 when it failed.
+    #[clap(long, conflicts_with = "commands_file")]
+    pub exec: Option<String>,
+
+    /// Output format for `--exec`: human-readable text or a single JSON object.
+    /// Startup reports go to standard error either way, so JSON output on
+    /// standard output stays machine-parseable.
+    #[clap(long, value_enum, default_value_t = CliOutputFormat::Text)]
+    pub output: CliOutputFormat,
+
+    /// Answer "yes" to every confirmation prompt.
+    ///
+    /// State-changing commands ask for confirmation; in non-interactive runs
+    /// (`--exec`, `--commands-file`) they abort unless this flag is passed.
+    #[clap(long)]
+    pub yes: bool,
 
     /// Preserve history file between application runs.
     /// This can be very insecure as it also stores things like the seed-phrase, use at your own risk!
@@ -189,9 +255,9 @@ pub struct CliArgs {
     #[arg(long, conflicts_with_all(["remote_rpc_wallet_password", "remote_rpc_wallet_username", "remote_rpc_wallet_cookie_file"]))]
     pub remote_rpc_wallet_no_authentication: bool,
 
-    /// Disable QR code output for wallet commands
+    /// Print QR codes for addresses and transaction payloads (off by default).
     #[arg(long)]
-    pub no_qr: bool,
+    pub qr: bool,
 }
 
 impl From<&Network> for ChainType {

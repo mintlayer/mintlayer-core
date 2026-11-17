@@ -31,6 +31,12 @@ pub struct TransactionBuilder {
     witnesses: Vec<InputWitness>,
 }
 
+impl Default for TransactionBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransactionBuilder {
     pub fn new() -> Self {
         Self {

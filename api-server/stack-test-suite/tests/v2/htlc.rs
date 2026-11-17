@@ -185,6 +185,7 @@ async fn spend(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -220,7 +221,7 @@ async fn spend(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     assert!(body.contains(&format!("\"secret\":{}", to_json_string(secret.secret()))));
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -357,6 +358,7 @@ async fn refund(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -385,5 +387,5 @@ async fn refund(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     assert!(body.contains("\"secret\":null"));
 
-    task.abort();
+    shutdown_task(task).await;
 }

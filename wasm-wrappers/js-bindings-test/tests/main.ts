@@ -27,6 +27,7 @@ import { test_orders } from "./test_orders.js";
 import { test_signed_transaction_intent } from "./test_signed_transaction_intent.js";
 import { test_transaction_and_witness_encoding } from "./test_transaction_and_witness_encoding.js";
 import { test_partially_signed_transaction_encoding } from "./test_partially_signed_transaction_encoding.js";
+import { test_decode_transaction_to_js } from "./test_decode_transaction_to_js.js";
 
 /** @public */
 export function run_all_tests() {
@@ -40,6 +41,7 @@ export function run_all_tests() {
   run_one_test(test_signed_transaction_intent);
   run_one_test(test_transaction_and_witness_encoding);
   run_one_test(test_partially_signed_transaction_encoding);
+  run_one_test(test_decode_transaction_to_js);
 
   console.log("All tests passed");
 }
