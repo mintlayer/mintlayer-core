@@ -52,5 +52,3 @@ target-debian/
 /Mintlayer_Node_win_*_Setup.exe
 /Mintlayer_Node_GUI_win_*_Setup.exe
 
-# local agent workspace
-.opencode/

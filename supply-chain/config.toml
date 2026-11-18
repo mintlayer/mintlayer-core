@@ -28,6 +28,9 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
+[policy.file-rotate]
+audit-as-crates-io = false
+
 [policy.fontconfig-parser]
 audit-as-crates-io = true
 
@@ -51,6 +54,15 @@ audit-as-crates-io = true
 
 [policy.parity-scale-codec-derive]
 audit-as-crates-io = true
+
+[policy.reedline]
+audit-as-crates-io = false
+
+[policy.serde_with]
+audit-as-crates-io = false
+
+[policy.serde_with_macros]
+audit-as-crates-io = false
 
 [policy.trezor-client]
 audit-as-crates-io = false
@@ -113,6 +125,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.async-recursion]]
 version = "1.1.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.base64]]
+version = "0.23.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bigdecimal]]
@@ -340,7 +356,7 @@ version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.darling]]
-version = "0.23.0"
+version = "0.24.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.darling_core]]
@@ -348,7 +364,7 @@ version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.darling_core]]
-version = "0.23.0"
+version = "0.24.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.darling_macro]]
@@ -356,7 +372,7 @@ version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.darling_macro]]
-version = "0.23.0"
+version = "0.24.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.dashmap]]
@@ -519,10 +535,6 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.file-rotate]]
-version = "0.7.6"
-criteria = "safe-to-deploy"
-
 [[exemptions.find-msvc-tools]]
 version = "0.1.9"
 criteria = "safe-to-deploy"
@@ -679,10 +691,6 @@ criteria = "safe-to-deploy"
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.iana-time-zone]]
-version = "0.1.65"
-criteria = "safe-to-deploy"
-
 [[exemptions.iced_aw]]
 version = "0.12.2@git:def1db9aac1e58a47e0c3127d4d4e95d724ca8ad"
 criteria = "safe-to-deploy"
@@ -706,6 +714,26 @@ criteria = "safe-to-deploy"
 [[exemptions.iri-string]]
 version = "0.7.10"
 criteria = "safe-to-run"
+
+[[exemptions.jiff]]
+version = "1.0.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.jiff-core]]
+version = "1.0.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.jiff-static]]
+version = "1.0.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.jiff-tzdb]]
+version = "1.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.jiff-tzdb-platform]]
+version = "1.0.0"
+criteria = "safe-to-deploy"
 
 [[exemptions.jni]]
 version = "0.19.0"
@@ -1055,6 +1083,10 @@ criteria = "safe-to-deploy"
 version = "1.15.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.portable-atomic-util]]
+version = "0.2.8"
+criteria = "safe-to-deploy"
+
 [[exemptions.ppv-lite86]]
 version = "0.2.21"
 criteria = "safe-to-deploy"
@@ -1161,10 +1193,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.redox_users]]
 version = "0.4.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.reedline]]
-version = "0.38.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rend]]
@@ -1277,14 +1305,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.serde_urlencoded]]
 version = "0.7.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde_with]]
-version = "3.21.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde_with_macros]]
-version = "3.21.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.serial_test]]
