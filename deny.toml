@@ -59,4 +59,12 @@ ignore = [
     # is pulled in transitively by "futures", which requires the 0.1.x line;
     # this entry can go away when "futures" drops the dependency.
     "RUSTSEC-2026-0441",
+
+    # "chrono" is unmaintained: the advisory (RUSTSEC-2026-0543) covers every
+    # published version and offers no safe upgrade, so no lockfile update can
+    # clear it. It is a direct dependency of our own "common" crate (timestamp
+    # handling), and migrating to the recommended alternatives ("jiff" or
+    # "time") is a workspace-wide refactor that will land separately. This is
+    # an unmaintained-class notice, not a vulnerability report.
+    "RUSTSEC-2026-0543",
 ]
