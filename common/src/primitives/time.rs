@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(format!("{t}"), "2024-01-12 12:54:52.100 UTC");
         let t = Time::from_duration_since_epoch(Duration::from_micros(1705064092001100));
         assert_eq!(format!("{t}"), "2024-01-12 12:54:52.001100 UTC");
-        let t = Time::from_duration_since_epoch(Duration::from_nanos(1705064092_000000001));
+        let t = Time::from_duration_since_epoch(Duration::from_nanos(1_705_064_092_000_000_001));
         assert_eq!(format!("{t}"), "2024-01-12 12:54:52.000000001 UTC");
 
         let t = Time::from_duration_since_epoch(Duration::MAX);
