@@ -1,3 +1,14 @@
+[sources]
+# Temporary overlays (RUSTSEC-2026-0543 chrono removal) — narrow, exact-URL allows
+# instead of an org-wide expansion; remove when upstream releases land
+# (file-rotate: kstrafe/file-rotate#40; reedline >= 0.53 after an MSRV bump; serde_with
+# once chrono's status is resolved upstream).
+allow-git = [
+    "https://github.com/nullPointerEnjoyer/file-rotate",
+    "https://github.com/nullPointerEnjoyer/reedline",
+    "https://github.com/nullPointerEnjoyer/serde_with",
+]
+
 [sources.allow-org]
 github = [
     "mintlayer",  # allow any code from mintlayer's github

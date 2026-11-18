@@ -613,7 +613,7 @@ impl CliTokenTotalSupply {
 }
 
 /// An OutputTimeLock that can be parsed from strings of the form "block_count(num)", "seconds(num)",
-/// "until_height(num)" and "until_time(RFC 3339 datetime)".
+/// "until_height(num)" and "until_time(RFC 3339-style datetime)".
 #[derive(Debug, Clone)]
 pub enum CliOutputTimeLock {
     UntilHeight(BlockHeight),
@@ -648,7 +648,7 @@ impl FromStr for CliOutputTimeLock {
             Self::UntilHeight(parse_u64(arg)?.into())
         } else if lock_type.eq_ignore_ascii_case("until_time") {
             let date_time = arg
-                .parse::<chrono::DateTime<chrono::Utc>>()
+                .parse::<jiff::Timestamp>()
                 .map_err(|_| ParseError::InvalidTime(arg.to_owned()))?;
             let time =
                 Time::from_absolute_time(&date_time).ok_or(ParseError::BadTime(date_time))?;
@@ -821,7 +821,7 @@ pub enum ParseError {
     InvalidTime(String),
 
     #[error("Bad time: {0}")]
-    BadTime(chrono::DateTime<chrono::Utc>),
+    BadTime(jiff::Timestamp),
 
     #[error("Invalid currency: {0}")]
     InvalidCurrency(String),
@@ -840,7 +840,6 @@ pub enum ParseError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
 
     use rstest::rstest;
 
@@ -1248,8 +1247,6 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn test_parse_output_timelock(#[case] seed: Seed) {
-        use chrono::prelude::*;
-
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
@@ -1276,28 +1273,30 @@ mod tests {
             let year = rng.random_range(1970..=3000);
             let month = rng.random_range(1..=12);
             let days_in_month =
-                NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
+                jiff::civil::date(year, month.try_into().unwrap(), 1).days_in_month();
             let day = rng.random_range(1..=days_in_month);
             let hour = rng.random_range(0..24);
             let min = rng.random_range(0..60);
             let sec = rng.random_range(0..60);
-            let expected_time = NaiveDateTime::new(
-                NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
-                NaiveTime::from_hms_opt(hour, min, sec).unwrap(),
-            );
-            let expected_time_utc = DateTime::from_naive_utc_and_offset(expected_time, Utc);
+            let expected_time_utc = jiff::tz::TimeZone::UTC
+                .to_zoned_datetime(
+                    jiff::civil::date(year, month.try_into().unwrap(), day).at(hour, min, sec, 0),
+                )
+                .unwrap()
+                .timestamp();
             let tz_hours = rng.random_range(0..24);
             let tz_mins = rng.random_range(0..60);
             let tz_positive = rng.random_bool(0.5);
             let expected_time_with_tz = {
-                let offset = Duration::from_secs(tz_hours * 3600 + tz_mins * 60);
+                let offset = jiff::SignedDuration::from_secs(tz_hours * 3600 + tz_mins * 60);
                 if tz_positive {
                     expected_time_utc - offset
                 } else {
                     expected_time_utc + offset
                 }
             };
-            let datetime_base_str = format!("{year}-{month}-{day}T{hour}:{min}:{sec}");
+            let datetime_base_str =
+                format!("{year:04}-{month:02}-{day:02}T{hour:02}:{min:02}:{sec:02}");
             let datetime_str_utc = format!("{datetime_base_str}Z");
             let tz_plus_minus = if tz_positive { "+" } else { "-" };
             let tz_str = format!("{tz_plus_minus}{tz_hours:02}:{tz_mins:02}");
@@ -1326,6 +1325,32 @@ mod tests {
                         Time::from_absolute_time(&expected_time_with_tz).unwrap()
                     ))
                 );
+
+                // Non-zero-padded variants that the previous parser accepted are
+                // now rejected (fixed single-digit fields, independent of the
+                // random values above).
+                let unpadded_str = "2419-3-29T6:7:5Z";
+                let res = CliOutputTimeLock::from_str(&format!("until_time({unpadded_str})"));
+                assert!(matches!(res, Err(ParseError::InvalidTime(_))));
+
+                // Some lenient extensions remain accepted (Temporal-style parsing):
+                // space separator and omitted seconds.
+                let space_str =
+                    format!("{year:04}-{month:02}-{day:02} {hour:02}:{min:02}:{sec:02}Z");
+                let parsed: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("until_time({space_str})"))
+                        .unwrap()
+                        .into();
+                assert_eq!(
+                    parsed,
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_time(
+                        Time::from_absolute_time(&expected_time_utc).unwrap()
+                    ))
+                );
+
+                // Bare epoch seconds are not a valid timestamp here.
+                let res = CliOutputTimeLock::from_str(&format!("until_time({})", 1705064092_u64));
+                assert!(matches!(res, Err(ParseError::InvalidTime(_))));
             }
 
             let sec_frac = rng.random_range(1..1000);

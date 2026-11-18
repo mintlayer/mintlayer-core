@@ -67,7 +67,10 @@ fn random_string(length: usize) -> String {
 }
 
 fn current_datetime_as_string() -> String {
-    chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string()
+    jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .strftime("%Y%m%d_%H%M%S")
+        .to_string()
 }
 
 pub struct Podman {
