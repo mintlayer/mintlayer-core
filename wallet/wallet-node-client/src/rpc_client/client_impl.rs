@@ -26,8 +26,8 @@ use chainstate::{ChainInfo, rpc::ChainstateRpcClient};
 use common::{
     address::Address,
     chain::{
-        Block, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, BlockTxFees, Currency, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        RpcOrderInfo, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, BlockHeight, Id, time::Time},
@@ -81,6 +81,15 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
             .map(|blocks| blocks.into_iter().map(HexEncoded::take).collect())
+    }
+
+    async fn get_block_tx_fees(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
+        ChainstateRpcClient::get_block_tx_fees(&*self.rpc_client, block_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_block_ids_as_checkpoints(

@@ -37,7 +37,7 @@ pub use super::input_check::{
 };
 pub use mintscript::translate::TranslationError;
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Debug, PartialEq, Eq, Clone, strum::EnumCount)]
 pub enum ConnectTransactionError {
     #[error("Blockchain storage error: {0}")]
     StorageError(chainstate_storage::Error),

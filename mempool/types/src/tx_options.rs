@@ -44,6 +44,10 @@ pub struct TxOptions {
 
     /// Whether the transaction should be relayed
     relay_policy: TxRelayPolicy,
+
+    /// Whether the remote peer this transaction came from is an outbound (node-selected)
+    /// peer. Set by the p2p layer only; never exposed through RPC overrides.
+    origin_peer_outbound: bool,
 }
 
 impl TxOptions {
@@ -63,7 +67,15 @@ impl TxOptions {
         TxOptions {
             trust_policy,
             relay_policy,
+            origin_peer_outbound: false,
         }
+    }
+
+    /// Mark the transaction as submitted by an outbound (node-selected) peer. Only the p2p
+    /// layer sets this; it grants the larger outbound per-peer orphan capacity.
+    pub const fn with_origin_peer_outbound(mut self, outbound: bool) -> Self {
+        self.origin_peer_outbound = outbound;
+        self
     }
 
     /// Apply given user-specified overrides to the options
@@ -81,6 +93,10 @@ impl TxOptions {
 
     pub fn relay_policy(&self) -> TxRelayPolicy {
         self.relay_policy
+    }
+
+    pub fn origin_peer_is_outbound(&self) -> bool {
+        self.origin_peer_outbound
     }
 }
 

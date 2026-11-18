@@ -23,8 +23,8 @@ use std::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, Currency, DelegationId, GenBlock, OrderId, PoolId,
-        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, Currency, DelegationId, GenBlock, OrderId,
+        PoolId, RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
@@ -128,6 +128,13 @@ where
         max_count: usize,
     ) -> Result<Vec<Block>, ChainstateError> {
         self.deref().get_mainchain_blocks(from, max_count)
+    }
+
+    fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, ChainstateError> {
+        self.deref().get_block_tx_fees(block_id)
     }
 
     fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError> {
@@ -503,6 +510,7 @@ mod tests {
                 max_tip_age: Default::default(),
                 enable_heavy_checks: Some(true),
                 allow_checkpoints_mismatch: Default::default(),
+                pos_seal_duplication_tracking: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

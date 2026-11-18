@@ -25,8 +25,8 @@ use chainstate::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
     chain::{
-        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
-        RpcOrderInfo, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, BlockTxFees, ChainConfig, Currency, DelegationId, OrderId,
+        PoolId, RpcOrderInfo, TxInput, UtxoOutPoint,
         block::{
             Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,
@@ -75,6 +75,7 @@ mockall::mock! {
             start_block_height: BlockHeight,
             max_count: usize,
         ) -> Result<Vec<Block>, ChainstateError>;
+        fn get_block_tx_fees(&self, block_id: &Id<Block>) -> Result<Option<BlockTxFees>, ChainstateError>;
         fn get_block_header(&self, block_id: &Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
         fn get_locator_from_best_block(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;

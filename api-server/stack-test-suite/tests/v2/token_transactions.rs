@@ -36,7 +36,7 @@ async fn invalid_token_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid token Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn invalid_offset() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid offset");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -69,7 +69,7 @@ async fn invalid_num_items() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -96,7 +96,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -258,6 +258,7 @@ async fn ok(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -267,7 +268,7 @@ async fn ok(#[case] seed: Seed) {
     let (token_id, expected_transactions) = rx.await.unwrap();
     let num_tx = expected_transactions.len();
 
-    let url = format!("/api/v2/token/{token_id}/transactions?offset=999&items={num_tx}");
+    let url = format!("/api/v2/token/{token_id}/transactions?offset=0&items={num_tx}");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -295,10 +296,7 @@ async fn ok(#[case] seed: Seed) {
     let offset = rng.random_range(1..num_tx);
     let items = num_tx - offset;
 
-    let tx_global_index = &arr_body[offset - 1].get("tx_global_index").unwrap();
-    eprintln!("tx_global_index: '{tx_global_index}'");
-    let url =
-        format!("/api/v2/token/{token_id}/transactions?offset={tx_global_index}&items={items}");
+    let url = format!("/api/v2/token/{token_id}/transactions?offset={offset}&items={items}");
 
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
@@ -321,7 +319,7 @@ async fn ok(#[case] seed: Seed) {
         );
     }
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[track_caller]

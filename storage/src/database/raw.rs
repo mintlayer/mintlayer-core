@@ -38,6 +38,11 @@ impl<Sch> DbMapId<Sch> {
         Self { idx, _phantom }
     }
 
+    /// The type-erased index of this map
+    pub fn as_core(&self) -> storage_core::DbMapId {
+        self.idx
+    }
+
     fn from_usize_unchecked(idx: usize) -> Self {
         Self::from_idx_unchecked(storage_core::DbMapId::new(idx))
     }

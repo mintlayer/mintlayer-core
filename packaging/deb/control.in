@@ -1,0 +1,33 @@
+Package: mintlayer-node
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @DEBARCH@
+Maintainer: Mintlayer <devs@mintlayer.org>
+Installed-Size: @INSTALLED_SIZE@
+Depends: @SHLIBS@
+Recommends: systemd | systemd-tmpfiles
+Suggests: postgresql
+Description: Mintlayer node and associated tools
+ Mintlayer full node daemon, wallet RPC daemon, API server components,
+ DNS seed server and command line wallet tools.
+ .
+ This package includes systemd units for running the node daemon as a
+ system service (the mainnet instance is enabled by default; all other
+ services are opt-in) and udev rules for Ledger and Trezor hardware
+ wallets.
+
+Package: mintlayer-node-gui
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @DEBARCH@
+Maintainer: Mintlayer <devs@mintlayer.org>
+Installed-Size: @INSTALLED_SIZE@
+Depends: @SHLIBS@
+Recommends: mintlayer-node, hicolor-icon-theme
+Description: Graphical interface for the Mintlayer node
+ A graphical user interface for running and interacting with a Mintlayer
+ node.
+ .
+ Recommends the mintlayer-node package for Ledger/Trezor udev rules.

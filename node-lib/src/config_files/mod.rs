@@ -33,7 +33,7 @@ use std::{fs, path::Path};
 
 use ::chainstate_launcher::ChainConfig;
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::RunOptions;
 
@@ -45,7 +45,7 @@ use self::{
 
 /// The node configuration.
 #[must_use]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NodeConfigFile {
     // Subsystems configurations.
@@ -153,6 +153,7 @@ fn chainstate_config(
         max_tip_age,
         enable_heavy_checks,
         allow_checkpoints_mismatch,
+        pos_seal_duplication_tracking,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
@@ -172,6 +173,9 @@ fn chainstate_config(
         max_tip_age,
         enable_heavy_checks,
         allow_checkpoints_mismatch,
+        // Intentionally not overridden by a CLI option: the config file is the only
+        // control surface for this setting.
+        pos_seal_duplication_tracking,
     };
     ChainstateLauncherConfigFile {
         storage_backend,

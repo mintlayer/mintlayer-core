@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use serialization::extras::non_empty_vec::DataOrNoVec;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::helpers::make_trial;
 use crate::make_test;
@@ -978,28 +981,26 @@ where
         }
 
         let len = 5;
-        let global_idx = 10;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        let offset = 0;
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
         assert_eq!(token_txs, expected_txs);
 
         let len = 5;
-        let global_idx = 5;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        let offset = 5;
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1030,14 +1031,13 @@ where
         }
 
         let len = 5;
-        let global_idx = 200;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        let offset = 0;
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1045,14 +1045,13 @@ where
         assert_eq!(token_txs, expected_txs);
 
         let len = 5;
-        let global_idx = 105;
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
+        let offset = 5;
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
 
         let expected_txs: Vec<_> = updated_token_transactions
             .iter()
             .rev()
-            .filter(|tx| tx.tx_global_index < global_idx)
+            .skip(offset as usize)
             .take(len as usize)
             .cloned()
             .collect();
@@ -1079,20 +1078,20 @@ where
         }
 
         let len = rng.random_range(0..5);
-        let global_idx = rng.random_range(5..=10);
-        let token_txs =
-            db_tx.get_token_transactions(random_token_id, len, global_idx).await.unwrap();
-        eprintln!("getting len: {len} < idx {global_idx}");
+        let offset = rng.random_range(0..=5);
+        let token_txs = db_tx.get_token_transactions(random_token_id, len, offset).await.unwrap();
+        eprintln!("getting len: {len}, offset {offset}");
         let expected_token_txs: Vec<_> = token_transactions
             .iter()
             .rev()
-            .filter_map(|(idx, tx_id, _)| {
+            .map(|(idx, tx_id, _)| {
                 let idx = *idx;
-                ((idx) < global_idx).then_some(TokenTransaction {
+                TokenTransaction {
                     tx_global_index: idx,
                     tx_id: *tx_id,
-                })
+                }
             })
+            .skip(offset as usize)
             .take(len as usize)
             .collect();
 
@@ -1858,6 +1857,53 @@ where
             let ids = db_tx.get_token_ids_by_ticker(6, 0, &format!("A{c}")).await.unwrap();
             assert!(ids.is_empty());
         }
+
+        // Both tables keep a row per block height, so updating a token or changing an nft
+        // owner adds another row for an id that is already there. Neither must show up twice
+        // in the listings.
+        db_tx
+            .set_fungible_token_data(
+                random_token_id1,
+                block_height.next_height(),
+                token_data.clone(),
+            )
+            .await
+            .unwrap();
+
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_nft_owner = Address::new(
+            &chain_config,
+            Destination::PublicKeyHash(PublicKeyHash::from(&pk)),
+        )
+        .unwrap();
+        db_tx
+            .set_address_balance_at_height(
+                &new_nft_owner,
+                Amount::from_atoms(1),
+                CoinOrTokenId::TokenId(random_token_id4),
+                block_height.next_height(),
+            )
+            .await
+            .unwrap();
+
+        let expected_ids: BTreeSet<_> = all_ids.iter().copied().collect();
+
+        let ids = db_tx.get_token_ids(6, 0).await.unwrap();
+        assert_eq!(ids.iter().copied().collect::<BTreeSet<_>>(), expected_ids);
+
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
+        assert_eq!(ids.iter().copied().collect::<BTreeSet<_>>(), expected_ids);
+
+        // A page that crosses the boundary between the tokens and the nfts must not repeat
+        // or drop ids either.
+        let first_page = db_tx.get_token_ids(3, 0).await.unwrap();
+        let second_page = db_tx.get_token_ids(3, 3).await.unwrap();
+        assert_eq!(first_page.len(), 3);
+        assert_eq!(second_page.len(), 3);
+        assert_eq!(
+            first_page.iter().chain(second_page.iter()).copied().collect::<BTreeSet<_>>(),
+            expected_ids
+        );
     }
 
     // test coin and token statistics
@@ -2148,6 +2194,666 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(rng: &mut impl CryptoRng, stor
     );
 }
 
+/// Keyset (cursor) pagination of the pool listing over the latest pool data.
+async fn pool_data_keyset<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    // three pools created at heights 10, 20, 30
+    let (pool1_id, pool2_id, pool3_id) = (
+        PoolId::random_using(&mut rng),
+        PoolId::random_using(&mut rng),
+        PoolId::random_using(&mut rng),
+    );
+    let (pool1_data, pool2_data, pool3_data) = (
+        make_pool_data(&mut rng, Amount::from_atoms(100)),
+        make_pool_data(&mut rng, Amount::from_atoms(200)),
+        make_pool_data(&mut rng, Amount::from_atoms(300)),
+    );
+    let (h10, h20, h30) = (
+        BlockHeight::new(10),
+        BlockHeight::new(20),
+        BlockHeight::new(30),
+    );
+    db_tx.set_pool_data_at_height(pool1_id, &pool1_data, h10).await.unwrap();
+    db_tx.set_pool_data_at_height(pool2_id, &pool2_data, h20).await.unwrap();
+    db_tx.set_pool_data_at_height(pool3_id, &pool3_data, h30).await.unwrap();
+
+    // the creation height is the height of the first insert
+    let expect = |expected: &[(BlockHeight, PoolId, &PoolDataWithExtraInfo)]| {
+        expected
+            .iter()
+            .map(|(height, pool_id, data)| (*height, *pool_id, (*data).clone()))
+            .collect::<Vec<_>>()
+    };
+
+    // ordered by the creation height (descending)
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h20, pool2_id, &pool2_data),
+            (h10, pool1_id, &pool1_data)
+        ])
+    );
+
+    // a later update does not change the creation height
+    let pool1_updated = make_pool_data(&mut rng, Amount::from_atoms(111));
+    db_tx
+        .set_pool_data_at_height(pool1_id, &pool1_updated, h30.next_height())
+        .await
+        .unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h20, pool2_id, &pool2_data),
+            (h10, pool1_id, &pool1_updated),
+        ])
+    );
+
+    // a late lower-height write corrects the creation height to the true minimum: the
+    // backends agree on min-height semantics (matching the `MIN(block_height)`
+    // re-derivation of the rollback path), which keeps a mid-history re-seed from
+    // silently mis-ordering the listing. The latest data is still the highest height's.
+    let pool2_early = make_pool_data(&mut rng, Amount::from_atoms(222));
+    let h5 = BlockHeight::new(5);
+    db_tx.set_pool_data_at_height(pool2_id, &pool2_early, h5).await.unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h10, pool1_id, &pool1_updated),
+            (h5, pool2_id, &pool2_data),
+        ])
+    );
+
+    // cursor pagination
+    let page1 = db_tx.get_latest_pool_data_before(2, None).await.unwrap();
+    assert_eq!(
+        page1,
+        expect(&[(h30, pool3_id, &pool3_data), (h10, pool1_id, &pool1_updated)])
+    );
+
+    let page2 = db_tx.get_latest_pool_data_before(2, Some((h10, pool1_id))).await.unwrap();
+    assert_eq!(page2, expect(&[(h5, pool2_id, &pool2_data)]));
+
+    let end = db_tx.get_latest_pool_data_before(2, Some((h5, pool2_id))).await.unwrap();
+    assert!(end.is_empty());
+
+    // pools with a zero staker balance (decommissioned) are not listed
+    let pool3_decommissioned = make_pool_data(&mut rng, Amount::ZERO);
+    db_tx
+        .set_pool_data_at_height(pool3_id, &pool3_decommissioned, h30.next_height())
+        .await
+        .unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[(h10, pool1_id, &pool1_updated), (h5, pool2_id, &pool2_data)])
+    );
+
+    // the rollback restores the latest data below the deleted height, keeping the
+    // original (minimum) creation height; the late h5 write of pool2 survives
+    db_tx.del_pools_above_height(h30).await.unwrap();
+    let all = db_tx.get_latest_pool_data_before(10, None).await.unwrap();
+    assert_eq!(
+        all,
+        expect(&[
+            (h30, pool3_id, &pool3_data),
+            (h10, pool1_id, &pool1_data),
+            (h5, pool2_id, &pool2_data),
+        ])
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+/// Point-in-time reads: connecting a block at height h must observe pool and
+/// delegation state as of h, never rows written by higher blocks.
+async fn point_in_time_pool_and_delegation_reads<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let pool_id = PoolId::random_using(&mut rng);
+    let (h5, h10, h15, h20, h25, h30) = (
+        BlockHeight::new(5),
+        BlockHeight::new(10),
+        BlockHeight::new(15),
+        BlockHeight::new(20),
+        BlockHeight::new(25),
+        BlockHeight::new(30),
+    );
+    let pool_at_h10 = make_pool_data(&mut rng, Amount::from_atoms(100));
+    let pool_at_h30 = make_pool_data(&mut rng, Amount::from_atoms(300));
+    db_tx.set_pool_data_at_height(pool_id, &pool_at_h10, h10).await.unwrap();
+    db_tx.set_pool_data_at_height(pool_id, &pool_at_h30, h30).await.unwrap();
+
+    // pool state is read as of the requested height
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h5).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h15).await.unwrap(),
+        Some(pool_at_h10.clone())
+    );
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h30).await.unwrap(),
+        Some(pool_at_h30.clone())
+    );
+
+    // delegation rows across heights: d1 accrues 100 -> 150, d2 and d3 appear later
+    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination = Destination::PublicKey(pk);
+    let (d1_id, d2_id, d3_id) = (
+        DelegationId::random_using(&mut rng),
+        DelegationId::random_using(&mut rng),
+        DelegationId::random_using(&mut rng),
+    );
+    let d1_h10 = Delegation::new(
+        h10,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(100),
+        AccountNonce::new(0),
+    );
+    let d1_h20 = Delegation::new(
+        h20,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(150),
+        AccountNonce::new(1),
+    );
+    let d2_h20 = Delegation::new(
+        h20,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(50),
+        AccountNonce::new(0),
+    );
+    let d3_h30 = Delegation::new(
+        h30,
+        destination.clone(),
+        pool_id,
+        Amount::from_atoms(70),
+        AccountNonce::new(0),
+    );
+    db_tx.set_delegation_at_height(d1_id, &d1_h10, h10).await.unwrap();
+    db_tx.set_delegation_at_height(d1_id, &d1_h20, h20).await.unwrap();
+    db_tx.set_delegation_at_height(d2_id, &d2_h20, h20).await.unwrap();
+    db_tx.set_delegation_at_height(d3_id, &d3_h30, h30).await.unwrap();
+
+    // single delegation read as of a height
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h5).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h15).await.unwrap(),
+        Some(d1_h10.clone())
+    );
+    assert_eq!(
+        db_tx.get_delegation_at_or_below_height(d1_id, h30).await.unwrap(),
+        Some(d1_h20.clone())
+    );
+
+    // pool delegation shares as of a height; rows above the bound are ignored
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h5).await.unwrap(),
+        BTreeMap::new()
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h15).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h10.clone())])
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h25).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20.clone()), (d2_id, d2_h20.clone())])
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h30).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20.clone()), (d2_id, d2_h20.clone()), (d3_id, d3_h30.clone())])
+    );
+
+    // the rollback of rows above h20 is observed by the bounded reads
+    db_tx.del_delegations_above_height(h20).await.unwrap();
+    db_tx.del_pools_above_height(h20).await.unwrap();
+    assert_eq!(
+        db_tx.get_pool_data_at_or_below_height(pool_id, h30).await.unwrap(),
+        Some(pool_at_h10)
+    );
+    assert_eq!(
+        db_tx.get_pool_delegations_at_or_below_height(pool_id, h30).await.unwrap(),
+        BTreeMap::from([(d1_id, d1_h20), (d2_id, d2_h20)])
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+/// Holders of an asset: the top address amounts with keyset (cursor) pagination.
+async fn top_address_amounts<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let (addr1, addr2, addr3, addr4) = (
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+    );
+
+    let token_id = TokenId::random_using(&mut rng);
+    let h1 = BlockHeight::new(1);
+
+    // register the token (the scanner stores the issuance, including the decimals, before
+    // any balances)
+    let token_data = FungibleTokenData {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: 18,
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        circulating_supply: Amount::ZERO,
+        total_supply: TokenTotalSupply::Unlimited,
+        is_locked: false,
+        frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+        authority: Destination::PublicKeyHash(PublicKeyHash::from(
+            &PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1,
+        )),
+        next_nonce: AccountNonce::new(0),
+    };
+    db_tx.set_fungible_token_issuance(token_id, h1, token_data).await.unwrap();
+
+    // coin holders: addr2 (300), addr3 and addr4 (200 each, so the encoded-address
+    // tie-break is exercised), addr1 (100)
+    let coin_holders: Vec<(Address<Destination>, Amount)> = vec![
+        (addr1.clone(), Amount::from_atoms(100)),
+        (addr2.clone(), Amount::from_atoms(300)),
+        (addr3.clone(), Amount::from_atoms(200)),
+        (addr4.clone(), Amount::from_atoms(200)),
+    ];
+    for (address, amount) in &coin_holders {
+        db_tx
+            .set_address_balance_at_height(address, *amount, CoinOrTokenId::Coin, h1)
+            .await
+            .unwrap();
+    }
+    // a token holder
+    db_tx
+        .set_address_balance_at_height(
+            &addr1,
+            Amount::from_atoms(50),
+            CoinOrTokenId::TokenId(token_id),
+            h1,
+        )
+        .await
+        .unwrap();
+
+    // NOTE: no re-sorting before the asserts — the ordering (balance descending, the
+    // encoded address descending as tie-break) is exactly what the contract requires
+    let expect = |expected: &[(&Address<Destination>, Amount)]| {
+        expected
+            .iter()
+            .map(|(address, amount)| (address.as_str().to_owned(), *amount))
+            .collect::<Vec<_>>()
+    };
+
+    // equal balances tie-break by the encoded address, descending byte order
+    let mut tie = [addr3.as_str(), addr4.as_str()];
+    tie.sort_unstable();
+    let (tie_low, tie_high) = (tie[0], tie[1]);
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+
+    // the token holders are independent of the coin ones
+    let token_holders = db_tx
+        .get_top_address_amounts(CoinOrTokenId::TokenId(token_id), 10, None)
+        .await
+        .unwrap();
+    assert_eq!(token_holders, expect(&[(&addr1, Amount::from_atoms(50))]));
+
+    // cursor pagination over the coin holders
+    let page = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
+    assert_eq!(
+        page,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+        ]
+    );
+    let (last_address, last_amount) = page[1].clone();
+
+    let next_page = db_tx
+        .get_top_address_amounts(
+            CoinOrTokenId::Coin,
+            2,
+            Some((last_address.clone(), last_amount)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        next_page,
+        vec![
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+    let (last_address2, last_amount2) = next_page[1].clone();
+
+    let end = db_tx
+        .get_top_address_amounts(CoinOrTokenId::Coin, 2, Some((last_address2, last_amount2)))
+        .await
+        .unwrap();
+    assert!(end.is_empty());
+
+    // a balance update changes the ranking
+    db_tx
+        .set_address_balance_at_height(
+            &addr1,
+            Amount::from_atoms(400),
+            CoinOrTokenId::Coin,
+            h1.next_height(),
+        )
+        .await
+        .unwrap();
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr1.as_str().to_owned(), Amount::from_atoms(400)),
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+        ]
+    );
+
+    // the rollback restores the previous balances; this also guards the ordering
+    // coupling in `del_address_balance_above_height`: the holders cache
+    // re-derivation is only correct because the versioned balances above the height
+    // are deleted first, within the same call
+    db_tx.del_address_balance_above_height(h1).await.unwrap();
+    let all = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 10, None).await.unwrap();
+    assert_eq!(
+        all,
+        vec![
+            (addr2.as_str().to_owned(), Amount::from_atoms(300)),
+            (tie_high.to_owned(), Amount::from_atoms(200)),
+            (tie_low.to_owned(), Amount::from_atoms(200)),
+            (addr1.as_str().to_owned(), Amount::from_atoms(100)),
+        ]
+    );
+
+    // REGRESSION GUARD (mixed magnitudes): amounts whose TEXT representation
+    // orders differently from their numeric value. Postgres resolves a bare
+    // name in ORDER BY to the OUTPUT column first, so an unaliased
+    // `amount::text` select makes `ORDER BY amount DESC` sort by the text of
+    // the atoms ('9000000' > '10000000'), returning a lexicographic listing
+    // instead of the balance order both storage backends must honor.
+    // 10_000_000 must rank above 9_000_000 on every backend.
+    let (addr5, addr6) = (
+        make_address(&chain_config, &mut rng),
+        make_address(&chain_config, &mut rng),
+    );
+    db_tx
+        .set_address_balance_at_height(
+            &addr5,
+            Amount::from_atoms(9_000_000),
+            CoinOrTokenId::Coin,
+            h1,
+        )
+        .await
+        .unwrap();
+    db_tx
+        .set_address_balance_at_height(
+            &addr6,
+            Amount::from_atoms(10_000_000),
+            CoinOrTokenId::Coin,
+            h1,
+        )
+        .await
+        .unwrap();
+    let mixed = db_tx.get_top_address_amounts(CoinOrTokenId::Coin, 2, None).await.unwrap();
+    assert_eq!(
+        mixed,
+        vec![
+            (addr6.as_str().to_owned(), Amount::from_atoms(10_000_000)),
+            (addr5.as_str().to_owned(), Amount::from_atoms(9_000_000)),
+        ]
+    );
+    // the keyset cursor crosses the 10_000_000 -> 9_000_000 boundary numerically
+    let next = db_tx
+        .get_top_address_amounts(
+            CoinOrTokenId::Coin,
+            2,
+            Some((addr6.as_str().to_owned(), Amount::from_atoms(10_000_000))),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        next.first(),
+        Some(&(addr5.as_str().to_owned(), Amount::from_atoms(9_000_000)))
+    );
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+/// The order book entries of a trading pair: only the live (not concluded, not frozen)
+/// orders with non-zero remaining balances are returned.
+async fn order_book_entries<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+
+    let mut storage = storage_maker().await;
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+    let chain_config = common::chain::config::create_regtest();
+    db_tx.reinitialize_storage(&chain_config).await.unwrap();
+
+    let token1 = TokenId::random_using(&mut rng);
+    let token2 = TokenId::random_using(&mut rng);
+
+    // three live orders of the (Coin, token1) pair and one of another pair
+    let (order1_id, order1) = random_order(
+        &mut rng,
+        BlockHeight::new(1),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order2_id, order2) = random_order(
+        &mut rng,
+        BlockHeight::new(2),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order3_id, order3) = random_order(
+        &mut rng,
+        BlockHeight::new(3),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order4_id, order4) = random_order(
+        &mut rng,
+        BlockHeight::new(4),
+        CoinOrTokenId::TokenId(token1),
+        CoinOrTokenId::TokenId(token2),
+    );
+    for (order_id, order) in [
+        (&order1_id, &order1),
+        (&order2_id, &order2),
+        (&order3_id, &order3),
+        (&order4_id, &order4),
+    ] {
+        db_tx
+            .set_order_at_height(*order_id, order, order.creation_block_height)
+            .await
+            .unwrap();
+    }
+
+    let sort_entries = |mut entries: Vec<(Amount, Amount)>| {
+        entries.sort_by_key(|(ask_balance, give_balance)| (*ask_balance, *give_balance));
+        entries
+    };
+    let expected_pair = sort_entries(vec![
+        (order1.ask_balance, order1.give_balance),
+        (order2.ask_balance, order2.give_balance),
+        (order3.ask_balance, order3.give_balance),
+    ]);
+
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    // the entries come back with the deepest orders first (the ordering contract)
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
+    // TODO: cover has_more == true (ORDER_BOOK_MAX_ORDERS truncation) once the cap is
+    // injectable (test-only constructor parameter or a configurable limit), e.g. via
+    // a small cap and a handful of seeded orders
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
+
+    // the reverse pair is empty
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::TokenId(token1), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+    assert!(entries.is_empty());
+    assert!(!has_more);
+
+    // a fully filled (concluded) order is no longer part of the book
+    let block_height = BlockHeight::new(100);
+    let order1_concluded =
+        order1.clone().fill(&chain_config, block_height, order1.ask_balance).conclude();
+    db_tx
+        .set_order_at_height(order1_id, &order1_concluded, block_height.next_height())
+        .await
+        .unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(
+        sort_entries(entries),
+        sort_entries(vec![
+            (order2.ask_balance, order2.give_balance),
+            (order3.ask_balance, order3.give_balance),
+        ])
+    );
+    assert!(!has_more);
+
+    // a frozen order is not part of the book either
+    let order2_frozen = order2.clone().freeze();
+    db_tx
+        .set_order_at_height(order2_id, &order2_frozen, block_height.next_height())
+        .await
+        .unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(
+        sort_entries(entries),
+        vec![(order3.ask_balance, order3.give_balance)]
+    );
+    assert!(!has_more);
+
+    // the rollback restores the original book
+    db_tx.del_orders_above_height(block_height).await.unwrap();
+    let (entries, has_more) = db_tx
+        .get_order_book_entries(CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1))
+        .await
+        .unwrap();
+    assert_eq!(sort_entries(entries.clone()), expected_pair);
+    assert!(entries.windows(2).all(|pair| pair[0].0 >= pair[1].0));
+    assert!(!has_more);
+
+    db_tx.commit().await.unwrap();
+    Ok(())
+}
+
+fn make_pool_data(rng: &mut impl CryptoRng, staker_balance: Amount) -> PoolDataWithExtraInfo {
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+    let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let pool_data = PoolData::new(
+        Destination::PublicKey(pk),
+        staker_balance,
+        Amount::ZERO,
+        vrf_pk,
+        PerThousand::new(500).unwrap(),
+        Amount::from_atoms(100),
+    );
+    PoolDataWithExtraInfo {
+        pool_data,
+        delegations_balance: Amount::ZERO,
+    }
+}
+
+fn make_address(
+    chain_config: &common::chain::ChainConfig,
+    rng: &mut impl CryptoRng,
+) -> Address<Destination> {
+    let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Address::new(
+        chain_config,
+        Destination::PublicKeyHash(PublicKeyHash::from(&pk)),
+    )
+    .unwrap()
+}
+
 fn random_order(
     rng: &mut impl CryptoRng,
     creation_height: BlockHeight,
@@ -2174,6 +2880,85 @@ fn random_order(
     (order_id, order)
 }
 
+/// The offset passed to `get_token_transactions` skips over the newest entries of the token's
+/// transaction list, matching the skip-N semantics of the offset parameter the HTTP API passes:
+/// offset 0 starts at the newest transaction, and an offset at or past the end of the list
+/// yields an empty page.
+pub async fn token_transactions_offset_paging<S, Fut, F>(
+    storage_maker: Arc<F>,
+    seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    let mut rng = make_seedable_rng(seed_maker());
+    let token_id = TokenId::random_using(&mut rng);
+    let mut storage = storage_maker().await;
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        let chain_config = create_unit_test_config();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    // 10 transactions for the token, with continuous tx_global_index values 0..10.
+    let token_transactions: Vec<_> = (0..10)
+        .map(|idx| {
+            let random_tx_id = Id::<Transaction>::random_using(&mut rng);
+            TokenTransaction {
+                tx_global_index: idx,
+                tx_id: random_tx_id,
+            }
+        })
+        .collect();
+
+    let mut tx = storage.transaction_rw().await.unwrap();
+    for txn in &token_transactions {
+        tx.set_token_transaction_at_height(
+            token_id,
+            txn.tx_id,
+            BlockHeight::new(txn.tx_global_index),
+            txn.tx_global_index,
+        )
+        .await
+        .unwrap();
+    }
+
+    let newest_first: Vec<_> = token_transactions.iter().rev().cloned().collect();
+
+    // Default paging (offset 0) returns the newest transactions first.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 10, 0).await.unwrap(),
+        newest_first
+    );
+
+    // The page length is respected.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 2, 0).await.unwrap(),
+        newest_first[..2]
+    );
+
+    // The offset skips over the newest entries.
+    assert_eq!(
+        tx.get_token_transactions(token_id, 4, 3).await.unwrap(),
+        &newest_first[3..7]
+    );
+
+    // An offset at or past the end of the list yields an empty page, however large.
+    assert!(tx.get_token_transactions(token_id, 10, 10).await.unwrap().is_empty());
+    assert!(tx.get_token_transactions(token_id, 10, 12345).await.unwrap().is_empty());
+    assert!(tx.get_token_transactions(token_id, 10, u64::MAX).await.unwrap().is_empty());
+    // An offset that fits a 64-bit usize but not a 32-bit one must not wrap to a small value
+    // (which would return the first page) on narrow-pointer targets.
+    assert!(tx.get_token_transactions(token_id, 10, 1 << 35).await.unwrap().is_empty());
+
+    tx.commit().await.unwrap();
+
+    Ok(())
+}
+
 pub fn build_tests<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
     storage_maker: Arc<F>,
 ) -> impl Iterator<Item = libtest_mimic::Trial>
@@ -2183,9 +2968,232 @@ where
 {
     vec![
         make_test!(initialization, storage_maker.clone()),
-        make_test!(set_get, storage_maker),
+        make_test!(set_get, storage_maker.clone()),
+        make_test!(token_transactions_offset_paging, storage_maker.clone()),
+        make_test!(pool_data_keyset, storage_maker.clone()),
+        make_test!(
+            point_in_time_pool_and_delegation_reads,
+            storage_maker.clone()
+        ),
+        make_test!(top_address_amounts, storage_maker.clone()),
+        make_test!(order_book_entries, storage_maker.clone()),
+        make_test!(get_utxos_batch_semantics, storage_maker.clone()),
+        make_test!(stream_events_append_and_read, storage_maker),
     ]
     .into_iter()
+}
+
+/// Streaming events are only visible to readers after the writing transaction has been committed,
+/// and are returned in ascending id order.
+///
+/// Note: the backends that don't support stream events simply drop the appended events and return
+/// an empty list on reads.
+pub async fn stream_events_append_and_read<S, Fut, F>(
+    storage_maker: Arc<F>,
+    _seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
+{
+    use api_server_common::streaming::{StreamEvent, TxOrigin};
+    use common::primitives::H256;
+
+    let tx_id = Id::<Transaction>::new(H256::from_low_u64_be(1));
+    let events = vec![
+        StreamEvent::TxSeen {
+            tx_id,
+            origin: TxOrigin::Local,
+        },
+        StreamEvent::TxSeen {
+            tx_id,
+            origin: TxOrigin::Remote,
+        },
+    ];
+
+    let mut storage = storage_maker().await;
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        let chain_config = create_unit_test_config();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    // Phase 1: events appended in a rolled back transaction are never visible.
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        for event in &events {
+            tx.append_stream_event(event).await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+
+        let db_tx = storage.transaction_ro().await.unwrap();
+        assert!(db_tx.read_stream_events_after(0).await.unwrap().is_empty());
+    }
+
+    // Phase 2: the committed events are visible, in ascending id order.
+    let mut tx = storage.transaction_rw().await.unwrap();
+
+    let mut appended_ids = Vec::with_capacity(events.len());
+    for event in &events {
+        appended_ids.push(tx.append_stream_event(event).await.unwrap());
+    }
+
+    tx.commit().await.unwrap();
+
+    let db_tx = storage.transaction_ro().await.unwrap();
+    let read_events = db_tx.read_stream_events_after(0).await.unwrap();
+
+    // Note: the backends that don't support stream events (detected by the dummy ids returned
+    // from the appends) must return an empty list; the ones that do support them must return
+    // exactly the appended events, in the appended order. This way, a backend that silently
+    // drops the appended events fails the test instead of passing it vacuously.
+    let supports_stream_events = appended_ids.iter().any(|id| *id > 0);
+
+    if supports_stream_events {
+        assert_eq!(
+            read_events.len(),
+            events.len(),
+            "unexpected number of stream events: {}",
+            read_events.len()
+        );
+    } else {
+        assert!(
+            read_events.is_empty(),
+            "a backend without stream event support must not return any events, got {}",
+            read_events.len()
+        );
+    }
+
+    if supports_stream_events {
+        // Note: the events are returned in ascending id order and the ids are strictly monotonic.
+        let ids = read_events.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        assert!(
+            ids.windows(2).all(|ids| ids[0] < ids[1]),
+            "ids not monotonic: {ids:?}"
+        );
+
+        for ((_, read_event), expected_event) in read_events.iter().zip(events.iter()) {
+            assert_eq!(read_event, expected_event);
+        }
+
+        // Note: reading after the last seen id returns nothing new.
+        assert!(db_tx.read_stream_events_after(ids[1]).await.unwrap().is_empty());
+        assert_eq!(
+            db_tx.read_stream_events_after(ids[0]).await.unwrap().len(),
+            1
+        );
+    }
+
+    Ok(())
+}
+
+/// Batched UTXO fetch must agree with the single fetch:
+/// - multiple versioned rows per outpoint resolve to the newest row,
+/// - duplicate outpoints in the request return the same value per position,
+/// - missing outpoints return None,
+///   and the result order matches the request order.
+pub async fn get_utxos_batch_semantics<S, Fut, F: Fn() -> Fut>(
+    storage_maker: Arc<F>,
+    _seed_maker: Box<dyn Fn() -> Seed + Send>,
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+{
+    let mut rng = make_seedable_rng(Seed::from_entropy_and_print("get_utxos_batch_semantics"));
+    let chain_config = create_unit_test_config();
+    let (_, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
+    let alice_address = Address::<Destination>::new(&chain_config, alice_destination.clone())
+        .expect("Unable to encode destination");
+
+    let mut storage = storage_maker().await;
+
+    {
+        let mut tx = storage.transaction_rw().await.unwrap();
+        tx.reinitialize_storage(&chain_config).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let tx_id = Id::<Transaction>::random_using(&mut rng);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), rng.random::<u32>());
+
+        // Two versioned rows for the same outpoint: an unspent row at the
+        // lower height and a spent row at the higher height. The newest row
+        // must win, exactly like the single get_utxo (ORDER BY ... DESC
+        // LIMIT 1) does.
+        let old_unspent = Utxo::new(
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
+                alice_destination.clone(),
+            ),
+            None,
+            None,
+        );
+        let newer_spent = Utxo::new(
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.random_range(1..1000))),
+                alice_destination.clone(),
+            ),
+            None,
+            Some(BlockHeight::new(rng.random_range(100..200))),
+        );
+
+        db_tx
+            .set_utxo_at_height(
+                outpoint.clone(),
+                old_unspent,
+                &[alice_address.as_str()],
+                BlockHeight::new(1),
+            )
+            .await
+            .unwrap();
+        db_tx
+            .set_utxo_at_height(
+                outpoint.clone(),
+                newer_spent.clone(),
+                &[alice_address.as_str()],
+                BlockHeight::new(2),
+            )
+            .await
+            .unwrap();
+
+        // An outpoint that was never written.
+        let missing_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(Id::<Transaction>::random_using(&mut rng)),
+            rng.random::<u32>(),
+        );
+
+        let requested = &[missing_outpoint.clone(), outpoint.clone(), outpoint.clone()];
+
+        let batched = db_tx.get_utxos(requested).await.unwrap();
+        let single_0 = db_tx.get_utxo(missing_outpoint.clone()).await.unwrap();
+        let single_1 = db_tx.get_utxo(outpoint.clone()).await.unwrap();
+        let single_2 = db_tx.get_utxo(outpoint.clone()).await.unwrap();
+
+        assert_eq!(batched[0], single_0);
+        assert!(batched[0].is_none());
+        assert_eq!(batched[1].as_ref(), single_1.as_ref());
+        assert_eq!(batched[1], batched[2]);
+        assert_eq!(single_1, single_2);
+        // The newest (spent) row wins over the older unspent one: the utxo
+        // payload is the one stored with the newest row. (The reported
+        // spent height comes from the row height, mirroring get_utxo.)
+        assert_eq!(
+            batched[1].as_ref().unwrap().utxo_with_extra_info(),
+            newer_spent.utxo_with_extra_info()
+        );
+
+        // Empty request is not an error.
+        assert!(db_tx.get_utxos(&[]).await.unwrap().is_empty());
+    }
+
+    Ok(())
 }
 
 fn get_all_substrings(s: &str) -> Vec<&str> {

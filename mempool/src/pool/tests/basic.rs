@@ -560,8 +560,7 @@ async fn get_all_txs_in_insertion_order(#[case] seed: Seed) {
         .build();
     let mempool_config = MempoolConfig {
         min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::ZERO).into(),
-        max_cluster_tx_count: Default::default(),
-        max_cluster_size_bytes: Default::default(),
+        ..Default::default()
     };
     let mut mempool = setup_with_chainstate_generic(tf.chainstate(), mempool_config, time_getter);
 

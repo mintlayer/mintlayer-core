@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cursor;
 pub mod json_helpers;
+pub mod stream;
 pub mod v2;
 
 use std::sync::Arc;
@@ -26,7 +28,7 @@ use tower_http::cors::{AllowMethods, Any, CorsLayer};
 use api_server_common::storage::storage_api::ApiServerStorage;
 
 use crate::{
-    ApiServerWebServerState, TxSubmitClient, api,
+    ApiServerWebServerState, MempoolQueryClient, TxSubmitClient, api,
     error::{ApiServerWebServerClientError, ApiServerWebServerError},
 };
 
@@ -46,7 +48,7 @@ async fn server_status() -> Result<impl IntoResponse, ApiServerWebServerError> {
 #[allow(dead_code)]
 pub fn web_server<
     T: ApiServerStorage + Send + Sync + 'static,
-    R: TxSubmitClient + Send + Sync + 'static,
+    R: TxSubmitClient + MempoolQueryClient + Send + Sync + 'static,
 >(
     socket: TcpListener,
     state: ApiServerWebServerState<Arc<T>, Arc<R>>,

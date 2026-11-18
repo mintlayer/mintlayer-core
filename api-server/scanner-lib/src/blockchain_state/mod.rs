@@ -15,7 +15,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ops::{Add, Sub},
     sync::Arc,
 };
 
@@ -27,6 +26,7 @@ use api_server_common::storage::storage_api::{
     PoolDataWithExtraInfo, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
     block_aux_data::{BlockAuxData, BlockWithExtraData},
 };
+use api_server_common::streaming::{STREAM_EVENTS_RETENTION_COUNT, StreamEvent, StreamEventId};
 use chainstate::{
     calculate_median_time_past_from_blocktimestamps,
     constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
@@ -51,7 +51,7 @@ use common::{
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, H256, Id, Idable, id::WithId},
 };
 use orders_accounting::OrderData;
-use pos_accounting::{PoSAccountingView, PoolData};
+use pos_accounting::{Error as PosError, PoSAccountingView, PoolData};
 use serialization::DecodeAll;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
@@ -66,11 +66,39 @@ mod pos_adapter;
 pub enum BlockchainStateError {
     #[error("Unexpected storage error: {0}")]
     StorageError(#[from] ApiServerStorageError),
+    #[error("PoS accounting error: {0}")]
+    PosAccountingError(#[from] PosError),
+    /// The trusted fee list supplied alongside a block batch does not align
+    /// with the batch; scanning is aborted instead of indexing partial data.
+    #[error("Trusted fee count mismatch: {fee_count} fee entries for {block_count} blocks")]
+    TrustedFeeCountMismatch {
+        block_count: usize,
+        fee_count: usize,
+    },
+}
+
+/// (experimental step 10) The indexing mode of the scanner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanMode {
+    /// Full indexing: everything is written as blocks are scanned.
+    Full,
+    /// Fast catch-up: secondary indexes (address/token transaction history and
+    /// statistics) are deferred; core data (balances, utxos, blocks,
+    /// transactions, stream events) is still indexed. A backfill pass after
+    /// catching up rebuilds the deferred tables.
+    CatchingUp,
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
     chain_config: Arc<ChainConfig>,
     storage: S,
+    scan_mode: ScanMode,
+    /// The event id at which the next stream event retention pruning is due.
+    ///
+    /// Note: this is an in-memory watermark, so the pruning (with its `max(id)` lookup and the
+    /// DELETE) runs once per retention window instead of on every block commit, keeping it off
+    /// the critical indexing path.
+    stream_events_next_prune_id: StreamEventId,
 }
 
 impl<S: ApiServerStorage> BlockchainState<S> {
@@ -78,7 +106,18 @@ impl<S: ApiServerStorage> BlockchainState<S> {
         Self {
             chain_config,
             storage,
+            scan_mode: ScanMode::Full,
+            stream_events_next_prune_id: 0,
         }
+    }
+
+    /// (experimental step 10) Switch between full indexing and fast catch-up.
+    pub fn set_scan_mode(&mut self, mode: ScanMode) {
+        self.scan_mode = mode;
+    }
+
+    pub fn scan_mode(&self) -> ScanMode {
+        self.scan_mode
     }
 
     pub fn storage(&self) -> &S {
@@ -86,19 +125,22 @@ impl<S: ApiServerStorage> BlockchainState<S> {
     }
 
     pub async fn scan_genesis(&mut self, genesis: &Genesis) -> Result<(), BlockchainStateError> {
-        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+        let mut db_tx = self.storage.transaction_rw().await?;
 
+        let mut acc = BalanceAccumulator::default();
         update_tables_from_block_reward(
             self.chain_config.clone(),
             &mut db_tx,
             BlockHeight::new(0),
             genesis.utxos(),
             genesis.get_id().into(),
+            None,
+            &mut acc,
         )
-        .await
-        .expect("Unable to update tables from block reward");
+        .await?;
+        acc.flush(&mut db_tx, BlockHeight::new(0)).await?;
 
-        db_tx.commit().await.expect("Unable to commit transaction");
+        db_tx.commit().await?;
         logging::log::info!("Database commit completed successfully");
 
         Ok(())
@@ -110,8 +152,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
-        let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
+        let db_tx = self.storage.transaction_ro().await?;
+        let best_block = db_tx.get_best_block().await?;
         Ok((best_block.block_height(), best_block.block_id()))
     }
 
@@ -120,30 +162,135 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+        // (experimental step 9) The trait entry point; no trusted fees.
+        let fees = vec![None; blocks.len()];
+        self.scan_blocks_with_fees(common_block_height, blocks, fees).await
+    }
 
-        disconnect_tables_above_height(&mut db_tx, common_block_height)
-            .await
-            .expect("Unable to disconnect tables");
+    #[allow(clippy::items_after_statements)] // the prefetch chunk size sits next to its use
+    async fn scan_blocks_with_fees(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        trusted_fees: Vec<Option<Vec<Fee>>>,
+    ) -> Result<(), Self::Error> {
+        if blocks.len() != trusted_fees.len() {
+            return Err(BlockchainStateError::TrustedFeeCountMismatch {
+                block_count: blocks.len(),
+                fee_count: trusted_fees.len(),
+            });
+        }
+        let mut db_tx = self.storage.transaction_rw().await?;
+
+        // Note: a reorg happened iff the local best block is above the common ancestor with the
+        // new chain, in which case the blocks above the common ancestor are about to be
+        // disconnected.
+        let local_best_height = db_tx.get_best_block().await?.block_height();
+        let is_reorg = local_best_height > common_block_height;
+        let removed_block_ids = if is_reorg {
+            // Note: the removed block ids must be captured before the disconnect below, because
+            // the disconnect only marks the blocks as disconnected instead of removing them.
+            Some(
+                capture_main_chain_block_ids(&mut db_tx, common_block_height, local_best_height)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        // (experimental) The table cleanup below is only needed when a reorg
+        // actually happened; during catch-up sync (the common case) the local
+        // best height is below the common ancestor and every DELETE would be
+        // a no-op costing 14 indexed scans per batch.
+        if is_reorg {
+            let _t = TimingGuard::stage(Stage::ReorgCleanup);
+            disconnect_tables_above_height(&mut db_tx, common_block_height).await?;
+        }
+
+        let mut last_event_id: StreamEventId = 0;
+        if let Some(removed_block_ids) = removed_block_ids {
+            let new_tip_height = next_block_height(common_block_height, blocks.len());
+            let event = StreamEvent::Reorg {
+                common_ancestor_height: common_block_height,
+                removed_block_ids,
+                new_tip_height,
+            };
+            last_event_id = db_tx.append_stream_event(&event).await?;
+        }
+
+        // (experimental) step 5: fetch the median-time window once per batch
+        // (after the reorg cleanup, so it reflects the new chain) and roll it
+        // in memory per block.
+        let mut median_time_window: Vec<BlockTimestamp> =
+            db_tx.get_latest_blocktimestamps().await?;
+
+        let mut acc = BalanceAccumulator::default();
+
         let mut next_order_number =
             db_tx.get_last_transaction_global_index().await?.map_or(0, |idx| idx + 1);
 
+        // (experimental) step 4: prefetch all input UTXOs referenced by the
+        // whole batch (including PoS kernel inputs) with a single query.
+        // UTXOs created and consumed within the same batch are not in the DB
+        // yet at this point; those fall back to direct reads via
+        // cached_get_utxo, which observe the uncommitted writes of the rw tx.
+        let mut prefetch_outpoints: BTreeSet<UtxoOutPoint> = BTreeSet::new();
+        for block in &blocks {
+            for tx in block.transactions() {
+                for input in tx.transaction().inputs() {
+                    if let TxInput::Utxo(outpoint) = input {
+                        prefetch_outpoints.insert(outpoint.clone());
+                    }
+                }
+            }
+            if let ConsensusData::PoS(pos_data) = block.consensus_data() {
+                for input in pos_data.kernel_inputs() {
+                    if let TxInput::Utxo(outpoint) = input {
+                        prefetch_outpoints.insert(outpoint.clone());
+                    }
+                }
+            }
+        }
+        let outpoint_list: Vec<UtxoOutPoint> = prefetch_outpoints.into_iter().collect();
+        // Chunk the prefetch so a transaction-heavy batch
+        // cannot build one giant ANY($1) bind.
+        const UTXO_PREFETCH_CHUNK: usize = 10_000;
+        let mut utxo_cache: BTreeMap<UtxoOutPoint, Utxo> = BTreeMap::new();
+        for chunk in outpoint_list.chunks(UTXO_PREFETCH_CHUNK) {
+            let fetched_utxos = db_tx.get_utxos(chunk).await?;
+            utxo_cache.extend(
+                chunk
+                    .iter()
+                    .cloned()
+                    .zip(fetched_utxos)
+                    .filter_map(|(outpoint, utxo)| utxo.map(|utxo| (outpoint, utxo))),
+            );
+        }
+
         // Connect the new blocks in the new chain
+        count_blocks(blocks.len());
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let block_timestamp = block.timestamp();
 
             // calculate the previous and new median_time
-            let (previous_median_time, new_median_time) =
-                previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
+            let (_previous_median_time, new_median_time) = {
+                let _t = TimingGuard::stage(Stage::MedianLocked);
+                let medians = previous_and_new_median_time_from_window(
+                    &mut median_time_window,
+                    block_timestamp,
+                );
 
-            update_locked_amounts_for_current_block(
-                &mut db_tx,
-                &self.chain_config,
-                block_height,
-                (previous_median_time, new_median_time),
-            )
-            .await?;
+                update_locked_amounts_for_current_block(
+                    &mut db_tx,
+                    &self.chain_config,
+                    block_height,
+                    medians,
+                    &mut acc,
+                )
+                .await?;
+                medians
+            };
 
             logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
@@ -161,28 +308,49 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             // Third, txs are flushed to the db AFTER the block.
             // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
+            let block_trusted_fees = trusted_fees.get(index).and_then(|f| f.clone());
+            // (experimental step 10) In fast catch-up mode, address/token
+            // transaction history and statistics tables are deferred to the
+            // post-catch-up backfill pass. Balances, utxos, blocks,
+            // transactions and stream events keep indexing so the core API
+            // stays complete.
+            let defer_secondary = self.scan_mode == ScanMode::CatchingUp;
+
+            count_txs(block.transactions().len());
             for (idx, tx) in block.transactions().iter().enumerate() {
-                let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
-                    &self.chain_config,
-                    &mut db_tx,
-                    tx.transaction(),
-                    block_height,
-                )
-                .await?;
+                let trusted_fee =
+                    block_trusted_fees.as_ref().and_then(|fees| fees.get(idx).copied());
+                let (tx_fee, tx_additional_info) = {
+                    let _t = TimingGuard::stage(Stage::FeeCalc);
+                    calculate_tx_fee_and_collect_token_info(
+                        &self.chain_config,
+                        &mut db_tx,
+                        tx.transaction(),
+                        block_height,
+                        &utxo_cache,
+                        trusted_fee,
+                    )
+                    .await?
+                };
 
                 total_fees = total_fees.combine(tx_fee).expect("no overflow");
                 tx_additional_infos.push(tx_additional_info.clone());
 
-                update_tables_from_transaction(
-                    Arc::clone(&self.chain_config),
-                    &mut db_tx,
-                    (block_height, block_timestamp),
-                    new_median_time,
-                    tx,
-                    next_order_number + idx as u64,
-                )
-                .await
-                .expect("Unable to update tables from transaction");
+                {
+                    let _t = TimingGuard::stage(Stage::TxTables);
+                    update_tables_from_transaction(
+                        Arc::clone(&self.chain_config),
+                        &mut db_tx,
+                        (block_height, block_timestamp),
+                        new_median_time,
+                        tx,
+                        next_order_number + idx as u64,
+                        &mut utxo_cache,
+                        &mut acc,
+                        defer_secondary,
+                    )
+                    .await?;
+                }
 
                 let tx_info = TransactionInfo {
                     tx: tx.clone(),
@@ -196,60 +364,363 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 block: WithId::take(block.clone()),
                 tx_additional_infos,
             };
-            db_tx
-                .set_mainchain_block(block_id, block_height, &block_with_extras)
-                .await
-                .expect("Unable to set block");
+            {
+                let _t = TimingGuard::stage(Stage::BlockTables);
+                db_tx.set_mainchain_block(block_id, block_height, &block_with_extras).await?;
 
-            for (idx, tx_info) in transactions.iter().enumerate() {
-                db_tx
-                    .set_transaction(
-                        tx_info.tx.transaction().get_id(),
-                        next_order_number + idx as u64,
-                        block_id,
-                        tx_info,
-                    )
-                    .await
-                    .expect("Unable to set transaction");
-            }
-            next_order_number += transactions.len() as u64;
-
-            db_tx
-                .set_block_aux_data(
+                let event = StreamEvent::Block {
                     block_id,
-                    &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
+                    height: block_height,
+                    timestamp: block_timestamp,
+                    tx_ids: block
+                        .transactions()
+                        .iter()
+                        .map(|tx| tx.transaction().get_id())
+                        .collect(),
+                };
+                last_event_id = db_tx.append_stream_event(&event).await?;
+
+                for (idx, tx_info) in transactions.iter().enumerate() {
+                    db_tx
+                        .set_transaction(
+                            tx_info.tx.transaction().get_id(),
+                            next_order_number + idx as u64,
+                            block_id,
+                            tx_info,
+                        )
+                        .await?;
+                }
+                next_order_number += transactions.len() as u64;
+
+                db_tx
+                    .set_block_aux_data(
+                        block_id,
+                        &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
+                    )
+                    .await?;
+
+                let block_fees = total_fees
+                    .map_into_block_fees(&self.chain_config, block_height)
+                    .expect("no overflow");
+
+                update_tables_from_block(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    &block,
+                    block_fees,
+                    &mut utxo_cache,
+                    &mut acc,
                 )
-                .await
-                .expect("Unable to set block aux data");
+                .await?;
 
-            let block_fees = total_fees
-                .map_into_block_fees(&self.chain_config, block_height)
-                .expect("no overflow");
-
-            update_tables_from_block(
-                Arc::clone(&self.chain_config),
-                &mut db_tx,
-                block_height,
-                &block,
-                block_fees,
-            )
-            .await
-            .expect("Unable to update tables from block");
+                // (experimental) step 6: apply this block's aggregated
+                // balance/statistic deltas as the end-of-block values.
+                acc.flush(&mut db_tx, block_height).await?;
+            }
         }
 
-        db_tx.commit().await.expect("Unable to commit transaction");
+        // Note: sent within the transaction, so the notification is only delivered if the
+        // transaction commits; this is what wakes up the stream event pump in the web server.
+        // Note: the guard also skips the notify for the backends that don't support stream
+        // events, since those return the dummy event id 0 from the appends.
+        // Note: the pruning runs only once per retention window, instead of on every block
+        // commit; see the `stream_events_next_prune_id` field documentation.
+        // The watermark only moves after the commit succeeds: a rolled-back transaction
+        // rolls the pruning back with it, so the next attempt must run it again.
+        let should_prune = last_event_id > 0 && last_event_id >= self.stream_events_next_prune_id;
+        if should_prune {
+            db_tx.prune_stream_events().await?;
+        }
+        if last_event_id > 0 {
+            db_tx.notify_new_stream_events(last_event_id).await?;
+        }
+
+        {
+            let _t = TimingGuard::stage(Stage::Commit);
+            db_tx.commit().await?;
+        }
+        if should_prune {
+            self.stream_events_next_prune_id = last_event_id + STREAM_EVENTS_RETENTION_COUNT;
+        }
         logging::log::info!("Database commit completed successfully");
+        log_batch_summary();
 
         Ok(())
     }
 }
 
+/// The height of the block that follows `block_count` blocks connected on top of `base_height`.
+fn next_block_height(base_height: BlockHeight, block_count: usize) -> BlockHeight {
+    BlockHeight::new(base_height.into_int() + block_count as u64)
+}
+
+/// Collect the ids of the main chain blocks above `common_block_height`, up to and including
+/// `best_block_height`.
+///
+/// Note: this issues one query per height; the cost is linear in the reorg depth, which is
+/// bounded by the number of blocks fetched in a single scanner batch.
+async fn capture_main_chain_block_ids<T: ApiServerStorageRead>(
+    db_tx: &mut T,
+    common_block_height: BlockHeight,
+    best_block_height: BlockHeight,
+) -> Result<Vec<Id<Block>>, ApiServerStorageError> {
+    let mut block_ids = Vec::with_capacity(
+        best_block_height.into_int().saturating_sub(common_block_height.into_int()) as usize,
+    );
+    for height in (common_block_height.into_int() + 1)..=best_block_height.into_int() {
+        if let Some(block_id) = db_tx.get_main_chain_block_id(BlockHeight::new(height)).await? {
+            block_ids.push(block_id);
+        }
+    }
+    Ok(block_ids)
+}
+
 // Find locked UTXOs that are unlocked at this height or time and update address balances
+mod perf_timing;
+
+use perf_timing::{
+    Stage, TimingGuard, count_blocks, count_cache_hit, count_cache_miss, count_txs,
+    log_batch_summary,
+};
+
+/// (experimental) step 6: signed atom deltas for the read-modify-write
+/// patterns. Deltas are accumulated in memory and flushed once per block
+/// with the end-of-block value, preserving the per-height versioned rows
+/// while removing one SELECT plus upsert set per delta event.
+#[derive(Default)]
+struct BalanceAccumulator {
+    address_deltas: BTreeMap<(Address<Destination>, CoinOrTokenId), i128>,
+    locked_deltas: BTreeMap<(Address<Destination>, CoinOrTokenId), i128>,
+    statistic_deltas: BTreeMap<(CoinOrTokenStatistic, CoinOrTokenId), i128>,
+    // Batch-local "current value" cache; filled on first flush per key so
+    // later blocks don't re-read the balance.
+    address_current: BTreeMap<(Address<Destination>, CoinOrTokenId), Amount>,
+    locked_current: BTreeMap<(Address<Destination>, CoinOrTokenId), Amount>,
+    statistic_current: BTreeMap<(CoinOrTokenStatistic, CoinOrTokenId), Amount>,
+}
+
+fn amount_delta_i128(amount: &Amount) -> i128 {
+    i128::try_from(amount.into_atoms()).expect("amount atoms do not fit i128")
+}
+
+/// Returns an error instead of panicking so a statistic
+/// underflow surfaces as a scan error like it did before the aggregation
+/// refactor (address-balance paths keep the historical panic-for-parity via
+/// the caller).
+fn apply_delta(
+    current: Amount,
+    delta: i128,
+    context: &str,
+) -> Result<Amount, ApiServerStorageError> {
+    let current_atoms = i128::try_from(current.into_atoms()).map_err(|_| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "amount atoms do not fit i128: {context}"
+        ))
+    })?;
+    let new_atoms = current_atoms + delta;
+    if new_atoms < 0 {
+        return Err(ApiServerStorageError::LowLevelStorageError(format!(
+            "Balance should not overflow {context}: would go negative"
+        )));
+    }
+    Ok(Amount::from_atoms(u128::try_from(new_atoms).map_err(
+        |_| ApiServerStorageError::LowLevelStorageError(format!("balance overflow: {context}")),
+    )?))
+}
+
+impl BalanceAccumulator {
+    fn add_address_delta(
+        &mut self,
+        address: &Address<Destination>,
+        coin_or_token_id: CoinOrTokenId,
+        delta: i128,
+    ) {
+        *self.address_deltas.entry((address.clone(), coin_or_token_id)).or_insert(0) += delta;
+    }
+
+    fn add_locked_delta(
+        &mut self,
+        address: &Address<Destination>,
+        coin_or_token_id: CoinOrTokenId,
+        delta: i128,
+    ) {
+        *self.locked_deltas.entry((address.clone(), coin_or_token_id)).or_insert(0) += delta;
+    }
+
+    fn add_statistic_delta(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        delta: i128,
+    ) {
+        *self.statistic_deltas.entry((statistic, coin_or_token_id)).or_insert(0) += delta;
+    }
+
+    /// Applies all accumulated deltas as of `block_height` and resets the
+    /// delta maps (the current-value caches persist for the whole batch).
+    async fn flush<T: ApiServerStorageWrite>(
+        &mut self,
+        db_tx: &mut T,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        for ((address, coin_or_token_id), delta) in std::mem::take(&mut self.address_deltas) {
+            let current = match self.address_current.get(&(address.clone(), coin_or_token_id)) {
+                Some(value) => *value,
+                None => {
+                    let value = db_tx
+                        .get_address_balance(address.as_str(), coin_or_token_id)
+                        .await?
+                        .unwrap_or(Amount::ZERO);
+                    self.address_current.insert((address.clone(), coin_or_token_id), value);
+                    value
+                }
+            };
+            // Address balances panicked on underflow before the aggregation
+            // refactor; keep that parity.
+            let new_amount =
+                apply_delta(current, delta, &format!("{address:?} {coin_or_token_id:?}"))
+                    .expect("address balance underflow");
+            db_tx
+                .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
+                .await?;
+            self.address_current.insert((address, coin_or_token_id), new_amount);
+        }
+
+        for ((address, coin_or_token_id), delta) in std::mem::take(&mut self.locked_deltas) {
+            let current = match self.locked_current.get(&(address.clone(), coin_or_token_id)) {
+                Some(value) => *value,
+                None => {
+                    let value = db_tx
+                        .get_address_locked_balance(address.as_str(), coin_or_token_id)
+                        .await?
+                        .unwrap_or(Amount::ZERO);
+                    self.locked_current.insert((address.clone(), coin_or_token_id), value);
+                    value
+                }
+            };
+            // Address locked balances panicked on underflow before the
+            // aggregation refactor; keep that parity.
+            let new_amount = apply_delta(
+                current,
+                delta,
+                &format!("locked {address:?} {coin_or_token_id:?}"),
+            )
+            .expect("locked address balance underflow");
+            db_tx
+                .set_address_locked_balance_at_height(
+                    &address,
+                    new_amount,
+                    coin_or_token_id,
+                    block_height,
+                )
+                .await?;
+            self.locked_current.insert((address, coin_or_token_id), new_amount);
+        }
+
+        for ((statistic, coin_or_token_id), delta) in std::mem::take(&mut self.statistic_deltas) {
+            let current = match self.statistic_current.get(&(statistic, coin_or_token_id)) {
+                Some(value) => *value,
+                None => {
+                    let value = db_tx
+                        .get_statistic(statistic, coin_or_token_id)
+                        .await?
+                        .unwrap_or(Amount::ZERO);
+                    self.statistic_current.insert((statistic, coin_or_token_id), value);
+                    value
+                }
+            };
+            // Statistics returned an error on underflow before the
+            // aggregation refactor; propagate instead of panicking.
+            let new_amount = apply_delta(
+                current,
+                delta,
+                &format!("statistic {statistic:?} {coin_or_token_id:?}"),
+            )?;
+            db_tx
+                .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
+                .await?;
+            self.statistic_current.insert((statistic, coin_or_token_id), new_amount);
+        }
+
+        Ok(())
+    }
+}
+
+#[allow(clippy::unused_async)]
+async fn increase_address_amount(
+    acc: &mut BalanceAccumulator,
+    address: &Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) {
+    acc.add_address_delta(address, coin_or_token_id, amount_delta_i128(amount));
+}
+
+#[allow(clippy::unused_async)]
+async fn decrease_address_amount(
+    acc: &mut BalanceAccumulator,
+    address: Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) {
+    acc.add_address_delta(&address, coin_or_token_id, -amount_delta_i128(amount));
+}
+
+#[allow(clippy::unused_async)]
+async fn increase_locked_address_amount(
+    acc: &mut BalanceAccumulator,
+    address: &Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) {
+    acc.add_locked_delta(address, coin_or_token_id, amount_delta_i128(amount));
+}
+
+#[allow(clippy::unused_async)]
+async fn decrease_address_locked_amount(
+    acc: &mut BalanceAccumulator,
+    address: Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) {
+    acc.add_locked_delta(&address, coin_or_token_id, -amount_delta_i128(amount));
+}
+
+#[allow(clippy::unused_async)]
+async fn increase_statistic_amount(
+    acc: &mut BalanceAccumulator,
+    statistic: CoinOrTokenStatistic,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) -> Result<(), ApiServerStorageError> {
+    acc.add_statistic_delta(statistic, coin_or_token_id, amount_delta_i128(amount));
+    Ok(())
+}
+
+#[allow(clippy::unused_async)]
+async fn decrease_statistic_amount(
+    acc: &mut BalanceAccumulator,
+    statistic: CoinOrTokenStatistic,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    _block_height: BlockHeight,
+) -> Result<(), ApiServerStorageError> {
+    acc.add_statistic_delta(statistic, coin_or_token_id, -amount_delta_i128(amount));
+    Ok(())
+}
+
 async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     (previous_median_time, new_median_time): (BlockTimestamp, BlockTimestamp),
+    acc: &mut BalanceAccumulator,
 ) -> Result<(), ApiServerStorageError> {
     let locked_utxos = db_tx
         .get_locked_utxos_until_now(block_height, (previous_median_time, new_median_time))
@@ -264,7 +735,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
                 match outvalue {
                     OutputValue::Coin(amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::Coin,
@@ -272,7 +743,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
                         )
                         .await;
                         decrease_address_locked_amount(
-                            db_tx,
+                            acc,
                             address,
                             amount,
                             CoinOrTokenId::Coin,
@@ -283,7 +754,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
                     OutputValue::TokenV0(_) => {}
                     OutputValue::TokenV1(token_id, amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
@@ -291,7 +762,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
                         )
                         .await;
                         decrease_address_locked_amount(
-                            db_tx,
+                            acc,
                             address,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
@@ -317,18 +788,22 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-async fn previous_and_new_median_time<T: ApiServerStorageRead>(
-    db_tx: &mut T,
+/// (experimental) step 5: in-memory version of `previous_and_new_median_time`.
+/// `window` holds the MEDIAN_TIME_SPAN most recent block timestamps,
+/// newest-first (same shape the db query returns); it is advanced in place
+/// with the new block's timestamp so the whole batch needs only one initial
+/// query instead of one per block.
+fn previous_and_new_median_time_from_window(
+    window: &mut Vec<BlockTimestamp>,
     block_timestamp: BlockTimestamp,
-) -> Result<(BlockTimestamp, BlockTimestamp), ApiServerStorageError> {
-    let mut timestamps = db_tx.get_latest_blocktimestamps().await?;
+) -> (BlockTimestamp, BlockTimestamp) {
     let previous_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
-    timestamps.insert(0, block_timestamp);
-    let new_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+        calculate_median_time_past_from_blocktimestamps(window.iter().copied());
+    window.insert(0, block_timestamp);
+    window.truncate(chainstate::MEDIAN_TIME_SPAN);
+    let new_median_time = calculate_median_time_past_from_blocktimestamps(window.iter().copied());
 
-    Ok((previous_median_time, new_median_time))
+    (previous_median_time, new_median_time)
 }
 
 async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
@@ -373,16 +848,19 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
     total_tx_fees: Fee,
-) -> Result<(), ApiServerStorageError> {
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
+    acc: &mut BalanceAccumulator,
+) -> Result<(), BlockchainStateError> {
     update_tables_from_block_reward(
         chain_config.clone(),
         db_tx,
         block_height,
         block.block_reward().outputs(),
         block.get_id().into(),
+        Some(&mut *utxo_cache),
+        acc,
     )
-    .await
-    .expect("Unable to update tables from block reward");
+    .await?;
 
     update_tables_from_consensus_data(
         chain_config.clone(),
@@ -390,9 +868,10 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
         block_height,
         block,
         total_tx_fees,
+        utxo_cache,
+        acc,
     )
-    .await
-    .expect("Unable to update tables from consensus data");
+    .await?;
 
     Ok(())
 }
@@ -403,6 +882,8 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block_rewards: &[TxOutput],
     block_id: Id<GenBlock>,
+    mut utxo_cache: Option<&mut BTreeMap<UtxoOutPoint, Utxo>>,
+    acc: &mut BalanceAccumulator,
 ) -> Result<(), ApiServerStorageError> {
     for (idx, output) in block_rewards.iter().enumerate() {
         let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id), idx as u32);
@@ -424,6 +905,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
             }
@@ -442,32 +924,33 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Preminted,
                     &pool_data.pledge_amount(),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     &pool_data.pledge_amount(),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Staked,
                     &pool_data.pledge_amount(),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => {
@@ -477,7 +960,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     OutputValue::TokenV0(_) => None,
                     OutputValue::TokenV1(token_id, amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
@@ -485,26 +968,26 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                         )
                         .await;
                         increase_statistic_amount(
-                            db_tx,
+                            acc,
                             CoinOrTokenStatistic::Preminted,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
                             block_height,
                         )
-                        .await;
+                        .await?;
                         increase_statistic_amount(
-                            db_tx,
+                            acc,
                             CoinOrTokenStatistic::CirculatingSupply,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
                             block_height,
                         )
-                        .await;
+                        .await?;
                         Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
                     }
                     OutputValue::Coin(amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::Coin,
@@ -512,21 +995,21 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                         )
                         .await;
                         increase_statistic_amount(
-                            db_tx,
+                            acc,
                             CoinOrTokenStatistic::Preminted,
                             amount,
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                         increase_statistic_amount(
-                            db_tx,
+                            acc,
                             CoinOrTokenStatistic::CirculatingSupply,
                             amount,
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                         None
                     }
                 };
@@ -538,6 +1021,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    utxo_cache.as_deref_mut(),
                 )
                 .await;
             }
@@ -552,6 +1036,8 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     tx: &Transaction,
     block_height: BlockHeight,
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    trusted_fee: Option<Fee>,
 ) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
     let new_tokens = tx
         .outputs()
@@ -578,11 +1064,21 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-    let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
+    // (experimental) step 3: fetch input UTXOs once and share them between
+    // the fee calculation and the token-info collection below; previously the
+    // inputs were fetched twice per transaction (once inside tx_fees via
+    // collect_inputs_utxos and once through the FuturesOrdered here).
+    let input_utxos: Vec<Option<TxOutput>> =
+        collect_inputs_utxos(utxo_cache, db_tx, tx.inputs()).await?;
 
-    let input_tasks: FuturesOrdered<_> =
-        tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
-    let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
+    // (experimental step 9) Trust the node's persisted fee when available
+    // (computed by consensus at connect time); fall back to local
+    // recomputation only for blocks predating fee persistence.
+    let fee = match trusted_fee {
+        Some(fee) => AccumulatedFee::from_coin_fee(fee),
+        None => tx_fees(chain_config, block_height, tx, &input_utxos, db_tx).await?,
+    };
+
     let token_ids = {
         let mut token_ids = BTreeSet::new();
         for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
@@ -658,18 +1154,33 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     Ok((fee, tx_aditional_infos))
 }
 
+/// (experimental) step 4: UTXO reads go through the batch-level prefetch
+/// cache first; a cache miss (e.g. a UTXO created by a tx earlier in the same
+/// batch, which the prefetch couldn't see) falls back to a direct read, which
+/// does observe the uncommitted writes of the current transaction.
+async fn cached_get_utxo<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    outpoint: &UtxoOutPoint,
+    db_tx: &T,
+) -> Result<Option<Utxo>, ApiServerStorageError> {
+    if let Some(utxo) = utxo_cache.get(outpoint) {
+        count_cache_hit();
+        return Ok(Some(utxo.clone()));
+    }
+    count_cache_miss();
+    db_tx.get_utxo(outpoint.clone()).await
+}
+
 async fn fetch_utxo<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     input: &TxInput,
     db_tx: &T,
 ) -> Result<Option<TxOutput>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = db_tx
-                .get_utxo(outpoint.clone())
-                .await?
-                .map(|utxo| utxo.into_output())
-                .expect("must be present");
-            Ok(Some(utxo))
+            let utxo =
+                cached_get_utxo(utxo_cache, outpoint, db_tx).await?.expect("must be present");
+            Ok(Some(utxo.into_output()))
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) | TxInput::OrderAccountCommand(_) => {
             Ok(None)
@@ -773,10 +1284,10 @@ async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &Transaction,
+    inputs_utxos: &[Option<TxOutput>],
     db_tx: &T,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
-    let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
+    let pools = prefetch_pool_data(inputs_utxos, db_tx, block_height).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
 
@@ -790,7 +1301,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
         &pos_accounting_adapter,
         &tokens_view,
         tx.inputs(),
-        &inputs_utxos,
+        inputs_utxos,
     )
     .expect("valid block");
     let outputs_accumulator =
@@ -802,8 +1313,9 @@ async fn tx_fees<T: ApiServerStorageRead>(
 }
 
 async fn prefetch_pool_data<T: ApiServerStorageRead>(
-    inputs_utxos: &Vec<Option<TxOutput>>,
+    inputs_utxos: &[Option<TxOutput>],
     db_tx: &T,
+    block_height: BlockHeight,
 ) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
@@ -811,7 +1323,16 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let data = db_tx.get_pool_data(*pool_id).await?.expect("should exist").pool_data;
+                // Fee calculation runs while connecting `block_height`, so the pool state
+                // must be read as of that height; a row written by a higher block must
+                // not influence the fees (see `update_tables_from_consensus_data`).
+                // On a valid chain the pool was created before this block, so the
+                // missing row can only mean corrupt storage, hence the panic.
+                let data = db_tx
+                    .get_pool_data_at_or_below_height(*pool_id, block_height)
+                    .await?
+                    .expect("should exist")
+                    .pool_data;
                 pools.insert(*pool_id, data);
             }
             Some(
@@ -889,12 +1410,13 @@ async fn prefetch_orders<T: ApiServerStorageRead>(
 }
 
 async fn collect_inputs_utxos<T: ApiServerStorageRead>(
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     db_tx: &T,
     inputs: &[TxInput],
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
     let mut outputs = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let output = fetch_utxo(input, db_tx).await?;
+        let output = fetch_utxo(utxo_cache, input, db_tx).await?;
         outputs.push(output);
     }
 
@@ -907,6 +1429,8 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
     total_tx_fees: Fee,
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    acc: &mut BalanceAccumulator,
 ) -> Result<(), ApiServerStorageError> {
     match block.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {}
@@ -914,8 +1438,9 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             for input in pos_data.kernel_inputs() {
                 match input {
                     TxInput::Utxo(outpoint) => {
-                        let utxo =
-                            db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                        let utxo = cached_get_utxo(utxo_cache, outpoint, db_tx)
+                            .await?
+                            .expect("must be present");
                         set_utxo(
                             outpoint.clone(),
                             utxo.output(),
@@ -924,6 +1449,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                             block_height,
                             true,
                             &chain_config,
+                            None,
                         )
                         .await;
                     }
@@ -939,13 +1465,19 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Block subsidy and fees should not overflow");
 
             let pool_id = *pos_data.stake_pool_id();
+            // Read the state as of this block's height. Connecting a block must never
+            // observe state written by higher (future) blocks, otherwise rewards would
+            // be credited on top of future state and the accumulated balances would
+            // silently drift from the chain on every reconnection of a lower block.
+            // The producing pool must exist as of this block on a valid chain.
             let pool_data = db_tx
-                .get_pool_data(pool_id)
+                .get_pool_data_at_or_below_height(pool_id, block_height)
                 .await
                 .expect("Unable to get pool data")
                 .expect("Pool should exist");
 
-            let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
+            let delegation_shares =
+                db_tx.get_pool_delegations_at_or_below_height(pool_id, block_height).await?;
             let mut adapter =
                 pos_adapter::PoSAdapter::new(pool_id, pool_data.pool_data, &delegation_shares);
 
@@ -965,21 +1497,21 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             )
             .expect("no error");
             increase_statistic_amount(
-                db_tx,
+                acc,
                 CoinOrTokenStatistic::Staked,
                 &total_reward,
                 CoinOrTokenId::Coin,
                 block_height,
             )
-            .await;
+            .await?;
             increase_statistic_amount(
-                db_tx,
+                acc,
                 CoinOrTokenStatistic::CirculatingSupply,
                 &block_subsidy,
                 CoinOrTokenId::Coin,
                 block_height,
             )
-            .await;
+            .await?;
 
             for (delegation_id, rewards) in adapter.rewards_per_delegation() {
                 let delegation = delegation_shares.get(delegation_id).expect("must exist").clone();
@@ -1009,6 +1541,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
@@ -1016,16 +1549,21 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
     tx_global_index: u64,
-) -> Result<(), ApiServerStorageError> {
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
+    acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
+) -> Result<(), BlockchainStateError> {
     update_tables_from_transaction_inputs(
         Arc::clone(&chain_config),
         db_tx,
         block_height,
         transaction,
         tx_global_index,
+        utxo_cache,
+        acc,
+        defer_secondary,
     )
-    .await
-    .expect("Unable to update tables from transaction inputs");
+    .await?;
 
     update_tables_from_transaction_outputs(
         Arc::clone(&chain_config),
@@ -1034,20 +1572,26 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         median_time,
         transaction.transaction(),
         tx_global_index,
+        &mut *utxo_cache,
+        acc,
+        defer_secondary,
     )
-    .await
-    .expect("Unable to update tables from transaction outputs");
+    .await?;
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
     tx: &SignedTransaction,
     tx_global_index: u64,
-) -> Result<(), ApiServerStorageError> {
+    utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
+    acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
+) -> Result<(), BlockchainStateError> {
     let sigs = tx.signatures();
     let tx = tx.transaction();
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
@@ -1079,30 +1623,30 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance = issuance.mint_tokens(*amount, *nonce);
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         amount,
                         CoinOrTokenId::TokenId(*token_id),
                         block_height,
                     )
-                    .await;
+                    .await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnmintTokens(token_id) => {
@@ -1116,21 +1660,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FreezeToken(token_id, is_unfreezable) => {
@@ -1141,21 +1685,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::UnfreezeToken(token_id) => {
@@ -1166,21 +1710,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_freeze_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::LockTokenSupply(token_id) => {
@@ -1191,21 +1735,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_supply_change_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, destination) => {
@@ -1216,21 +1760,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_authority_fee(block_height);
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
@@ -1241,21 +1785,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_data(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_metadata_uri_fee();
                     increase_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::Burned,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     decrease_statistic_amount(
-                        db_tx,
+                        acc,
                         CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
                     )
-                    .await;
+                    .await?;
                     transaction_tokens.insert(*token_id);
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
@@ -1306,13 +1850,15 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         // Update delegation pledge
 
                         //TODO: optimize into a single query when amount is a number in the DB
+                        // The delegation must exist as of this block on a valid chain,
+                        // since the spending input references it.
                         let delegation = db_tx
-                            .get_delegation(*delegation_id)
+                            .get_delegation_at_or_below_height(*delegation_id, block_height)
                             .await
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
 
-                        let new_delegation = delegation.spend_share(*amount, outpoint.nonce());
+                        let new_delegation = delegation.spend_share(*amount, outpoint.nonce())?;
 
                         db_tx
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
@@ -1321,30 +1867,32 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
                         let pool_id = *new_delegation.pool_id();
                         let pool_data = db_tx
-                            .get_pool_data(pool_id)
+                            .get_pool_data_at_or_below_height(pool_id, block_height)
                             .await
                             .expect("unable to get pool data")
                             .expect("must exist");
-                        let new_pool_data = pool_data.decrease_delegation_balance(*amount);
+                        let new_pool_data = pool_data.decrease_delegation_balance(*amount)?;
 
                         db_tx
                             .set_pool_data_at_height(pool_id, &new_pool_data, block_height)
                             .await
                             .expect("unable to update pool data");
                         decrease_statistic_amount(
-                            db_tx,
+                            acc,
                             CoinOrTokenStatistic::Staked,
                             amount,
                             CoinOrTokenId::Coin,
                             block_height,
                         )
-                        .await;
+                        .await?;
                     }
                 }
             }
             TxInput::Utxo(outpoint) => match outpoint.source_id() {
                 OutPointSourceId::BlockReward(_) => {
-                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    let utxo = cached_get_utxo(utxo_cache, outpoint, db_tx)
+                        .await?
+                        .expect("must be present");
                     set_utxo(
                         outpoint.clone(),
                         utxo.output(),
@@ -1353,6 +1901,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                         true,
                         &chain_config,
+                        None,
                     )
                     .await;
 
@@ -1369,16 +1918,13 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateOrder(_) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            let pool_data = db_tx
-                                .get_pool_data(pool_id)
-                                .await?
-                                .expect("pool data should exist")
-                                .decommission_pool();
-
-                            db_tx
-                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
-                                .await
-                                .expect("unable to update pool data");
+                            let pool_data = decommission_pool_and_decrement_staked(
+                                db_tx,
+                                pool_id,
+                                block_height,
+                                acc,
+                            )
+                            .await?;
 
                             let address = Address::<Destination>::new(
                                 &chain_config,
@@ -1390,19 +1936,13 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 .entry(address.clone())
                                 .or_default()
                                 .insert(tx.get_id());
-                            decrease_statistic_amount(
-                                db_tx,
-                                CoinOrTokenStatistic::Staked,
-                                &pool_data.pledge_amount(),
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
                         }
                     }
                 }
                 OutPointSourceId::Transaction(_) => {
-                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    let utxo = cached_get_utxo(utxo_cache, outpoint, db_tx)
+                        .await?
+                        .expect("must be present");
                     set_utxo(
                         outpoint.clone(),
                         utxo.output(),
@@ -1411,6 +1951,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         block_height,
                         true,
                         &chain_config,
+                        None,
                     )
                     .await;
 
@@ -1423,24 +1964,13 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateOrder(_) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            let pool_data = db_tx
-                                .get_pool_data(pool_id)
-                                .await?
-                                .expect("pool data should exist")
-                                .decommission_pool();
-
-                            db_tx
-                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
-                                .await
-                                .expect("unable to update pool data");
-                            decrease_statistic_amount(
+                            decommission_pool_and_decrement_staked(
                                 db_tx,
-                                CoinOrTokenStatistic::Staked,
-                                &pool_data.pledge_amount(),
-                                CoinOrTokenId::Coin,
+                                pool_id,
                                 block_height,
+                                acc,
                             )
-                            .await;
+                            .await?;
                         }
                         TxOutput::IssueNft(token_id, _, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -1452,7 +1982,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 .insert(tx.get_id());
 
                             decrease_address_amount(
-                                db_tx,
+                                acc,
                                 address,
                                 &Amount::from_atoms(1),
                                 CoinOrTokenId::TokenId(token_id),
@@ -1509,7 +2039,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 OutputValue::TokenV0(_) => {}
                                 OutputValue::TokenV1(token_id, amount) => {
                                     decrease_address_amount(
-                                        db_tx,
+                                        acc,
                                         address,
                                         &amount,
                                         CoinOrTokenId::TokenId(token_id),
@@ -1520,7 +2050,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 }
                                 OutputValue::Coin(amount) => {
                                     decrease_address_amount(
-                                        db_tx,
+                                        acc,
                                         address,
                                         &amount,
                                         CoinOrTokenId::Coin,
@@ -1536,7 +2066,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
         }
     }
 
+    // (experimental step 10) address/token transaction history is deferred in
+    // fast catch-up mode; rebuilt by the post-catch-up backfill pass.
     for (address, transactions) in address_transactions {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
@@ -1548,6 +2083,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     }
     let tx_id = tx.get_id();
     for token_id in transaction_tokens {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
             .await
@@ -1561,6 +2099,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
@@ -1568,6 +2107,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     median_time: BlockTimestamp,
     transaction: &Transaction,
     tx_global_index: u64,
+    utxo_cache: &mut BTreeMap<UtxoOutPoint, Utxo>,
+    acc: &mut BalanceAccumulator,
+    defer_secondary: bool,
 ) -> Result<(), ApiServerStorageError> {
     let tx_id = transaction.get_id();
     let inputs = transaction.inputs();
@@ -1592,40 +2134,40 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 };
 
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Burned,
                     amount,
                     coin_or_token_id,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     amount,
                     coin_or_token_id,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::DataDeposit(_) => {
                 let amount = chain_config.data_deposit_fee(block_height);
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Burned,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
             }
             TxOutput::IssueFungibleToken(issuance) => {
                 let token_id = make_token_id(chain_config.as_ref(), block_height, inputs)?;
@@ -1645,21 +2187,21 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;
                 let amount = chain_config.fungible_token_issuance_fee();
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Burned,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 transaction_tokens.insert(token_id);
             }
             TxOutput::IssueNft(token_id, issuance, destination) => {
@@ -1673,7 +2215,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await?;
 
                 increase_address_amount(
-                    db_tx,
+                    acc,
                     &address,
                     &Amount::from_atoms(1),
                     CoinOrTokenId::TokenId(*token_id),
@@ -1681,30 +2223,30 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     &Amount::from_atoms(1),
                     CoinOrTokenId::TokenId(*token_id),
                     block_height,
                 )
-                .await;
+                .await?;
                 let amount = chain_config.nft_issuance_fee(block_height);
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Burned,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 decrease_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
 
                 set_utxo(
                     outpoint,
@@ -1714,6 +2256,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    Some(&mut *utxo_cache),
                 )
                 .await;
             }
@@ -1745,13 +2288,13 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to update pool balance");
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Staked,
                     &stake_pool_data.pledge(),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
                 set_utxo(
                     outpoint,
                     output,
@@ -1760,6 +2303,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
+                    Some(&mut *utxo_cache),
                 )
                 .await;
                 let address = Address::<Destination>::new(
@@ -1778,7 +2322,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 // Update delegation pledge
 
                 let delegation = db_tx
-                    .get_delegation(*delegation_id)
+                    .get_delegation_at_or_below_height(*delegation_id, block_height)
                     .await
                     .expect("Unable to get delegation")
                     .expect("Delegation should exist");
@@ -1790,17 +2334,17 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to update delegation");
                 increase_statistic_amount(
-                    db_tx,
+                    acc,
                     CoinOrTokenStatistic::Staked,
                     amount,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
-                .await;
+                .await?;
 
                 let pool_id = *new_delegation.pool_id();
                 let pool_data = db_tx
-                    .get_pool_data(pool_id)
+                    .get_pool_data_at_or_below_height(pool_id, block_height)
                     .await
                     .expect("unable to get pool data")
                     .expect("must exist");
@@ -1828,7 +2372,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     OutputValue::TokenV0(_) => None,
                     OutputValue::TokenV1(token_id, amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
@@ -1840,7 +2384,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     }
                     OutputValue::Coin(amount) => {
                         increase_address_amount(
-                            db_tx,
+                            acc,
                             &address,
                             amount,
                             CoinOrTokenId::Coin,
@@ -1854,9 +2398,17 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), idx as u32);
                 let utxo = Utxo::new(output.clone(), token_decimals, None);
                 db_tx
-                    .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                    .set_utxo_at_height(
+                        outpoint.clone(),
+                        utxo.clone(),
+                        &[address.as_str()],
+                        block_height,
+                    )
                     .await
                     .expect("Unable to set utxo");
+                // (experimental) step 4: make the new UTXO visible to the
+                // batch cache for later inputs of this batch.
+                utxo_cache.insert(outpoint, utxo);
             }
             TxOutput::LockThenTransfer(output_value, destination, lock) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
@@ -1879,7 +2431,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     OutputValue::Coin(amount) => {
                         if already_unlocked {
                             increase_address_amount(
-                                db_tx,
+                                acc,
                                 &address,
                                 amount,
                                 CoinOrTokenId::Coin,
@@ -1888,7 +2440,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                             .await;
                         } else {
                             increase_locked_address_amount(
-                                db_tx,
+                                acc,
                                 &address,
                                 amount,
                                 CoinOrTokenId::Coin,
@@ -1903,7 +2455,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         transaction_tokens.insert(*token_id);
                         if already_unlocked {
                             increase_address_amount(
-                                db_tx,
+                                acc,
                                 &address,
                                 amount,
                                 CoinOrTokenId::TokenId(*token_id),
@@ -1912,7 +2464,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                             .await;
                         } else {
                             increase_locked_address_amount(
-                                db_tx,
+                                acc,
                                 &address,
                                 amount,
                                 CoinOrTokenId::TokenId(*token_id),
@@ -1927,9 +2479,17 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 if already_unlocked {
                     let utxo = Utxo::new(output.clone(), token_decimals, None);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+                        .set_utxo_at_height(
+                            outpoint.clone(),
+                            utxo.clone(),
+                            &[address.as_str()],
+                            block_height,
+                        )
                         .await
                         .expect("Unable to set utxo");
+                    // (experimental) step 4: make the new UTXO visible to the
+                    // batch cache for later inputs of this batch.
+                    utxo_cache.insert(outpoint, utxo);
                 } else {
                     let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
@@ -2013,6 +2573,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     }
 
     for (address, transactions) in address_transactions {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_address_transactions_at_height(address.as_str(), transactions, block_height)
             .await
@@ -2024,6 +2587,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     }
 
     for token_id in transaction_tokens {
+        if defer_secondary {
+            continue;
+        }
         db_tx
             .set_token_transaction_at_height(token_id, tx_id, block_height, tx_global_index)
             .await
@@ -2037,142 +2603,46 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-async fn increase_statistic_amount<T: ApiServerStorageWrite>(
+/// Decommissions a stake pool and removes its whole balance (pledge plus
+/// accumulated staker rewards, matching what the creation and block-reward
+/// paths added to the `Staked` statistic) from it. The balance is captured
+/// before `decommission_pool` zeroes the record; the zeroed record is stored
+/// and returned so callers can read the decommission destination.
+async fn decommission_pool_and_decrement_staked<T: ApiServerStorageWrite>(
     db_tx: &mut T,
-    statistic: CoinOrTokenStatistic,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
+    pool_id: PoolId,
     block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_statistic(statistic, coin_or_token_id)
-        .await
-        .expect("Unable to get statistic")
-        .unwrap_or(Amount::ZERO);
+    acc: &mut BalanceAccumulator,
+) -> Result<PoolDataWithExtraInfo, ApiServerStorageError> {
+    let pool_data = db_tx
+        .get_pool_data_at_or_below_height(pool_id, block_height)
+        .await?
+        .ok_or_else(|| {
+            ApiServerStorageError::LowLevelStorageError(format!(
+                "pool data for {pool_id} should exist"
+            ))
+        })?;
+    let staker_balance = pool_data.staker_balance().map_err(|error| {
+        ApiServerStorageError::LowLevelStorageError(format!(
+            "staker balance overflow for pool {pool_id}: {error}",
+        ))
+    })?;
+    let pool_data = pool_data.decommission_pool();
 
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+    db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
 
-    db_tx
-        .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
-        .await
-        .expect("Unable to update statistic")
+    decrease_statistic_amount(
+        acc,
+        CoinOrTokenStatistic::Staked,
+        &staker_balance,
+        CoinOrTokenId::Coin,
+        block_height,
+    )
+    .await?;
+    Ok(pool_data)
 }
 
-async fn decrease_statistic_amount<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
-    statistic: CoinOrTokenStatistic,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
-    block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_statistic(statistic, coin_or_token_id)
-        .await
-        .expect("Unable to get statistic")
-        .unwrap_or(Amount::ZERO);
-
-    let new_amount = current_balance.sub(*amount).expect("Balance should not underflow");
-
-    db_tx
-        .set_statistic(statistic, coin_or_token_id, block_height, new_amount)
-        .await
-        .expect("Unable to update statistic")
-}
-
-async fn increase_address_amount<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
-    address: &Address<Destination>,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
-    block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_address_balance(address.as_str(), coin_or_token_id)
-        .await
-        .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
-
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
-
-    db_tx
-        .set_address_balance_at_height(address, new_amount, coin_or_token_id, block_height)
-        .await
-        .expect("Unable to update balance")
-}
-
-async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
-    address: &Address<Destination>,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
-    block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_address_locked_balance(address.as_str(), coin_or_token_id)
-        .await
-        .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
-
-    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
-
-    db_tx
-        .set_address_locked_balance_at_height(address, new_amount, coin_or_token_id, block_height)
-        .await
-        .expect("Unable to update balance")
-}
-
-async fn decrease_address_amount<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
-    address: Address<Destination>,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
-    block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_address_balance(address.as_str(), coin_or_token_id)
-        .await
-        .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
-
-    let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
-        panic!(
-            "Balance should not overflow {:?} {:?} {:?}",
-            coin_or_token_id, current_balance, *amount
-        )
-    });
-
-    db_tx
-        .set_address_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
-        .await
-        .expect("Unable to update balance")
-}
-
-async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
-    address: Address<Destination>,
-    amount: &Amount,
-    coin_or_token_id: CoinOrTokenId,
-    block_height: BlockHeight,
-) {
-    let current_balance = db_tx
-        .get_address_locked_balance(address.as_str(), coin_or_token_id)
-        .await
-        .expect("Unable to get balance")
-        .unwrap_or(Amount::ZERO);
-
-    let new_amount = current_balance.sub(*amount).unwrap_or_else(|| {
-        panic!(
-            "Balance should not overflow {:?} {:?} {:?}",
-            coin_or_token_id, current_balance, *amount
-        )
-    });
-
-    db_tx
-        .set_address_locked_balance_at_height(&address, new_amount, coin_or_token_id, block_height)
-        .await
-        .expect("Unable to update balance")
-}
-
+#[allow(clippy::too_many_arguments)]
 async fn set_utxo<T: ApiServerStorageWrite>(
     outpoint: UtxoOutPoint,
     output: &TxOutput,
@@ -2181,6 +2651,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     spent: bool,
     chain_config: &ChainConfig,
+    mut utxo_cache: Option<&mut BTreeMap<UtxoOutPoint, Utxo>>,
 ) {
     let utxo = Utxo::new(
         output.clone(),
@@ -2191,9 +2662,20 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");
         db_tx
-            .set_utxo_at_height(outpoint, utxo, &[address.as_str()], block_height)
+            .set_utxo_at_height(
+                outpoint.clone(),
+                utxo.clone(),
+                &[address.as_str()],
+                block_height,
+            )
             .await
             .expect("Unable to set utxo");
+        // (experimental) step 4: freshly created UTXOs become visible to the
+        // batch cache, so later inputs of the same batch read them from
+        // memory instead of the db.
+        if let (Some(cache), false) = (utxo_cache.as_mut(), spent) {
+            cache.insert(outpoint, utxo);
+        }
     }
 }
 
@@ -2211,5 +2693,344 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::CreateOrder(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod replay_regression_tests {
+    use super::*;
+
+    use api_server_common::storage::{
+        impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+        storage_api::{ApiServerStorageRead, ApiServerTransactionRw, Transactional},
+    };
+    use chainstate::{BlockSource, chainstate_interface::ChainstateInterface};
+    use chainstate_test_framework::{TestFramework, TransactionBuilder};
+    use common::{
+        chain::{
+            CoinUnit, Destination, OutPointSourceId, PoolId, TxInput, TxOutput,
+            output_value::OutputValue, signature::inputsig::InputWitness, stakelock::StakePoolData,
+        },
+        primitives::{H256, per_thousand::PerThousand},
+    };
+    use crypto::{
+        key::{KeyKind, PrivateKey},
+        vrf::{VRFKeyKind, VRFPrivateKey},
+    };
+    use randomness::CryptoRng;
+    use rstest::rstest;
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    fn make_pos_block(
+        rng: &mut impl CryptoRng,
+        tf: &mut TestFramework,
+        prev_block_id: Id<GenBlock>,
+        staking_sk: &PrivateKey,
+        vrf_sk: &VRFPrivateKey,
+        pool_id: PoolId,
+        transactions: Vec<SignedTransaction>,
+    ) -> Block {
+        tf.progress_time_seconds_since_epoch(
+            tf.chainstate.get_chain_config().target_block_spacing().as_secs(),
+        );
+        tf.make_pos_block_builder()
+            .with_parent(prev_block_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .with_stake_pool_id(pool_id)
+            .with_transactions(transactions)
+            .build(rng)
+    }
+
+    fn trivial_spend_transaction(input_id: Id<GenBlock>) -> SignedTransaction {
+        TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::BlockReward(input_id), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build()
+    }
+
+    async fn fresh_storage(
+        chain_config: &Arc<ChainConfig>,
+    ) -> TransactionalApiServerInMemoryStorage {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(chain_config);
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(chain_config).await.unwrap();
+        let genesis = chain_config.genesis_block().as_ref();
+        let mut acc = BalanceAccumulator::default();
+        update_tables_from_block_reward(
+            Arc::clone(chain_config),
+            &mut db_tx,
+            BlockHeight::new(0),
+            genesis.utxos(),
+            genesis.get_id().into(),
+            None,
+            &mut acc,
+        )
+        .await
+        .unwrap();
+        db_tx.commit().await.unwrap();
+        storage
+    }
+
+    async fn connect_block(
+        chain_config: &Arc<ChainConfig>,
+        storage: &mut TransactionalApiServerInMemoryStorage,
+        block_height: BlockHeight,
+        block: &Block,
+    ) {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        let mut utxo_cache = BTreeMap::new();
+        let mut acc = BalanceAccumulator::default();
+        update_tables_from_block(
+            Arc::clone(chain_config),
+            &mut db_tx,
+            block_height,
+            block,
+            Fee(Amount::ZERO),
+            &mut utxo_cache,
+            &mut acc,
+        )
+        .await
+        .unwrap();
+        acc.flush(&mut db_tx, block_height).await.unwrap();
+        db_tx.commit().await.unwrap();
+    }
+
+    async fn pool_staker_balance_at(
+        storage: &TransactionalApiServerInMemoryStorage,
+        pool_id: PoolId,
+        max_height: BlockHeight,
+    ) -> Amount {
+        storage
+            .transaction_ro()
+            .await
+            .unwrap()
+            .get_pool_data_at_or_below_height(pool_id, max_height)
+            .await
+            .unwrap()
+            .expect("pool row must exist")
+            .staker_balance()
+            .expect("staker balance")
+    }
+
+    /// Regression: connecting a block must read PoS state as of that block's height.
+    /// History rows written by higher (future) heights - e.g. left behind when a
+    /// rescan is interrupted and restarted from an earlier common block - must never
+    /// leak into reward distribution, otherwise replaying the range silently
+    /// accumulates duplicate rewards and the scanner drifts from the chain.
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    #[tokio::test]
+    async fn connecting_block_ignores_future_pool_rows(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN;
+        let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let staking_key = Destination::PublicKey(pk.clone());
+        let pool_data = StakePoolData::new(
+            Amount::from_atoms(initial_pledge),
+            staking_key.clone(),
+            vrf_pk,
+            staking_key.clone(),
+            PerThousand::new_from_rng(&mut rng),
+            Amount::ZERO,
+        );
+        let pool_id = PoolId::new(H256::random_using(&mut rng));
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            Amount::from_atoms(initial_pledge * 2),
+            pool_id,
+            pool_data,
+        )
+        .build();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+
+        let block1 = make_pos_block(
+            &mut rng,
+            &mut tf,
+            chain_config.genesis_block_id(),
+            &staking_sk,
+            &vrf_sk,
+            pool_id,
+            vec![trivial_spend_transaction(chain_config.genesis_block_id())],
+        );
+        tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+
+        let block2 = make_pos_block(
+            &mut rng,
+            &mut tf,
+            block1.get_id().into(),
+            &staking_sk,
+            &vrf_sk,
+            pool_id,
+            vec![],
+        );
+        tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+
+        // Baseline: a clean linear pass over both blocks.
+        let mut clean_storage = fresh_storage(&chain_config).await;
+        connect_block(
+            &chain_config,
+            &mut clean_storage,
+            BlockHeight::new(1),
+            &block1,
+        )
+        .await;
+        connect_block(
+            &chain_config,
+            &mut clean_storage,
+            BlockHeight::new(2),
+            &block2,
+        )
+        .await;
+        let clean_balance =
+            pool_staker_balance_at(&clean_storage, pool_id, BlockHeight::new(2)).await;
+
+        // Corrupted run: identical replay, except a pool row written by a higher
+        // (never-connected) height survives between the two blocks.
+        let mut storage = fresh_storage(&chain_config).await;
+        connect_block(&chain_config, &mut storage, BlockHeight::new(1), &block1).await;
+
+        {
+            let mut db_tx = storage.transaction_rw().await.unwrap();
+            let future_pool_data = db_tx
+                .get_pool_data(pool_id)
+                .await
+                .unwrap()
+                .expect("pool must exist after block 1");
+            let inflated = future_pool_data
+                .pool_data
+                .increase_staker_rewards(Amount::from_atoms(10_000))
+                .unwrap();
+            db_tx
+                .set_pool_data_at_height(
+                    pool_id,
+                    &PoolDataWithExtraInfo::new(inflated),
+                    BlockHeight::new(50),
+                )
+                .await
+                .unwrap();
+            db_tx.commit().await.unwrap();
+        }
+
+        connect_block(&chain_config, &mut storage, BlockHeight::new(2), &block2).await;
+
+        // Connecting block 2 must read the state as of height 2, so the corrupted
+        // run converges to the clean balance. With a latest-row read the balance
+        // would come out as clean_balance + 10_000 + the block 2 reward.
+        let corrupted_balance =
+            pool_staker_balance_at(&storage, pool_id, BlockHeight::new(2)).await;
+        assert_eq!(clean_balance, corrupted_balance);
+    }
+}
+
+#[cfg(test)]
+mod median_window_tests {
+    // Focused coverage for the in-memory median-time
+    // window: the rolling window must produce identical medians to a
+    // from-scratch recomputation over the same history, for chains both
+    // shorter and longer than MEDIAN_TIME_SPAN.
+    use super::previous_and_new_median_time_from_window;
+    use chainstate::{MEDIAN_TIME_SPAN, calculate_median_time_past_from_blocktimestamps};
+    use common::chain::block::timestamp::BlockTimestamp;
+    use randomness::RngExt as _;
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    #[test]
+    fn rolling_window_matches_from_scratch_recomputation() {
+        let mut rng = make_seedable_rng(Seed::from_entropy_and_print("median_window"));
+        let mut window: Vec<BlockTimestamp> = Vec::new();
+        let mut history: Vec<BlockTimestamp> = Vec::new();
+
+        // The db query always includes at least the genesis timestamp, so the
+        // window is never empty in production; mirror that.
+        let genesis_timestamp = BlockTimestamp::from_int_seconds(1_699_999_970);
+        window.push(genesis_timestamp);
+        history.push(genesis_timestamp);
+
+        let base = 1_700_000_000u64;
+        for step in 0..200u64 {
+            let timestamp = BlockTimestamp::from_int_seconds(base + step * 30);
+
+            // From-scratch mirror of the per-block db query: the previous
+            // median covers the history BEFORE this block; the new median
+            // covers it after inserting this block at the front.
+            let previous = calculate_median_time_past_from_blocktimestamps(history.iter().copied());
+            history.insert(0, timestamp);
+            let new = calculate_median_time_past_from_blocktimestamps(history.iter().copied());
+
+            let (rolled_previous, rolled_new) =
+                previous_and_new_median_time_from_window(&mut window, timestamp);
+
+            assert_eq!(rolled_previous, previous, "step {step}: previous median");
+            assert_eq!(rolled_new, new, "step {step}: new median");
+
+            // The window must never exceed MEDIAN_TIME_SPAN entries.
+            assert!(window.len() <= MEDIAN_TIME_SPAN);
+
+            // Occasionally verify the window content matches the db-query
+            // shape (last 11 timestamps, newest first, incl. genesis-like
+            // short chains).
+            let expected_window: Vec<BlockTimestamp> =
+                history.iter().take(MEDIAN_TIME_SPAN).copied().collect();
+            assert_eq!(window, expected_window, "step {step}: window content");
+
+            // Randomly rewind the history to simulate a reorg-resolved state:
+            // the production code re-reads the window after cleanup, so just
+            // rebuild both sides consistently.
+            if step % 17 == 16 {
+                let keep = rng.random_range(1..=history.len());
+                history.truncate(keep);
+                window.truncate(keep.min(MEDIAN_TIME_SPAN));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod fee_alignment_tests {
+    use super::*;
+    use crate::sync::local_state::LocalBlockchainState;
+    use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
+    use common::chain::config::create_mainnet;
+    use common::primitives::BlockHeight;
+
+    type TestStorage = TransactionalApiServerInMemoryStorage;
+
+    fn new_state() -> BlockchainState<TestStorage> {
+        let chain_config = Arc::new(create_mainnet());
+        let storage = TestStorage::new(&chain_config);
+        BlockchainState::new(chain_config, storage)
+    }
+
+    // A fee list whose length does not match the block batch must be rejected
+    // before any indexing happens instead of silently indexing partial data.
+    #[tokio::test]
+    async fn trusted_fee_count_mismatch_is_rejected() {
+        let mut state = new_state();
+        let err = state
+            .scan_blocks_with_fees(BlockHeight::from(0), Vec::new(), vec![None])
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                BlockchainStateError::TrustedFeeCountMismatch {
+                    block_count: 0,
+                    fee_count: 1,
+                }
+            ),
+            "unexpected error: {err:?}"
+        );
     }
 }

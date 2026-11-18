@@ -26,8 +26,8 @@ use crate::{
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        AccountNonce, AccountType, ChainConfig, Currency, DelegationId, OrderId, PoolId,
-        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, BlockTxFees, ChainConfig, Currency, DelegationId, OrderId,
+        PoolId, RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
         block::{
             Block, BlockReward, GenBlock, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,
@@ -87,6 +87,13 @@ pub trait ChainstateInterface: Send + Sync {
         from: BlockHeight,
         max_count: usize,
     ) -> Result<Vec<Block>, ChainstateError>;
+
+    /// (experimental) Per-transaction fees of a mainchain block, persisted at
+    /// connect time. None if the block predates fee persistence.
+    fn get_block_tx_fees(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockTxFees>, ChainstateError>;
     fn get_block_header(
         &self,
         block_id: &Id<Block>,

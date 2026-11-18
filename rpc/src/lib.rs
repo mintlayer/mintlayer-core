@@ -26,7 +26,7 @@ pub use rpc_description_macro::describe;
 /// Support types for RPC interfaces
 pub use rpc_types as types;
 
-use std::{net::SocketAddr, path::PathBuf};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use base64::Engine;
 use http::{HeaderValue, header};
@@ -38,7 +38,9 @@ use jsonrpsee::{
 
 use logging::log;
 
-pub use error::{ClientError, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result};
+pub use error::{
+    ClientError, ClientErrorExt, Error, RpcCallResult, RpcClientResult, RpcResult, handle_result,
+};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
@@ -51,7 +53,11 @@ use utils::cookie::load_cookie;
 
 #[cfg(feature = "test-support")]
 pub mod test_support {
+    pub use jsonrpsee::RpcModule;
+    pub use jsonrpsee::core::RpcResult;
     pub use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+    pub use jsonrpsee::server::{Server, ServerHandle, SubscriptionSink};
+    pub use jsonrpsee::types::error::{CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE};
 }
 
 /// The RPC subsystem builder. Used to populate the RPC server with method handlers.
@@ -258,6 +264,15 @@ pub async fn new_ws_client(
 
     jsonrpsee::ws_client::WsClientBuilder::new()
         .set_headers(headers)
+        // Note: WS-level pings are disabled by jsonrpsee by default; enabling them gives the
+        // client a way to detect half-dead connections (the peer stopped answering but the TCP
+        // connection is still open): failed pings terminate the client's background task, which
+        // surfaces to callers as `ClientError::RestartNeeded`, i.e. a connection-level error.
+        .enable_ws_ping(jsonrpsee::ws_client::PingConfig::new())
+        // Note: pinned explicitly (it matches the jsonrpsee default) so that the "a hung node
+        // cannot wedge a caller indefinitely" guarantees of the daemons do not silently depend
+        // on a library default.
+        .request_timeout(Duration::from_secs(60))
         .build(host)
         .await
 }

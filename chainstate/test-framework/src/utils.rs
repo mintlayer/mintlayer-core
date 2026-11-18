@@ -413,8 +413,7 @@ pub fn sign_witnesses(
     )
     .unwrap();
 
-    let witnesses = tx
-        .inputs()
+    tx.inputs()
         .iter()
         .enumerate()
         .map(|(idx, input)| {
@@ -431,9 +430,7 @@ pub fn sign_witnesses(
                 )
                 .unwrap()
         })
-        .collect();
-
-    witnesses
+        .collect()
 }
 
 pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Option<UtxoOutPoint> {

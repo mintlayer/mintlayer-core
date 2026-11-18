@@ -1,0 +1,5 @@
+mintlayer (@VERSION@) unstable; urgency=medium
+
+  * Mintlayer release @VERSION@.
+
+ -- Mintlayer <devs@mintlayer.org>  @DATE@

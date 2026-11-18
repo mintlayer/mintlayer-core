@@ -61,3 +61,9 @@ impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
         self.data
     }
 }
+
+impl<K: Ord, T: Clone> Default for DeltaDataUndoCollection<K, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

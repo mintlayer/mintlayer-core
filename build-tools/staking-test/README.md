@@ -10,7 +10,7 @@ the script) and certain other arguments.
 
 The expected `node-daemon` arguments are:
 - `--blockprod-min-peers-to-produce-blocks=0`
-- `--blockprod-use-current-time-if-non-pos`
+- `--blockprod-use-current-time-if-non-pos=true`
 - `--chain-pos-netupgrades=3`
 - `--max-tip-age=1000000000`
 

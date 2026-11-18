@@ -40,6 +40,12 @@ pub struct PoSAccountingData {
     pub delegation_data: BTreeMap<DelegationId, DelegationData>,
 }
 
+impl Default for PoSAccountingData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PoSAccountingData {
     pub fn new() -> Self {
         Self {
