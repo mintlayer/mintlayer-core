@@ -302,8 +302,7 @@ mod tests {
             let sec = rng.random_range(0..60);
             let abs_time = jiff::tz::TimeZone::UTC
                 .to_zoned_datetime(
-                    jiff::civil::date(year, month.try_into().unwrap(), day.try_into().unwrap())
-                        .at(hour, min, sec, 0),
+                    jiff::civil::date(year, month.try_into().unwrap(), day).at(hour, min, sec, 0),
                 )
                 .unwrap()
                 .timestamp();
