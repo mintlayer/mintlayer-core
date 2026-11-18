@@ -723,7 +723,7 @@ pub fn select_coins(
     // When the fees are paid with this currency, an input that isn't worth more than the fee of
     // spending it can't help reach the target, and its effective value would underflow.
     // Keep only the groups that are worth more than the fee of spending them; note this
-    // is the authoritative filter — the caller in `account::create_transaction` applies
+    // is the authoritative filter — `utxo_output_groups_by_currency` in `account` applies
     // the same predicate only to keep its input-count estimate conservative.
     if pay_fees == PayFee::PayFeeWithThisCurrency {
         utxo_pool.retain(|group| group.value > group.fee);
