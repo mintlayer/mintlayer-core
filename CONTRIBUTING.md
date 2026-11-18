@@ -40,7 +40,13 @@ Most of the test suite runs with a normal cargo invocation. We run it in release
 cargo test --release --workspace
 ```
 
-Some of the heavier tests, such as the functional tests, are marked as ignored so they don't run by default. If your change touches an area covered by them, you can run them explicitly by passing `-- --ignored`. When you add new behavior, please add tests for it, and when you fix a bug, a test that would have caught it is very welcome.
+Some of the heavier tests, such as the functional tests, are marked as ignored so they don't run by default. If your change touches an area covered by them, run the functional test suite explicitly:
+
+```
+cargo test -p mintlayer-test --test functional -- --ignored
+```
+
+(See `test/README.md` for details; passing a bare `-- --ignored` to the whole workspace would also run deliberately disabled tests that are expected to fail.) When you add new behavior, please add tests for it, and when you fix a bug, a test that would have caught it is very welcome.
 
 ### Before you open a pull request
 
