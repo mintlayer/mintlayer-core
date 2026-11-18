@@ -28,7 +28,7 @@ wallet-types = { path = "../types", default-features = false }
 
 async-trait.workspace = true
 bigdecimal.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true
 derive_more.workspace = true

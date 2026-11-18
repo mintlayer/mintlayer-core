@@ -419,7 +419,7 @@ pub fn htlc_create(backend: &mut impl PromptBackend) -> Result<String, WizardErr
         "timelock value",
         &backend.text(
             match timelock_kind {
-                3 => "Refund time (RFC 3339):",
+                3 => "Refund time (RFC 3339-style):",
                 _ => "Timelock value:",
             },
             None,

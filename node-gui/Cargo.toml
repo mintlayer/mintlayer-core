@@ -25,7 +25,7 @@ wallet-types = { path = "../wallet/types", default-features = false }
 wallet-storage = { path = "../wallet/storage", default-features = false }
 
 anyhow.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 ctor.workspace = true
 futures.workspace = true
 heck.workspace = true

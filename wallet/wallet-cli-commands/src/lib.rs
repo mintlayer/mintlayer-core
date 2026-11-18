@@ -1050,7 +1050,7 @@ pub enum HtlcGroupSubCommand {
         secret_hash: String,
         /// The address that can spend the HTLC providing the secret.
         spend_address: String,
-        /// The refund timelock, e.g. block_count(720) or until_time(RFC 3339).
+        /// The refund timelock, e.g. block_count(720) or until_time(RFC 3339-style).
         refund_timelock: CliOutputTimeLock,
         /// The address that can refund the HTLC after the refund timelock expires.
         refund_address: String,
@@ -2601,7 +2601,7 @@ pub enum WalletCommand {
 
         /// The refund timelock.
         ///
-        /// The format is one of: block_count(num), seconds(num), until_height(num) and until_time(RFC 3339 datetime),
+        /// The format is one of: block_count(num), seconds(num), until_height(num) and until_time(RFC 3339-style datetime),
         /// e.g. block_count(720), seconds(86400), until_height(500000), until_time(2026-02-26T12:30:00Z).
         refund_timelock: CliOutputTimeLock,
 

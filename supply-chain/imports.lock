@@ -308,13 +308,6 @@ user-id = 267
 user-login = "tarcieri"
 user-name = "Tony Arcieri"
 
-[[publisher.chrono]]
-version = "0.4.43"
-when = "2026-01-14"
-user-id = 4556
-user-login = "djc"
-user-name = "Dirkjan Ochtman"
-
 [[publisher.clap]]
 version = "4.5.57"
 when = "2026-02-03"
@@ -878,6 +871,13 @@ when = "2025-10-21"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
+
+[[publisher.itertools]]
+version = "0.10.5"
+when = "2022-09-20"
+user-id = 1442
+user-login = "jswrenn"
+user-name = "Jack Wrenn"
 
 [[publisher.itertools]]
 version = "0.12.1"
@@ -1506,8 +1506,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.serde_json]]
-version = "1.0.149"
-when = "2026-01-06"
+version = "1.0.154"
+when = "2026-10-11"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -2811,11 +2811,6 @@ criteria = "safe-to-deploy"
 delta = "1.0.0-rc.2 -> 1.0.0"
 notes = "Only minor changes made for a stable release."
 
-[[audits.bytecode-alliance.audits.iana-time-zone-haiku]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.1.2"
-
 [[audits.bytecode-alliance.audits.idna]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3662,12 +3657,6 @@ criteria = "safe-to-deploy"
 delta = "2.0.0-beta1 -> 2.0.0-beta2"
 notes = "from_utf8_unchecked unsafe remove, all other unsafe not meaningfully changed"
 aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
-
-[[audits.google.audits.itertools]]
-who = "ChromeOS"
-criteria = "safe-to-run"
-version = "0.10.5"
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/refs/heads/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.lazy_static]]
 who = "Lukasz Anforowicz <lukasza@chromium.org>"
