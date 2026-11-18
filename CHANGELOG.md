@@ -34,11 +34,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
       change.
 
-  - Node CLI:
-    - the help text of `node-daemon`/`node-gui` now documents the accepted values and
-      defaults of the constrained options (`--storage-backend`, `--node-type`,
-      `--rpc-bind-address`, `--rpc-enabled`).
-
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
       enabled by default during the initial block download or bootstrapping, which
@@ -47,6 +42,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       mode of operation when the download/bootstrapping finishes.
 
   - Node CLI:
+    - the help text now documents the accepted values and defaults of the constrained
+      options (`--storage-backend`, `--node-type`, `--rpc-bind-address`, `--rpc-enabled`).
     - boolean node options now require an explicit `true`/`false` value (e.g.
       `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; the
       corresponding environment variables (`ML_NODE_*` for top-level options and
