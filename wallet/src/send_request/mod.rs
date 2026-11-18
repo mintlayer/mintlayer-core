@@ -191,6 +191,12 @@ pub struct IssueNftArguments {
     pub destination: Destination,
 }
 
+impl Default for SendRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SendRequest {
     pub fn new() -> Self {
         Self {

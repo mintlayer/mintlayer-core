@@ -51,8 +51,8 @@ use wallet_rpc_lib::{
         LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegationTransaction, NewOrderTransaction,
         NewSubmittedTransaction, NewTokenTransaction, NftMetadata, NodeVersion, OpenedWallet,
         OwnOrderInfo, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract, RpcInspectTransaction,
-        RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses,
-        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        RpcNewTransaction, RpcPreparedTransaction, RpcStandaloneAddresses, RpcUtxoState,
+        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TransactionRequestOptions,
         TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
@@ -433,13 +433,32 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_utxos(
         &self,
         account_index: U31,
-        _utxo_types: Vec<UtxoType>,
-        _utxo_states: Vec<UtxoState>,
-        _with_locked: WithLocked,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
     ) -> Result<Vec<UtxoInfo>, Self::Error> {
-        WalletRpcClient::get_utxos(&self.http_client, account_index.into())
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        // An empty filter is sent as `None` ("no filter requested") rather than
+        // `Some(vec![])`, so the client stays correct even if the server's
+        // empty-array and omitted semantics ever diverge.
+        let utxo_types: Option<Vec<RpcUtxoType>> = if utxo_types.is_empty() {
+            None
+        } else {
+            Some(utxo_types.iter().map(Into::into).collect())
+        };
+        let utxo_states: Option<Vec<RpcUtxoState>> = if utxo_states.is_empty() {
+            None
+        } else {
+            Some(utxo_states.iter().map(Into::into).collect())
+        };
+        WalletRpcClient::get_utxos(
+            &self.http_client,
+            account_index.into(),
+            utxo_types,
+            utxo_states,
+            Some(with_locked),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn submit_raw_transaction(

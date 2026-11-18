@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod listener;
 pub mod transactional;
 
 mod queries;
 
-use std::str::FromStr;
+pub use queries::take_postgres_statement_cache_stats;
+pub use queries::take_postgres_statement_count;
+
 use std::sync::Arc;
 
 use bb8_postgres::PostgresConnectionManager;
@@ -31,8 +34,12 @@ use crate::storage::storage_api::ApiServerStorageError;
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
 
+pub use self::listener::{PostgresEventListener, PostgresStreamEventSource};
+
 pub struct TransactionalApiServerPostgresStorage {
     pool: Pool<PostgresConnectionManager<NoTls>>,
+    /// The connection configuration, used to create dedicated connections, e.g. for LISTEN/NOTIFY.
+    connection_config: tokio_postgres::Config,
     /// This task is responsible for rolling back failed RW/RO transactions, since closing connections are pooled
     tx_dropper_joiner: tokio::task::JoinHandle<()>,
     /// This channel is used to send transactions that are not manually rolled back to the tx_dropper task to roll them back
@@ -59,29 +66,27 @@ impl TransactionalApiServerPostgresStorage {
         max_connections: u32,
         chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
+        // The configuration is built from the discrete fields instead of a connection
+        // string, so the password never exists as a string that a parse error could echo.
+        let database = match database {
+            Some(d) => d.to_owned(),
+            None => format!("mintlayer-{}", chain_config.chain_type().name()),
+        };
         let password_part = match password {
-            Some(p) => format!("password={}", p),
-            None => "".to_string(),
+            Some(_) => crate::REDACTED,
+            None => crate::UNSET_SENTINEL,
         };
+        logging::log::debug!(
+            "Using postgres config: host={host} port={port} user={user} password={password_part} database={database}"
+        );
 
-        let database_part = match database {
-            Some(d) => format!("dbname={}", d),
-            None => format!("dbname=mintlayer-{}", chain_config.chain_type().name()),
-        };
+        let mut config = tokio_postgres::Config::new();
+        config.host(host).port(port).user(user).dbname(database);
+        if let Some(password) = password {
+            config.password(password);
+        }
 
-        let config_str =
-            format!("host={host} port={port} user={user} {password_part} {database_part}");
-        logging::log::debug!("Using postgres config connection string: {}", config_str);
-
-        let config: tokio_postgres::Config =
-            config_str.parse().map_err(|e: <tokio_postgres::Config as FromStr>::Err| {
-                ApiServerStorageError::InitializationError(format!(
-                    "Postgres configuration parsing error: {}",
-                    e
-                ))
-            })?;
-
-        let manager = PostgresConnectionManager::new(config, NoTls);
+        let manager = PostgresConnectionManager::new(config.clone(), NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(
                 "Postgres connection pool creation error: {}",
@@ -106,6 +111,7 @@ impl TransactionalApiServerPostgresStorage {
 
         let result = Self {
             pool,
+            connection_config: config,
             tx_dropper_joiner,
             db_tx_conn_sender: conn_tx,
             chain_config,

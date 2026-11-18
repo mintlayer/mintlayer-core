@@ -328,6 +328,12 @@ pub enum MpscChannelTransportError {
     },
 }
 
+impl Default for MpscChannelTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddrV4;

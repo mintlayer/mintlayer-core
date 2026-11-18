@@ -76,6 +76,12 @@ pub struct TokensAdditionalInfo {
     infos: BTreeMap<TokenId, TokenAdditionalInfo>,
 }
 
+impl Default for TokensAdditionalInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokensAdditionalInfo {
     pub fn new() -> Self {
         Self {
@@ -110,6 +116,12 @@ impl TokensAdditionalInfo {
 pub struct TxAdditionalInfo {
     pub ptx_additional_info: PtxAdditionalInfo,
     pub tokens_additional_info: TokensAdditionalInfo,
+}
+
+impl Default for TxAdditionalInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TxAdditionalInfo {

@@ -38,7 +38,8 @@ use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
 use wallet_cli_commands::{
-    ManageableWalletCommand, OpenWalletSubCommand, WalletCommand, WalletManagementCommand,
+    LARGE_STACK_SIZE, ManageableWalletCommand, OpenWalletSubCommand, WalletCommand,
+    WalletManagementCommand,
 };
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig, types::NodeInterface};
 
@@ -49,6 +50,10 @@ enum Mode {
     NonInteractive,
     CommandsList {
         file_input: console::FileInput,
+    },
+    Exec {
+        line: String,
+        output_format: config::CliOutputFormat,
     },
 }
 
@@ -73,7 +78,13 @@ pub async fn run(
 
     let cli_args = args.cli_args();
 
-    let mode = if let Some(file_path) = &cli_args.commands_file {
+    let mode = if let Some(line) = &cli_args.exec {
+        repl::non_interactive::log::init();
+        Mode::Exec {
+            line: line.clone(),
+            output_format: cli_args.output,
+        }
+    } else if let Some(file_path) = &cli_args.commands_file {
         repl::non_interactive::log::init();
         let file_input = console::FileInput::new::<ColdWalletClient>(file_path.clone())?;
         Mode::CommandsList { file_input }
@@ -157,7 +168,7 @@ async fn start_hot_wallet(
         cli_args.node_rpc_address.clone().unwrap_or(default_addr)
     };
 
-    let no_qr = cli_args.no_qr;
+    let qr = cli_args.qr;
     let (repl_handle, wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
@@ -171,7 +182,7 @@ async fn start_hot_wallet(
             wallet_rpc_config,
         },
         false,
-        no_qr,
+        qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -187,7 +198,7 @@ async fn start_cold_wallet(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
-    let no_qr = cli_args.no_qr;
+    let qr = cli_args.qr;
     let (repl_handle, wallet_rpc_config) = setup_events_and_repl(
         cli_args,
         mode,
@@ -206,7 +217,7 @@ async fn start_cold_wallet(
             wallet_rpc_config,
         },
         true,
-        no_qr,
+        qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -247,7 +258,7 @@ async fn connect_to_rpc_wallet(
         _ => panic!("Should not happen due to arg constraints"),
     };
 
-    let no_qr = cli_args.no_qr;
+    let qr = cli_args.qr;
     let remote_socket_address = cli_args.remote_rpc_wallet_address.clone().expect("checked");
     let (repl_handle, _wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
@@ -261,7 +272,7 @@ async fn connect_to_rpc_wallet(
             rpc_auth,
         },
         false,
-        no_qr,
+        qr,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -367,35 +378,56 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
         None
     };
 
-    // Run a blocking loop in a separate thread
-    let repl = std::thread::spawn(move || match mode {
-        Mode::Interactive { logger } => repl::interactive::run(
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(false),
-            logger,
-            args.history_file,
-            args.vi_mode,
-            startup_command_futures,
-            args.cold_wallet,
-        ),
-        Mode::NonInteractive => repl::non_interactive::run(
-            input,
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(false),
-            args.cold_wallet,
-            startup_command_futures,
-        ),
-        Mode::CommandsList { file_input } => repl::non_interactive::run(
-            file_input,
-            output,
-            event_tx,
-            args.exit_on_error.unwrap_or(true),
-            args.cold_wallet,
-            startup_command_futures,
-        ),
-    });
+    // Run a blocking loop in a separate thread; the stack is sized for the
+    // clap-generated grammar construction, whose augment frames are large.
+    let repl = {
+        let builder = std::thread::Builder::new().stack_size(LARGE_STACK_SIZE);
+        builder
+            .spawn(move || match mode {
+                Mode::Interactive { logger } => repl::interactive::run(
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(false),
+                    logger,
+                    args.history_file,
+                    args.vi_mode,
+                    startup_command_futures,
+                    args.cold_wallet,
+                    args.yes,
+                ),
+                Mode::NonInteractive => repl::non_interactive::run(
+                    input,
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(false),
+                    args.cold_wallet,
+                    args.yes,
+                    startup_command_futures,
+                ),
+                Mode::CommandsList { file_input } => repl::non_interactive::run(
+                    file_input,
+                    output,
+                    event_tx,
+                    args.exit_on_error.unwrap_or(true),
+                    args.cold_wallet,
+                    args.yes,
+                    startup_command_futures,
+                ),
+                Mode::Exec {
+                    line,
+                    output_format,
+                } => repl::exec::run(
+                    line,
+                    output_format,
+                    args.yes,
+                    output,
+                    event_tx,
+                    args.cold_wallet,
+                    startup_command_futures,
+                ),
+            })
+            .map_err(Box::<dyn std::error::Error>::from)?
+    };
 
     Ok((repl, wallet_rpc_config))
 }

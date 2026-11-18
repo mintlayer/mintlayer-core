@@ -194,9 +194,8 @@ impl<const N: u8> Encode for Tag<N> {
 
 impl<const N: u8> Decode for Tag<N> {
     fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        u8::decode(input).and_then(|b| {
-            Some(Tag).filter(|_| b == N).ok_or_else(|| "Unexpected tag number".into())
-        })
+        u8::decode(input)
+            .and_then(|b| (b == N).then_some(Tag).ok_or_else(|| "Unexpected tag number".into()))
     }
 
     fn skip<I: Input>(input: &mut I) -> Result<(), Error> {

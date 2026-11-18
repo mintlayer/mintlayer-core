@@ -1088,3 +1088,306 @@ fn new_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
 fn tried_addr_table<S>(peerdb: &PeerDb<S>) -> &Table {
     peerdb.address_tables.tried_addr_table()
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn normalize_legacy_mapped_address_keys_reports_whether_it_rewrote(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        tx.commit().unwrap();
+    }
+
+    // A store whose keys are already canonical needs no rewrites, so the caller can
+    // skip committing the migration transaction.
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        assert!(!tx.normalize_legacy_mapped_address_keys().unwrap());
+    }
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        let mut known = tx.storage().get_mut::<DBKnownAddresses, _>();
+        known.put("[::ffff:1.2.3.4]:12345".to_owned(), KnownAddressState::New).unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60))
+            .unwrap();
+        tx.commit().unwrap();
+    }
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        assert!(tx.normalize_legacy_mapped_address_keys().unwrap());
+        tx.commit().unwrap();
+    }
+
+    // Pin the other half of the contract: committing a `true` result persists the rewrite.
+    {
+        use storage::MakeMapRef as _;
+
+        let tx = db_store.transaction_ro().unwrap();
+        let known = tx.storage().get::<DBKnownAddresses, _>();
+        assert!(known.get("[::ffff:1.2.3.4]:12345").unwrap().is_none());
+        assert!(known.get("1.2.3.4:12345").unwrap().is_some());
+        let banned = tx.storage().get::<DBBannedAddresses, _>();
+        assert!(banned.get("::ffff:1.2.3.4").unwrap().is_none());
+        assert!(banned.get("1.2.3.4").unwrap().is_some());
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn legacy_mapped_address_rows_are_folded_on_load(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::{DBBannedAddresses, DBKnownAddresses};
+    use crate::peer_manager::peerdb::storage_load::LoadedStorage;
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+    use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+    use storage::MakeMapRef as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    // Seed the store with rows keyed by the mapped spelling, as an older version could
+    // have written them before the canonicalization was introduced.
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        tx.storage()
+            .get_mut::<DBKnownAddresses, _>()
+            .put("[::ffff:1.2.3.4]:12345".to_owned(), KnownAddressState::New)
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60))
+            .unwrap();
+        // A legacy mapped key that no longer parses cannot be loaded by the regular
+        // read path either; the fold must drop it instead of failing every startup.
+        tx.storage()
+            .get_mut::<DBKnownAddresses, _>()
+            .put(
+                "[::ffff:not-an-address]:12345".to_owned(),
+                KnownAddressState::New,
+            )
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put("::ffff:not-an-ip".to_owned(), Duration::from_secs(60))
+            .unwrap();
+        tx.commit().unwrap();
+    }
+
+    let peerdb_config = test_p2p_config().peer_manager_config.peerdb_config;
+    LoadedStorage::load_storage(&db_store, &peerdb_config, &mut rng).unwrap();
+
+    let tx = db_store.transaction_ro().unwrap();
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:not-an-address]:12345")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:not-an-ip")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("1.2.3.4:12345")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:1.2.3.4")
+            .unwrap()
+            .is_none()
+    );
+    assert!(tx.storage().get::<DBBannedAddresses, _>().get("1.2.3.4").unwrap().is_some());
+
+    // Sanity check on the canonical spellings, mirroring what the runtime writes.
+    let canonical_socket: SocketAddress = "1.2.3.4:12345".parse().unwrap();
+    assert_eq!(canonical_socket.to_string(), "1.2.3.4:12345");
+    let canonical_bannable: BannableAddress = "1.2.3.4".parse().unwrap();
+    assert_eq!(canonical_bannable.to_string(), "1.2.3.4");
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn folded_legacy_rows_merge_with_canonical_ones(#[case] seed: Seed) {
+    use crate::peer_manager::peerdb::storage::PeerDbStorageWrite;
+    use crate::peer_manager::peerdb::storage_impl::{
+        DBAnchorAddresses, DBBannedAddresses, DBDiscouragedAddresses, DBKnownAddresses,
+    };
+    use crate::peer_manager::peerdb::storage_load::LoadedStorage;
+    use crate::peer_manager::peerdb::{CURRENT_STORAGE_VERSION, salt::Salt};
+    use crate::peer_manager::peerdb_common::storage::TransactionRw as _;
+    use storage::MakeMapRef as _;
+
+    let mut rng = make_seedable_rng(seed);
+    let db_store = peerdb_inmemory_store();
+
+    {
+        let mut tx = db_store.transaction_rw().unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
+        tx.set_salt(Salt::new_random(&mut rng)).unwrap();
+        let mut known = tx.storage().get_mut::<DBKnownAddresses, _>();
+        known
+            .put(
+                "[::ffff:1.2.3.4]:12345".to_owned(),
+                KnownAddressState::Tried,
+            )
+            .unwrap();
+        known.put("1.2.3.4:12345".to_owned(), KnownAddressState::New).unwrap();
+        known.put("[::ffff:9.9.9.9]:9999".to_owned(), KnownAddressState::New).unwrap();
+        known.put("9.9.9.9:9999".to_owned(), KnownAddressState::Tried).unwrap();
+
+        let mut banned = tx.storage().get_mut::<DBBannedAddresses, _>();
+        banned.put("::ffff:1.2.3.4".to_owned(), Duration::from_secs(60)).unwrap();
+        banned.put("1.2.3.4".to_owned(), Duration::from_secs(120)).unwrap();
+        banned.put("::ffff:5.6.7.8".to_owned(), Duration::from_secs(300)).unwrap();
+        banned.put("5.6.7.8".to_owned(), Duration::from_secs(120)).unwrap();
+
+        tx.storage()
+            .get_mut::<DBDiscouragedAddresses, _>()
+            .put("::ffff:7.7.7.7".to_owned(), Duration::from_secs(30))
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBDiscouragedAddresses, _>()
+            .put("7.7.7.7".to_owned(), Duration::from_secs(90))
+            .unwrap();
+        tx.storage()
+            .get_mut::<DBAnchorAddresses, _>()
+            .put("[::ffff:8.8.8.8]:8888".to_owned(), ())
+            .unwrap();
+        tx.commit().unwrap();
+    }
+
+    let peerdb_config = test_p2p_config().peer_manager_config.peerdb_config;
+    LoadedStorage::load_storage(&db_store, &peerdb_config, &mut rng).unwrap();
+
+    let tx = db_store.transaction_ro().unwrap();
+    // The legacy Tried state merges over the canonical New state.
+    assert_eq!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("1.2.3.4:12345")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        KnownAddressState::Tried
+    );
+    // The reverse pair: a legacy New row must not downgrade a canonical Tried row.
+    assert_eq!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("9.9.9.9:9999")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        KnownAddressState::Tried
+    );
+    assert!(
+        tx.storage()
+            .get::<DBKnownAddresses, _>()
+            .get("[::ffff:1.2.3.4]:12345")
+            .unwrap()
+            .is_none()
+    );
+
+    // The same merge rule applies to ban rows: the later unban time wins, regardless of
+    // whether it comes from the legacy or the canonical row.
+    assert_eq!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("1.2.3.4")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(120)
+    );
+    assert_eq!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("5.6.7.8")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(300)
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:5.6.7.8")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBBannedAddresses, _>()
+            .get("::ffff:1.2.3.4")
+            .unwrap()
+            .is_none()
+    );
+
+    // Discouraged rows follow the same later-time-wins rule, and anchor rows keep
+    // their unit value when folded.
+    assert_eq!(
+        tx.storage()
+            .get::<DBDiscouragedAddresses, _>()
+            .get("7.7.7.7")
+            .unwrap()
+            .unwrap()
+            .decode(),
+        Duration::from_secs(90)
+    );
+    assert!(
+        tx.storage()
+            .get::<DBDiscouragedAddresses, _>()
+            .get("::ffff:7.7.7.7")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBAnchorAddresses, _>()
+            .get("8.8.8.8:8888")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        tx.storage()
+            .get::<DBAnchorAddresses, _>()
+            .get("[::ffff:8.8.8.8]:8888")
+            .unwrap()
+            .is_none()
+    );
+}

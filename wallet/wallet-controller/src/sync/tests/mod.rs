@@ -29,8 +29,8 @@ use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction,
+        BlockTxFees, Currency, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction,
         tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{Amount, time::Time},
@@ -216,6 +216,12 @@ impl NodeInterface for MockNode {
     }
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         Ok(self.tf.lock().unwrap().chainstate.get_block(&block_id).unwrap())
+    }
+    async fn get_block_tx_fees(
+        &self,
+        _block_id: Id<Block>,
+    ) -> Result<Option<BlockTxFees>, Self::Error> {
+        unreachable!()
     }
     async fn get_mainchain_blocks(
         &self,

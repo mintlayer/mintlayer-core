@@ -106,13 +106,15 @@ fn print_coin_amount_with_ticker(chain_config: &ChainConfig, value: Amount) -> S
 
 fn print_timestamp(timestamp: Duration) -> Option<String> {
     let timestamp: i64 = timestamp.as_secs().try_into().ok()?;
-    let timestamp = chrono::DateTime::from_timestamp(timestamp, 0);
+    let timestamp = jiff::Timestamp::from_second(timestamp).ok()?;
 
-    // To print in local timezone
-    // use chrono::TimeZone;
-    // let timestamp = chrono::Local.from_utc_datetime(&timestamp);
-
-    timestamp.map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string())
+    // To print in local timezone, use `jiff::tz::TimeZone::system()` instead of UTC.
+    Some(
+        timestamp
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+            .strftime("%Y-%m-%d %H:%M:%S")
+            .to_string(),
+    )
 }
 
 fn print_block_timestamp(timestamp: BlockTimestamp) -> String {
@@ -644,12 +646,25 @@ impl MainWindow {
                         status: _,
                         print_message: out,
                     }
-                    | ConsoleCommand::Print(out) => self
+                    | ConsoleCommand::Print(out)
+                    | ConsoleCommand::Warn(out) => self
                         .main_widget
                         .update(
                             MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
                                 wallet_id,
                                 WalletMessage::ConsoleOutput(out),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::Json { text, value } => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(
+                                    wallet_cli_commands::output::json_display_text(text, &value),
+                                ),
                             )),
                             backend_sender,
                         )
