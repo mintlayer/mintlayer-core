@@ -640,8 +640,11 @@ fn test_select_random_coins_prefers_fewer_inputs_on_equal_waste(#[case] _seed: S
 /// When the fees are paid with this currency, an input that isn't worth more than the fee of
 /// spending it has no positive effective value, and computing it would underflow. Coin selection
 /// must leave such inputs out instead of panicking, whichever algorithm is used.
-#[test]
-fn test_select_coins_skips_inputs_not_covering_their_fee() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_select_coins_skips_inputs_not_covering_their_fee(#[case] seed: Seed) {
+    let _ = seed; // assertions are shuffle-independent; seeding matches file convention
     let mut groups = vec![];
     add_output(Amount::from_atoms(100), &mut groups);
     add_output(Amount::from_atoms(60), &mut groups);
