@@ -19,7 +19,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 
 use rpc_description::HasValueHint;
@@ -110,28 +109,26 @@ impl Time {
         self.time.saturating_sub(t.time)
     }
 
-    /// Convert this `Time` instance to `chrono::DateTime`.
+    /// Convert this `Time` instance to a `jiff::Timestamp`.
     ///
-    /// This may fail if the time is too far into the future.
-    pub fn as_absolute_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        TryInto::<i64>::try_into(self.time.as_secs()).ok().and_then(|secs| {
-            // Note: chrono::DateTime supports time values up to about 262,000 years away
-            // from the common era, which is still way below i64::MAX; i.e. timestamp_opt
-            // may still return None here.
-            chrono::Utc.timestamp_opt(secs, self.time.subsec_nanos()).single()
-        })
+    /// This may fail if the time is too far into the future: `jiff::Timestamp`
+    /// supports dates up to the end of year 9999.
+    pub fn as_absolute_time(&self) -> Option<jiff::Timestamp> {
+        TryInto::<i64>::try_into(self.time.as_secs())
+            .ok()
+            .and_then(|secs| jiff::Timestamp::new(secs, self.time.subsec_nanos() as i32).ok())
     }
 
-    /// Create a new `Time` instance from `chrono::DateTime`.
+    /// Create a new `Time` instance from a `jiff::Timestamp`.
     ///
     /// This will fail if the date-time is before the Unix epoch or if it doesn't represent
     /// a whole number of seconds.
-    pub fn from_absolute_time(time: &chrono::DateTime<chrono::Utc>) -> Option<Self> {
-        if time.timestamp_subsec_nanos() != 0 {
+    pub fn from_absolute_time(time: &jiff::Timestamp) -> Option<Self> {
+        if time.subsec_nanosecond() != 0 {
             return None;
         }
 
-        let seconds: u64 = time.timestamp().try_into().ok()?;
+        let seconds: u64 = time.as_second().try_into().ok()?;
         Some(Self::from_secs_since_epoch(seconds))
     }
 }
@@ -165,7 +162,9 @@ impl Debug for Time {
         let utc_time = self.as_absolute_time();
 
         if let Some(time) = utc_time {
-            write!(f, "{time:?}")
+            // `jiff::Timestamp`'s Display renders RFC 3339 (e.g. "2024-01-12T12:54:52Z"),
+            // which is what the Debug output looked like with `chrono`.
+            write!(f, "{time}")
         } else {
             write!(f, "Time({:?})", self.time)
         }
@@ -177,7 +176,17 @@ impl Display for Time {
         let utc_time = self.as_absolute_time();
 
         if let Some(time) = utc_time {
-            write!(f, "{time}")
+            // Same format that `chrono`'s Display used to produce, e.g.
+            // "2024-01-12 12:54:52 UTC" / "2024-01-12 12:54:52.123 UTC".
+            let subsec_nanos = time.subsec_nanosecond();
+            let base =
+                time.to_zoned_datetime(jiff::tz::TimeZone::UTC).strftime("%Y-%m-%d %H:%M:%S");
+            if subsec_nanos == 0 {
+                write!(f, "{base} UTC")
+            } else {
+                let subsec = format!("{subsec_nanos:09}");
+                write!(f, "{base}.{} UTC", subsec.trim_end_matches('0'))
+            }
         } else {
             // Note: we could use humantime::format_duration here, but the output won't be
             // very nice, e.g. for Duration::MAX it'll be:
@@ -268,26 +277,24 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn from_to_absolute_time(#[case] seed: Seed) {
-        use chrono::prelude::*;
-
         let mut rng = make_seedable_rng(seed);
 
         for _ in 0..10 {
             let year = rng.random_range(1970..=3000);
             let month = rng.random_range(1..=12);
             let days_in_month =
-                NaiveDate::from_ymd_opt(year, month, 1).unwrap().num_days_in_month();
+                jiff::civil::date(year, month.try_into().unwrap(), 1).days_in_month();
             let day = rng.random_range(1..=days_in_month);
             let hour = rng.random_range(0..24);
             let min = rng.random_range(0..60);
             let sec = rng.random_range(0..60);
-            let abs_time = DateTime::from_naive_utc_and_offset(
-                NaiveDateTime::new(
-                    NaiveDate::from_ymd_opt(year, month, day.into()).unwrap(),
-                    NaiveTime::from_hms_opt(hour, min, sec).unwrap(),
-                ),
-                Utc,
-            );
+            let abs_time = jiff::tz::TimeZone::UTC
+                .to_zoned_datetime(
+                    jiff::civil::date(year, month.try_into().unwrap(), day.try_into().unwrap())
+                        .at(hour, min, sec, 0),
+                )
+                .unwrap()
+                .timestamp();
 
             let time = Time::from_absolute_time(&abs_time).unwrap();
             let abs_time_from_conversion = time.as_absolute_time().unwrap();
@@ -295,7 +302,8 @@ mod tests {
 
             // Only a whole number of seconds should be allowed.
             let millis = rng.random_range(1..1000);
-            let abs_time_with_millis = abs_time + Duration::from_millis(millis);
+            let abs_time_with_millis =
+                abs_time.checked_add(jiff::SignedDuration::from_millis(millis)).unwrap();
             assert!(Time::from_absolute_time(&abs_time_with_millis).is_none());
         }
     }

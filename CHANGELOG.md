@@ -12,6 +12,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Build:
+    - the workspace no longer depends on `chrono` (unmaintained per RUSTSEC-2026-0543):
+      first-party code now uses `jiff`, and the remaining transitive uses are served by
+      temporary overlay forks (file-rotate, reedline, serde_with) that make `chrono`
+      optional or drop it; the overlays are tracked for removal once upstream releases
+      allow it.
+
+  - Wallet CLI:
+    - `until_time(...)` output timelocks now require a properly formatted RFC 3339
+      timestamp (e.g. `2027-01-31T12:00:00Z`); some non-zero-padded variants that were
+      accepted before are now rejected.
+
   - Wallet:
     - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
       as the target is met, and among equally economical solutions the one spending

@@ -2,6 +2,9 @@
 github = [
     "mintlayer",  # allow any code from mintlayer's github
     "paritytech", # we have to use an unreleased version of parity-scale-codec at this moment
+    # Temporary overlay of file-rotate (chrono made optional, RUSTSEC-2026-0543) until
+    # https://github.com/kstrafe/file-rotate/pull/40 is released.
+    "nullPointerEnjoyer",
 ]
 
 [licenses]
