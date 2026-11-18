@@ -17,9 +17,11 @@
 
 use std::{
     ffi::OsString,
+    fmt,
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -126,7 +128,7 @@ pub struct TopLevelOptions {
 
     /// Create the data directory if it is missing; the default value depends on whether
     /// a custom data directory is used (false for a custom directory, true for the default one).
-    #[clap(long = "create-datadir-if-missing", value_name = "VAL")]
+    #[clap(long = "create-datadir-if-missing", value_name = "true|false", action = clap::ArgAction::Set)]
     pub create_data_dir_if_missing: Option<bool>,
 
     /// Log to a file.
@@ -137,7 +139,7 @@ pub struct TopLevelOptions {
     /// The log level used in this case doesn't depend on the RUST_LOG env variable and is always INFO.
     ///
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
-    #[clap(long, action = clap::ArgAction::Set)]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
 
     /// If specified, the application will clean the data directory and exit immediately.
@@ -170,16 +172,24 @@ impl TopLevelOptions {
     }
 }
 
+// Options whose values can hold a secret: RPC credentials and the genesis staking
+// settings, which carry staking and VRF private keys. Their environment-sourced values
+// are hidden from the help output (see the `mut_args` attributes and the guard test).
+// For chain-genesis-staking-settings this hides the help rendering only; the options
+// dump that debug-printed the staking keys was removed rather than redacted, so debug
+// output stays secret-safe only as long as no full-options debug formatting returns.
+const SECRET_OPTIONS: &[&str] = &["rpc-username", "rpc-password", "chain-genesis-staking-settings"];
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the mainnet node.
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("MAINNET_NODE", SECRET_OPTIONS)))]
     Mainnet(RunOptions),
     /// Run the testnet node.
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("TESTNET_NODE", SECRET_OPTIONS)))]
     Testnet(RunOptions),
     /// Run the regtest node.
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_NODE")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values("REGTEST_NODE", SECRET_OPTIONS)))]
     Regtest(Box<RegtestOptions>),
 }
 
@@ -237,6 +247,75 @@ pub struct RegtestOptions {
     pub chain_config: ChainConfigOptions,
 }
 
+/// A value that must never appear in debug output, meant for command line options holding
+/// credentials so that any debug formatting of the containing struct stays secret-safe.
+///
+/// Note: redaction covers debug output only — values passed on the command line remain
+/// visible in process listings and shell history.
+///
+/// Note: serialization is intentionally not supported so that configuration dumps cannot
+/// emit credentials; the type is only deserialized when reading a configuration file.
+///
+/// Note: equality comparison is intentionally not derived; a derived comparison invites
+/// non-constant-time checks on secret values in future authentication decisions.
+///
+/// Note: the inner value is zeroized when the value is dropped, so the memory holding
+/// the credential is wiped instead of lingering in freed memory (for zeroizable types).
+/// This covers this wrapper's copy only: copies a consumer makes out of the value (e.g.
+/// [`std::string::String`]s inside an RPC server) are ordinary values with ordinary
+/// lifetimes and are not scrubbed.
+#[derive(Clone, Default)]
+pub struct Redacted<T: zeroize::Zeroize>(T);
+
+impl<T: zeroize::Zeroize> Drop for Redacted<T> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<T: zeroize::Zeroize> fmt::Debug for Redacted<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
+impl<T: zeroize::Zeroize> From<T> for Redacted<T> {
+    fn from(value: T) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: FromStr + zeroize::Zeroize> FromStr for Redacted<T> {
+    type Err = T::Err;
+
+    // Note that the intermediate `String` handed over by the command line parser and
+    // the parser's own argument copies are not zeroized, so the wipe only covers the
+    // value inside this wrapper.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        T::from_str(s).map(Self)
+    }
+}
+
+impl<T: zeroize::Zeroize> AsRef<T> for Redacted<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+// Serialization is intentionally not supported so that configuration dumps cannot emit
+// credentials; only deserialization (reading a configuration file) is provided.
+// Consuming access is intentionally not provided either: `into_inner` would move the
+// value out of a type with a `Drop` impl, and dropped values are zeroized, not handed
+// out. Read access goes through `AsRef`.
+impl<'de, T> serde::Deserialize<'de> for Redacted<T>
+where
+    T: serde::Deserialize<'de> + zeroize::Zeroize,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        T::deserialize(deserializer).map(Self)
+    }
+}
+
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// Minimum number of connected peers to enable block production.
@@ -255,12 +334,12 @@ pub struct RunOptions {
     /// Genesis. If used on a node that is not starting from Genesis,
     /// the node may produce blocks from the past, which will lead
     /// to being banned by the network.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub blockprod_skip_ibd_check: Option<bool>,
 
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
@@ -294,7 +373,15 @@ pub struct RunOptions {
     /// Additionally, the corruption may not be detectable by the db engine, in which case you'll
     /// end up having a malfunctioning node. Therefore, if you are using the reckless mode and
     /// the system crashes in the process, always delete the db and re-sync, just in case.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    ///
+    /// Note: the value must be explicit (`true`/`false`) because the node daemon enables the
+    /// reckless mode by default when this option is not set anywhere; a value-less boolean
+    /// flag would make the flag's absence look like an explicit opt-out.
+    // Implementation note: an explicit `ArgAction::Set` is what makes the absence of the
+    // flag yield `None`. clap's `SetTrue` action on an `Option<bool>` materializes `Some(false)`
+    // for an absent flag, which would look like an explicit `false` to the code below and
+    // would defeat the daemon's default-on behavior as well as config-file values.
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     pub enable_db_reckless_mode_in_ibd: Option<bool>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.
@@ -310,7 +397,7 @@ pub struct RunOptions {
     pub mempool_max_cluster_size_bytes: Option<usize>,
 
     /// Whether p2p networking should be enabled.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub p2p_networking_enabled: Option<bool>,
 
     /// Addresses to bind P2P to.
@@ -323,7 +410,7 @@ pub struct RunOptions {
     pub p2p_socks5_proxy: Option<String>,
 
     /// Disable p2p encryption (for tests only).
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_disable_noise: Option<bool>,
 
@@ -380,7 +467,7 @@ pub struct RunOptions {
     // remove them.
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false")]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
@@ -406,18 +493,18 @@ pub struct RunOptions {
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
     #[clap(long, value_name = "USERNAME")]
-    pub rpc_username: Option<String>,
+    pub rpc_username: Option<Redacted<String>>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
     #[clap(long, value_name = "PASSWORD")]
-    pub rpc_password: Option<String>,
+    pub rpc_password: Option<Redacted<String>>,
 
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
@@ -433,11 +520,11 @@ pub struct RunOptions {
 
     /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
     /// Defaults to true for regtest and false in other cases.
-    #[clap(long, value_name = "VAL")]
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub enable_chainstate_heavy_checks: Option<bool>,
 
     /// If true, blocks and block headers will not be rejected if checkpoints mismatch is detected.
-    #[clap(long, action = clap::ArgAction::SetTrue, hide = true)]
+    #[clap(long, action = clap::ArgAction::Set, value_name = "true|false", hide = true)]
     pub allow_checkpoints_mismatch: Option<bool>,
 
     /// Path to a CSV file with custom checkpoints that must be used instead of the predefined ones.
@@ -451,7 +538,7 @@ pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, str::FromStr as _};
+    use std::collections::BTreeMap;
 
     use rstest::rstest;
 
@@ -460,6 +547,17 @@ mod tests {
         primitives::{BlockHeight, H256, Id, Idable as _},
     };
     use utils::concatln;
+
+    /// Pins the secret option list against the derived command: a renamed field would
+    /// silently stop matching the hiding list in the `mut_args` attributes and leak its
+    /// environment value into `--help`.
+    #[test]
+    fn secret_options_env_values_are_hidden() {
+        utils::clap_utils::assert_secret_options_hidden(
+            &<Options as clap::CommandFactory>::command(),
+            SECRET_OPTIONS,
+        );
+    }
 
     use super::*;
 
@@ -574,5 +672,160 @@ mod tests {
             let chain_config = cmd.create_chain_config().unwrap();
             assert_eq!(chain_config.height_checkpoints(), &default_checkpoints);
         }
+    }
+}
+
+#[cfg(test)]
+mod reckless_mode_option_tests {
+    use super::*;
+
+    const RECKLESS_MODE_ENV_VAR: &str = "ML_MAINNET_NODE_ENABLE_DB_RECKLESS_MODE_IN_IBD";
+
+    /// Clears the variable on construction (so an ambient environment cannot interfere
+    /// with a test) and on drop (so a failing assertion cannot leak it into sibling
+    /// tests). Must only be used from `#[serial_test::serial]`-serialized tests.
+    struct EnvVarGuard(&'static str);
+
+    impl EnvVarGuard {
+        fn cleared(name: &'static str) -> Self {
+            // SAFETY: the tests using this guard are `#[serial_test::serial]`-serialized.
+            unsafe { std::env::remove_var(name) };
+            Self(name)
+        }
+
+        fn set(&self, value: &str) {
+            // SAFETY: see `cleared`.
+            unsafe { std::env::set_var(self.0, value) };
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `cleared`.
+            unsafe { std::env::remove_var(self.0) };
+        }
+    }
+
+    fn parse_mainnet_run_options(args: &[&str]) -> RunOptions {
+        let full_args = std::iter::once("mintlayerd").chain(args.iter().copied());
+        let options = <Options as clap::Parser>::try_parse_from(full_args)
+            .unwrap_or_else(|err| panic!("arguments must parse: {err}"));
+        match options.with_resolved_command().command {
+            Command::Mainnet(run_options) => run_options,
+            _ => panic!("expected the mainnet subcommand"),
+        }
+    }
+
+    // Regression: `--enable-db-reckless-mode-in-ibd` used to be a value-less flag
+    // (`ArgAction::SetTrue`), so not passing it produced `Some(false)`, which the node
+    // runner treats as an explicit opt-out from the reckless-mode-by-default IBD
+    // behavior. The flag now requires an explicit value, so its absence must yield
+    // `None` for the default to kick in.
+    // These tests parse arguments, and parsing reads `ML_*` environment variables, so
+    // they must not run concurrently with the tests that set those variables.
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_absent_yields_none() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, None);
+        // The other boolean options use the same explicit-value pattern; their absence must
+        // also yield `None` so that a value from the configuration file can take precedence.
+        assert_eq!(run_options.blockprod_skip_ibd_check, None);
+        assert_eq!(run_options.blockprod_use_current_time_if_non_pos, None);
+        assert_eq!(run_options.p2p_disable_noise, None);
+        assert_eq!(
+            run_options.p2p_force_dns_query_if_no_global_addresses_known,
+            None
+        );
+        assert_eq!(run_options.allow_checkpoints_mismatch, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_accepts_explicit_values() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "true"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        let run_options =
+            parse_mainnet_run_options(&["mainnet", "--enable-db-reckless-mode-in-ibd", "false"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_flag_without_a_value_is_rejected() {
+        let _env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+        let full_args = ["mintlayerd", "mainnet", "--enable-db-reckless-mode-in-ibd"];
+        assert!(<Options as clap::Parser>::try_parse_from(full_args).is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_value_reaches_parsing() {
+        // The env var name is derived from the long option name by
+        // `clap_utils::env_adder`; the env layer of the precedence chain must keep
+        // working: an env var with a valid value wins when the CLI flag is absent,
+        // and an invalid value must be rejected.
+        let env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+
+        env_guard.set("true");
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(true));
+
+        env_guard.set("false");
+        let run_options = parse_mainnet_run_options(&["mainnet"]);
+        assert_eq!(run_options.enable_db_reckless_mode_in_ibd, Some(false));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn reckless_mode_env_var_with_invalid_value_is_rejected() {
+        let env_guard = EnvVarGuard::cleared(RECKLESS_MODE_ENV_VAR);
+
+        env_guard.set("not-a-bool");
+        let result = <Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"]);
+        assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod redacted_tests {
+    use super::*;
+
+    #[test]
+    fn run_options_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let debug_output = format!("{options:?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
+    }
+
+    #[test]
+    fn rpc_config_file_debug_omits_rpc_credentials() {
+        let options = RunOptions {
+            rpc_username: Some("rpc_user_name".to_owned().into()),
+            rpc_password: Some("rpc_pass_word".to_owned().into()),
+            ..Default::default()
+        };
+
+        let config = crate::RpcConfigFile::with_run_options(
+            &common::chain::config::create_testnet(),
+            crate::RpcConfigFile::default(),
+            &options,
+        );
+
+        let debug_output = format!("{config:#?}");
+        assert!(debug_output.contains("<redacted>"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_user_name"), "{debug_output}");
+        assert!(!debug_output.contains("rpc_pass_word"), "{debug_output}");
     }
 }

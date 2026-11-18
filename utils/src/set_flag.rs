@@ -21,7 +21,6 @@ impl SetFlag {
     pub fn new() -> Self {
         Self(false)
     }
-
     /// If the flag is already set
     pub fn test(&self) -> bool {
         self.0
@@ -37,5 +36,11 @@ impl SetFlag {
         let old_value = self.0;
         self.0 = true;
         old_value
+    }
+}
+
+impl Default for SetFlag {
+    fn default() -> Self {
+        Self::new()
     }
 }

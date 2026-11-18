@@ -77,7 +77,6 @@ impl TxAdditionalInfo {
             order_info: BTreeMap::new(),
         }
     }
-
     pub fn with_pool_info(mut self, pool_id: PoolId, info: PoolAdditionalInfo) -> Self {
         self.pool_info.insert(pool_id, info);
         self
@@ -159,5 +158,11 @@ impl OutputValuesHolder for TxAdditionalInfo {
     fn output_values_iter(&self) -> impl Iterator<Item = &OutputValue> {
         self.order_info_iter()
             .flat_map(|(_, order_info)| order_info.output_values_iter())
+    }
+}
+
+impl Default for TxAdditionalInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }

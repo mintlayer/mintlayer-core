@@ -1704,3 +1704,152 @@ fn add_random_transfer_tx_with_state(
         )
         .unwrap();
 }
+
+// Pruning a stale-in-mempool chain: the parent and its in-mempool descendant are
+// marked Abandoned and the parent's inputs are made spendable again.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn prune_dead_transaction_stale_inmempool_chain(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.random());
+    let mut output_cache = OutputCache::empty();
+
+    let genesis_tx_id = Id::<Transaction>::random_using(&mut rng);
+    let tx_a = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_a_id = tx_a.transaction().get_id();
+
+    let tx_b = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx_a_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_b_id = tx_b.transaction().get_id();
+
+    // Both are cached as in-mempool, but the node tells us they are not there anymore
+    for tx in [(&tx_a, tx_a_id), (&tx_b, tx_b_id)] {
+        output_cache
+            .add_tx(
+                &chain_config,
+                best_block_height,
+                tx.1.into(),
+                WalletTx::Tx(TxData::new(tx.0.clone(), TxState::InMempool(0))),
+            )
+            .unwrap();
+    }
+
+    // Plain abandon still rejects the stale in-mempool state (regression guard)
+    let res = output_cache.abandon_transaction(&chain_config, tx_a_id);
+    assert_eq!(
+        res.unwrap_err(),
+        WalletError::CannotChangeTransactionState(TxState::InMempool(0), TxState::Abandoned)
+    );
+
+    // Pruning tolerates it and cascades to the in-mempool descendant
+    let pruned = output_cache.prune_dead_transaction(&chain_config, tx_a_id).unwrap();
+    let pruned_ids: BTreeSet<_> = pruned.into_iter().map(|(id, _)| id).collect();
+    assert_eq!(pruned_ids, BTreeSet::from([tx_a_id, tx_b_id]));
+
+    assert_eq!(
+        output_cache.get_transaction(tx_a_id).unwrap().state(),
+        &TxState::Abandoned
+    );
+    assert_eq!(
+        output_cache.get_transaction(tx_b_id).unwrap().state(),
+        &TxState::Abandoned
+    );
+
+    // The rollback made the inputs spendable again, i.e. the chain is no longer
+    // tracked as unconfirmed.
+    assert!(output_cache.unconfirmed_descendants.is_empty());
+}
+
+// Pruning still refuses confirmed and already-abandoned transactions.
+fn make_cache_tx_with_state(
+    rng: &mut impl Rng,
+    chain_config: &ChainConfig,
+    best_block_height: BlockHeight,
+    output_cache: &mut OutputCache,
+    state: TxState,
+) -> Id<Transaction> {
+    let genesis_tx_id = Id::<Transaction>::random_using(rng);
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_tx_id.into(), 0),
+            empty_witness(rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.random())),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let tx_id = tx.transaction().get_id();
+    output_cache
+        .add_tx(
+            chain_config,
+            best_block_height,
+            tx_id.into(),
+            WalletTx::Tx(TxData::new(tx, state)),
+        )
+        .unwrap();
+    tx_id
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn prune_dead_transaction_rejects_terminal_states(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = create_unit_test_config();
+    let best_block_height = BlockHeight::new(rng.random());
+    let mut output_cache = OutputCache::empty();
+
+    let confirmed_tx_id = make_cache_tx_with_state(
+        &mut rng,
+        &chain_config,
+        best_block_height,
+        &mut output_cache,
+        TxState::Confirmed(best_block_height, BlockTimestamp::from_int_seconds(0), 0),
+    );
+    let abandoned_tx_id = make_cache_tx_with_state(
+        &mut rng,
+        &chain_config,
+        best_block_height,
+        &mut output_cache,
+        TxState::Abandoned,
+    );
+
+    assert!(matches!(
+        output_cache.prune_dead_transaction(&chain_config, confirmed_tx_id).unwrap_err(),
+        WalletError::CannotChangeTransactionState(TxState::Confirmed(_, _, _), TxState::Abandoned)
+    ));
+    assert!(matches!(
+        output_cache.prune_dead_transaction(&chain_config, abandoned_tx_id).unwrap_err(),
+        WalletError::CannotChangeTransactionState(TxState::Abandoned, TxState::Abandoned)
+    ));
+    assert_eq!(
+        output_cache.get_transaction(confirmed_tx_id).unwrap().state(),
+        &TxState::Confirmed(best_block_height, BlockTimestamp::from_int_seconds(0), 0)
+    );
+    assert_eq!(
+        output_cache.get_transaction(abandoned_tx_id).unwrap().state(),
+        &TxState::Abandoned
+    );
+}

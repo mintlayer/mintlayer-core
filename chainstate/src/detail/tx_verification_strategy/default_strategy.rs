@@ -17,7 +17,7 @@ use super::TransactionVerificationStrategy;
 use crate::TransactionVerifierMakerFn;
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig, block::timestamp::BlockTimestamp},
+    chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::{Idable, id::WithId},
 };
 use constraints_value_accumulator::AccumulatedFee;
@@ -57,7 +57,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef,
@@ -70,6 +70,9 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
+        // (experimental) step 9: collect the per-transaction fee of each tx
+        // while connecting, to be persisted for serving to API consumers.
+        let mut block_tx_fees = Vec::with_capacity(block.transactions().len());
         let total_fees = block
             .transactions()
             .iter()
@@ -83,6 +86,16 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                         &median_time_past,
                     )
                     .log_err()?;
+                let tx_fee = fee
+                    .clone()
+                    .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
+                    .map_err(|err| {
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            err,
+                            block.get_id().into(),
+                        )
+                    })?;
+                block_tx_fees.push((tx.transaction().get_id(), tx_fee));
                 total
                     .combine(fee)
                     .map_err(|_| ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()))
@@ -112,7 +125,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
 
         tx_verifier.set_best_block(block.get_id().into());
 
-        Ok(tx_verifier)
+        Ok((tx_verifier, BlockTxFees(block_tx_fees)))
     }
 
     fn disconnect_block<C, S, M, U, A, T, O>(

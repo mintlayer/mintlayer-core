@@ -38,6 +38,13 @@ use pos_accounting::{Error as PosError, PoolData};
 use serialization::{Decode, Encode};
 
 use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
+use crate::streaming::{StreamEvent, StreamEventId, StreamEventReadError};
+
+/// Hard cap on the number of live orders a single order-book query may consume;
+/// both backends return at most this many entries, largest ask balance first, and
+/// when the cap truncates the book, the smallest-balance orders are omitted;
+/// `has_more` signals a truncated result.
+pub const ORDER_BOOK_MAX_ORDERS: usize = 10_000;
 
 pub mod block_aux_data;
 
@@ -80,6 +87,20 @@ pub enum CoinOrTokenStatistic {
     Staked,
     Burned,
     Preminted,
+}
+
+impl CoinOrTokenStatistic {
+    /// Order matters: the array is serialized into the `ANY($1)` statistics filter
+    /// as text (via `to_string`), so it must stay in sync with the enum variants
+    /// AND their string spellings.
+    pub const VARIANTS: [Self; 4] = {
+        // compile-time exhaustiveness guard: adding a variant without updating the
+        // array below fails to compile here because this match has no wildcard
+        match Self::CirculatingSupply {
+            Self::CirculatingSupply | Self::Staked | Self::Burned | Self::Preminted => {}
+        }
+        [Self::CirculatingSupply, Self::Staked, Self::Burned, Self::Preminted]
+    };
 }
 
 impl FromStr for CoinOrTokenStatistic {
@@ -171,14 +192,14 @@ impl Delegation {
         }
     }
 
-    pub fn spend_share(self, amount: Amount, nonce: AccountNonce) -> Self {
-        Self {
+    pub fn spend_share(self, amount: Amount, nonce: AccountNonce) -> Result<Self, PosError> {
+        Ok(Self {
             spend_destination: self.spend_destination,
             pool_id: self.pool_id,
-            balance: (self.balance - amount).expect("not underflow"),
-            next_nonce: nonce.increment().expect("no overflow"),
+            balance: (self.balance - amount).ok_or(PosError::DelegationBalanceSubtractionError)?,
+            next_nonce: nonce.increment().ok_or(PosError::AdditionError)?,
             creation_block_height: self.creation_block_height,
-        }
+        })
     }
 }
 
@@ -203,11 +224,12 @@ impl PoolDataWithExtraInfo {
         }
     }
 
-    pub fn decrease_delegation_balance(self, stake: Amount) -> Self {
-        Self {
+    pub fn decrease_delegation_balance(self, stake: Amount) -> Result<Self, PosError> {
+        Ok(Self {
             pool_data: self.pool_data,
-            delegations_balance: (self.delegations_balance - stake).expect("no overflow"),
-        }
+            delegations_balance: (self.delegations_balance - stake)
+                .ok_or(PosError::DelegationBalanceSubtractionError)?,
+        })
     }
 
     pub fn staker_balance(&self) -> Result<Amount, PosError> {
@@ -418,7 +440,7 @@ impl LockedUtxo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Utxo {
     utxo: UtxoWithExtraInfo,
     spent_at_block_height: Option<BlockHeight>,
@@ -601,6 +623,19 @@ pub trait ApiServerStorageRead: Sync {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    /// Returns up to `len` holders of the asset with the largest balances, ordered by
+    /// the balance (descending, ties broken by the address in descending BYTE order);
+    /// keyset (cursor) pagination, the cursor is the (address, amount) of the last
+    /// returned holder, exclusive, with the amount encoded as a plain atom-count
+    /// string (`into_atoms().to_string()`) — not a decimal/fixed-point form.
+    /// Addresses with a zero balance are excluded.
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError>;
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -618,13 +653,15 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
     /// Returns a page of transaction IDs that reference this `token_id`, limited to `len` entries
-    /// and with a `tx_global_index` older than the specified value.
-    /// The `tx_global_index` is not continuous for a specific `token_id`.
+    /// and starting `offset` entries into the full, newest-first list for the token. An offset
+    /// greater than or equal to the number of transactions for the token yields an empty page.
+    /// As with the other offset-paginated queries, the cost of a request grows linearly with the
+    /// offset.
     async fn get_token_transactions(
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError>;
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
@@ -673,6 +710,36 @@ pub trait ApiServerStorageRead: Sync {
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
 
+    /// Point-in-time variant of [`Self::get_pool_data`]: returns the pool state as of
+    /// `block_height`, i.e. the latest history row with `block_height <= block_height`.
+    ///
+    /// Replay code must use this instead of [`Self::get_pool_data`]: connecting a block
+    /// at height `h` must never observe state written by blocks above `h`, otherwise
+    /// rewards get credited on top of future state and the accumulated balances
+    /// silently drift from the chain.
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError>;
+
+    /// Point-in-time variant of [`Self::get_delegation`]: returns the delegation state
+    /// as of `block_height`, i.e. the latest history row with
+    /// `block_height <= block_height`.
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError>;
+
+    /// Point-in-time variant of [`Self::get_pool_delegations`]: for every delegation
+    /// of the pool, its latest history row with `block_height <= block_height`.
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError>;
+
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
@@ -684,6 +751,15 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
+
+    /// Keyset (cursor) pagination of the pool listing by creation height (descending);
+    /// the cursor is the (creation height, pool id) of the last returned pool, exclusive.
+    /// Returns the creation height of each pool alongside its id and data.
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_pool_data_with_largest_staker_balance(
         &self,
@@ -720,6 +796,20 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
     -> Result<Option<Utxo>, ApiServerStorageError>;
+
+    /// (experimental) Fetch multiple UTXOs in one round trip, preserving the
+    /// input order. The default implementation loops over `get_utxo`; backends
+    /// override it with a single batched query.
+    async fn get_utxos(
+        &self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        let mut result = Vec::with_capacity(outpoints.len());
+        for outpoint in outpoints {
+            result.push(self.get_utxo(outpoint.clone()).await?);
+        }
+        Ok(result)
+    }
 
     async fn get_address_available_utxos(
         &self,
@@ -800,6 +890,36 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    /// Remaining balances of the live (not concluded, not frozen) orders of a trading
+    /// pair, as (ask_balance, give_balance) pairs; the price of each order is derived
+    /// from these in the web layer. At most [`ORDER_BOOK_MAX_ORDERS`] entries
+    /// are returned, ordered by ask balance (descending, ties broken by the order id
+    /// in descending byte order); `has_more` reports whether the cap truncated the
+    /// book (the entries with the largest ask balance are returned; when the cap
+    /// truncates the book, the smallest-balance orders are omitted).
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError>;
+
+    /// Read the stream events with an id greater than `last_seen_id`, in ascending id order.
+    ///
+    /// Note: backends that don't support stream events simply return an empty list.
+    async fn read_stream_events_after(
+        &self,
+        _last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+        Ok(Vec::new())
+    }
+
+    /// The id of the most recently committed stream event, if any.
+    ///
+    /// Note: backends that don't support stream events simply return `None`.
+    async fn latest_stream_event_id(&self) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        Ok(None)
+    }
 }
 
 #[async_trait::async_trait]
@@ -829,6 +949,10 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    /// Stores the balance under the string encoding carried by the given address:
+    /// scanning constructs addresses via `Address::new`, so the stored encoding is
+    /// the canonical one, which the byte-ordered tie-break comparison of the
+    /// top-addresses listing relies on.
     async fn set_address_balance_at_height(
         &mut self,
         address: &Address<Destination>,
@@ -1000,6 +1124,41 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
+
+    /// Append an event to the stream event log and return the assigned event id.
+    ///
+    /// The event becomes visible to readers only after the enclosing transaction has been
+    /// committed, which is what guarantees that an event is never observed before the data it
+    /// refers to.
+    ///
+    /// Note: backends that don't support stream events silently drop the event and return a
+    /// dummy id.
+    async fn append_stream_event(
+        &mut self,
+        _event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        Ok(0)
+    }
+
+    /// Request a notification to be delivered to stream event listeners when (and only when) the
+    /// enclosing transaction commits, signaling that all events up to `last_event_id` are
+    /// available.
+    ///
+    /// Note: backends that don't support stream event notifications silently do nothing; listeners
+    /// are expected to poll for new events as a fallback anyway.
+    async fn notify_new_stream_events(
+        &mut self,
+        _last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
+
+    /// Delete the stream events that fell out of the retention window.
+    ///
+    /// Note: backends that don't support stream events silently do nothing.
+    async fn prune_stream_events(&mut self) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1033,3 +1192,60 @@ pub trait Transactional<'tx> {
 }
 
 pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send + Sync {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::primitives::{BlockHeight, H256, per_thousand::PerThousand};
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+    use test_utils::random::{Seed, make_seedable_rng};
+
+    fn test_delegation(balance: Amount) -> Delegation {
+        Delegation::new(
+            BlockHeight::new(1),
+            Destination::AnyoneCanSpend,
+            PoolId::new(H256::zero()),
+            balance,
+            AccountNonce::new(7),
+        )
+    }
+
+    /// Regression: spending more than the delegation balance must return an error,
+    /// not panic - a stale scanner state must not take the whole scanner down.
+    #[test]
+    fn spend_share_underflow_returns_error() {
+        let delegation = test_delegation(Amount::from_atoms(100));
+        let err = delegation
+            .spend_share(Amount::from_atoms(101), AccountNonce::new(8))
+            .expect_err("underflow must be an error");
+        assert!(matches!(err, PosError::DelegationBalanceSubtractionError));
+    }
+
+    #[test]
+    fn spend_share_exact_balance_succeeds_and_bumps_nonce() {
+        let delegation = test_delegation(Amount::from_atoms(100));
+        let spent = delegation
+            .spend_share(Amount::from_atoms(100), AccountNonce::new(8))
+            .expect("exact spend must succeed");
+        assert_eq!(spent.balance(), &Amount::ZERO);
+        assert_eq!(spent.next_nonce(), &AccountNonce::new(9));
+    }
+
+    #[test]
+    fn decrease_delegation_balance_underflow_returns_error() {
+        let mut rng = make_seedable_rng(Seed::from(1u64));
+        let (_, vrf_public_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let pool_data = PoolDataWithExtraInfo::new(PoolData::new(
+            Destination::AnyoneCanSpend,
+            Amount::from_atoms(1_000),
+            Amount::ZERO,
+            vrf_public_key,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        ));
+        let err = pool_data
+            .decrease_delegation_balance(Amount::from_atoms(1))
+            .expect_err("underflow must be an error");
+        assert!(matches!(err, PosError::DelegationBalanceSubtractionError));
+    }
+}

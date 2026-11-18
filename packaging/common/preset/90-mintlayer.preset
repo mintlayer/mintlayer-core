@@ -1,0 +1,4 @@
+# Preset policy for Mintlayer units.
+# Only the mainnet node daemon is enabled by default; every other unit is
+# opt-in and must be enabled explicitly by the administrator.
+enable mintlayer-node@mainnet.service

@@ -44,6 +44,12 @@ pub struct WalletId(u64);
 
 static NEXT_WALLET_ID: AtomicU64 = AtomicU64::new(0);
 
+impl Default for WalletId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WalletId {
     pub fn new() -> Self {
         Self(NEXT_WALLET_ID.fetch_add(1, Ordering::Relaxed))

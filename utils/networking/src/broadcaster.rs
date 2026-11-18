@@ -37,7 +37,6 @@ impl<T> Broadcaster<T> {
             auto_purge_ticks: 0,
         }
     }
-
     /// Add a new subscriber
     pub fn subscribe(&mut self) -> Receiver<T> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -82,6 +81,12 @@ impl<T> Broadcaster<T> {
         // connections as we go and reset the purge tick counter.
         self.auto_purge_ticks = 0;
         self.senders.retain(|sender| sender.send(value.clone()).is_ok());
+    }
+}
+
+impl<T> Default for Broadcaster<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

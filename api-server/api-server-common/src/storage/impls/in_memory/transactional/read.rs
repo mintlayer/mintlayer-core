@@ -46,6 +46,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
+    async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        self.transaction.get_top_address_amounts(coin_or_token_id, len, cursor)
+    }
+
     async fn get_address_balances(
         &self,
         address: &str,
@@ -72,9 +81,9 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        self.transaction.get_token_transactions(token_id, len, tx_global_index)
+        self.transaction.get_token_transactions(token_id, len, offset)
     }
 
     async fn get_block(
@@ -128,6 +137,15 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_delegation(delegation_id)
     }
 
+    async fn get_delegation_at_or_below_height(
+        &self,
+        delegation_id: DelegationId,
+        block_height: BlockHeight,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.transaction
+            .get_delegation_at_or_below_height(delegation_id, Some(block_height))
+    }
+
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
@@ -143,12 +161,29 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_pool_delegations(pool_id)
     }
 
+    async fn get_pool_delegations_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.transaction
+            .get_pool_delegations_at_or_below_height(pool_id, Some(block_height))
+    }
+
     async fn get_latest_pool_data(
         &self,
         len: u32,
         offset: u64,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_latest_pool_ids(len, offset)
+    }
+
+    async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        self.transaction.get_latest_pool_ids_before(len, cursor)
     }
 
     async fn get_pool_data_with_largest_staker_balance(
@@ -199,6 +234,14 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         pool_id: PoolId,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
+    }
+
+    async fn get_pool_data_at_or_below_height(
+        &self,
+        pool_id: PoolId,
+        block_height: BlockHeight,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.transaction.get_pool_data_at_or_below_height(pool_id, Some(block_height))
     }
 
     async fn get_utxo(
@@ -316,5 +359,13 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         offset: u64,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_for_trading_pair(pair, len, offset)
+    }
+
+    async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        self.transaction.get_order_book_entries(ask_currency, give_currency)
     }
 }

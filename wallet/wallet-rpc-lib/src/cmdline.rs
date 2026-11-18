@@ -48,18 +48,32 @@ impl WalletRpcDaemonArgs {
     }
 }
 
+/// Options whose values can hold a secret; their environment-sourced values are hidden
+/// from the help output.
+const WALLET_RPC_SECRET_OPTIONS: &[&str] =
+    &["rpc-username", "rpc-password", "node-rpc-username", "node-rpc-password"];
+
 #[derive(clap::Subcommand)]
 pub enum WalletRpcDaemonCommand {
     /// Run the mainnet wallet.
-    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "MAINNET_WALLET_RPC_DAEMON",
+        WALLET_RPC_SECRET_OPTIONS
+    )))]
     Mainnet(WalletRpcDaemonChainArgs),
 
     /// Run the testnet wallet.
-    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "TESTNET_WALLET_RPC_DAEMON",
+        WALLET_RPC_SECRET_OPTIONS
+    )))]
     Testnet(WalletRpcDaemonChainArgs),
 
     /// Run the regtest wallet.
-    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET_RPC_DAEMON")))]
+    #[clap(mut_args(clap_utils::env_adder_hiding_env_values(
+        "REGTEST_WALLET_RPC_DAEMON",
+        WALLET_RPC_SECRET_OPTIONS
+    )))]
     Regtest {
         #[command(flatten)]
         args: WalletRpcDaemonChainArgs,
@@ -315,4 +329,18 @@ pub enum ConfigError {
 
     #[error(transparent)]
     RunningAsRoot(anyhow::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn every_secret_option_has_its_env_value_hidden() {
+        clap_utils::assert_secret_options_hidden(
+            &WalletRpcDaemonArgs::command(),
+            WALLET_RPC_SECRET_OPTIONS,
+        );
+    }
 }

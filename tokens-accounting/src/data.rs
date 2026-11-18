@@ -36,6 +36,12 @@ pub struct TokensAccountingData {
     pub circulating_supply: BTreeMap<TokenId, Amount>,
 }
 
+impl Default for TokensAccountingData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokensAccountingData {
     pub fn new() -> Self {
         Self {
@@ -49,6 +55,12 @@ impl TokensAccountingData {
 pub struct TokensAccountingDeltaData {
     pub(crate) token_data: DeltaDataCollection<TokenId, TokenData>,
     pub(crate) circulating_supply: DeltaAmountCollection<TokenId>,
+}
+
+impl Default for TokensAccountingDeltaData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TokensAccountingDeltaData {
@@ -79,6 +91,12 @@ impl TokensAccountingDeltaData {
 pub struct TokensAccountingDeltaUndoData {
     pub(crate) token_data: DeltaDataUndoCollection<TokenId, TokenData>,
     pub(crate) circulating_supply: DeltaAmountCollection<TokenId>,
+}
+
+impl Default for TokensAccountingDeltaUndoData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TokensAccountingDeltaUndoData {

@@ -37,16 +37,219 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         AmountWithDecimals, ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation,
-        FungibleTokenData, LockedUtxo, NftWithOwner, Order, PoolBlockStats, PoolDataWithExtraInfo,
-        TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo, UtxoWithExtraInfo,
+        FungibleTokenData, LockedUtxo, NftWithOwner, ORDER_BOOK_MAX_ORDERS, Order, PoolBlockStats,
+        PoolDataWithExtraInfo, TokenTransaction, TransactionInfo, TransactionWithBlockInfo, Utxo,
+        UtxoWithExtraInfo,
         block_aux_data::{BlockAuxData, BlockWithExtraData},
     },
 };
+use crate::streaming::{
+    STREAM_EVENTS_NOTIFY_CHANNEL, STREAM_EVENTS_PUMP_CURSOR_KEY, STREAM_EVENTS_READ_BATCH_SIZE,
+    STREAM_EVENTS_RETENTION_COUNT, STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR, StreamEvent,
+    StreamEventId, StreamEventReadError,
+};
+
+use std::collections::HashMap;
 
 const VERSION_STR: &str = "version";
 
+// (experimental) Statement counting for scanner profiling. Enabled via
+// ML_SCANNER_STAGE_TIMING=1; the counter is read and reset per sync batch by
+// the scanner's perf_timing module.
+//
+// Caveat: these counters are process-global across all
+// postgres connections. Numbers are exact when the scanner is the only
+// postgres traffic in the process (dedicated scanner-daemon); if an api-server
+// serves requests in the same process, stmts/block absorbs that traffic too.
+static STMT_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STMT_COUNT_ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+fn stmt_counting_enabled() -> bool {
+    *STMT_COUNT_ENABLED.get_or_init(|| {
+        std::env::var("ML_SCANNER_STAGE_TIMING")
+            .is_ok_and(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+    })
+}
+
+/// Returns and resets the number of postgres statements issued since the last
+/// call. Meaningful only when ML_SCANNER_STAGE_TIMING is enabled.
+pub fn take_postgres_statement_count() -> u64 {
+    if stmt_counting_enabled() {
+        STMT_COUNT.swap(0, std::sync::atomic::Ordering::Relaxed)
+    } else {
+        0
+    }
+}
+
+// (experimental) step 7: per-transaction prepared statement cache.
+// tokio_postgres::Statement is an Arc handle holding only a Weak reference to
+// the client, so cached statements are plain safe Rust and stay valid for the
+// lifetime of the cache; they are cleared when the transaction struct is
+// dropped, before its connection returns to the pool.
+pub type StatementCache = std::sync::Mutex<HashMap<String, tokio_postgres::Statement>>;
+
+static STMT_CACHE_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STMT_CACHE_MISSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Returns and resets (cache hits, cache misses) since the last call.
+/// Meaningful only when ML_SCANNER_STAGE_TIMING is enabled.
+pub fn take_postgres_statement_cache_stats() -> (u64, u64) {
+    if stmt_counting_enabled() {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            STMT_CACHE_HITS.swap(0, Relaxed),
+            STMT_CACHE_MISSES.swap(0, Relaxed),
+        )
+    } else {
+        (0, 0)
+    }
+}
+
+/// Thin forwarding wrapper around a pooled postgres connection that counts
+/// issued statements. Method signatures mirror the tokio-postgres ones used by
+/// `QueryFromConnection`, so call sites don't change.
+pub struct CountingConnection<'a, 'b> {
+    inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+    statements: &'a StatementCache,
+}
+
+impl<'a, 'b> CountingConnection<'a, 'b> {
+    pub fn new(
+        inner: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self { inner, statements }
+    }
+
+    fn count(&self) {
+        if stmt_counting_enabled() {
+            STMT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Prepares the statement unless it is already in this transaction's
+    /// cache; saves one Parse+Describe round trip per execution.
+    async fn cached_statement(
+        &self,
+        statement: &str,
+    ) -> Result<tokio_postgres::Statement, tokio_postgres::Error> {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        // Degrade gracefully if the mutex is poisoned: never panic before the
+        // connection returns to the pool (matching the Drop paths in transactional).
+        let cached = self
+            .statements
+            .lock()
+            .ok()
+            .and_then(|statements| statements.get(statement).cloned());
+        match cached {
+            Some(prepared) => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_HITS.fetch_add(1, Relaxed);
+                }
+                Ok(prepared)
+            }
+            None => {
+                if stmt_counting_enabled() {
+                    STMT_CACHE_MISSES.fetch_add(1, Relaxed);
+                }
+                let prepared = self.inner.prepare(statement).await?;
+                if let Ok(mut statements) = self.statements.lock() {
+                    statements.insert(statement.to_string(), prepared.clone());
+                }
+                Ok(prepared)
+            }
+        }
+    }
+
+    pub async fn execute(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.execute(&prepared, params).await
+    }
+
+    pub async fn query(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query(&prepared, params).await
+    }
+
+    pub async fn query_opt(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_opt(&prepared, params).await
+    }
+
+    pub async fn query_one(
+        &self,
+        statement: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+        self.count();
+        let prepared = self.cached_statement(statement).await?;
+        self.inner.query_one(&prepared, params).await
+    }
+}
+
 pub struct QueryFromConnection<'a, 'b> {
-    tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+    tx: CountingConnection<'a, 'b>,
+}
+
+/// Largest `$n` placeholder index across up to four query-text fragments
+/// (const-evaluable); used to tie bound-parameter array lengths to the assembled
+/// query text at compile time.
+#[allow(dead_code)]
+const fn placeholder_count(a: &str, b: &str, c: &str, d: &str) -> usize {
+    let mut largest = placeholder_count_1(a);
+    let candidate = placeholder_count_1(b);
+    if candidate > largest {
+        largest = candidate;
+    }
+    let candidate = placeholder_count_1(c);
+    if candidate > largest {
+        largest = candidate;
+    }
+    let candidate = placeholder_count_1(d);
+    if candidate > largest {
+        largest = candidate;
+    }
+    largest
+}
+
+/// `placeholder_count` for a single fragment; counts DISTINCT placeholder indices
+/// (`$n` with the largest n), not occurrences, because a placeholder index is
+/// bound exactly once regardless of how often the query text references it.
+#[allow(dead_code)]
+const fn placeholder_count_1(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let mut largest = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            // single-digit placeholder indices only; the largest bound parameter
+            // in these queries is single-digit by construction
+            let digit = (bytes[i + 1] - b'0') as usize;
+            if digit > largest {
+                largest = digit;
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    largest
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
@@ -61,8 +264,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
     }
 
-    pub fn new(tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
+        statements: &'a StatementCache,
+    ) -> Self {
+        Self {
+            tx: CountingConnection::new(tx, statements),
+        }
     }
 
     fn block_height_to_postgres_friendly(block_height: BlockHeight) -> i64 {
@@ -92,6 +300,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::TxGlobalIndexTooHigh(tx_global_index))
     }
 
+    /// An offset that doesn't fit a bigint is past the end of any result set.
+    /// Postgres rejects a negative OFFSET, so callers map overflow to an empty
+    /// page instead of wrapping.
+    fn offset_to_bigint(offset: u64) -> Option<i64> {
+        i64::try_from(offset).ok()
+    }
+
+    /// Whether the schema exists and carries a storage version. Note that a `true`
+    /// result does NOT mean the stored version is current: the caller must compare
+    /// [`Self::get_storage_version`] with the current version and reinitialize when
+    /// they differ (the scanner daemon does exactly that).
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
         let query_str = Self::get_table_exists_query("misc_data");
         let row_count = self
@@ -176,6 +395,85 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     Ok(Some(amount))
                 },
             )
+    }
+
+    /// Top holders of an asset, ordered by the balance (descending, ties broken by the
+    /// address); keyset (cursor) pagination, the cursor is the (amount, address) of the
+    /// last returned holder, exclusive. Addresses with a zero balance are excluded.
+    pub async fn get_top_address_amounts(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+        len: u32,
+        cursor: Option<(String, Amount)>,
+    ) -> Result<Vec<(String, Amount)>, ApiServerStorageError> {
+        // the cursor and no-cursor variants share one query text: the cursor
+        // predicate is appended from a constant, so the ordering and the cursor
+        // comparison cannot drift apart between the two branches (all query parts
+        // are compile-time constants; only bound parameters carry runtime values)
+        // NOTE: the select ALIASES the text cast (amount_text). A bare
+        // `amount::text` output column would be named `amount`, and ORDER BY
+        // resolves a bare name to the OUTPUT column first — sorting by the
+        // TEXT representation of the atoms instead of the numeric value
+        // (lexicographic order, e.g. '999999997' after '99999999998'). The
+        // alias keeps `ORDER BY amount` bound to the numeric input column,
+        // matching the cursor predicate, which already compares numerically.
+        const QUERY_HEAD: &str = r#"
+            SELECT address, amount::text AS amount_text
+            FROM ml.address_amount
+            WHERE coin_or_token_id = $1 AND amount != 0"#;
+        const CURSOR_PREDICATE: &str = r#"
+                AND (amount < $2::text::numeric
+                    OR (amount = $2::text::numeric
+                        AND address COLLATE "C" < $3))"#;
+        const QUERY_TAIL: &str = r#"
+            ORDER BY amount DESC, address COLLATE "C" DESC
+            LIMIT "#;
+        // the largest placeholder of each query variant, derived from the ACTUAL
+        // constants above at compile time (const-concatenation): editing a constant
+        // without adjusting the matching parameter array fails to compile, including
+        // in release builds
+        const CURSOR_PARAM_COUNT: usize =
+            placeholder_count(QUERY_HEAD, CURSOR_PREDICATE, QUERY_TAIL, "$4;");
+        const NO_CURSOR_PARAM_COUNT: usize = placeholder_count(QUERY_HEAD, QUERY_TAIL, "$2;", "");
+        let coin_or_token_id = coin_or_token_id.encode();
+        let len = len as i64;
+        let rows = match cursor {
+            Some((address, amount)) => {
+                let amount_str = amount.into_atoms().to_string();
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); CURSOR_PARAM_COUNT] =
+                    [&coin_or_token_id, &amount_str, &address, &len];
+                self.tx
+                    .query(
+                        &format!("{QUERY_HEAD}{CURSOR_PREDICATE}{QUERY_TAIL}$4;"),
+                        &params,
+                    )
+                    .await
+                    .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            }
+            None => {
+                let params: [&(dyn tokio_postgres::types::ToSql + Sync); NO_CURSOR_PARAM_COUNT] =
+                    [&coin_or_token_id, &len];
+                self.tx
+                    .query(&format!("{QUERY_HEAD}{QUERY_TAIL}$2;"), &params)
+                    .await
+                    .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            }
+        };
+
+        rows.into_iter()
+            .map(|row| -> Result<(String, Amount), ApiServerStorageError> {
+                let address: String = row.get(0);
+                let amount_str: String = row.get(1);
+                // fail fast on a corrupt row rather than silently returning wrong
+                // balances; the message carries the offending value for diagnosis
+                let atoms = amount_str.parse::<u128>().map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "invalid amount {amount_str} for address {address}: {e}"
+                    ))
+                })?;
+                Ok((address, Amount::from_atoms(atoms)))
+            })
+            .collect()
     }
 
     pub async fn get_address_balances(
@@ -267,15 +565,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
-        self.tx
-            .execute(
-                "DELETE FROM ml.address_balance WHERE block_height > $1;",
-                &[&height],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        // the versioned-history delete and the holders re-derivation form one
+        // dependency unit (the re-derivation is only correct immediately after
+        // the delete); keeping the two in a single helper makes that coupling
+        // structural instead of comment-enforced
+        self.del_address_balance_and_rederive_holders(height).await?;
 
-        // delete and update the address balance from the cache table
+        // roll back the latest-address-balance cache of the disconnected
+        // blocks; this is only correct because the versioned delete inside the
+        // helper above already ran within this same rollback call
         self.tx
             .execute(
                 r#"
@@ -317,6 +615,139 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    /// Delete the versioned address-balance rows above the height and re-derive
+    /// the holders (`ml.address_amount`) rows from what remains; set-based, in a
+    /// constant number of round trips, so the two steps cannot drift apart.
+    async fn del_address_balance_and_rederive_holders(
+        &mut self,
+        height: i64,
+    ) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .execute(
+                "DELETE FROM ml.address_balance WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        // roll back the holders table rows of the disconnected blocks; set-based, in a
+        // constant number of round trips: delete the rolled-back rows, drop rows whose
+        // whole versioned history was orphaned, then re-derive and re-insert the rest
+        // in bulk (the numeric amount is decoded from the versioned balances).
+        // NOTE: this re-derivation is only correct because the versioned
+        // `ml.address_balance` rows above the height were deleted by the statement
+        // above, within this same call; the ordering of the two statements is
+        // load-bearing. `top_address_amounts` in the storage test suite guards this by
+        // rolling back through this function and asserting the re-derived listing.
+        let deleted_holders_rows = self
+            .tx
+            .query(
+                "DELETE FROM ml.address_amount WHERE block_height > $1 RETURNING address, coin_or_token_id;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if !deleted_holders_rows.is_empty() {
+            let addresses: Vec<String> =
+                deleted_holders_rows.iter().map(|row| row.get(0)).collect();
+            let coin_or_token_ids: Vec<Vec<u8>> =
+                deleted_holders_rows.iter().map(|row| row.get(1)).collect();
+
+            // rows whose versioned history was fully orphaned leave the table
+            self.tx
+                .execute(
+                    r#"
+                        DELETE FROM ml.address_amount aa
+                        WHERE (aa.address, aa.coin_or_token_id) IN (
+                            SELECT address, coin_or_token_id
+                            FROM unnest($1::text[], $2::bytea[]) AS d(address, coin_or_token_id)
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM ml.address_balance ab
+                            WHERE ab.address = aa.address AND ab.coin_or_token_id = aa.coin_or_token_id
+                        );
+                    "#,
+                    &[&addresses, &coin_or_token_ids],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+            // the latest remaining versioned balance of every affected pair
+            let latest_versioned = self
+                .tx
+                .query(
+                    r#"
+                        SELECT DISTINCT ON (a.address, a.coin_or_token_id)
+                            a.address, a.coin_or_token_id, a.block_height, a.amount
+                        FROM ml.address_balance a
+                        JOIN unnest($1::text[], $2::bytea[]) AS d(address, coin_or_token_id)
+                            ON a.address = d.address AND a.coin_or_token_id = d.coin_or_token_id
+                        ORDER BY a.address, a.coin_or_token_id, a.block_height DESC;
+                    "#,
+                    &[&addresses, &coin_or_token_ids],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+            let mut upsert_addresses: Vec<String> = Vec::with_capacity(latest_versioned.len());
+            let mut upsert_coin_or_token_ids: Vec<Vec<u8>> =
+                Vec::with_capacity(latest_versioned.len());
+            let mut upsert_block_heights: Vec<i64> = Vec::with_capacity(latest_versioned.len());
+            let mut upsert_amounts: Vec<String> = Vec::with_capacity(latest_versioned.len());
+
+            for row in latest_versioned {
+                let amount: Vec<u8> = row.get(3);
+                let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Amount deserialization failed: {e}"
+                    ))
+                })?;
+                upsert_addresses.push(row.get(0));
+                upsert_coin_or_token_ids.push(row.get(1));
+                upsert_block_heights.push(row.get::<_, i64>(2));
+                upsert_amounts.push(amount.into_atoms().to_string());
+            }
+
+            self.tx
+                .execute(
+                    r#"
+                        INSERT INTO ml.address_amount (address, coin_or_token_id, block_height, amount)
+                        SELECT address, coin_or_token_id, block_height, amount
+                        FROM unnest($1::text[], $2::bytea[], $3::bigint[], $4::text[]::numeric[])
+                            AS t(address, coin_or_token_id, block_height, amount)
+                        ON CONFLICT (address, coin_or_token_id) DO UPDATE
+                        SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
+                        WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
+                    -- unlike the pool cache there is no LEAST/GREATEST envelope here,
+                    -- by design: the holders listing orders by `amount DESC`, which
+                    -- rollback does not touch, so a stale cache row can only be wrong
+                    -- in VALUE, never out of order. The height guard `<=` lets any
+                    -- write at the same or newer height than the cached row replace
+                    -- it (including same-height reorg rewrites); cache rows older
+                    -- than the incoming versioned row are exactly the rows this
+                    -- write corrects. A cache row NEWER than the versioned table can
+                    -- only exist if a rollback was interrupted after truncating the
+                    -- versioned history but before rolling the cache back — the
+                    -- rollback helper (del_address_balance_and_rederive_holders)
+                    -- always runs both steps in one transaction, so that state is
+                    -- unreachable outside a crash mid-transaction, which postgres
+                    -- atomicity also rules out.
+                    "#,
+                    &[
+                        &upsert_addresses,
+                        &upsert_coin_or_token_ids,
+                        &upsert_block_heights,
+                        &upsert_amounts,
+                    ],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
     pub async fn del_address_locked_balance_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -343,6 +774,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
+        // the versioned insert and the holders-cache upsert below both run on every
+        // balance write: the cache row is rewritten even when the amount is unchanged
+        // (the height guard still updates it), which is intentional — re-parsing the
+        // listing from the versioned table per read would cost more than the
+        // redundant upsert (the listing is served from this cache alone)
         self.tx
             .execute(
                 r#"
@@ -371,6 +807,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     DO UPDATE SET amount = EXCLUDED.amount;
                 "#,
                 &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        // the holders table tracks the same latest balance, but with the amount in the
+        // NUMERIC form so the holders listing can order the addresses by it
+        let amount_str = amount.into_atoms().to_string();
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.address_amount (address, coin_or_token_id, block_height, amount)
+                    VALUES ($1, $2, $3, $4::text::numeric)
+                    ON CONFLICT (address, coin_or_token_id) DO UPDATE
+                    SET block_height = EXCLUDED.block_height, amount = EXCLUDED.amount
+                    WHERE ml.address_amount.block_height <= EXCLUDED.block_height;
+                "#,
+                &[&address.to_string(), &coin_or_token_id.encode(), &height, &amount_str],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -501,9 +954,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         token_id: TokenId,
         len: u32,
-        tx_global_index: u64,
+        offset: u64,
     ) -> Result<Vec<TokenTransaction>, ApiServerStorageError> {
-        let tx_global_index = Self::tx_global_index_to_postgres_friendly(tx_global_index)?;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         let len = len as i64;
         let rows = self
             .tx
@@ -511,11 +966,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     SELECT tx_global_index, transaction_id
                     FROM ml.token_transactions
-                    WHERE token_id = $1 AND tx_global_index < $2
+                    WHERE token_id = $1
                     ORDER BY tx_global_index DESC
+                    OFFSET $2
                     LIMIT $3;
                 "#,
-                &[&token_id.encode(), &tx_global_index, &len],
+                &[&token_id.encode(), &offset, &len],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -770,6 +1226,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     owning_block_id bytea NOT NULL REFERENCES ml.blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
+        )
+        .await?;
+
+        // index for the keyset (cursor) pagination of the transaction listing
+        self.just_execute(
+            "CREATE INDEX transactions_tx_global_index ON ml.transactions (tx_global_index DESC);",
         )
         .await?;
 
@@ -1046,6 +1508,115 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // Latest state of every pool; maintained alongside ml.pool_data by the scanner so
+        // that the pool listings do not have to derive the newest state of each pool from
+        // the full versioned history (which is touched at every PoS block).
+        self.just_execute(
+            "CREATE TABLE ml.latest_pool_data_cache (
+                    pool_id TEXT COLLATE \"C\" NOT NULL,
+                    block_height bigint NOT NULL,
+                    creation_block_height bigint NOT NULL,
+                    staker_balance NUMERIC NOT NULL,
+                    data bytea NOT NULL,
+                    PRIMARY KEY (pool_id)
+                );",
+        )
+        .await?;
+
+        // index for the keyset pagination of the pool listing (by creation height)
+        self.just_execute(
+            "CREATE INDEX latest_pool_data_created_index
+                ON ml.latest_pool_data_cache (creation_block_height DESC, pool_id DESC);",
+        )
+        .await?;
+
+        // index for the pool listing sorted by pledge; includes the tie-break column
+        // so the listing's ORDER BY is index-satisfiable (matching
+        // latest_pool_data_created_index)
+        self.just_execute(
+            "CREATE INDEX latest_pool_data_staker_balance_index
+                ON ml.latest_pool_data_cache (staker_balance DESC, pool_id DESC);",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX latest_pool_data_block_height_index
+                ON ml.latest_pool_data_cache (block_height DESC);",
+        )
+        .await?;
+
+        // Latest balance of every (address, asset) pair as an orderable numeric amount;
+        // maintained alongside ml.address_balance by the scanner so that the top holders
+        // listing can be served by an index scan instead of decoding every balance.
+        self.just_execute(
+            "CREATE TABLE ml.address_amount (
+                    address TEXT COLLATE \"C\" NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    amount NUMERIC NOT NULL,
+                    PRIMARY KEY (address, coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        // index for the keyset pagination of the holders listing
+        self.just_execute(
+            "CREATE INDEX address_amount_top_holders_index
+                ON ml.address_amount (coin_or_token_id, amount DESC, address DESC);",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX address_amount_block_height ON ml.address_amount (block_height DESC);",
+        )
+        .await?;
+
+        // Latest state of every order; maintained alongside ml.orders by the scanner so
+        // that the order book does not have to derive the newest state of each order from
+        // the full versioned history.
+        self.just_execute(
+            "CREATE TABLE ml.latest_orders_cache (
+                    order_id TEXT COLLATE \"C\" NOT NULL,
+                    block_height bigint NOT NULL,
+                    creation_block_height bigint NOT NULL,
+                    ask_currency bytea NOT NULL,
+                    ask_balance NUMERIC NOT NULL,
+                    give_currency bytea NOT NULL,
+                    give_balance NUMERIC NOT NULL,
+                    frozen BOOLEAN NOT NULL,
+                    PRIMARY KEY (order_id)
+                );",
+        )
+        .await?;
+
+        // index for the order book pair lookups; the trailing columns cover the
+        // book read's ordering (deepest ask first, encoded order id as tie-break) so
+        // no separate sort of the pair's live orders is needed
+        self.just_execute(
+            "CREATE INDEX latest_orders_currencies_index
+                ON ml.latest_orders_cache (ask_currency, give_currency, ask_balance DESC, order_id DESC);",
+        )
+        .await?;
+
+        // index for reorgs
+        self.just_execute(
+            "CREATE INDEX latest_orders_block_height_index ON ml.latest_orders_cache (block_height DESC);",
+        )
+        .await?;
+
+        // Append-only log of stream events for real-time clients; the primary key index also
+        // serves the `WHERE id > $1 ORDER BY id` reads of the event pump.
+        self.just_execute(
+            "CREATE TABLE ml.emitted_events (
+                id BIGSERIAL PRIMARY KEY,
+                kind TEXT NOT NULL,
+                payload JSONB NOT NULL
+            );",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -1280,6 +1851,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         delegation_id: DelegationId,
         chain_config: &ChainConfig,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.get_delegation_at_or_below_height(delegation_id, None, chain_config).await
+    }
+
+    /// Returns the delegation state as of `max_height`: the latest `ml.delegations`
+    /// history row with `block_height <= max_height` (`None` means unbounded).
+    ///
+    /// Note this reads the history table directly and deliberately bypasses
+    /// `ml.latest_delegations_cache`, which only ever reflects the latest state.
+    pub async fn get_delegation_at_or_below_height(
+        &mut self,
+        delegation_id: DelegationId,
+        max_height: Option<BlockHeight>,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
         let delegation_id = Address::new(chain_config, delegation_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
@@ -1287,11 +1872,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                 SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.latest_delegations_cache
-                WHERE delegation_id = $1
+                FROM ml.delegations
+                WHERE delegation_id = $1 AND ($2::bigint IS NULL OR block_height <= $2)
+                ORDER BY block_height DESC
                 LIMIT 1;
                 "#,
-                &[&delegation_id.as_str()],
+                &[
+                    &delegation_id.as_str(),
+                    &max_height.map(Self::block_height_to_postgres_friendly),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1302,8 +1891,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let pool_id: String = data.get(0);
-        let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-            .map_err(|_| ApiServerStorageError::AddressableError)?
+        let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid pool id {pool_id}: {e}"
+                ))
+            })?
             .into_object();
         let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
@@ -1363,12 +1956,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|row| {
                 let delegation_id: String = row.get(0);
                 let delegation_id =
-                    Address::<DelegationId>::from_string(chain_config, delegation_id)
-                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                    Address::<DelegationId>::from_string(chain_config, &delegation_id)
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "invalid delegation id {delegation_id}: {e}"
+                            ))
+                        })?
                         .into_object();
                 let pool_id: String = row.get(1);
-                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "invalid pool id {pool_id}: {e}"
+                        ))
+                    })?
                     .into_object();
                 let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
@@ -1558,6 +2159,56 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        // delete and re-derive the pool rows of the latest-state cache from the versioned
+        // table (a deleted row whose pool still exists below the disconnected height must
+        // not be lost)
+        self.tx
+            .execute(
+                r#"
+                WITH deleted_cache_rows AS (
+                    DELETE FROM ml.latest_pool_data_cache
+                    WHERE block_height > $1
+                    RETURNING pool_id
+                ),
+                latest_pool_data_for_deleted AS (
+                    SELECT
+                        dcr.pool_id,
+                        ld.block_height,
+                        created.creation_block_height,
+                        ld.staker_balance,
+                        ld.data
+                    FROM deleted_cache_rows dcr
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            pool_id,
+                            block_height,
+                            staker_balance,
+                            data
+                        FROM ml.pool_data d_inner
+                        WHERE d_inner.pool_id = dcr.pool_id
+                        ORDER BY block_height DESC
+                        LIMIT 1
+                    ) AS ld
+                    CROSS JOIN LATERAL (
+                        SELECT MIN(p_min.block_height) AS creation_block_height
+                        FROM ml.pool_data p_min
+                        WHERE p_min.pool_id = dcr.pool_id
+                    ) AS created
+                )
+                INSERT INTO ml.latest_pool_data_cache (pool_id, block_height, creation_block_height, staker_balance, data)
+                SELECT
+                    pool_id,
+                    block_height,
+                    creation_block_height,
+                    staker_balance::numeric,
+                    data
+                FROM latest_pool_data_for_deleted;
+                "#,
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -1597,68 +2248,136 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.get_pool_delegations_at_or_below_height(pool_id, None, chain_config).await
+    }
+
+    /// Returns the delegation shares of `pool_id` as of `max_height`: for every
+    /// delegation of the pool, its latest `ml.delegations` history row with
+    /// `block_height <= max_height`.
+    ///
+    /// With `max_height: None` the latest state is read directly from
+    /// `ml.latest_delegations_cache` (one primary-key range scan per pool).
+    ///
+    /// With a bound, the set of delegation ids is taken from
+    /// `ml.latest_delegations_cache` (kept in lockstep with the history table by
+    /// `set_delegation_at_height` and the rollback paths; a delegation's pool
+    /// never changes after creation). For each id, a primary-key point lookup
+    /// picks the newest history row at or below `max_height`, so a delegation
+    /// created above `max_height` contributes no row and the cost is one index
+    /// lookup per delegation instead of a scan of the pool's whole history.
+    /// Replay code must use the bounded form so that connecting a block at
+    /// height `h` never observes state written by blocks above `h`.
+    pub async fn get_pool_delegations_at_or_below_height(
+        &mut self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
+        chain_config: &ChainConfig,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let pool_id_str = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let sql = if max_height.is_none() {
+            // latest state: a direct primary-key range scan of the cache; `$2` is
+            // always NULL here and the condition always true, the parameter exists
+            // only to keep both queries on the same two-parameter call shape
+            "SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
+             FROM ml.latest_delegations_cache
+             WHERE pool_id = $1 AND $2::bigint IS NULL;"
+        } else {
+            "SELECT d.delegation_id, d.balance, d.spend_destination, d.next_nonce,
+                    d.creation_block_height
+             FROM ml.latest_delegations_cache AS c
+             CROSS JOIN LATERAL (
+                 SELECT delegation_id, balance, spend_destination, next_nonce,
+                        creation_block_height
+                 FROM ml.delegations
+                 WHERE delegation_id = c.delegation_id
+                   AND block_height <= $2
+                 ORDER BY block_height DESC
+                 LIMIT 1
+             ) AS d
+             WHERE c.pool_id = $1;"
+        };
+        let pool_id_param = pool_id_str.as_str();
+        let height_param = max_height.map(Self::block_height_to_postgres_friendly);
+        let params: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+            [&pool_id_param, &height_param];
         self.tx
-            .query(
-                r#"
-                SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
-                FROM ml.latest_delegations_cache
-                WHERE pool_id = $1;
-                "#,
-                &[&pool_id_str.as_str()],
-            )
+            .query(sql, &params)
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
-            .map(|row| {
-                let delegation_id_str: String = row.get(0);
-                let delegation_id =
-                    Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
-                        .map_err(|_| ApiServerStorageError::AddressableError)?
-                        .into_object();
-                let balance: String = row.get(1);
-                let spend_destination: Vec<u8> = row.get(2);
-                let next_nonce: Vec<u8> = row.get(3);
-                let creation_block_height: i64 = row.get(4);
-
-                let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
-                    ApiServerStorageError::DeserializationError(format!(
-                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
-                    ))
-                })?;
-                let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
-                    .map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Amount for PoolId {} deserialization failed: {}",
-                            pool_id_str, e
-                        ))
-                    })?;
-                let next_nonce =
-                    AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Delegation {} deserialization failed: {}",
-                            delegation_id_str, e
-                        ))
-                    })?;
-
-                Ok((
-                    delegation_id,
-                    Delegation::new(
-                        BlockHeight::new(creation_block_height as u64),
-                        spend_destination,
-                        pool_id,
-                        balance,
-                        next_nonce,
-                    ),
-                ))
-            })
+            .map(|row| Self::decode_delegation_share_row(&row, chain_config, &pool_id))
             .collect()
+    }
+
+    fn decode_delegation_share_row(
+        row: &tokio_postgres::Row,
+        chain_config: &ChainConfig,
+        pool_id: &PoolId,
+    ) -> Result<(DelegationId, Delegation), ApiServerStorageError> {
+        let delegation_id_str: String = row.get(0);
+        let delegation_id = Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "invalid delegation id {delegation_id_str}: {e}"
+                ))
+            })?
+            .into_object();
+        let balance: String = row.get(1);
+        let spend_destination: Vec<u8> = row.get(2);
+        let next_nonce: Vec<u8> = row.get(3);
+        let creation_block_height: i64 = row.get(4);
+
+        let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
+            ))
+        })?;
+        let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Amount for PoolId {} deserialization failed: {}",
+                    pool_id, e
+                ))
+            })?;
+        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id_str, e
+            ))
+        })?;
+
+        Ok((
+            delegation_id,
+            Delegation::new(
+                BlockHeight::new(creation_block_height as u64),
+                spend_destination,
+                *pool_id,
+                balance,
+                next_nonce,
+            ),
+        ))
     }
 
     pub async fn get_pool_data(
         &mut self,
         pool_id: PoolId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
+        self.get_pool_data_at_or_below_height(pool_id, None, chain_config).await
+    }
+
+    /// Returns the pool state as of `max_height`: the latest history row with
+    /// `block_height <= max_height` (`None` means unbounded, i.e. the latest row).
+    ///
+    /// Replay code must use this instead of [`Self::get_pool_data`]: connecting a
+    /// block at height `h` must never observe state written by blocks above `h`,
+    /// otherwise rewards get credited on top of future state and the accumulated
+    /// balances silently drift from the chain.
+    pub async fn get_pool_data_at_or_below_height(
+        &mut self,
+        pool_id: PoolId,
+        max_height: Option<BlockHeight>,
         chain_config: &ChainConfig,
     ) -> Result<Option<PoolDataWithExtraInfo>, ApiServerStorageError> {
         let pool_id = Address::new(chain_config, pool_id)
@@ -1668,11 +2387,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 SELECT data
                 FROM ml.pool_data
-                WHERE pool_id = $1
+                WHERE pool_id = $1 AND ($2::bigint IS NULL OR block_height <= $2)
                 ORDER BY block_height DESC
                 LIMIT 1;
             "#,
-                &[&pool_id.as_str()],
+                &[&pool_id.as_str(), &max_height.map(Self::block_height_to_postgres_friendly)],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -1693,6 +2412,36 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
     }
 
+    fn decode_pool_id_and_data_rows(
+        rows: Vec<tokio_postgres::Row>,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        rows.into_iter()
+            .map(
+                |row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
+                    let pool_id: String = row.get(0);
+                    let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "invalid pool id {pool_id}: {e}"
+                            ))
+                        })?
+                        .into_object();
+                    let pool_data: Vec<u8> = row.get(1);
+                    let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice())
+                        .map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "Pool data deserialization failed: {}",
+                                e
+                            ))
+                        })?;
+
+                    Ok((pool_id, pool_data))
+                },
+            )
+            .collect()
+    }
+
     pub async fn get_latest_pool_data(
         &self,
         len: u32,
@@ -1700,31 +2449,93 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
-        self.tx
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
+        let rows = self
+            .tx
             .query(
                 r#"
-                SELECT sub.pool_id, data
-                FROM (
-                    SELECT pool_id, data, staker_balance, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
-                    FROM ml.pool_data
-                ) AS sub INNER JOIN (SELECT pool_id, MIN(block_height) AS created_height FROM ml.pool_data GROUP BY pool_id) as created ON sub.pool_id = created.pool_id
-                WHERE newest = 1 AND staker_balance::NUMERIC != 0
-                ORDER BY created_height DESC
+                SELECT pool_id, data
+                FROM ml.latest_pool_data_cache
+                WHERE staker_balance != 0
+                ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
                 &[&offset, &len],
             )
             .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
-            .into_iter()
-            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
-                let pool_id: String = row.get(0);
-                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Self::decode_pool_id_and_data_rows(rows, chain_config)
+    }
+
+    /// Keyset (cursor) pagination of the pool listing by creation height; the cursor is
+    /// the (creation height, pool id) of the last returned pool, exclusive.
+    pub async fn get_latest_pool_data_before(
+        &self,
+        len: u32,
+        cursor: Option<(BlockHeight, PoolId)>,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<(BlockHeight, PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
+        let len = len as i64;
+        let rows = match cursor {
+            Some((creation_height, pool_id)) => {
+                let creation_height = Self::block_height_to_postgres_friendly(creation_height);
+                let pool_id = Address::new(chain_config, pool_id)
+                    .map_err(|_| ApiServerStorageError::AddressableError)?;
+                self.tx
+                    .query(
+                        r#"
+                        SELECT creation_block_height, pool_id, data
+                        FROM ml.latest_pool_data_cache
+                        WHERE staker_balance != 0
+                            AND (creation_block_height < $1
+                                OR (creation_block_height = $1
+                                    AND pool_id COLLATE "C" < $2))
+                        ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
+                        LIMIT $3;
+                    "#,
+                        &[&creation_height, &pool_id.as_str(), &len],
+                    )
+                    .await
+                    .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            }
+            None => self
+                .tx
+                .query(
+                    r#"
+                        SELECT creation_block_height, pool_id, data
+                        FROM ml.latest_pool_data_cache
+                        WHERE staker_balance != 0
+                        ORDER BY creation_block_height DESC, pool_id COLLATE "C" DESC
+                        LIMIT $1;
+                    "#,
+                    &[&len],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?,
+        };
+
+        rows.into_iter()
+            .map(|row| -> Result<(BlockHeight, PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
+                let creation_block_height: i64 = row.get(0);
+                let creation_block_height = u64::try_from(creation_block_height).map_err(|_| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "invalid negative creation block height: {creation_block_height}"
+                    ))
+                })?;
+                let creation_block_height = BlockHeight::new(creation_block_height);
+                let pool_id: String = row.get(1);
+                let pool_id = Address::<PoolId>::from_string(chain_config, &pool_id)
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "invalid pool id {pool_id}: {e}"
+                        ))
+                    })?
                     .into_object();
-                let pool_data: Vec<u8> = row.get(1);
+                let pool_data: Vec<u8> = row.get(2);
                 let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Pool data deserialization failed: {}",
@@ -1732,7 +2543,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ))
                 })?;
 
-                Ok((pool_id, pool_data))
+                Ok((creation_block_height, pool_id, pool_data))
             })
             .collect()
     }
@@ -1744,41 +2555,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolDataWithExtraInfo)>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
-        self.tx
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
+        let rows = self
+            .tx
             .query(
                 r#"
                 SELECT pool_id, data
-                FROM (
-                    SELECT pool_id, data, staker_balance, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
-                    FROM ml.pool_data
-                ) AS sub
-                WHERE newest = 1 AND staker_balance::NUMERIC != 0
-                ORDER BY staker_balance DESC
+                FROM ml.latest_pool_data_cache
+                WHERE staker_balance != 0
+                ORDER BY staker_balance DESC, pool_id COLLATE "C" DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
                 &[&offset, &len],
             )
             .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
-            .into_iter()
-            .map(|row| -> Result<(PoolId, PoolDataWithExtraInfo), ApiServerStorageError> {
-                let pool_id: String = row.get(0);
-                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .into_object();
-                let pool_data: Vec<u8> = row.get(1);
-                let pool_data = PoolDataWithExtraInfo::decode_all(&mut pool_data.as_slice()).map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "Pool data deserialization failed: {}",
-                        e
-                    ))
-                })?;
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-                Ok((pool_id, pool_data))
-            })
-            .collect()
+        Self::decode_pool_id_and_data_rows(rows, chain_config)
     }
 
     pub async fn set_pool_data_at_height(
@@ -1800,6 +2596,36 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (pool_id, block_height) DO UPDATE
                     SET staker_balance = $3, data = $4;
+                "#,
+                &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        // maintain the latest-state cache used by the pool listings as the envelope of
+        // the versioned table: the creation height is the lowest height the pool was
+        // ever written at, the latest state is the highest one (in the normal
+        // genesis-ascending scan that is simply the first and the last write). The
+        // update is monotone — the same-height write of a reorg replaces the cached
+        // state (the `>=` CASE branches), a late lower-height write only corrects the
+        // creation height — so a pool first seen mid-history (a re-seed that started at
+        // a higher height) gets its creation height corrected when the lower rows
+        // arrive, matching the `MIN(block_height)` re-derivation of the rollback path
+        // and the in-memory backend.
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.latest_pool_data_cache (pool_id, block_height, creation_block_height, staker_balance, data)
+                    VALUES ($1, $2, $2, $3::text::numeric, $4)
+                    ON CONFLICT (pool_id) DO UPDATE
+                    SET block_height = GREATEST(ml.latest_pool_data_cache.block_height, EXCLUDED.block_height),
+                        creation_block_height = LEAST(ml.latest_pool_data_cache.creation_block_height, EXCLUDED.creation_block_height),
+                        staker_balance = CASE
+                            WHEN EXCLUDED.block_height >= ml.latest_pool_data_cache.block_height THEN EXCLUDED.staker_balance
+                            ELSE ml.latest_pool_data_cache.staker_balance END,
+                        data = CASE
+                            WHEN EXCLUDED.block_height >= ml.latest_pool_data_cache.block_height THEN EXCLUDED.data
+                            ELSE ml.latest_pool_data_cache.data END;
                 "#,
                 &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
             )
@@ -1915,7 +2741,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         offset: u64,
     ) -> Result<Vec<TransactionWithBlockInfo>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         let rows = self
             .tx
             .query(
@@ -2104,6 +2932,56 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some(Utxo::new_with_info(output, spent_at_block_height)))
+    }
+
+    /// (experimental) Batched variant of `get_utxo`; one query for all
+    /// outpoints. Rows are matched back to the requested outpoints, so the
+    /// result order mirrors the input order.
+    pub async fn get_utxos(
+        &mut self,
+        outpoints: &[UtxoOutPoint],
+    ) -> Result<Vec<Option<Utxo>>, ApiServerStorageError> {
+        use std::collections::BTreeMap;
+
+        if outpoints.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let encoded: Vec<Vec<u8>> = outpoints.iter().map(|op| op.encode()).collect();
+        // The utxo table can hold multiple versioned rows per
+        // outpoint (one per height); DISTINCT ON with block_height DESC makes
+        // the batched fetch pick the same newest row the single get_utxo
+        // (ORDER BY block_height DESC LIMIT 1) would pick.
+        let rows = self
+            .tx
+            .query(
+                "SELECT DISTINCT ON (outpoint) outpoint, utxo, spent, block_height \
+                 FROM ml.utxo WHERE outpoint = ANY($1) \
+                 ORDER BY outpoint, block_height DESC;",
+                &[&encoded],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut by_outpoint: BTreeMap<Vec<u8>, Utxo> = BTreeMap::new();
+        for row in rows {
+            let outpoint: Vec<u8> = row.get(0);
+            let serialized_data: Vec<u8> = row.get(1);
+            let spent: bool = row.get(2);
+            let block_height: i64 = row.get(3);
+            let spent_at_block_height = spent.then_some(BlockHeight::new(block_height as u64));
+
+            let utxo =
+                UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo deserialization failed in batched fetch: {}",
+                        e
+                    ))
+                })?;
+            by_outpoint.insert(outpoint, Utxo::new_with_info(utxo, spent_at_block_height));
+        }
+
+        Ok(outpoints.iter().map(|op| by_outpoint.get(&op.encode()).cloned()).collect())
     }
 
     pub async fn get_address_available_utxos(
@@ -2522,27 +3400,20 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         offset: u64,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         self.tx
             .query(
                 r#"
-                WITH count_tokens AS (
-                    SELECT count(token_id) FROM ml.fungible_token
-                )
-                (SELECT token_id
-                 FROM ml.fungible_token
-                 ORDER BY token_id
-                 OFFSET $1
-                 LIMIT $2)
-                UNION ALL
-                (SELECT nft_id
-                 FROM ml.nft_issuance
-                 ORDER BY nft_id
-                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                SELECT id FROM (
+                    (SELECT DISTINCT 0 AS grp, token_id AS id FROM ml.fungible_token)
+                    UNION ALL
+                    (SELECT DISTINCT 1, nft_id FROM ml.nft_issuance)
+                ) t
+                ORDER BY grp, id
+                OFFSET $1
+                LIMIT $2;
             "#,
                 &[&offset, &len],
             )
@@ -2565,31 +3436,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         ticker: &str,
     ) -> Result<Vec<TokenId>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         let escaped_ticker = escape_for_like(ticker);
         let ticker_patern = format!("%{escaped_ticker}%");
         self.tx
             .query(
                 r#"
-                WITH count_tokens AS (
-                    SELECT count(token_id) FROM ml.fungible_token WHERE ticker ILIKE $3
-                )
-                (SELECT token_id
-                 FROM ml.fungible_token
-                 WHERE ticker ILIKE $3
-                 ORDER BY token_id
-                 OFFSET $1
-                 LIMIT $2)
-                UNION ALL
-                (SELECT nft_id
-                 FROM ml.nft_issuance
-                 WHERE ticker ILIKE $3
-                 ORDER BY nft_id
-                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
-                 LIMIT CASE
-                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
-                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
-                       ELSE 0 END);
+                SELECT id FROM (
+                    (SELECT DISTINCT 0 AS grp, token_id AS id
+                     FROM ml.fungible_token
+                     WHERE ticker ILIKE $3)
+                    UNION ALL
+                    (SELECT DISTINCT 1, nft_id
+                     FROM ml.nft_issuance
+                     WHERE ticker ILIKE $3)
+                ) t
+                ORDER BY grp, id
+                OFFSET $1
+                LIMIT $2;
             "#,
                 &[&offset, &len, &ticker_patern],
             )
@@ -2642,19 +3508,36 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        // Note: the newest value of each statistic is read with one indexed lookup per
+        // statistic instead of a `ROW_NUMBER()` window over the whole table: the primary
+        // key is (statistic, coin_or_token_id, block_height), so a lookup that filters by
+        // the coin or token id alone cannot use the key prefix and degrades into a scan of
+        // every historical row of the asset (the circulating supply and the staked amount
+        // are touched at every PoS block, so there can be millions of such rows).
         let rows = self
             .tx
             .query(
+                // DISTINCT ON picks the highest row per requested statistic; a
+                // statistic with no rows at all is silently omitted from the result
+                // (the endpoints treat a missing statistic as absent rather than
+                // zero) — keep the endpoint defaults in sync with this behavior
                 r#"
-                SELECT sub.statistic, sub.amount
+                SELECT statistic, amount
                 FROM (
-                    SELECT statistic, amount, ROW_NUMBER() OVER(PARTITION BY statistic ORDER BY block_height DESC) as newest
+                    SELECT DISTINCT ON (statistic)
+                        statistic, amount
                     FROM ml.statistics
-                    WHERE coin_or_token_id = $1
-                ) AS sub
-                WHERE newest = 1;
+                    WHERE statistic = ANY($1) AND coin_or_token_id = $2
+                    ORDER BY statistic, block_height DESC
+                ) AS sub;
                 "#,
-                &[&coin_or_token_id.encode()],
+                &[
+                    &CoinOrTokenStatistic::VARIANTS
+                        .iter()
+                        .map(|variant| variant.to_string())
+                        .collect::<Vec<_>>(),
+                    &coin_or_token_id.encode(),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2974,6 +3857,42 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        // maintain the latest-orders cache as a mirror of the latest versioned state;
+        // concluded orders (both balances zeroed) are stored as well, they are filtered
+        // out by the order book reads
+        let ask_balance = order.ask_balance.into_atoms().to_string();
+        let give_balance = order.give_balance.into_atoms().to_string();
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.latest_orders_cache
+                        (order_id, block_height, creation_block_height, ask_currency, ask_balance, give_currency, give_balance, frozen)
+                    VALUES ($1, $2, $3, $4, $5::text::numeric, $6, $7::text::numeric, $8)
+                    ON CONFLICT (order_id) DO UPDATE
+                    SET block_height = EXCLUDED.block_height,
+                        creation_block_height = EXCLUDED.creation_block_height,
+                        ask_currency = EXCLUDED.ask_currency,
+                        ask_balance = EXCLUDED.ask_balance,
+                        give_currency = EXCLUDED.give_currency,
+                        give_balance = EXCLUDED.give_balance,
+                        frozen = EXCLUDED.frozen
+                    WHERE ml.latest_orders_cache.block_height <= EXCLUDED.block_height;
+                "#,
+                &[
+                    &order_id.as_str(),
+                    &height,
+                    &creation_block_height,
+                    &order.ask_currency.encode(),
+                    &ask_balance,
+                    &order.give_currency.encode(),
+                    &give_balance,
+                    &order.is_frozen,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -2988,7 +3907,107 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        // roll back the latest-orders cache rows of the disconnected blocks; the cache is
+        // a mirror of the latest versioned state (concluded orders included, filtered by
+        // the order book reads), so the surviving versioned history of every order with a
+        // deleted cache row fully determines its restored state.
+        //
+        // No ON CONFLICT clause is needed: `order_id` is the primary key of the cache
+        // table and the deleting CTE returns each affected order exactly once, so the
+        // lateral join inserts at most one row per order. The lateral join can also
+        // produce NO row for a deleted cache row only if that order has no surviving
+        // versioned history at all — impossible in practice, because every cache row is
+        // written from a versioned row (the upsert's `WHERE block_height <=
+        // EXCLUDED.block_height` guard keeps one cache row per order), and rollback
+        // heights only ever move to heights where the versioned rows already exist.
+        self.tx
+            .execute(
+                r#"
+                    WITH deleted_cache_rows AS (
+                        DELETE FROM ml.latest_orders_cache WHERE block_height > $1 RETURNING order_id
+                    )
+                    INSERT INTO ml.latest_orders_cache
+                        (order_id, block_height, creation_block_height, ask_currency, ask_balance, give_currency, give_balance, frozen)
+                    SELECT
+                        o.order_id, o.block_height, o.creation_block_height, o.ask_currency,
+                        o.ask_balance::numeric, o.give_currency, o.give_balance::numeric, o.frozen
+                    FROM deleted_cache_rows d
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            o.order_id, o.block_height, o.creation_block_height,
+                            o.ask_currency, o.ask_balance, o.give_currency,
+                            o.give_balance, o.frozen
+                        FROM ml.orders o
+                        WHERE o.order_id = d.order_id
+                        ORDER BY o.block_height DESC
+                        LIMIT 1
+                    ) o;
+                "#,
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
+    }
+
+    /// Remaining balances of the live (not concluded, not frozen) orders of a trading
+    /// pair, as (ask_balance, give_balance) pairs, ordered by ask balance (descending,
+    /// ties broken by the order id in descending byte order); capped at
+    /// [`ORDER_BOOK_MAX_ORDERS`] entries, `has_more` reports truncation.
+    pub async fn get_order_book_entries(
+        &self,
+        ask_currency: CoinOrTokenId,
+        give_currency: CoinOrTokenId,
+    ) -> Result<(Vec<(Amount, Amount)>, bool), ApiServerStorageError> {
+        let ask_currency = ask_currency.encode();
+        let give_currency = give_currency.encode();
+        // one extra row detects truncation
+        let cap = ORDER_BOOK_MAX_ORDERS as i64 + 1;
+
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT ask_balance::text, give_balance::text, order_id
+                    FROM ml.latest_orders_cache
+                    WHERE ask_currency = $1 AND give_currency = $2
+                        AND frozen = FALSE
+                        AND ask_balance != 0 AND give_balance != 0
+                    ORDER BY ask_balance DESC, order_id DESC
+                    LIMIT $3;
+                "#,
+                &[&ask_currency, &give_currency, &cap],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let has_more = rows.len() > ORDER_BOOK_MAX_ORDERS;
+
+        rows.into_iter()
+            .take(ORDER_BOOK_MAX_ORDERS)
+            .map(|row| -> Result<(Amount, Amount), ApiServerStorageError> {
+                let ask_str: String = row.get(0);
+                let give_str: String = row.get(1);
+                let order_id: String = row.get(2);
+
+                // fail fast on a corrupt row rather than silently returning wrong
+                // balances; the message carries the offending value for diagnosis
+                let ask = ask_str.parse::<u128>().map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "invalid ask balance {ask_str} for order {order_id}: {e}"
+                    ))
+                })?;
+                let give = give_str.parse::<u128>().map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "invalid give balance {give_str} for order {order_id}: {e}"
+                    ))
+                })?;
+
+                Ok((Amount::from_atoms(ask), Amount::from_atoms(give)))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|entries| (entries, has_more))
     }
 
     pub async fn get_orders_by_height(
@@ -2998,7 +4017,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         self.tx
             .query(
                 r#"
@@ -3031,7 +4052,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         let len = len as i64;
-        let offset = offset as i64;
+        let Some(offset) = Self::offset_to_bigint(offset) else {
+            return Ok(Vec::new());
+        };
         self.tx
             .query(
                 r#"
@@ -3055,6 +4078,181 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })
             .collect()
     }
+
+    pub async fn append_stream_event(
+        &mut self,
+        event: &StreamEvent,
+    ) -> Result<StreamEventId, ApiServerStorageError> {
+        let kind = event.event_name();
+        let payload = serde_json::to_string(event).map_err(|e| {
+            ApiServerStorageError::LowLevelStorageError(format!(
+                "Stream event serialization failed: {e}"
+            ))
+        })?;
+
+        let row = self
+            .tx
+            .query_one(
+                // Note: the payload is bound as text and cast to jsonb, because the string types
+                // of the postgres driver do not serialize into the jsonb type directly.
+                "INSERT INTO ml.emitted_events (kind, payload) VALUES ($1, ($2::text)::jsonb)
+                    RETURNING id;",
+                &[&kind, &payload],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.get(0))
+    }
+
+    pub async fn read_stream_events_after(
+        &self,
+        last_seen_id: StreamEventId,
+    ) -> Result<Vec<(StreamEventId, StreamEvent)>, StreamEventReadError> {
+        let rows = self
+            .tx
+            .query(
+                // Note: the reads are batched to keep the memory use of the event pump bounded
+                // regardless of the backlog size.
+                "SELECT id, payload::text FROM ml.emitted_events WHERE id > $1
+                    ORDER BY id ASC LIMIT $2;",
+                &[&last_seen_id, &STREAM_EVENTS_READ_BATCH_SIZE],
+            )
+            .await
+            .map_err(|e| StreamEventReadError::Other(e.to_string()))?;
+
+        // Note: a row that cannot be decoded is surfaced to the pump as a dedicated error (so
+        // that the pump can skip the event loudly instead of being permanently stalled by it):
+        // the event has been durably committed alongside the data it refers to, so silently
+        // dropping it would hide e.g. a reorg from the clients.
+        let mut events = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id: i64 = row.get(0);
+            let payload: String = row.get(1);
+            match serde_json::from_str(&payload) {
+                Ok(event) => events.push((id, event)),
+                Err(err) => {
+                    logging::log::error!(
+                        "Undecodable stream event #{id}: {err} (payload: {payload})"
+                    );
+                    return Err(StreamEventReadError::UndecodableEvent {
+                        id,
+                        error: err.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(events)
+    }
+
+    /// Delete the stream events that fell out of the retention window, returning the number of
+    /// deleted rows.
+    ///
+    /// Note: the pruning is based on the consumption progress recorded by the event pump (see
+    /// `update_stream_events_pump_cursor`), so that events that have not been pumped (and thus
+    /// broadcast) yet are never deleted. To bound the growth of the event log before any
+    /// progress has been recorded (no web server) or during a pump outage, everything below a
+    /// hard limit of `STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR * STREAM_EVENTS_RETENTION_COUNT`
+    /// events is deleted regardless of the progress, with an error being logged in that case.
+    pub async fn prune_stream_events(&mut self) -> Result<u64, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_one("SELECT COALESCE(max(id), 0) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let max_id: i64 = row.get(0);
+
+        let pump_cursor = self.stream_events_pump_cursor().await?;
+
+        // Note: without a recorded cursor, only the hard limit bounds the log: pruning below the
+        // plain retention window before the pump has recorded any progress could delete events
+        // that have not been consumed yet (e.g. in a scanner-only deployment, or in the window
+        // between the scanner's first commits and the pump's first cursor write).
+        let retention_cutoff = max_id - STREAM_EVENTS_RETENTION_COUNT;
+        let hard_cutoff =
+            max_id - STREAM_EVENTS_RETENTION_COUNT * STREAM_EVENTS_RETENTION_HARD_LIMIT_FACTOR;
+        let cutoff = match pump_cursor {
+            Some(pump_cursor) => std::cmp::max(retention_cutoff.min(pump_cursor), hard_cutoff),
+            None => hard_cutoff,
+        };
+
+        if cutoff < 0 {
+            return Ok(0);
+        }
+
+        if let Some(pump_cursor) = pump_cursor
+            && cutoff > pump_cursor
+        {
+            logging::log::error!(
+                "The stream event pump is lagging behind: pruning stream events up to \
+                #{cutoff} while the pump has only consumed up to #{pump_cursor}; connected \
+                clients will miss the pruned events"
+            );
+        }
+
+        let deleted = self
+            .tx
+            .execute("DELETE FROM ml.emitted_events WHERE id <= $1;", &[&cutoff])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(deleted)
+    }
+
+    /// The stream event consumption progress recorded by the event pump, if any.
+    async fn stream_events_pump_cursor(&mut self) -> Result<Option<i64>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT value FROM ml.misc_data WHERE name = $1;",
+                &[&STREAM_EVENTS_PUMP_CURSOR_KEY],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        match row.map(|row| row.get::<_, Vec<u8>>(0)) {
+            Some(bytes) => {
+                let bytes: [u8; 8] = bytes.try_into().map_err(|_| {
+                    ApiServerStorageError::DeserializationError(
+                        "Invalid stream event pump cursor stored in the database".to_owned(),
+                    )
+                })?;
+                Ok(Some(i64::from_be_bytes(bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// The id of the most recently committed stream event, if any.
+    pub async fn latest_stream_event_id(
+        &mut self,
+    ) -> Result<Option<StreamEventId>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt("SELECT max(id) FROM ml.emitted_events;", &[])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(row.and_then(|row| row.get(0)))
+    }
+
+    pub async fn notify_new_stream_events(
+        &mut self,
+        last_event_id: StreamEventId,
+    ) -> Result<(), ApiServerStorageError> {
+        // Note: the notification is sent within the transaction that appends the events, so
+        // Postgres delivers it only if/when that transaction commits.
+        self.tx
+            .execute(
+                "SELECT pg_notify($1, $2::text);",
+                &[&STREAM_EVENTS_NOTIFY_CHANNEL, &last_event_id.to_string()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 fn decode_order_from_row(
@@ -3073,8 +4271,12 @@ fn decode_order_from_row(
     let creation_block_height: i64 = data.get("creation_block_height");
     let is_frozen: bool = data.get("frozen");
 
-    let order_id = Address::<OrderId>::from_string(chain_config, order_id)
-        .map_err(|_| ApiServerStorageError::AddressableError)?
+    let order_id = Address::<OrderId>::from_string(chain_config, &order_id)
+        .map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "invalid addressable id {order_id}: {e}"
+            ))
+        })?
         .into_object();
 
     let initially_asked = Amount::from_fixedpoint_str(&initially_asked, 0).ok_or_else(|| {

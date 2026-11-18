@@ -33,7 +33,7 @@ async fn invalid_pool_id() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Invalid pool Id");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -51,7 +51,7 @@ async fn from_to_not_specified() {
         "Failed to deserialize query string: missing field `from`"
     );
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[tokio::test]
@@ -69,7 +69,7 @@ async fn pool_id_not_fund() {
 
     assert_eq!(body["error"].as_str().unwrap(), "Stake pool not found");
 
-    task.abort();
+    shutdown_task(task).await;
 }
 
 #[rstest]
@@ -169,6 +169,7 @@ async fn ok(#[case] seed: Seed) {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
                 time_getter: Default::default(),
+                stream_events: Default::default(),
             }
         };
 
@@ -196,5 +197,5 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body.get("block_count").unwrap(), num_blocks);
 
-    task.abort();
+    shutdown_task(task).await;
 }

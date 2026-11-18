@@ -135,6 +135,7 @@ impl BlockprodTestSetupBuilder {
             enable_db_reckless_mode_in_ibd: Default::default(),
             max_orphan_blocks: Default::default(),
             allow_checkpoints_mismatch: Default::default(),
+            pos_seal_duplication_tracking: Default::default(),
         };
 
         let mempool_config = self.mempool_config.unwrap_or_default();

@@ -33,6 +33,24 @@ pub struct MempoolConfigFile {
 
     /// Maximum total size of transactions that is allowed in a single cluster.
     pub max_cluster_size_bytes: Option<usize>,
+
+    /// Whether to park local-origin transactions with unknown inputs in the orphan pool.
+    pub allow_local_orphans: Option<bool>,
+
+    /// Capacity for local-origin orphans within the orphan pool.
+    pub local_orphan_pool_capacity: Option<usize>,
+
+    /// Capacity for orphans from a single remote peer within the orphan pool.
+    ///
+    /// The pool's aggregate capacity is fixed (`DEFAULT_ORPHAN_POOL_CAPACITY`) and not
+    /// configurable; if the per-peer caps are large, the aggregate binds first and further
+    /// admissions fail with "orphan pool full" instead of displacing parked entries.
+    pub remote_orphan_pool_capacity_per_peer: Option<usize>,
+
+    /// Capacity for orphans from a single outbound (node-selected) remote peer.
+    ///
+    /// Subject to the same fixed aggregate capacity as the inbound per-peer cap above.
+    pub outbound_remote_orphan_pool_capacity_per_peer: Option<usize>,
 }
 
 impl MempoolConfigFile {
@@ -45,6 +63,10 @@ impl MempoolConfigFile {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = config;
 
         let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
@@ -52,11 +74,19 @@ impl MempoolConfigFile {
             max_cluster_tx_count.or(options.mempool_max_cluster_transaction_count);
         let max_cluster_size_bytes =
             max_cluster_size_bytes.or(options.mempool_max_cluster_size_bytes);
+        // Note: `allow_local_orphans`, `local_orphan_pool_capacity`,
+        // `remote_orphan_pool_capacity_per_peer` and
+        // `outbound_remote_orphan_pool_capacity_per_peer` are intentionally not exposed as CLI
+        // options; they can only be set through the mempool config file.
 
         MempoolConfigFile {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         }
     }
 }
@@ -67,6 +97,10 @@ impl From<MempoolConfigFile> for MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = config_file;
 
         Self {
@@ -75,6 +109,11 @@ impl From<MempoolConfigFile> for MempoolConfig {
                 .into(),
             max_cluster_tx_count: max_cluster_tx_count.into(),
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
+            allow_local_orphans: allow_local_orphans.into(),
+            local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
+            remote_orphan_pool_capacity_per_peer: remote_orphan_pool_capacity_per_peer.into(),
+            outbound_remote_orphan_pool_capacity_per_peer:
+                outbound_remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 }

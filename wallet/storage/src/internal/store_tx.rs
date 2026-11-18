@@ -225,6 +225,17 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
+            fn get_user_transactions_for_account(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Vec<SignedTransaction>> {
+                self.storage
+                    .get::<db::DBUserTx, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|items| items.map(|(_, tx)| tx).collect())
+            }
+
             /// Collect and return all signed transactions from the storage
             fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
                 self.storage
@@ -435,6 +446,14 @@ where
     /// Collect and return all signed transactions from the storage
     fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
         (**self).get_user_transactions()
+    }
+
+    /// Collect and return all signed transactions of the given account from the storage
+    fn get_user_transactions_for_account(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<SignedTransaction>> {
+        (**self).get_user_transactions_for_account(account_id)
     }
 
     fn get_account_unconfirmed_tx_counter(

@@ -119,6 +119,19 @@ pub const ROLLING_FEE_DECAY_INTERVAL: Duration = Duration::new(10, 0);
 
 pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 
+/// A separate, smaller cap for local-origin orphans, so that they cannot starve remote peers'
+/// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
+pub const DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY: usize = 25;
+
+/// A per-peer cap for remote-origin orphans, so that no single peer can fill the shared orphan
+/// pool and starve other peers' transactions out of it.
+pub const DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER: usize = 10;
+
+/// A larger per-peer cap for orphans submitted by outbound (node-selected) peers. Outbound
+/// peers carry the node's main transaction feed, so they get a bigger share of the shared
+/// orphan pool than inbound peers.
+pub const DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER: usize = 40;
+
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
@@ -144,6 +157,34 @@ make_config_setting!(
 make_config_setting!(MaxClusterTxCount, usize, 64);
 make_config_setting!(MaxClusterSizeBytes, usize, 100_000);
 
+// Separate cap for local-origin orphans, so that they cannot starve remote peers'
+// orphans out of the main orphan pool when `AllowLocalOrphans` is enabled.
+make_config_setting!(
+    LocalOrphanPoolCapacity,
+    usize,
+    DEFAULT_LOCAL_ORPHAN_POOL_CAPACITY
+);
+
+// Per-peer cap for remote-origin orphans, so that no single peer can fill the shared orphan
+// pool and starve other peers' transactions out of it.
+make_config_setting!(
+    RemoteOrphanPoolCapacityPerPeer,
+    usize,
+    DEFAULT_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+);
+
+// Larger per-peer cap for orphans submitted by outbound (node-selected) peers.
+make_config_setting!(
+    OutboundRemoteOrphanPoolCapacityPerPeer,
+    usize,
+    DEFAULT_OUTBOUND_REMOTE_ORPHAN_POOL_CAPACITY_PER_PEER
+);
+
+// When disabled (the default), transactions submitted locally whose inputs are not yet known are
+// rejected outright. When enabled, they are parked in the orphan pool instead and re-processed
+// once their parents arrive (or are mined), same as remote transactions.
+make_config_setting!(AllowLocalOrphans, bool, false);
+
 #[derive(Debug, Clone, Default)]
 pub struct MempoolConfig {
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
@@ -154,6 +195,18 @@ pub struct MempoolConfig {
 
     /// Maximum total size of transactions that is allowed in a single cluster.
     pub max_cluster_size_bytes: MaxClusterSizeBytes,
+
+    /// Whether to park local-origin transactions with unknown inputs in the orphan pool.
+    pub allow_local_orphans: AllowLocalOrphans,
+
+    /// Capacity for local-origin orphans within the orphan pool.
+    pub local_orphan_pool_capacity: LocalOrphanPoolCapacity,
+
+    /// Per-peer capacity for remote-origin orphans within the orphan pool.
+    pub remote_orphan_pool_capacity_per_peer: RemoteOrphanPoolCapacityPerPeer,
+
+    /// Per-peer capacity for orphans submitted by outbound (node-selected) peers.
+    pub outbound_remote_orphan_pool_capacity_per_peer: OutboundRemoteOrphanPoolCapacityPerPeer,
 }
 
 impl MempoolConfig {
@@ -166,12 +219,21 @@ impl MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = self;
 
         RpcMempoolConfig {
             min_tx_relay_fee_rate: **min_tx_relay_fee_rate,
             max_cluster_tx_count: **max_cluster_tx_count,
             max_cluster_size_bytes: **max_cluster_size_bytes,
+            allow_local_orphans: **allow_local_orphans,
+            local_orphan_pool_capacity: **local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer: **remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer:
+                **outbound_remote_orphan_pool_capacity_per_peer,
         }
     }
 
@@ -188,6 +250,38 @@ impl MempoolConfig {
             *self.max_cluster_size_bytes > 0,
             ConfigError::MaxClusterSizeBytesCannotBeZero
         );
+        // Note: a value of 0 combined with `allow_local_orphans = true` would
+        // silently disable local orphan parking, so we forbid it like the
+        // other zero-valued limits. Also note there is no upper bound relative
+        // to the overall orphan pool capacity
+        // (`config::DEFAULT_ORPHAN_POOL_CAPACITY`): a value above it makes the
+        // separate local cap non-binding, since the total pool limit evicts
+        // without regard to origin.
+        ensure!(
+            *self.local_orphan_pool_capacity > 0,
+            ConfigError::LocalOrphanPoolCapacityCannotBeZero
+        );
+        // Note: as with the local cap, there is no upper bound relative to the overall orphan
+        // pool capacity (`config::DEFAULT_ORPHAN_POOL_CAPACITY`). If the sum of the per-peer
+        // caps exceeds the overall capacity, the overall capacity is what binds; once it is
+        // exhausted by peers that are each within their own cap, further admissions are
+        // rejected as `Full` until space frees up (expiry, promotion, or peer teardown)
+        // instead of displacing other peers' parked orphans.
+        ensure!(
+            *self.remote_orphan_pool_capacity_per_peer > 0,
+            ConfigError::RemoteOrphanPoolCapacityPerPeerCannotBeZero
+        );
+        ensure!(
+            *self.outbound_remote_orphan_pool_capacity_per_peer > 0,
+            ConfigError::OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero
+        );
+        // The outbound tier is documented as the larger per-peer share; an inverted
+        // configuration would silently contradict that policy.
+        ensure!(
+            *self.outbound_remote_orphan_pool_capacity_per_peer
+                >= *self.remote_orphan_pool_capacity_per_peer,
+            ConfigError::OutboundOrphanCapacityBelowInboundCapacity
+        );
         Ok(())
     }
 }
@@ -198,12 +292,21 @@ impl From<RpcMempoolConfig> for MempoolConfig {
             min_tx_relay_fee_rate,
             max_cluster_tx_count,
             max_cluster_size_bytes,
+            allow_local_orphans,
+            local_orphan_pool_capacity,
+            remote_orphan_pool_capacity_per_peer,
+            outbound_remote_orphan_pool_capacity_per_peer,
         } = value;
 
         Self {
             min_tx_relay_fee_rate: min_tx_relay_fee_rate.into(),
             max_cluster_tx_count: max_cluster_tx_count.into(),
             max_cluster_size_bytes: max_cluster_size_bytes.into(),
+            allow_local_orphans: allow_local_orphans.into(),
+            local_orphan_pool_capacity: local_orphan_pool_capacity.into(),
+            remote_orphan_pool_capacity_per_peer: remote_orphan_pool_capacity_per_peer.into(),
+            outbound_remote_orphan_pool_capacity_per_peer:
+                outbound_remote_orphan_pool_capacity_per_peer.into(),
         }
     }
 }
@@ -214,12 +317,34 @@ pub struct RpcMempoolConfig {
     pub min_tx_relay_fee_rate: FeeRate,
     pub max_cluster_tx_count: usize,
     pub max_cluster_size_bytes: usize,
+    pub allow_local_orphans: bool,
+    pub local_orphan_pool_capacity: usize,
+    pub remote_orphan_pool_capacity_per_peer: usize,
+    pub outbound_remote_orphan_pool_capacity_per_peer: usize,
 }
 
+/// Mempool configuration errors.
+// The variant names intentionally share the `CannotBeZero` suffix: they all
+// describe zero-values that make no sense for the corresponding limit.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("Maximum cluster transaction count cannot be zero")]
     MaxClusterTxCountCannotBeZero,
+
+    #[error("Local orphan pool capacity cannot be zero")]
+    LocalOrphanPoolCapacityCannotBeZero,
+
+    #[error("Remote orphan pool capacity per peer cannot be zero")]
+    RemoteOrphanPoolCapacityPerPeerCannotBeZero,
+
+    #[error("Outbound remote orphan pool capacity per peer cannot be zero")]
+    OutboundRemoteOrphanPoolCapacityPerPeerCannotBeZero,
+
+    #[error(
+        "Outbound remote orphan pool capacity per peer cannot be below the inbound per-peer capacity"
+    )]
+    OutboundOrphanCapacityBelowInboundCapacity,
 
     #[error("Maximum cluster size in bytes cannot be zero")]
     MaxClusterSizeBytesCannotBeZero,

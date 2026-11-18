@@ -17,10 +17,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
+use chainstate_types::{
+    BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite,
+    seal::{BlockSeal, DuplicateSealEvidence, SealIndexEntry},
+};
 use common::{
     chain::{
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderId, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, BlockTxFees, DelegationId, GenBlock, OrderId, PoolId,
+        UtxoOutPoint,
         block::{BlockReward, signed_block_header::SignedBlockHeader},
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
@@ -70,6 +74,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
@@ -107,6 +112,12 @@ mockall::mock! {
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
+
+        fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
+        fn get_duplicate_seal_evidence(
+            &self,
+            seal: &BlockSeal,
+        ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
     impl EpochStorageRead for Store {
@@ -198,7 +209,9 @@ mockall::mock! {
         fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn del_block_tx_fees(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
@@ -238,6 +251,15 @@ mockall::mock! {
 
         fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()>;
+
+        fn set_seal_index_entry(&mut self, seal: &BlockSeal, entry: &SealIndexEntry) -> crate::Result<()>;
+        fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> crate::Result<()>;
+        fn set_duplicate_seal_evidence(
+            &mut self,
+            seal: &BlockSeal,
+            evidence: &DuplicateSealEvidence,
+        ) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for Store {
@@ -380,6 +402,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -409,6 +432,12 @@ mockall::mock! {
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
+
+        fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
+        fn get_duplicate_seal_evidence(
+            &self,
+            seal: &BlockSeal,
+        ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
     impl EpochStorageRead for StoreTxRo {
@@ -508,6 +537,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_undo_data(&self, id: &Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+        fn get_block_tx_fees(&self, id: &Id<Block>) -> crate::Result<Option<BlockTxFees>>;
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -536,6 +566,12 @@ mockall::mock! {
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
+
+        fn get_seal_index_entry(&self, seal: &BlockSeal) -> crate::Result<Option<SealIndexEntry>>;
+        fn get_duplicate_seal_evidence(
+            &self,
+            seal: &BlockSeal,
+        ) -> crate::Result<Option<DuplicateSealEvidence>>;
     }
 
     impl EpochStorageRead for StoreTxRw {
@@ -625,7 +661,9 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: &Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn set_block_tx_fees(&mut self, id: &Id<Block>, fees: &BlockTxFees) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn del_block_tx_fees(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: BlockHeight) -> crate::Result<()>;
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
@@ -667,6 +705,15 @@ mockall::mock! {
 
         fn set_account_nonce_count(&mut self, account: &AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: &AccountType) -> crate::Result<()>;
+
+        fn set_seal_index_entry(&mut self, seal: &BlockSeal, entry: &SealIndexEntry) -> crate::Result<()>;
+        fn del_seal_index_entry(&mut self, seal: &BlockSeal) -> crate::Result<()>;
+        fn set_duplicate_seal_evidence(
+            &mut self,
+            seal: &BlockSeal,
+            evidence: &DuplicateSealEvidence,
+        ) -> crate::Result<()>;
+        fn del_duplicate_seal_evidence(&mut self, seal: &BlockSeal) -> crate::Result<()>;
     }
 
     impl EpochStorageWrite for StoreTxRw {

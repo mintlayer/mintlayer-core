@@ -115,10 +115,18 @@ impl Decode for SchnorrkelPublicKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[must_use]
 pub struct SchnorrkelPrivateKey {
     key: schnorrkel::SecretKey,
+}
+
+impl std::fmt::Debug for SchnorrkelPrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Keep the key material out of the formatted output; this type can end up in
+        // log lines through derived Debug impls of larger structures.
+        f.write_str("SchnorrkelPrivateKey(<redacted>)")
+    }
 }
 
 impl SchnorrkelPrivateKey {
@@ -220,6 +228,14 @@ mod tests {
     use schnorrkel::{Keypair, signing_context};
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{Seed, make_seedable_rng};
+
+    #[test]
+    fn private_key_debug_hides_key_material() {
+        let mut rng = make_true_rng();
+        let (sk, _pk) = SchnorrkelPrivateKey::new(&mut rng);
+
+        assert_eq!(format!("{sk:?}"), "SchnorrkelPrivateKey(<redacted>)");
+    }
 
     #[test]
     fn key_serialization() {

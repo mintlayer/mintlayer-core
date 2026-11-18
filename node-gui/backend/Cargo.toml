@@ -26,7 +26,6 @@ wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib", default-features = fals
 wallet-types = { path = "../../wallet/types", default-features = false }
 
 anyhow.workspace = true
-chrono.workspace = true
 futures.workspace = true
 itertools.workspace = true
 semver.workspace = true
