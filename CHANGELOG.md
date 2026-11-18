@@ -12,6 +12,22 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Build:
+    - the workspace no longer depends on `chrono` (unmaintained per RUSTSEC-2026-0543):
+      first-party code now uses `jiff`, and the remaining transitive uses are served by
+      temporary overlay forks (file-rotate, reedline, serde_with) that make `chrono`
+      optional or drop it; the overlays are tracked for removal once upstream releases
+      allow it.
+
+  - Wallet CLI:
+    - `until_time(...)` output timelocks are now parsed as zero-padded, RFC 3339-style
+      timestamps (e.g. `2027-01-31T12:00:00Z`). Several lenient variants that were
+      accepted before (non-zero-padded fields such as `2027-1-31T12:0:0Z`) are now
+      rejected, while some extensions (space separator, omitted seconds, short
+      offsets, zone annotations) remain accepted. The `Bad time` error message now
+      renders timestamps in RFC 3339 form (e.g. `2024-01-12T12:54:52Z`) instead of the
+      previous `2024-01-12 12:54:52 UTC`.
+
   - Wallet:
     - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
       as the target is met, and among equally economical solutions the one spending
@@ -33,13 +49,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       likewise now require an explicit `true`/`false` value. This makes the absence of an
       option distinguishable from an explicit opt-out, so a value from the configuration
       file is no longer silently overridden by the command line or the environment.
-      corresponding `ML_NODE_*` environment variables likewise now require an explicit
-      `true`/`false` value. This makes the absence of an option distinguishable from an
-      explicit opt-out, so a value from the configuration file is no longer silently
-      overridden by the command line or the environment.
-      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this
-      makes the absence of an option distinguishable from an explicit opt-out, so a value
-      from the configuration file is no longer silently overridden by the command line.
+
+
 ## [1.4.5] - 2026-11-10
 
 ### Added
