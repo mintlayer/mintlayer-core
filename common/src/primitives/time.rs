@@ -177,15 +177,19 @@ impl Display for Time {
 
         if let Some(time) = utc_time {
             // Same format that `chrono`'s Display used to produce, e.g.
-            // "2024-01-12 12:54:52 UTC" / "2024-01-12 12:54:52.123 UTC".
+            // "2024-01-12 12:54:52 UTC" / "2024-01-12 12:54:52.123 UTC"; the subsecond
+            // part uses chrono's grouping (3, 6 or 9 digits, no trailing-zero trimming).
             let subsec_nanos = time.subsec_nanosecond();
             let base =
                 time.to_zoned_datetime(jiff::tz::TimeZone::UTC).strftime("%Y-%m-%d %H:%M:%S");
             if subsec_nanos == 0 {
                 write!(f, "{base} UTC")
+            } else if subsec_nanos % 1_000_000 == 0 {
+                write!(f, "{base}.{:03} UTC", subsec_nanos / 1_000_000)
+            } else if subsec_nanos % 1_000 == 0 {
+                write!(f, "{base}.{:06} UTC", subsec_nanos / 1_000)
             } else {
-                let subsec = format!("{subsec_nanos:09}");
-                write!(f, "{base}.{} UTC", subsec.trim_end_matches('0'))
+                write!(f, "{base}.{:09} UTC", subsec_nanos)
             }
         } else {
             // Note: we could use humantime::format_duration here, but the output won't be
@@ -265,6 +269,14 @@ mod tests {
         assert_eq!(s, "2024-01-12T12:54:52.123Z");
         let s = format!("{t}");
         assert_eq!(s, "2024-01-12 12:54:52.123 UTC");
+
+        // Subsecond digits use chrono's 3/6/9 grouping (no trailing-zero trimming).
+        let t = Time::from_duration_since_epoch(Duration::from_millis(1705064092100));
+        assert_eq!(format!("{t}"), "2024-01-12 12:54:52.100 UTC");
+        let t = Time::from_duration_since_epoch(Duration::from_micros(1705064092001100));
+        assert_eq!(format!("{t}"), "2024-01-12 12:54:52.001100 UTC");
+        let t = Time::from_duration_since_epoch(Duration::from_nanos(1705064092_000000001));
+        assert_eq!(format!("{t}"), "2024-01-12 12:54:52.000000001 UTC");
 
         let t = Time::from_duration_since_epoch(Duration::MAX);
         let s = format!("{t:?}");

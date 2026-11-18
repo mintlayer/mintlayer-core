@@ -1327,6 +1327,38 @@ mod tests {
                         Time::from_absolute_time(&expected_time_with_tz).unwrap()
                     ))
                 );
+
+                // Non-zero-padded variants that the previous parser accepted are
+                // now rejected (fixed single-digit fields, independent of the
+                // random values above).
+                let unpadded_str = "2419-3-29T6:7:5Z";
+                let res = CliOutputTimeLock::from_str(&format!("until_time({unpadded_str})"));
+                assert!(matches!(
+                    res,
+                    Err(ParseError::InvalidTime(_)) | Err(ParseError::BadTime(_))
+                ));
+
+                // Some lenient extensions remain accepted (Temporal-style parsing):
+                // space separator and omitted seconds.
+                let space_str =
+                    format!("{year:04}-{month:02}-{day:02} {hour:02}:{min:02}:{sec:02}Z");
+                let parsed: OutputTimeLock =
+                    CliOutputTimeLock::from_str(&format!("until_time({space_str})"))
+                        .unwrap()
+                        .into();
+                assert_eq!(
+                    parsed,
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_time(
+                        Time::from_absolute_time(&expected_time_utc).unwrap()
+                    ))
+                );
+
+                // Bare epoch seconds are not a valid timestamp here.
+                let res = CliOutputTimeLock::from_str(&format!("until_time({})", 1705064092_u64));
+                assert!(matches!(
+                    res,
+                    Err(ParseError::InvalidTime(_)) | Err(ParseError::BadTime(_))
+                ));
             }
 
             let sec_frac = rng.random_range(1..1000);

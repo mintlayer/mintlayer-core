@@ -20,9 +20,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       allow it.
 
   - Wallet CLI:
-    - `until_time(...)` output timelocks now require a properly formatted RFC 3339
-      timestamp (e.g. `2027-01-31T12:00:00Z`); some non-zero-padded variants that were
-      accepted before are now rejected.
+    - `until_time(...)` output timelocks are now parsed as zero-padded, RFC 3339-style
+      timestamps (e.g. `2027-01-31T12:00:00Z`). Several lenient variants that were
+      accepted before (non-zero-padded fields such as `2027-1-31T12:0:0Z`) are now
+      rejected, while some extensions (space separator, omitted seconds, short
+      offsets, zone annotations) remain accepted.
 
   - Wallet:
     - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
@@ -45,13 +47,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       likewise now require an explicit `true`/`false` value. This makes the absence of an
       option distinguishable from an explicit opt-out, so a value from the configuration
       file is no longer silently overridden by the command line or the environment.
-      corresponding `ML_NODE_*` environment variables likewise now require an explicit
-      `true`/`false` value. This makes the absence of an option distinguishable from an
-      explicit opt-out, so a value from the configuration file is no longer silently
-      overridden by the command line or the environment.
-      `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; this
-      makes the absence of an option distinguishable from an explicit opt-out, so a value
-      from the configuration file is no longer silently overridden by the command line.
+
+
 ## [1.4.5] - 2026-11-10
 
 ### Added
