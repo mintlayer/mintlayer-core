@@ -220,7 +220,7 @@ iced_aw = { git = "https://github.com/iced-rs/iced_aw", rev = "def1db9aac1e58a47
 iced_fonts = "0.1"
 indoc = "2.0"
 itertools = "0.14"
-jiff = "1.0.1"
+jiff = "1.0"
 jsonrpsee = { version = "0.26", default-features = false }
 lazy_static = "1.4"
 libtest-mimic = "0.8"
