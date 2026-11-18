@@ -50,7 +50,7 @@ We keep the static checks in one place so you can run locally exactly what CI wi
 ./do_checks.sh
 ```
 
-This runs, in order: `cargo fmt`, `cargo deny` and `cargo vet` over the dependency graph, `cargo clippy` with the lint configuration we use, and a few repo-specific checks (including a WASM API documentation check, which needs Python 3.11+). The deny and vet tools come separately, so install them once with:
+This runs, in order: `cargo fmt`, `cargo deny` and `cargo vet` over the dependency graph, `cargo clippy` with the lint configuration we use, and a few repo-specific checks, which need Python 3.11+ (including a WASM API documentation check). The deny and vet tools come separately, so install them once with:
 
 ```
 cargo install cargo-deny --locked
