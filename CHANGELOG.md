@@ -24,7 +24,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       timestamps (e.g. `2027-01-31T12:00:00Z`). Several lenient variants that were
       accepted before (non-zero-padded fields such as `2027-1-31T12:0:0Z`) are now
       rejected, while some extensions (space separator, omitted seconds, short
-      offsets, zone annotations) remain accepted.
+      offsets, zone annotations) remain accepted. The `Bad time` error message now
+      renders timestamps in RFC 3339 form (e.g. `2024-01-12T12:54:52Z`) instead of the
+      previous `2024-01-12 12:54:52 UTC`.
 
   - Wallet:
     - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon

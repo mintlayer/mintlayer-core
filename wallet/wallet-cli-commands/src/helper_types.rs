@@ -613,7 +613,7 @@ impl CliTokenTotalSupply {
 }
 
 /// An OutputTimeLock that can be parsed from strings of the form "block_count(num)", "seconds(num)",
-/// "until_height(num)" and "until_time(RFC 3339 datetime)".
+/// "until_height(num)" and "until_time(RFC 3339-style datetime)".
 #[derive(Debug, Clone)]
 pub enum CliOutputTimeLock {
     UntilHeight(BlockHeight),
@@ -1333,10 +1333,7 @@ mod tests {
                 // random values above).
                 let unpadded_str = "2419-3-29T6:7:5Z";
                 let res = CliOutputTimeLock::from_str(&format!("until_time({unpadded_str})"));
-                assert!(matches!(
-                    res,
-                    Err(ParseError::InvalidTime(_)) | Err(ParseError::BadTime(_))
-                ));
+                assert!(matches!(res, Err(ParseError::InvalidTime(_))));
 
                 // Some lenient extensions remain accepted (Temporal-style parsing):
                 // space separator and omitted seconds.
@@ -1355,10 +1352,7 @@ mod tests {
 
                 // Bare epoch seconds are not a valid timestamp here.
                 let res = CliOutputTimeLock::from_str(&format!("until_time({})", 1705064092_u64));
-                assert!(matches!(
-                    res,
-                    Err(ParseError::InvalidTime(_)) | Err(ParseError::BadTime(_))
-                ));
+                assert!(matches!(res, Err(ParseError::InvalidTime(_))));
             }
 
             let sec_frac = rng.random_range(1..1000);
