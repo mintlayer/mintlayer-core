@@ -40,7 +40,7 @@ Most of the test suite runs with a normal cargo invocation. We run it in release
 cargo test --release --workspace
 ```
 
-Some of the heavier tests, such as the functional tests, are marked as ignored so they don't run by default. If your change touches an area covered by them, you can run them explicitly by passing `-- --ignored`. When you add new behaviour, please add tests for it, and when you fix a bug, a test that would have caught it is very welcome.
+Some of the heavier tests, such as the functional tests, are marked as ignored so they don't run by default. If your change touches an area covered by them, you can run them explicitly by passing `-- --ignored`. When you add new behavior, please add tests for it, and when you fix a bug, a test that would have caught it is very welcome.
 
 ### Before you open a pull request
 
@@ -50,7 +50,7 @@ We keep the static checks in one place so you can run locally exactly what CI wi
 ./do_checks.sh
 ```
 
-This checks formatting with `cargo fmt`, runs `cargo clippy` with the lint configuration we use, and runs `cargo deny` and `cargo vet` over the dependency tree. The last two come from separate tools, so install them once with:
+This runs, in order: `cargo fmt`, `cargo deny` and `cargo vet` over the dependency graph, `cargo clippy` with the lint configuration we use, and a few repo-specific checks (including a WASM API documentation check, which needs Python 3.11+). The deny and vet tools come separately, so install them once with:
 
 ```
 cargo install cargo-deny --locked
