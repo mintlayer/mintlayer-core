@@ -28,6 +28,9 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
+[policy.file-rotate]
+audit-as-crates-io = false
+
 [policy.fontconfig-parser]
 audit-as-crates-io = true
 
@@ -51,6 +54,15 @@ audit-as-crates-io = true
 
 [policy.parity-scale-codec-derive]
 audit-as-crates-io = true
+
+[policy.reedline]
+audit-as-crates-io = false
+
+[policy.serde_with]
+audit-as-crates-io = false
+
+[policy.serde_with_macros]
+audit-as-crates-io = false
 
 [policy.trezor-client]
 audit-as-crates-io = false
@@ -1674,18 +1686,3 @@ criteria = "safe-to-deploy"
 [[exemptions.zeno]]
 version = "0.2.3"
 criteria = "safe-to-deploy"
-
-# Overlay forks of crates.io packages (RUSTSEC-2026-0543 work): not published to
-# crates.io, so crates.io publisher identity does not apply; they are rev-pinned in
-# the workspace manifest and reviewed as part of the migration PR.
-[policy.file-rotate]
-audit-as-crates-io = false
-
-[policy.reedline]
-audit-as-crates-io = false
-
-[policy.serde_with]
-audit-as-crates-io = false
-
-[policy.serde_with_macros]
-audit-as-crates-io = false
