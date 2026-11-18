@@ -17,6 +17,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       as the target is met, and among equally economical solutions the one spending
       fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
       change.
+    - coin selection itself now leaves out inputs that aren't worth more than the fee of
+      spending them, instead of relying on its caller to filter them out first, so such
+      an input can no longer make it panic.
 
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now

@@ -41,6 +41,11 @@ fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
     });
 }
 
+fn add_output_with_fee(value: Amount, fee: Amount, groups: &mut Vec<OutputGroup>) {
+    add_output(value, groups);
+    groups.last_mut().expect("the group was just added").fee = fee;
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -629,5 +634,84 @@ fn test_select_random_coins_prefers_fewer_inputs_on_equal_waste(#[case] _seed: S
             1,
             "seed {seed_u64}: expected the tie-break to prefer the single-input solution"
         );
+    }
+}
+
+/// When the fees are paid with this currency, an input that isn't worth more than the fee of
+/// spending it has no positive effective value, and computing it would underflow. Coin selection
+/// must leave such inputs out instead of panicking, whichever algorithm is used.
+#[test]
+fn test_select_coins_skips_inputs_not_covering_their_fee() {
+    let mut groups = vec![];
+    add_output(Amount::from_atoms(100), &mut groups);
+    add_output(Amount::from_atoms(60), &mut groups);
+    // One input worth less than its fee and one worth exactly its fee.
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+    add_output_with_fee(Amount::from_atoms(10), Amount::from_atoms(10), &mut groups);
+
+    let target_value = Amount::from_atoms(100);
+    let select = |algo| {
+        select_coins(
+            groups.clone(),
+            target_value,
+            PayFee::PayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        )
+    };
+
+    // Spending the preselected inputs leaves out the two that don't cover their fee.
+    let result = select(CoinSelectionAlgo::UsePreselected).unwrap();
+    assert_eq!(result.num_selected_inputs(), 2);
+    assert_eq!(result.effective_value, Amount::from_atoms(160));
+
+    // The random selection doesn't pick them either. They are the only inputs with a fee, so
+    // a zero total fee shows that neither was selected.
+    let result = select(CoinSelectionAlgo::Randomize).unwrap();
+    assert!(result.effective_value >= target_value);
+    assert_eq!(result.get_total_fees(), Amount::ZERO);
+}
+
+/// If no input covers the fee of spending it, there is nothing to select from, which is reported
+/// as an error rather than a panic.
+#[test]
+fn test_select_coins_no_inputs_covering_their_fee() {
+    let mut groups = vec![];
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+    add_output_with_fee(Amount::from_atoms(10), Amount::from_atoms(10), &mut groups);
+
+    for algo in [CoinSelectionAlgo::UsePreselected, CoinSelectionAlgo::Randomize] {
+        let result = select_coins(
+            groups.clone(),
+            Amount::from_atoms(1),
+            PayFee::PayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        );
+        assert_eq!(result.unwrap_err(), UtxoSelectorError::NoUtxos);
+    }
+}
+
+/// When the fees are paid with another currency (e.g. for token inputs), an input's fee doesn't
+/// reduce its value, so an input worth less than its fee is still selected.
+#[test]
+fn test_select_coins_keeps_inputs_when_fee_paid_with_other_currency() {
+    let mut groups = vec![];
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+
+    for algo in [CoinSelectionAlgo::UsePreselected, CoinSelectionAlgo::Randomize] {
+        let result = select_coins(
+            groups.clone(),
+            Amount::from_atoms(5),
+            PayFee::DoNotPayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        )
+        .unwrap();
+        assert_eq!(result.num_selected_inputs(), 1);
+        assert_eq!(result.effective_value, Amount::from_atoms(5));
     }
 }
