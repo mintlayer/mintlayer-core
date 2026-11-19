@@ -16,7 +16,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - internal `is-empty` utility crate (plus its derive macro) consolidates the
       `is_empty` checks over aggregate types; `PoSAccountingData::is_empty` is now
       derived instead of hand-written, with no behavior change.
-    - the workspace no longer depends on `chrono`  - Build:
     - the workspace no longer depends on `chrono` (unmaintained per RUSTSEC-2026-0543):
       first-party code now uses `jiff`, and the remaining transitive uses are served by
       temporary overlay forks (file-rotate, reedline, serde_with) that make `chrono`

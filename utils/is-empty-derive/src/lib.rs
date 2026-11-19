@@ -15,7 +15,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Index, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, Index, Type, parse_macro_input};
 
 /// Derive the `IsEmpty` trait for a struct.
 ///
@@ -49,6 +49,19 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     };
 
+    // Arrays always report non-empty through their slice method, so deriving over them
+    // would silently produce a permanently non-empty aggregate; reject them instead.
+    for field in fields.iter() {
+        if let Type::Array(_) = field.ty {
+            return syn::Error::new_spanned(
+                &field.ty,
+                "IsEmpty cannot be derived for structs with array fields",
+            )
+            .to_compile_error()
+            .into();
+        }
+    }
+
     let checks: Vec<_> = match fields {
         Fields::Named(fields) => fields
             .named
@@ -75,6 +88,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
+        #[automatically_derived]
         impl #impl_generics ::is_empty::IsEmpty for #ident #ty_generics #where_clause {
             fn is_empty(&self) -> bool {
                 #body
