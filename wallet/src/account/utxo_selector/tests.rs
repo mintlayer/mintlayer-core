@@ -23,6 +23,24 @@ use test_utils::random::{Seed, make_seedable_rng};
 
 use super::*;
 
+fn add_output_with_weight(value: Amount, weight: usize, groups: &mut Vec<OutputGroup>) {
+    let outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
+        0,
+    );
+    let tx_output = TxOutput::Transfer(OutputValue::Coin(value), Destination::AnyoneCanSpend);
+
+    let outputs = vec![(outpoint.into(), tx_output)];
+
+    groups.push(OutputGroup {
+        outputs,
+        value,
+        fee: Amount::ZERO,
+        long_term_fee: Amount::ZERO,
+        weight,
+    });
+}
+
 fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
@@ -39,6 +57,11 @@ fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
         long_term_fee: Amount::ZERO,
         weight: 1,
     });
+}
+
+fn add_output_with_fee(value: Amount, fee: Amount, groups: &mut Vec<OutputGroup>) {
+    add_output(value, groups);
+    groups.last_mut().expect("the group was just added").fee = fee;
 }
 
 #[rstest]
@@ -451,6 +474,118 @@ fn test_srd_solver_max_weight(#[case] seed: Seed) {
     assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
 }
 
+#[test]
+fn test_prefer_confirmed_uses_confirmed_when_sufficient() {
+    // The confirmed pool alone can cover the target, so it must be used and the full pool
+    // (deliberately given a different, larger value) must be left untouched.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(60), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(1000), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_insufficient() {
+    // The confirmed pool can't reach the target on its own, so selection must fall back to the
+    // full pool, which additionally contains a larger (unconfirmed) utxo.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(10), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(10), &mut full);
+    add_output(Amount::from_atoms(90), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert!(result.effective_value >= Amount::from_atoms(50));
+}
+
+#[test]
+fn test_prefer_confirmed_without_preference_uses_full_pool() {
+    // With no confirmed pool the full pool is used directly.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        None,
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_exceeds_weight_cap() {
+    // Every confirmed utxo is too heavy for the weight cap, so selection from the
+    // confirmed pool fails; the full pool's lighter utxos cover the target.
+    let mut confirmed = vec![];
+    add_output_with_weight(Amount::from_atoms(100), 2, &mut confirmed);
+    let mut full = vec![];
+    add_output_with_weight(Amount::from_atoms(60), 1, &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        1,
+    )
+    .unwrap();
+
+    // The exact full-pool value proves the fallback produced this selection.
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_on_empty_confirmed_bucket() {
+    // An empty confirmed bucket (no confirmed utxos of this currency) is not a
+    // preference failure: selection falls back to the full pool.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(vec![]),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -629,5 +764,87 @@ fn test_select_random_coins_prefers_fewer_inputs_on_equal_waste(#[case] _seed: S
             1,
             "seed {seed_u64}: expected the tie-break to prefer the single-input solution"
         );
+    }
+}
+
+/// When the fees are paid with this currency, an input that isn't worth more than the fee of
+/// spending it has no positive effective value, and computing it would underflow. Coin selection
+/// must leave such inputs out instead of panicking, whichever algorithm is used.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_select_coins_skips_inputs_not_covering_their_fee(#[case] _seed: Seed) {
+    // Assertions are shuffle-independent; seeding matches the file convention.
+    let mut groups = vec![];
+    add_output(Amount::from_atoms(100), &mut groups);
+    add_output(Amount::from_atoms(60), &mut groups);
+    // One input worth less than its fee and one worth exactly its fee.
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+    add_output_with_fee(Amount::from_atoms(10), Amount::from_atoms(10), &mut groups);
+
+    let target_value = Amount::from_atoms(100);
+    let select = |algo| {
+        select_coins(
+            groups.clone(),
+            target_value,
+            PayFee::PayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        )
+    };
+
+    // Spending the preselected inputs leaves out the two that don't cover their fee.
+    let result = select(CoinSelectionAlgo::UsePreselected).unwrap();
+    assert_eq!(result.num_selected_inputs(), 2);
+    assert_eq!(result.effective_value, Amount::from_atoms(160));
+
+    // The random selection doesn't pick them either. They are the only inputs with a fee, so
+    // a zero total fee shows that neither was selected.
+    let result = select(CoinSelectionAlgo::Randomize).unwrap();
+    assert!(result.effective_value >= target_value);
+    assert_eq!(result.get_total_fees(), Amount::ZERO);
+}
+
+/// If no input covers the fee of spending it, there is nothing to select from, which is reported
+/// as an error rather than a panic.
+#[test]
+fn test_select_coins_no_inputs_covering_their_fee() {
+    let mut groups = vec![];
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+    add_output_with_fee(Amount::from_atoms(10), Amount::from_atoms(10), &mut groups);
+
+    for algo in [CoinSelectionAlgo::UsePreselected, CoinSelectionAlgo::Randomize] {
+        let result = select_coins(
+            groups.clone(),
+            Amount::from_atoms(1),
+            PayFee::PayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        );
+        assert_eq!(result.unwrap_err(), UtxoSelectorError::NoUtxos);
+    }
+}
+
+/// When the fees are paid with another currency (e.g. for token inputs), an input's fee doesn't
+/// reduce its value, so an input worth less than its fee is still selected.
+#[test]
+fn test_select_coins_keeps_inputs_when_fee_paid_with_other_currency() {
+    let mut groups = vec![];
+    add_output_with_fee(Amount::from_atoms(5), Amount::from_atoms(10), &mut groups);
+
+    for algo in [CoinSelectionAlgo::UsePreselected, CoinSelectionAlgo::Randomize] {
+        let result = select_coins(
+            groups.clone(),
+            Amount::from_atoms(5),
+            PayFee::DoNotPayFeeWithThisCurrency,
+            Amount::ZERO,
+            algo,
+            100,
+        )
+        .unwrap();
+        assert_eq!(result.num_selected_inputs(), 1);
+        assert_eq!(result.effective_value, Amount::from_atoms(5));
     }
 }
