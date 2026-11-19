@@ -22,7 +22,8 @@ pub use is_empty_derive::IsEmpty;
 /// The interface for checking whether a value is "empty".
 ///
 /// This is mainly meant to be derived for aggregate types (see the `IsEmpty` derive macro), where
-/// a value is empty when all of its fields are empty. Deriving it instead of writing `is_empty` by
+/// a value is empty when all of its fields are empty. Note that the derive emits no bounds: a
+/// generic parameter is only usable when its own type implements `IsEmpty` independently. Deriving it instead of writing `is_empty` by
 /// hand means a newly added field can't be silently left out of the check.
 pub trait IsEmpty {
     /// Returns `true` if the value is empty.
@@ -74,6 +75,42 @@ mod tests {
             c: "x".to_owned(),
         };
         assert!(!with_string.is_empty());
+    }
+
+    #[test]
+    fn nested_derived_field_resolves_through_the_trait() {
+        #[derive(IsEmpty)]
+        struct Inner {
+            items: Vec<u32>,
+        }
+
+        #[derive(IsEmpty)]
+        struct Outer {
+            inner: Inner,
+            label: String,
+        }
+
+        assert!(
+            Outer {
+                inner: Inner { items: Vec::new() },
+                label: String::new()
+            }
+            .is_empty()
+        );
+        assert!(
+            !Outer {
+                inner: Inner { items: vec![1] },
+                label: String::new()
+            }
+            .is_empty()
+        );
+        assert!(
+            !Outer {
+                inner: Inner { items: Vec::new() },
+                label: "x".to_owned()
+            }
+            .is_empty()
+        );
     }
 
     #[test]

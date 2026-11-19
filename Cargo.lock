@@ -4421,14 +4421,14 @@ dependencies = [
 
 [[package]]
 name = "is-empty"
-version = "1.4.0"
+version = "1.4.5"
 dependencies = [
  "is-empty-derive",
 ]
 
 [[package]]
 name = "is-empty-derive"
-version = "1.4.0"
+version = "1.4.5"
 dependencies = [
  "quote",
  "syn 2.0.114",

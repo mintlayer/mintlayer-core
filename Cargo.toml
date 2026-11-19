@@ -64,6 +64,8 @@ members = [
   "tokens-accounting",                   # Tokens accounting
   "utils",                               # Various utilities.
   "utils/build_utils",                   # Build-related utilities.
+  "utils/is-empty",                      # Trait and derive for the is-empty check on aggregate types.
+  "utils/is-empty-derive",               # Proc-macro implementation of the IsEmpty derive.
   "utils/networking",                    # Various async/tokio utilities.
   "utxo",                                # Utxo and related utilities (cache, undo, etc.).
   "wallet",                              # Wallet primitives.
