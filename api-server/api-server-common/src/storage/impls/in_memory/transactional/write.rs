@@ -36,6 +36,13 @@ use super::ApiServerInMemoryStorageTransactionalRw;
 
 #[async_trait::async_trait]
 impl ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'_> {
+    async fn set_secondary_indexed_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_secondary_indexed_height(block_height)
+    }
+
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,
@@ -379,6 +386,17 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'_> {
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         self.transaction.get_best_block()
+    }
+
+    async fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        self.transaction.secondary_indexed_height()
+    }
+
+    async fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        self.transaction.get_block_transaction_indices(block_height)
     }
 
     async fn get_block(

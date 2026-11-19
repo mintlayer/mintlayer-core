@@ -15,7 +15,7 @@
 
 use common::{
     chain::{
-        DelegationId, Destination, OrderId, PoolId, block::timestamp::BlockTimestamp,
+        DelegationId, Destination, OrderId, PoolId, Transaction, block::timestamp::BlockTimestamp,
         tokens::TokenId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
@@ -139,6 +139,25 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo<'_> {
         let mut conn =
             QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_best_block().await?;
+
+        Ok(res)
+    }
+
+    async fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let res = conn.secondary_indexed_height().await?;
+
+        Ok(res)
+    }
+
+    async fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let res = conn.get_block_transaction_indices(block_height).await?;
 
         Ok(res)
     }

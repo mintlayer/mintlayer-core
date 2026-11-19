@@ -373,15 +373,15 @@ async fn supervise_sync<S: ApiServerStorage>(
                 // them is not implemented yet, so both transitions are
                 // surfaced loudly instead of failing silently.
                 if mode == api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp {
-                    logging::log::warn!(
-                        "(experimental) scanner entering fast catch-up mode: address/token \
-                         history and statistics will not be indexed for blocks scanned in this mode"
+                    logging::log::info!(
+                        "scanner entering fast catch-up mode: address/token history rows \
+                         are deferred for blocks scanned in this mode and rebuilt by the \
+                         backfill pass afterwards"
                     );
                 } else {
-                    logging::log::warn!(
-                        "(experimental) scanner leaving fast catch-up mode: any range indexed \
-                         while catching up lacks history/statistics rows until a backfill pass \
-                         (not yet implemented) is provided"
+                    logging::log::info!(
+                        "scanner leaving fast catch-up mode: deferred history rows are \
+                         being rebuilt by the backfill pass"
                     );
                 }
                 local_block.set_scan_mode(mode);
@@ -394,6 +394,22 @@ async fn supervise_sync<S: ApiServerStorage>(
                 // Note: the backoffs and the outage diagnostics are only reset here (after a
                 // successful sync), not after a successful connect: a flapping node must not
                 // pin the retry rate at the initial delay or reset the outage counters.
+                // Post-catch-up backfill: while in Full mode, rebuild the deferred
+                // secondary history tables for a chunk of the lagging range each
+                // cycle; live indexing keeps priority. The watermark makes this
+                // a no-op once the history tables are complete.
+                const SECONDARY_BACKFILL_CHUNK: usize = 1_000;
+                match local_block.backfill_secondary_indexes(SECONDARY_BACKFILL_CHUNK).await {
+                    Ok(Some(height)) => {
+                        logging::log::info!(
+                            "Secondary history backfill progressed to height {height}"
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        logging::log::warn!("Secondary history backfill failed: {err}");
+                    }
+                }
                 backoff.reset();
                 sync_error_backoff.reset();
                 outage = Outage::new();

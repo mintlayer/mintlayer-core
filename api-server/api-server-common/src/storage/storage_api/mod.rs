@@ -666,6 +666,21 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
 
+    /// The height through which the secondary history tables (address and
+    /// token transaction listings) are known to be complete. `None` means no
+    /// scan has deferred them, i.e. they are complete wherever they exist.
+    /// See `set_secondary_indexed_height`.
+    async fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError>;
+
+    /// The transaction global indices of all transactions whose owning block
+    /// is the main-chain block at `block_height`, in ascending index order.
+    /// Used by the secondary-index backfill to stamp token transaction rows
+    /// with the same indices the live scan assigned.
+    async fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError>;
+
     async fn get_latest_blocktimestamps(
         &self,
     ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError>;
@@ -945,6 +960,15 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_token_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    /// Records that the secondary history tables are complete through
+    /// `block_height` inclusive. Maintained by the scan (lagging while fast
+    /// catch-up defers history rows) and by the backfill pass; rolled back on
+    /// reorg disconnects together with the rows it describes.
+    async fn set_secondary_indexed_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
