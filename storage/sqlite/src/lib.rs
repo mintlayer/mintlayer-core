@@ -309,7 +309,7 @@ impl<'tx, const IS_READONLY: bool> backend::ReadOps for DbTx<'tx, IS_READONLY> {
         let conn_lock = self.lock_connection();
         let mut stmt = conn_lock
             .connection
-            .prepare_cached(&self.queries[map_id].greater_equal_iter_query(&key))
+            .prepare_cached(&self.queries[map_id].greater_equal_iter_query(key))
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
