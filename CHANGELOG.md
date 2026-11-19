@@ -33,6 +33,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       as the target is met, and among equally economical solutions the one spending
       fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
       change.
+    - coin selection now prefers confirmed UTXOs, reducing the chance that a
+      send is rejected for forming an oversized mempool cluster; the full UTXO set
+      is still used when the confirmed UTXOs cannot cover the payment.
+
+    - coin selection itself now leaves out inputs that aren't worth more than the fee of
+      spending them, instead of relying on its caller to filter them out first, so such
+      an input can no longer make it panic.
 
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
@@ -42,6 +49,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       mode of operation when the download/bootstrapping finishes.
 
   - Node CLI:
+    - the help text now documents the accepted values and defaults of the constrained
+      options (`--storage-backend`, `--node-type`, `--rpc-bind-address`, `--rpc-enabled`).
     - boolean node options now require an explicit `true`/`false` value (e.g.
       `--enable-db-reckless-mode-in-ibd true`) instead of working as value-less flags; the
       corresponding environment variables (`ML_NODE_*` for top-level options and
@@ -49,7 +58,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       likewise now require an explicit `true`/`false` value. This makes the absence of an
       option distinguishable from an explicit opt-out, so a value from the configuration
       file is no longer silently overridden by the command line or the environment.
-
 
 ## [1.4.5] - 2026-11-10
 
@@ -127,6 +135,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       perform the announced rescan; the rescan is now done before the command returns. Previously, in `wallet-cli`
       non-interactive mode the process would exit before the background rescan could run, leaving the wallet
       stuck at genesis so that every subsequent wallet open had to rescan the whole blockchain.
+
 
 ## [1.4.0] - 2026-07-09
 
