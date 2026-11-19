@@ -180,7 +180,7 @@ mod tests {
         // per-input vectors a length that no longer matches the single input (an empty
         // witnesses vector, or a doubled one for the rest), so the corresponding count
         // invariant is violated.
-        let witness_bytes = match skewed_vector {
+        let witnesses = match skewed_vector {
             SkewedVector::Witnesses => Vec::<Option<InputWitness>>::new(),
             _ => vec![Option::<InputWitness>::None],
         };
@@ -200,7 +200,7 @@ mod tests {
         let mut bytes = Vec::new();
         64u8.encode_to(&mut bytes); // PartiallySignedTransaction::V1 discriminant (codec index 64)
         tx.encode_to(&mut bytes);
-        witness_bytes.encode_to(&mut bytes); // witnesses
+        witnesses.encode_to(&mut bytes); // witnesses
         input_utxos.encode_to(&mut bytes); // input_utxos
         destinations.encode_to(&mut bytes); // destinations
         htlc_secrets.encode_to(&mut bytes); // htlc_secrets
