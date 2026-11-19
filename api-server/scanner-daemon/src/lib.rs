@@ -152,6 +152,12 @@ pub async fn run<S: ApiServerStorage>(
             BlockchainState::new(Arc::clone(chain_config), storage)
         }
     };
+    // Seed the history-table watermark for databases written by builds that
+    // predate it; a no-op on fresh databases (see the method docs).
+    local_block
+        .seed_secondary_watermark_for_upgrade()
+        .await
+        .unwrap_or_else(|e| panic!("Seeding the secondary history watermark failed: {e}"));
 
     supervise_sync(
         chain_config,
@@ -193,10 +199,6 @@ async fn reinitialize_and_rescan<S: ApiServerStorage>(
         .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
 
     let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
-    local_block
-        .seed_secondary_watermark_for_upgrade()
-        .await
-        .unwrap_or_else(|e| panic!("Seeding the secondary history watermark failed: {e}"));
     local_block
         .scan_genesis(chain_config.genesis_block().as_ref())
         .await
@@ -449,8 +451,4 @@ pub enum ApiServerScannerError {
     InvalidConfig(String),
     #[error("Postgres connection error: {0}")]
     PostgresConnectionError(ApiServerStorageError),
-    #[error("Blockchain state error: {0}")]
-    BlockchainStateError(
-        #[from] api_blockchain_scanner_lib::blockchain_state::BlockchainStateError,
-    ),
 }

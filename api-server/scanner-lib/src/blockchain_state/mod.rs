@@ -228,7 +228,11 @@ impl<S: ApiServerStorage> BlockchainState<S> {
         db_tx.commit().await?;
         if processed_end_height < best_height {
             logging::log::info!(
-                "Secondary index backfill complete through height {processed_end_height}                  (best {best_height})"
+                "Secondary index backfill progressed to height {processed_end_height} (best {best_height})"
+            );
+        } else {
+            logging::log::info!(
+                "Secondary index backfill complete: history tables rebuilt through height {processed_end_height}"
             );
         }
 
@@ -1325,10 +1329,6 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     Ok((fee, tx_aditional_infos))
 }
 
-/// (experimental) step 4: UTXO reads go through the batch-level prefetch
-/// cache first; a cache miss (e.g. a UTXO created by a tx earlier in the same
-/// batch, which the prefetch couldn't see) falls back to a direct read, which
-/// does observe the uncommitted writes of the current transaction.
 /// Read-only re-derivation of the secondary history rows (address ->
 /// transaction, token -> transaction) for one transaction, mirroring what
 /// the live scan collects inside `update_tables_from_transaction_inputs`
@@ -1495,23 +1495,25 @@ async fn collect_secondary_history<T: ApiServerStorageRead>(
                         }
                     }
                     TxOutput::Htlc(output_value, htlc) => {
-                        let destination = if let InputWitness::Standard(sig) = sig {
-                            let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
-                                &mut sig.raw_signature(),
-                            )
-                            .expect("proper signature");
-                            match htlc_sig {
-                                AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
-                                    htlc.spend_key.clone()
-                                }
-                                AuthorizedHashedTimelockContractSpend::Refund(_) => {
-                                    htlc.refund_key.clone()
-                                }
-                            }
-                        } else {
-                            panic!("Empty signature for htlc")
-                        };
+                        // The live scan treats block-reward-sourced HTLC
+                        // inputs as history no-ops (no witness decode).
                         if !block_reward_sourced {
+                            let destination = if let InputWitness::Standard(sig) = sig {
+                                let htlc_sig = AuthorizedHashedTimelockContractSpend::decode_all(
+                                    &mut sig.raw_signature(),
+                                )
+                                .expect("proper signature");
+                                match htlc_sig {
+                                    AuthorizedHashedTimelockContractSpend::Spend(_, _) => {
+                                        htlc.spend_key.clone()
+                                    }
+                                    AuthorizedHashedTimelockContractSpend::Refund(_) => {
+                                        htlc.refund_key.clone()
+                                    }
+                                }
+                            } else {
+                                panic!("Empty signature for htlc")
+                            };
                             insert_address(&destination, &mut address_transactions);
                             if let OutputValue::TokenV1(token_id, _) = &output_value {
                                 transaction_tokens.insert(*token_id);
@@ -1543,6 +1545,10 @@ fn collect_order_tokens(order: &Order, transaction_tokens: &mut BTreeSet<TokenId
     }
 }
 
+/// (experimental) step 4: UTXO reads go through the batch-level prefetch
+/// cache first; a cache miss (e.g. a UTXO created by a tx earlier in the same
+/// batch, which the prefetch couldn't see) falls back to a direct read, which
+/// does observe the uncommitted writes of the current transaction.
 async fn cached_get_utxo<T: ApiServerStorageRead>(
     utxo_cache: &BTreeMap<UtxoOutPoint, Utxo>,
     outpoint: &UtxoOutPoint,
@@ -3326,6 +3332,126 @@ mod backfill_tests {
         disconnect_tables_above_height(&mut db_tx, BlockHeight::new(5)).await.unwrap();
         assert_eq!(db_tx.secondary_indexed_height().await.unwrap(), None);
         db_tx.commit().await.unwrap();
+    }
+
+    /// The upgrade seed only fires for databases that predate the watermark
+    /// and have a non-genesis tip; fresh databases keep `None`, and a second
+    /// call is a no-op.
+    #[tokio::test]
+    async fn upgrade_seed_targets_only_pre_watermark_databases() {
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+
+        // Fresh database: the seed is a no-op.
+        let mut fresh = initialized_state(&chain_config).await;
+        fresh.seed_secondary_watermark_for_upgrade().await.unwrap();
+        assert_eq!(
+            fresh
+                .storage()
+                .transaction_ro()
+                .await
+                .unwrap()
+                .secondary_indexed_height()
+                .await
+                .unwrap(),
+            None
+        );
+
+        // A database with a tip above genesis and no watermark row (the
+        // pre-watermark-build population) is seeded at genesis.
+        let mut rng = make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let tf_config = Arc::clone(tf.chainstate.get_chain_config());
+        let tf_block = tf
+            .make_block_builder()
+            .with_parent(tf_config.genesis_block_id())
+            .build(&mut rng);
+        let mut pre_watermark = initialized_state(&tf_config).await;
+        {
+            let mut db_tx = pre_watermark.storage_mut().transaction_rw().await.unwrap();
+            db_tx
+                .set_mainchain_block(
+                    tf_block.get_id(),
+                    BlockHeight::new(1),
+                    &BlockWithExtraData {
+                        block: tf_block.clone(),
+                        tx_additional_infos: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            db_tx.commit().await.unwrap();
+        }
+        pre_watermark.seed_secondary_watermark_for_upgrade().await.unwrap();
+        assert_eq!(
+            pre_watermark
+                .storage()
+                .transaction_ro()
+                .await
+                .unwrap()
+                .secondary_indexed_height()
+                .await
+                .unwrap(),
+            Some(BlockHeight::new(0))
+        );
+        // Idempotent on re-run.
+        pre_watermark.seed_secondary_watermark_for_upgrade().await.unwrap();
+        assert_eq!(
+            pre_watermark
+                .storage()
+                .transaction_ro()
+                .await
+                .unwrap()
+                .secondary_indexed_height()
+                .await
+                .unwrap(),
+            Some(BlockHeight::new(0))
+        );
+    }
+
+    /// A missing block row in the backfill range fails loudly and leaves the
+    /// watermark (and the history tables) unchanged.
+    #[tokio::test]
+    async fn backfill_fails_loudly_on_missing_block() {
+        let mut rng = make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let tf_config = Arc::clone(tf.chainstate.get_chain_config());
+        let tf_block = tf
+            .make_block_builder()
+            .with_parent(tf_config.genesis_block_id())
+            .build(&mut rng);
+        let chain_config = tf_config;
+        let mut state = initialized_state(&chain_config).await;
+        {
+            let mut db_tx = state.storage_mut().transaction_rw().await.unwrap();
+            db_tx.set_secondary_indexed_height(BlockHeight::new(0)).await.unwrap();
+            db_tx
+                .set_mainchain_block(
+                    tf_block.get_id(),
+                    BlockHeight::new(10),
+                    &BlockWithExtraData {
+                        block: tf_block.clone(),
+                        tx_additional_infos: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            db_tx.commit().await.unwrap();
+        }
+        // The tip is at height 10 but height 1 has no main-chain block id:
+        // the pass must error, not advance the watermark.
+        let err = state.backfill_secondary_indexes(100).await.unwrap_err();
+        assert!(err.to_string().contains("no main-chain block id"));
+        assert_eq!(
+            state
+                .storage()
+                .transaction_ro()
+                .await
+                .unwrap()
+                .secondary_indexed_height()
+                .await
+                .unwrap(),
+            Some(BlockHeight::new(0))
+        );
     }
 }
 
