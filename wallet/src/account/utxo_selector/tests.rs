@@ -23,6 +23,24 @@ use test_utils::random::{Seed, make_seedable_rng};
 
 use super::*;
 
+fn add_output_with_weight(value: Amount, weight: usize, groups: &mut Vec<OutputGroup>) {
+    let outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
+        0,
+    );
+    let tx_output = TxOutput::Transfer(OutputValue::Coin(value), Destination::AnyoneCanSpend);
+
+    let outputs = vec![(outpoint.into(), tx_output)];
+
+    groups.push(OutputGroup {
+        outputs,
+        value,
+        fee: Amount::ZERO,
+        long_term_fee: Amount::ZERO,
+        weight,
+    });
+}
+
 fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
@@ -449,6 +467,118 @@ fn test_srd_solver_max_weight(#[case] seed: Seed) {
     );
 
     assert_eq!(result.unwrap_err(), UtxoSelectorError::MaxWeightExceeded);
+}
+
+#[test]
+fn test_prefer_confirmed_uses_confirmed_when_sufficient() {
+    // The confirmed pool alone can cover the target, so it must be used and the full pool
+    // (deliberately given a different, larger value) must be left untouched.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(60), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(1000), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_insufficient() {
+    // The confirmed pool can't reach the target on its own, so selection must fall back to the
+    // full pool, which additionally contains a larger (unconfirmed) utxo.
+    let mut confirmed = vec![];
+    add_output(Amount::from_atoms(10), &mut confirmed);
+    let mut full = vec![];
+    add_output(Amount::from_atoms(10), &mut full);
+    add_output(Amount::from_atoms(90), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert!(result.effective_value >= Amount::from_atoms(50));
+}
+
+#[test]
+fn test_prefer_confirmed_without_preference_uses_full_pool() {
+    // With no confirmed pool the full pool is used directly.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        None,
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_when_confirmed_exceeds_weight_cap() {
+    // Every confirmed utxo is too heavy for the weight cap, so selection from the
+    // confirmed pool fails; the full pool's lighter utxos cover the target.
+    let mut confirmed = vec![];
+    add_output_with_weight(Amount::from_atoms(100), 2, &mut confirmed);
+    let mut full = vec![];
+    add_output_with_weight(Amount::from_atoms(60), 1, &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(confirmed),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        1,
+    )
+    .unwrap();
+
+    // The exact full-pool value proves the fallback produced this selection.
+    assert_eq!(result.effective_value, Amount::from_atoms(60));
+}
+
+#[test]
+fn test_prefer_confirmed_falls_back_on_empty_confirmed_bucket() {
+    // An empty confirmed bucket (no confirmed utxos of this currency) is not a
+    // preference failure: selection falls back to the full pool.
+    let mut full = vec![];
+    add_output(Amount::from_atoms(70), &mut full);
+
+    let result = select_coins_preferring_confirmed(
+        Some(vec![]),
+        full,
+        Amount::from_atoms(50),
+        PayFee::PayFeeWithThisCurrency,
+        Amount::ZERO,
+        CoinSelectionAlgo::Randomize,
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(result.effective_value, Amount::from_atoms(70));
 }
 
 #[rstest]
