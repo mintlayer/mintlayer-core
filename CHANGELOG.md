@@ -12,6 +12,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Storage:
+    - the internal storage iteration APIs (`prefix_iter`, `greater_equal_iter`) now
+      take the key prefix by reference and return iterators that no longer borrow it,
+      making the borrow contract explicit for backend implementors.
   - Build:
     - internal `is-empty` utility crate (plus its derive macro) consolidates the
       `is_empty` checks over aggregate types; `PoSAccountingData::is_empty` is now
