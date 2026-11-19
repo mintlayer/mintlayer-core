@@ -144,6 +144,8 @@ mod tests {
         }
 
         // A decoy that would be picked up if the generated impl named the trait unqualified.
+        // It is never implemented or called on purpose; see the test below.
+        #[allow(dead_code)]
         trait IsEmpty {
             fn is_empty(&self) -> bool;
         }
