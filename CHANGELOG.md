@@ -37,6 +37,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       send is rejected for forming an oversized mempool cluster; the full UTXO set
       is still used when the confirmed UTXOs cannot cover the payment.
 
+    - coin selection itself now leaves out inputs that aren't worth more than the fee of
+      spending them, instead of relying on its caller to filter them out first, so such
+      an input can no longer make it panic.
+
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
       enabled by default during the initial block download or bootstrapping, which

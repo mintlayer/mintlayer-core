@@ -603,6 +603,11 @@ impl<K: AccountKeyChains> Account<K> {
                     .map(utxo_to_output_group)
                     .filter(|group| {
                         group.as_ref().map_or(true, |group| {
+                            // Same predicate as the guard in `select_coins`; kept here
+                            // only so the `max_possible_num_inputs` estimate stays
+                            // conservative.
+                            // Note: preselected inputs dropped by this rule are omitted
+                            // from the transaction silently (pre-existing behavior).
                             currency != *pay_fee_with_currency || group.value > group.fee
                         })
                     })
