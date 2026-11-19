@@ -293,7 +293,7 @@ impl<'tx, const IS_READONLY: bool> backend::ReadOps for DbTx<'tx, IS_READONLY> {
         let mut kv = Vec::new();
         while let Some(row) = rows.next().map_err(process_sqlite_error)? {
             let key = row.get::<usize, Vec<u8>>(0).map_err(process_sqlite_error)?;
-            if key.starts_with(&prefix) {
+            if key.starts_with(prefix) {
                 let value = row.get::<usize, Vec<u8>>(1).map_err(process_sqlite_error)?;
                 kv.push((key, value));
             }
