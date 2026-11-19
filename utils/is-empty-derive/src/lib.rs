@@ -26,9 +26,9 @@ use syn::{Data, DeriveInput, Fields, Index, Type, parse_macro_input};
 /// than through this trait, so that the standard collections and `String` work through their
 /// inherent methods. Two things follow from that:
 ///
-/// * A field whose `is_empty` means something unrelated is accepted silently. A fixed size array
-///   is the easiest way to get this wrong, as `[T; N]` resolves to the slice method and returns
-///   `false` for any `N > 0`, which would make the whole struct permanently non-empty.
+/// * A field whose `is_empty` means something unrelated is accepted silently. Fixed size arrays
+///   are rejected outright: `[T; N]` would resolve to the slice method and return `false` for
+///   any `N > 0`, silently making the whole struct permanently non-empty.
 /// * A field whose type gets its `is_empty` from this trait needs the trait in scope at the point
 ///   of the derive, since the per field call is not qualified.
 #[proc_macro_derive(IsEmpty)]
