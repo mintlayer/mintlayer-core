@@ -194,6 +194,10 @@ async fn reinitialize_and_rescan<S: ApiServerStorage>(
 
     let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
     local_block
+        .seed_secondary_watermark_for_upgrade()
+        .await
+        .unwrap_or_else(|e| panic!("Seeding the secondary history watermark failed: {e}"));
+    local_block
         .scan_genesis(chain_config.genesis_block().as_ref())
         .await
         .expect("Scanning the genesis block failed (see the fail-fast initialization policy)");
@@ -323,10 +327,9 @@ async fn supervise_sync<S: ApiServerStorage>(
         // only reset after a successful sync, see below.
         // (experimental step 10) Fast catch-up decision: while the scanner is
         // more than CATCH_UP_THRESHOLD blocks behind the node, run in
-        // CatchingUp mode (secondary indexes deferred); within the threshold,
-        // run Full and complete any deferred backfill. The threshold is
-        // deliberately simple; the backfill pass is a follow-up tracked in the
-        // experimental notes.
+        // CatchingUp mode (secondary history rows deferred); within the
+        // threshold, run Full. The deferred history rows are rebuilt by the
+        // backfill pass that runs alongside Full-mode syncing, below.
         const CATCH_UP_THRESHOLD: u64 = 2_000;
         // Note: the RemoteNode wrapper already maps connection errors; reuse
         // the sync error handling by folding the decision into the sync cycle
@@ -369,9 +372,7 @@ async fn supervise_sync<S: ApiServerStorage>(
             };
             if local_block.scan_mode() != mode {
                 // Blocks scanned in CatchingUp mode skip the secondary history
-                // and statistics tables, and the backfill pass that rebuilds
-                // them is not implemented yet, so both transitions are
-                // surfaced loudly instead of failing silently.
+                // tables; the backfill pass rebuilds those rows afterwards.
                 if mode == api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp {
                     logging::log::info!(
                         "scanner entering fast catch-up mode: address/token history rows \
@@ -394,19 +395,18 @@ async fn supervise_sync<S: ApiServerStorage>(
                 // Note: the backoffs and the outage diagnostics are only reset here (after a
                 // successful sync), not after a successful connect: a flapping node must not
                 // pin the retry rate at the initial delay or reset the outage counters.
-                // Post-catch-up backfill: while in Full mode, rebuild the deferred
-                // secondary history tables for a chunk of the lagging range each
-                // cycle; live indexing keeps priority. The watermark makes this
-                // a no-op once the history tables are complete.
-                const SECONDARY_BACKFILL_CHUNK: usize = 1_000;
-                match local_block.backfill_secondary_indexes(SECONDARY_BACKFILL_CHUNK).await {
-                    Ok(Some(height)) => {
-                        logging::log::info!(
-                            "Secondary history backfill progressed to height {height}"
-                        );
-                    }
-                    Ok(None) => {}
-                    Err(err) => {
+                // Post-catch-up backfill: while in Full mode, rebuild the
+                // deferred secondary history tables for a chunk of the lagging
+                // range each cycle; live indexing keeps priority, so the pass
+                // is skipped while still catching up. The watermark makes
+                // this a no-op once the history tables are complete.
+                if local_block.scan_mode()
+                    == api_blockchain_scanner_lib::blockchain_state::ScanMode::Full
+                {
+                    const SECONDARY_BACKFILL_CHUNK: usize = 1_000;
+                    if let Err(err) =
+                        local_block.backfill_secondary_indexes(SECONDARY_BACKFILL_CHUNK).await
+                    {
                         logging::log::warn!("Secondary history backfill failed: {err}");
                     }
                 }
@@ -449,4 +449,8 @@ pub enum ApiServerScannerError {
     InvalidConfig(String),
     #[error("Postgres connection error: {0}")]
     PostgresConnectionError(ApiServerStorageError),
+    #[error("Blockchain state error: {0}")]
+    BlockchainStateError(
+        #[from] api_blockchain_scanner_lib::blockchain_state::BlockchainStateError,
+    ),
 }

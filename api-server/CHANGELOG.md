@@ -4,6 +4,11 @@ All notable changes to the API server will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- The scanner's fast catch-up mode no longer leaves the address and token transaction history permanently incomplete: a backfill pass now rebuilds the deferred history rows from the locally stored blocks after catching up, without touching balances or UTXOs. Databases written by builds predating the history watermark are seeded at startup so their history is rebuilt too.
+
 ## [1.4.5] - 2026-11-10
 
 ### Fixed

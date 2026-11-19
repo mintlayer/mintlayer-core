@@ -82,10 +82,10 @@ pub enum BlockchainStateError {
 pub enum ScanMode {
     /// Full indexing: everything is written as blocks are scanned.
     Full,
-    /// Fast catch-up: secondary indexes (address/token transaction history and
-    /// statistics) are deferred; core data (balances, utxos, blocks,
-    /// transactions, stream events) is still indexed. A backfill pass after
-    /// catching up rebuilds the deferred tables.
+    /// Fast catch-up: the secondary history tables (address and token
+    /// transaction listings) are deferred; core data (balances, utxos,
+    /// statistics, blocks, transactions, stream events) is still indexed. A
+    /// backfill pass after catching up rebuilds the deferred history rows.
     CatchingUp,
 }
 
@@ -126,11 +126,13 @@ impl<S: ApiServerStorage> BlockchainState<S> {
 
     /// Mutable access to the storage, for callers that need to run
     /// transactions outside the scan paths (used by tests).
+    #[cfg(test)]
     pub fn storage_mut(&mut self) -> &mut S {
         &mut self.storage
     }
 
     /// Consumes the state, returning the storage.
+    #[cfg(test)]
     pub fn consume_storage(self) -> S {
         self.storage
     }
@@ -163,15 +165,28 @@ impl<S: ApiServerStorage> BlockchainState<S> {
 
         let remaining = best_height.into_int() - watermark.into_int();
         let chunk = std::cmp::min(remaining, u64::try_from(max_blocks).unwrap_or(remaining));
-        let end_height = BlockHeight::new(watermark.into_int() + chunk);
+        let requested_end_height = BlockHeight::new(watermark.into_int() + chunk);
 
-        for height_int in (watermark.into_int() + 1)..=(end_height.into_int()) {
+        // The watermark only ever advances to the last height that was fully
+        // processed: an inconsistent local database (a missing block or
+        // transaction row) fails loudly instead of silently marking the
+        // skipped range complete.
+        let mut processed_end_height = watermark;
+        for height_int in (watermark.into_int() + 1)..=(requested_end_height.into_int()) {
             let height = BlockHeight::new(height_int);
             let Some(block_id) = db_tx.get_main_chain_block_id(height).await? else {
-                break;
+                return Err(BlockchainStateError::StorageError(
+                    ApiServerStorageError::LowLevelStorageError(format!(
+                        "Backfill: no main-chain block id at height {height}"
+                    )),
+                ));
             };
             let Some(block_info) = db_tx.get_block(block_id).await? else {
-                break;
+                return Err(BlockchainStateError::StorageError(
+                    ApiServerStorageError::LowLevelStorageError(format!(
+                        "Backfill: no block row for {block_id} at height {height}"
+                    )),
+                ));
             };
             let indices: BTreeMap<Id<Transaction>, u64> =
                 db_tx.get_block_transaction_indices(height).await?.into_iter().collect();
@@ -191,7 +206,11 @@ impl<S: ApiServerStorage> BlockchainState<S> {
                 }
                 let tx_id = tx.transaction().get_id();
                 for token_id in transaction_tokens {
-                    let tx_global_index = indices.get(&tx_id).copied().unwrap_or(0);
+                    let tx_global_index = indices.get(&tx_id).copied().ok_or_else(|| {
+                        ApiServerStorageError::LowLevelStorageError(format!(
+                            "Backfill: no transaction global index for {tx_id} at height {height}"
+                        ))
+                    })?;
                     db_tx
                         .set_token_transaction_at_height(token_id, tx_id, height, tx_global_index)
                         .await
@@ -202,15 +221,42 @@ impl<S: ApiServerStorage> BlockchainState<S> {
                         })?;
                 }
             }
+            processed_end_height = height;
         }
 
-        db_tx.set_secondary_indexed_height(end_height).await?;
+        db_tx.set_secondary_indexed_height(processed_end_height).await?;
         db_tx.commit().await?;
-        logging::log::info!(
-            "Secondary index backfill complete through height {end_height} (best {best_height})"
-        );
+        if processed_end_height < best_height {
+            logging::log::info!(
+                "Secondary index backfill complete through height {processed_end_height}                  (best {best_height})"
+            );
+        }
 
-        Ok(Some(end_height))
+        Ok(Some(processed_end_height))
+    }
+
+    /// One-time startup seeding of the history-table watermark for databases
+    /// written by builds predating the watermark. A `None` watermark with a
+    /// non-genesis tip means history rows may be missing from an earlier
+    /// fast catch-up under those builds; seeding to genesis forces the
+    /// backfill to rebuild the full history (idempotent, correct in all
+    /// cases). Fresh databases keep `None`; the first Full batch records it.
+    pub async fn seed_secondary_watermark_for_upgrade(
+        &mut self,
+    ) -> Result<(), BlockchainStateError> {
+        let mut db_tx = self.storage.transaction_rw().await?;
+        if db_tx.secondary_indexed_height().await?.is_none() {
+            let best_height = db_tx.get_best_block().await?.block_height();
+            if best_height > BlockHeight::zero() {
+                logging::log::info!(
+                    "Seeding the secondary history watermark at genesis: an older build may \
+                     have deferred history rows during fast catch-up"
+                );
+                db_tx.set_secondary_indexed_height(BlockHeight::zero()).await?;
+            }
+        }
+        db_tx.commit().await?;
+        Ok(())
     }
 
     pub async fn scan_genesis(&mut self, genesis: &Genesis) -> Result<(), BlockchainStateError> {
@@ -1284,11 +1330,11 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
 /// batch, which the prefetch couldn't see) falls back to a direct read, which
 /// does observe the uncommitted writes of the current transaction.
 /// Read-only re-derivation of the secondary history rows (address ->
-/// transaction, token -> transaction) for one transaction, mirroring exactly
-/// what the live scan collects inside `update_tables_from_transaction_inputs`
-/// and `update_tables_from_transaction_outputs`. Used by the post-catch-up
-/// backfill; it must not mutate anything, so the equivalence with the live
-/// path is what the backfill tests assert.
+/// transaction, token -> transaction) for one transaction, mirroring what
+/// the live scan collects inside `update_tables_from_transaction_inputs`
+/// and `update_tables_from_transaction_outputs`, arm by arm. Used by the
+/// post-catch-up backfill; it must not mutate anything, and its
+/// equivalence with the live path is what the backfill tests assert.
 async fn collect_secondary_history<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     db_tx: &T,
@@ -1411,6 +1457,12 @@ async fn collect_secondary_history<T: ApiServerStorageRead>(
             TxInput::Account(_) => {}
             TxInput::Utxo(outpoint) => {
                 let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                // The live scan treats most output kinds of a spent input as
+                // history no-ops when the input is block-reward-sourced; only
+                // the pool-decommission pool ids record an address there.
+                // Mirror that per-source split.
+                let block_reward_sourced =
+                    matches!(outpoint.source_id(), OutPointSourceId::BlockReward(_));
                 match utxo.into_output() {
                     TxOutput::Burn(_)
                     | TxOutput::CreateDelegationId(_, _)
@@ -1422,9 +1474,9 @@ async fn collect_secondary_history<T: ApiServerStorageRead>(
                     | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                         // Only the block-reward-sourced variant records the
                         // decommission destination in the history tables; the
-                        // pool data is read at or below this height, where the
-                        // pool still exists (the decommission happens in this
-                        // very block).
+                        // pool data is read at or below this height; the row
+                        // at this height is the post-decommission record,
+                        // whose decommission destination is preserved.
                         if matches!(outpoint.source_id(), OutPointSourceId::BlockReward(_)) {
                             let pool_data = db_tx
                                 .get_pool_data_at_or_below_height(pool_id, block_height)
@@ -1437,8 +1489,10 @@ async fn collect_secondary_history<T: ApiServerStorageRead>(
                         }
                     }
                     TxOutput::IssueNft(token_id, _, destination) => {
-                        insert_address(&destination, &mut address_transactions);
-                        transaction_tokens.insert(token_id);
+                        if !block_reward_sourced {
+                            insert_address(&destination, &mut address_transactions);
+                            transaction_tokens.insert(token_id);
+                        }
                     }
                     TxOutput::Htlc(output_value, htlc) => {
                         let destination = if let InputWitness::Standard(sig) = sig {
@@ -1457,16 +1511,20 @@ async fn collect_secondary_history<T: ApiServerStorageRead>(
                         } else {
                             panic!("Empty signature for htlc")
                         };
-                        insert_address(&destination, &mut address_transactions);
-                        if let OutputValue::TokenV1(token_id, _) = &output_value {
-                            transaction_tokens.insert(*token_id);
+                        if !block_reward_sourced {
+                            insert_address(&destination, &mut address_transactions);
+                            if let OutputValue::TokenV1(token_id, _) = &output_value {
+                                transaction_tokens.insert(*token_id);
+                            }
                         }
                     }
                     TxOutput::LockThenTransfer(output_value, destination, _)
                     | TxOutput::Transfer(output_value, destination) => {
-                        insert_address(&destination, &mut address_transactions);
-                        if let OutputValue::TokenV1(token_id, _) = &output_value {
-                            transaction_tokens.insert(*token_id);
+                        if !block_reward_sourced {
+                            insert_address(&destination, &mut address_transactions);
+                            if let OutputValue::TokenV1(token_id, _) = &output_value {
+                                transaction_tokens.insert(*token_id);
+                            }
                         }
                     }
                 }
@@ -3212,16 +3270,25 @@ mod backfill_tests {
             );
         }
 
-        // Hazard guard: balances and utxos identical between the two scans.
-        let (full_balances, catchup_balances) = {
+        // Hazard guard: balances identical between the two scans, and the
+        // utxo row of the last transaction identical (proving the backfill
+        // left the core tables untouched).
+        let (full_balances, catchup_balances, full_utxo, catchup_utxo) = {
             let full_tx = full.storage().transaction_ro().await.unwrap();
             let cu_tx = catching_up.storage().transaction_ro().await.unwrap();
+            let last_tx_outpoint = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(blocks[2].transactions()[0].transaction().get_id()),
+                0,
+            );
             (
                 full_tx.get_address_balance(anyone.as_str(), CoinOrTokenId::Coin).await.unwrap(),
                 cu_tx.get_address_balance(anyone.as_str(), CoinOrTokenId::Coin).await.unwrap(),
+                full_tx.get_utxo(last_tx_outpoint.clone()).await.unwrap(),
+                cu_tx.get_utxo(last_tx_outpoint).await.unwrap(),
             )
         };
         assert_eq!(full_balances, catchup_balances);
+        assert_eq!(full_utxo, catchup_utxo);
 
         let (full_tip, catchup_tip) = {
             let full_tx = full.storage().transaction_ro().await.unwrap();
@@ -3238,7 +3305,6 @@ mod backfill_tests {
     /// describes; a `None` watermark stays untouched.
     #[tokio::test]
     async fn reorg_clamps_watermark() {
-        let mut rng = make_seedable_rng(test_utils::random::Seed::from_entropy());
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let mut state = initialized_state(&chain_config).await;
         {
@@ -3253,7 +3319,13 @@ mod backfill_tests {
             Some(BlockHeight::new(5))
         );
         db_tx.commit().await.unwrap();
-        let _ = &mut rng;
+
+        // A `None` watermark (nothing ever deferred) survives a disconnect.
+        let mut state = initialized_state(&chain_config).await;
+        let mut db_tx = state.storage_mut().transaction_rw().await.unwrap();
+        disconnect_tables_above_height(&mut db_tx, BlockHeight::new(5)).await.unwrap();
+        assert_eq!(db_tx.secondary_indexed_height().await.unwrap(), None);
+        db_tx.commit().await.unwrap();
     }
 }
 

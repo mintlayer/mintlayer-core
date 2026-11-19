@@ -12,12 +12,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
-  - API server:
-    - the scanner's fast catch-up mode no longer leaves the address and token
-      transaction history permanently incomplete: a backfill pass now rebuilds
-      the deferred history rows from the locally stored blocks after catching
-      up, without touching balances or UTXOs.
-
   - Build:
     - the workspace no longer depends on `chrono` (unmaintained per RUSTSEC-2026-0543):
       first-party code now uses `jiff`, and the remaining transitive uses are served by
