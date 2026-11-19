@@ -156,8 +156,14 @@ mod tests {
     // bytes are assembled by hand here to mimic malformed external input.
     #[rstest]
     #[trace]
-    #[case(Seed::from_entropy())]
-    fn test_decode_rejects_inconsistent_partially_signed_transaction(#[case] seed: Seed) {
+    #[case(Seed::from_entropy(), SkewedVector::Witnesses)]
+    #[case(Seed::from_entropy(), SkewedVector::InputUtxos)]
+    #[case(Seed::from_entropy(), SkewedVector::Destinations)]
+    #[case(Seed::from_entropy(), SkewedVector::HtlcSecrets)]
+    fn test_decode_rejects_inconsistent_partially_signed_transaction(
+        #[case] seed: Seed,
+        #[case] skewed_vector: SkewedVector,
+    ) {
         let mut rng = make_seedable_rng(seed);
 
         let tx = Transaction::new(
@@ -170,24 +176,54 @@ mod tests {
         )
         .unwrap();
 
-        // Encode a PartiallySignedTransactionV1 field by field, but give it an empty
-        // `witnesses` vector while the transaction has one input, so the witness count
-        // no longer matches the input count.
+        // Encode a PartiallySignedTransactionV1 field by field, giving one of the four
+        // per-input vectors a length that no longer matches the single input (an empty
+        // witnesses vector, or a doubled one for the rest), so the corresponding count
+        // invariant is violated.
+        let witness_bytes = match skewed_vector {
+            SkewedVector::Witnesses => Vec::<Option<InputWitness>>::new(),
+            _ => vec![Option::<InputWitness>::None],
+        };
+        let input_utxos = match skewed_vector {
+            SkewedVector::InputUtxos => vec![Option::<TxOutput>::None; 2],
+            _ => vec![Option::<TxOutput>::None],
+        };
+        let destinations = match skewed_vector {
+            SkewedVector::Destinations => vec![Option::<Destination>::None; 2],
+            _ => vec![Option::<Destination>::None],
+        };
+        let htlc_secrets = match skewed_vector {
+            SkewedVector::HtlcSecrets => vec![Option::<HtlcSecret>::None; 2],
+            _ => vec![Option::<HtlcSecret>::None],
+        };
+
         let mut bytes = Vec::new();
         64u8.encode_to(&mut bytes); // PartiallySignedTransaction::V1 discriminant (codec index 64)
         tx.encode_to(&mut bytes);
-        Vec::<Option<InputWitness>>::new().encode_to(&mut bytes); // witnesses
-        vec![Option::<TxOutput>::None].encode_to(&mut bytes); // input_utxos
-        vec![Option::<Destination>::None].encode_to(&mut bytes); // destinations
-        vec![Option::<HtlcSecret>::None].encode_to(&mut bytes); // htlc_secrets
+        witness_bytes.encode_to(&mut bytes); // witnesses
+        input_utxos.encode_to(&mut bytes); // input_utxos
+        destinations.encode_to(&mut bytes); // destinations
+        htlc_secrets.encode_to(&mut bytes); // htlc_secrets
         TxAdditionalInfo::new().encode_to(&mut bytes);
 
+        let expected_error = match skewed_vector {
+            SkewedVector::Witnesses => PartiallySignedTransactionError::InvalidWitnessCount,
+            SkewedVector::InputUtxos => PartiallySignedTransactionError::InvalidInputUtxosCount,
+            SkewedVector::Destinations => PartiallySignedTransactionError::InvalidDestinationsCount,
+            SkewedVector::HtlcSecrets => PartiallySignedTransactionError::InvalidHtlcSecretsCount,
+        };
         let err = GenericTransaction::decode_from_untagged_bytes(&bytes).unwrap_err();
         assert_eq!(
             err,
-            GenericTransactionError::InconsistentPartiallySignedTransaction(
-                PartiallySignedTransactionError::InvalidWitnessCount
-            )
+            GenericTransactionError::InconsistentPartiallySignedTransaction(expected_error)
         );
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum SkewedVector {
+        Witnesses,
+        InputUtxos,
+        Destinations,
+        HtlcSecrets,
     }
 }
