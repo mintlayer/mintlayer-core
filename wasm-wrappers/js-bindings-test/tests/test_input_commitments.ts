@@ -279,7 +279,7 @@ function test_impl() {
     witness_verification_func(witness, correct_tx_info);
 
     console.log("Testing verification with incorrect tx info");
-    if (is_v1) {
+    {
       // In v1 we do commit to the info, so passing incorrect info should result in verification
       // failure.
       expect_exception(
@@ -288,14 +288,6 @@ function test_impl() {
         },
         signature_verification_failure_msg
       );
-    } else {
-      // In v0, we only commit to UTXOs, so passing incorrect info won't cause the verification
-      // to fail.
-      // Note though that *some* info has to be passed anyway. This is because we want the input
-      // commitment construction to have the same requirements on the provided objects both in V0
-      // and V1. See the note and the TODO in `make_sighash_input_commitments_for_transaction_inputs`
-      // in `common`.
-      witness_verification_func(witness, different_tx_info);
     }
 
     console.groupEnd();
