@@ -66,11 +66,7 @@ import {
 const SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT = gen_random_int(0, 10_000_000_000, "SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT");
 
 export function test_input_commitments() {
-  function v1() {
-    test_impl(true);
-  }
-
-  run_one_test(v1);
+  run_one_test(test_impl);
 }
 
 const POOL_INFO = {
@@ -123,13 +119,8 @@ const DIFFERENT_ORDER_INFO = {
   give_balance: { atoms: "5000000000000000" }
 };
 
-function test_impl(is_v1: boolean) {
-  let height: number;
-  if (is_v1) {
-    height = SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT;
-  } else {
-    throw new Error("V0 input commitments are unreachable on the Babbage testnet");
-  };
+function test_impl() {
+  const height = SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT;
 
   const account_privkey = make_default_account_privkey(
     MNEMONIC,
