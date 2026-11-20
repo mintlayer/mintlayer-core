@@ -31,6 +31,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       invalid characters in `ChangeTokenMetadataUri` URIs) is scheduled at
       block height 806,500 (activating in early March 2027, with lead time for operators;
       testnet activated the same rules at height 787,640).
+    - the testnet is reset as the Babbage epoch: a fresh genesis (named after
+      Charles Babbage, continuing from the Lovelace testnet), new network
+      magic bytes, and every consensus and chainstate upgrade -- including the
+      tightening rules -- active from the first block. Testnet operators must
+      resynchronize from scratch; old testnet data, checkpoints and bootstrap
+      files do not apply.
 
   - Storage:
     - the internal storage iteration APIs (`prefix_iter`, `greater_equal_iter`) now

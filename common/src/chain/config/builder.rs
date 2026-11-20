@@ -59,38 +59,32 @@ use super::{
 // * enable tokens v1;
 // * upgrade consensus to PoSConsensusVersion::V1 to dis-incentivize large pools;
 // * change the maturity block count to 7200.
-const TESTNET_FORK_HEIGHT_1_TOKENS_V1: BlockHeight = BlockHeight::new(78_440);
 
 // The fork at which we:
 // * upgrade chainstate to RewardDistributionVersion::V1 to distribute reward to the staker
 // proportionally to their balance;
 // * change various tokens fees.
-const TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION: BlockHeight = BlockHeight::new(138_244);
 
 // The fork at which:
 // * txs with htlc outputs become valid;
 // * data deposit fee and size are changed;
 // * token metadata uri change is allowed;
 // * max future block time offset is changed.
-const TESTNET_FORK_HEIGHT_3_HTLC: BlockHeight = BlockHeight::new(297_550);
 
 // The fork at which:
 // * order outputs become valid;
 // * frozen token validation logic is changed to FrozenTokensValidationVersion::V1.
-const TESTNET_FORK_HEIGHT_4_ORDERS: BlockHeight = BlockHeight::new(325_180);
 
 // The fork at which we:
 // * enable orders v1;
 // * switch to sighash input commitments v1;
 // * enable token id generation v1;
 // * prohibit updating the staker destination in ProduceBlockFromStake.
-const TESTNET_FORK_HEIGHT_5_ORDERS_V1: BlockHeight = BlockHeight::new(566_060);
 
 // The fork where we tighten certain consensus rules:
 // * Using mismatched kernel utxo and PoSData is no longer allowed.
 // * Transferring zero amount of a token is no longer allowed.
 // * In AccountCommand::ChangeTokenMetadataUri, using a URI with invalid characters is no longer allowed.
-const TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING: BlockHeight = BlockHeight::new(787_640);
 
 // The fork at which:
 // * txs with htlc and order outputs become valid;
@@ -178,6 +172,9 @@ impl ChainType {
                     / Uint256::from_u64(target_block_spacing.as_secs()))
                 .expect("Target block time cannot be zero as per NonZeroU64");
 
+                // The Babbage testnet starts with the final consensus
+                // version active from the first block: the chain is reset,
+                // so there is no history to upgrade through.
                 let upgrades = vec![
                     (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
                     (
@@ -186,19 +183,6 @@ impl ChainType {
                             initial_difficulty: Some(
                                 pos_initial_difficulty(ChainType::Testnet).into(),
                             ),
-                            config: PoSChainConfig::new(
-                                target_limit,
-                                DEFAULT_MATURITY_BLOCK_COUNT_V0,
-                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                                PerThousand::new(1).expect("must be valid"),
-                                PoSConsensusVersion::V0,
-                            ),
-                        },
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_1_TOKENS_V1,
-                        ConsensusUpgrade::PoS {
-                            initial_difficulty: None,
                             config: PoSChainConfig::new(
                                 target_limit,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V1,
@@ -267,62 +251,26 @@ impl ChainType {
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
+            // The Babbage testnet starts with every chainstate upgrade
+            // active from genesis: the chain is reset, so the historical
+            // fork heights no longer apply.
             ChainType::Testnet => ChainstateUpgradesBuilder::new(ChainstateUpgrade::new(
-                TokenIssuanceVersion::V0,
-                RewardDistributionVersion::V0,
-                TokensFeeVersion::V0,
-                DataDepositFeeVersion::V0,
-                ChangeTokenMetadataUriActivated::No,
-                FrozenTokensValidationVersion::V0,
-                HtlcActivated::No,
-                OrdersActivated::No,
-                OrdersVersion::V0,
-                StakerDestinationUpdateForbidden::No,
-                TokenIdGenerationVersion::V0,
-                SighashInputCommitmentVersion::V0,
-                PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                ZeroTokenTransferForbidden::No,
-                ChangeTokenMetadataUriValidityCheckRequired::No,
+                TokenIssuanceVersion::V1,
+                RewardDistributionVersion::V1,
+                TokensFeeVersion::V1,
+                DataDepositFeeVersion::V1,
+                ChangeTokenMetadataUriActivated::Yes,
+                FrozenTokensValidationVersion::V1,
+                HtlcActivated::Yes,
+                OrdersActivated::Yes,
+                OrdersVersion::V1,
+                StakerDestinationUpdateForbidden::Yes,
+                TokenIdGenerationVersion::V1,
+                SighashInputCommitmentVersion::V1,
+                PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                ZeroTokenTransferForbidden::Yes,
+                ChangeTokenMetadataUriValidityCheckRequired::Yes,
             ))
-            .then(TESTNET_FORK_HEIGHT_1_TOKENS_V1, |builder| {
-                builder.token_issuance_version(TokenIssuanceVersion::V1)
-            })
-            .then(
-                TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION,
-                |builder| {
-                    builder
-                        .reward_distribution_version(RewardDistributionVersion::V1)
-                        .tokens_fee_version(TokensFeeVersion::V1)
-                },
-            )
-            .then(TESTNET_FORK_HEIGHT_3_HTLC, |builder| {
-                builder
-                    .data_deposit_fee_version(DataDepositFeeVersion::V1)
-                    .change_token_metadata_uri_activated(ChangeTokenMetadataUriActivated::Yes)
-                    .htlc_activated(HtlcActivated::Yes)
-            })
-            .then(TESTNET_FORK_HEIGHT_4_ORDERS, |builder| {
-                builder
-                    .frozen_tokens_validation_version(FrozenTokensValidationVersion::V1)
-                    .orders_activated(OrdersActivated::Yes)
-            })
-            .then(TESTNET_FORK_HEIGHT_5_ORDERS_V1, |builder| {
-                builder
-                    .orders_version(OrdersVersion::V1)
-                    .staker_destination_update_forbidden(StakerDestinationUpdateForbidden::Yes)
-                    .token_id_generation_version(TokenIdGenerationVersion::V1)
-                    .sighash_input_commitment_version(SighashInputCommitmentVersion::V1)
-            })
-            .then(TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING, |builder| {
-                builder
-                    .pool_id_mismatch_in_kernel_input_utxo_and_pos_data_forbidden(
-                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
-                    )
-                    .zero_token_transfer_forbidden(ZeroTokenTransferForbidden::Yes)
-                    .change_token_metadata_uri_validity_check_required(
-                        ChangeTokenMetadataUriValidityCheckRequired::Yes,
-                    )
-            })
             .build(),
         }
     }
@@ -734,27 +682,15 @@ mod tests {
             );
         }
 
-        // Testnet
+        // Testnet: the Babbage reset activates everything from genesis, so
+        // the V2 offset applies at every height (like regtest).
         {
             let config = Builder::new(ChainType::Testnet).build();
 
-            let before_the_fork =
-                BlockHeight::new(rng.random_range(0..TESTNET_FORK_HEIGHT_3_HTLC.into_int()));
-            assert_eq!(
-                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
-                config.max_future_block_time_offset(before_the_fork)
-            );
-
+            let height = BlockHeight::new(rng.random::<u64>());
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config.max_future_block_time_offset(TESTNET_FORK_HEIGHT_3_HTLC)
-            );
-
-            let after_the_fork =
-                BlockHeight::new(rng.random_range(TESTNET_FORK_HEIGHT_3_HTLC.into_int()..u64::MAX));
-            assert_eq!(
-                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config.max_future_block_time_offset(after_the_fork)
+                config.max_future_block_time_offset(height)
             );
         }
 
@@ -875,154 +811,32 @@ mod tests {
             );
         }
 
-        // Testnet
+        // Testnet: the Babbage reset activates every upgrade from genesis.
         {
             let config = Builder::new(ChainType::Testnet).build();
 
             assert_eq!(
                 config.chainstate_upgrades(),
-                &NetUpgrades::initialize(vec![
-                    (
-                        BlockHeight::new(0),
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V0,
-                            RewardDistributionVersion::V0,
-                            TokensFeeVersion::V0,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                            StakerDestinationUpdateForbidden::No,
-                            TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
+                &NetUpgrades::initialize(vec![(
+                    BlockHeight::new(0),
+                    ChainstateUpgrade::new(
+                        TokenIssuanceVersion::V1,
+                        RewardDistributionVersion::V1,
+                        TokensFeeVersion::V1,
+                        DataDepositFeeVersion::V1,
+                        ChangeTokenMetadataUriActivated::Yes,
+                        FrozenTokensValidationVersion::V1,
+                        HtlcActivated::Yes,
+                        OrdersActivated::Yes,
+                        OrdersVersion::V1,
+                        StakerDestinationUpdateForbidden::Yes,
+                        TokenIdGenerationVersion::V1,
+                        SighashInputCommitmentVersion::V1,
+                        PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
+                        ZeroTokenTransferForbidden::Yes,
+                        ChangeTokenMetadataUriValidityCheckRequired::Yes,
                     ),
-                    (
-                        TESTNET_FORK_HEIGHT_1_TOKENS_V1,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V0,
-                            TokensFeeVersion::V0,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                            StakerDestinationUpdateForbidden::No,
-                            TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_2_STAKER_REWARD_DISTRIBUTION,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V0,
-                            ChangeTokenMetadataUriActivated::No,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::No,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                            StakerDestinationUpdateForbidden::No,
-                            TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_3_HTLC,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V0,
-                            HtlcActivated::Yes,
-                            OrdersActivated::No,
-                            OrdersVersion::V0,
-                            StakerDestinationUpdateForbidden::No,
-                            TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_4_ORDERS,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V0,
-                            StakerDestinationUpdateForbidden::No,
-                            TokenIdGenerationVersion::V0,
-                            SighashInputCommitmentVersion::V0,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_5_ORDERS_V1,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                            StakerDestinationUpdateForbidden::Yes,
-                            TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V1,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::No,
-                            ZeroTokenTransferForbidden::No,
-                            ChangeTokenMetadataUriValidityCheckRequired::No,
-                        ),
-                    ),
-                    (
-                        TESTNET_FORK_HEIGHT_6_CONSENSUS_TIGHTENING,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
-                            OrdersVersion::V1,
-                            StakerDestinationUpdateForbidden::Yes,
-                            TokenIdGenerationVersion::V1,
-                            SighashInputCommitmentVersion::V1,
-                            PoolIdMismatchInKernelUtxoAndPoSDataForbidden::Yes,
-                            ZeroTokenTransferForbidden::Yes,
-                            ChangeTokenMetadataUriValidityCheckRequired::Yes,
-                        ),
-                    ),
-                ])
+                )])
                 .unwrap()
             );
         }
