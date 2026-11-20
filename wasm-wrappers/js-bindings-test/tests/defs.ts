@@ -24,11 +24,9 @@ import {
   gen_random_int,
 } from "./utils.js";
 
-// Taken from TESTNET_FORK_HEIGHT_5_ORDERS_V1 in common/src/chain/config/builder.rs
-// (which corresponds both to the orders and input commitments upgrade).
-const ORDERS_V1_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT = 566060;
-export const ORDERS_V1_TESTNET_FORK_HEIGHT = ORDERS_V1_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT;
-export const SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT = ORDERS_V1_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT;
+// On the Babbage testnet every chainstate upgrade (orders V1, input
+// commitments V1, ...) is active from the genesis block, so there is no fork
+// height to straddle anymore and V0-side encodings are unreachable there.
 
 // A random height for cases where the height doesn't matter.
 export const RANDOM_HEIGHT = gen_random_int(0, 10_000_000_000, "RANDOM_HEIGHT");

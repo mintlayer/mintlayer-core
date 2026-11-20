@@ -52,37 +52,6 @@ use super::{
 // of the most prominent change that happens at that height, which serves as the "proper name"
 // for the fork.
 
-// The fork at which we:
-// * enable tokens v1;
-// * upgrade consensus to PoSConsensusVersion::V1 to dis-incentivize large pools;
-// * change the maturity block count to 7200.
-
-// The fork at which we:
-// * upgrade chainstate to RewardDistributionVersion::V1 to distribute reward to the staker
-// proportionally to their balance;
-// * change various tokens fees.
-
-// The fork at which:
-// * txs with htlc outputs become valid;
-// * data deposit fee and size are changed;
-// * token metadata uri change is allowed;
-// * max future block time offset is changed.
-
-// The fork at which:
-// * order outputs become valid;
-// * frozen token validation logic is changed to FrozenTokensValidationVersion::V1.
-
-// The fork at which we:
-// * enable orders v1;
-// * switch to sighash input commitments v1;
-// * enable token id generation v1;
-// * prohibit updating the staker destination in ProduceBlockFromStake.
-
-// The fork where we tighten certain consensus rules:
-// * Using mismatched kernel utxo and PoSData is no longer allowed.
-// * Transferring zero amount of a token is no longer allowed.
-// * In AccountCommand::ChangeTokenMetadataUri, using a URI with invalid characters is no longer allowed.
-
 // The fork at which:
 // * txs with htlc and order outputs become valid;
 // * data deposit fee and size are changed;

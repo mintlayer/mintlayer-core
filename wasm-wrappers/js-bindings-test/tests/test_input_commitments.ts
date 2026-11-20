@@ -49,7 +49,6 @@ import {
   MNEMONIC,
   POOL_ID,
   ORDER_ID,
-  SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT,
   TOKEN_ID,
   HTLC_SECRET_HASH,
   HTLC_SECRET,
@@ -62,20 +61,15 @@ import {
   OUTPUTS,
 } from "./test_encode_other_outputs.js";
 
-// Note: the exact heights don't matter as long as they are at the "correct side" of the fork.
-const SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT =
-  gen_random_int(0, SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT - 1, "SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT");
-const SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT = SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT + SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT;
+// The Babbage testnet activates input commitments V1 from genesis, so only
+// the V1 encoding is reachable; the height is arbitrary.
+const SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT = gen_random_int(0, 10_000_000_000, "SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT");
 
 export function test_input_commitments() {
-  function v0() {
-    test_impl(false);
-  }
   function v1() {
     test_impl(true);
   }
 
-  run_one_test(v0);
   run_one_test(v1);
 }
 
@@ -134,7 +128,7 @@ function test_impl(is_v1: boolean) {
   if (is_v1) {
     height = SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT;
   } else {
-    height = SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT;
+    throw new Error("V0 input commitments are unreachable on the Babbage testnet");
   };
 
   const account_privkey = make_default_account_privkey(

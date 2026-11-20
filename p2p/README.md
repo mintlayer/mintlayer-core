@@ -107,7 +107,7 @@ Currently, the following message variants exist:
 | Length | Description | Type | Comments |
 |--------|-------------|---------|----------|
 | 4 bytes | Protocol version | `u32`   | The latest protocol version that the node supports.
-| 4 bytes | Network | `[u8; 4]` | "Magic bytes" that identify the network. For mainnet, this will be equal to `B0075FA0`; for testnet, this will be `2B7E19F8`.
+| 4 bytes | Network | `[u8; 4]` | "Magic bytes" that identify the network. For mainnet, this will be equal to `B0075FA0`; for testnet, this will be `BABB1871` (the Babbage epoch).
 | 8 bytes | Services | `u64`   | Bitmap of services that the node provides/supports.
 | Variable | User agent | `Vec<u8>` | An ASCII string containing the name of the user's software.
 | 4 bytes | Software version | `SemVer`   | The version of the user's software.
