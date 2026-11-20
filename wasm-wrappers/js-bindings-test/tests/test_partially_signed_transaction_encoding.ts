@@ -46,7 +46,6 @@ import {
   MNEMONIC,
   POOL_ID,
   ORDER_ID,
-  SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT,
   TOKEN_ID,
   HTLC_SECRET_HASH,
   HTLC_SECRET,
@@ -54,7 +53,9 @@ import {
 import { ADDRESS } from "./test_address_generation.js";
 
 export function test_partially_signed_transaction_encoding() {
-  const height = SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT;
+  // The Babbage testnet activates input commitments V1 from genesis, so the
+  // height is arbitrary.
+  const height = gen_random_int(0, 10_000_000_000, "psbt_encoding_height");
   const account_privkey = make_default_account_privkey(
     MNEMONIC,
     Network.Testnet,
