@@ -31,10 +31,7 @@ use crate::{
             create_testnet_genesis, create_unit_test_genesis, emission_schedule,
         },
         get_initial_randomness,
-        pos::{
-            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0,
-            DEFAULT_MATURITY_BLOCK_COUNT_V1,
-        },
+        pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V1},
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
     },
