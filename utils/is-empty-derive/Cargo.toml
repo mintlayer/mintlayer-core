@@ -1,0 +1,14 @@
+[package]
+name = "is-empty-derive"
+publish = false
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn.workspace = true
+quote.workspace = true

@@ -16,6 +16,7 @@ common = { path = "../../common" }
 consensus = { path = "../../consensus" }
 constraints-value-accumulator = { path = "../constraints-value-accumulator" }
 crypto = { path = "../../crypto" }
+is-empty = { path = "../../utils/is-empty" }
 logging = { path = "../../logging" }
 orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
