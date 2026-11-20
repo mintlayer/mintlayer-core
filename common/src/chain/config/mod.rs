@@ -133,7 +133,7 @@ pub enum ChainType {
 
 impl ChainType {
     pub const MAINNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xB0, 0x07, 0x5F, 0xA0]);
-    pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0x2b, 0x7e, 0x19, 0xf8]);
+    pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xBA, 0xBB, 0x18, 0x71]);
     pub const REGTEST_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xaa, 0xbb, 0xcc, 0xdd]);
     pub const SIGNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xf3, 0xf7, 0x7b, 0x45]);
 
@@ -838,7 +838,12 @@ fn create_testnet_genesis() -> Genesis {
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
 
-    let genesis_message = String::new();
+    // The Babbage testnet epoch: this message is part of the genesis hash, so
+    // changing it resets the testnet (new genesis id, fresh chain). Named
+    // after Charles Babbage, designer of the Analytical Engine -- the machine
+    // the first program, by Ada Lovelace (the previous testnet's namesake),
+    // was written for.
+    let genesis_message = String::from("babbage");
 
     // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
 
@@ -1014,7 +1019,7 @@ mod tests {
     fn testnet_creation() {
         let config = create_testnet();
 
-        assert_eq!(3, config.consensus_upgrades.len());
+        assert_eq!(2, config.consensus_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
@@ -1057,7 +1062,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:?}", ChainType::Testnet.magic_bytes()),
-            "MagicBytes(0x2B7E19F8)"
+            "MagicBytes(0xBABB1871)"
         );
         assert_eq!(
             format!("{:?}", ChainType::Regtest.magic_bytes()),

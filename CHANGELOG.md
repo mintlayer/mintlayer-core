@@ -12,6 +12,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ## [Unreleased]
 
 ### Changed
+  - Consensus:
+    - the testnet is reset as the Babbage epoch: a fresh genesis (named after
+      Charles Babbage, continuing from the Lovelace testnet), new network
+      magic bytes, and every consensus and chainstate upgrade -- including the
+      tightening rules -- active from the first block. Testnet operators must
+      resynchronize from scratch; old testnet data, checkpoints and bootstrap
+      files do not apply.
+
   - Storage:
     - the internal storage iteration APIs (`prefix_iter`, `greater_equal_iter`) now
       take the key prefix by reference and return iterators that no longer borrow it,
