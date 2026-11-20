@@ -41,6 +41,15 @@ use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
 #[async_trait::async_trait]
 impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'_> {
+    async fn set_secondary_indexed_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        conn.set_secondary_indexed_height(block_height).await
+    }
+
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,
@@ -574,6 +583,25 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw<'_> {
         let mut conn =
             QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
         let res = conn.get_best_block().await?;
+
+        Ok(res)
+    }
+
+    async fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let res = conn.secondary_indexed_height().await?;
+
+        Ok(res)
+    }
+
+    async fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        let mut conn =
+            QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR), &self.statements);
+        let res = conn.get_block_transaction_indices(block_height).await?;
 
         Ok(res)
     }

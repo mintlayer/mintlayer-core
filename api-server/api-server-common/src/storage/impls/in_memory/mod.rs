@@ -101,6 +101,7 @@ struct ApiServerInMemoryStorage {
     genesis_block: Arc<WithId<Genesis>>,
     number_of_coin_decimals: u8,
     storage_version: u32,
+    secondary_indexed_height: Option<BlockHeight>,
     // kept so that order/pool identifiers can be encoded exactly like the postgres
     // backend does (bech32 address strings), keeping tie-break orders identical
     chain_config: ChainConfig,
@@ -131,6 +132,7 @@ impl ApiServerInMemoryStorage {
             genesis_block: chain_config.genesis_block().clone(),
             number_of_coin_decimals: chain_config.coin_decimals(),
             storage_version: CURRENT_STORAGE_VERSION,
+            secondary_indexed_height: None,
             chain_config: chain_config.clone(),
         }
     }
@@ -404,6 +406,37 @@ impl ApiServerInMemoryStorage {
     fn get_storage_version(&self) -> Result<u32, ApiServerStorageError> {
         let version_table_handle = self.storage_version;
         Ok(version_table_handle)
+    }
+
+    fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        Ok(self.secondary_indexed_height)
+    }
+
+    fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        let Some(block_id) = self.main_chain_blocks_table.get(&block_height) else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .ordered_transaction_table
+            .iter()
+            .filter(|(_, tx_id)| {
+                self.transaction_table
+                    .get(*tx_id)
+                    .is_some_and(|(owning_block_id, _)| owning_block_id == block_id)
+            })
+            .map(|(index, tx_id)| (*tx_id, *index))
+            .collect())
+    }
+
+    fn set_secondary_indexed_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.secondary_indexed_height = Some(block_height);
+        Ok(())
     }
 
     fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {

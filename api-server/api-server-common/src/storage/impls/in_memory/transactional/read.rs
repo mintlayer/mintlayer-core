@@ -215,6 +215,17 @@ impl ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'_> {
         self.transaction.get_best_block()
     }
 
+    async fn secondary_indexed_height(&self) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        self.transaction.secondary_indexed_height()
+    }
+
+    async fn get_block_transaction_indices(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        self.transaction.get_block_transaction_indices(block_height)
+    }
+
     async fn get_block_aux_data(
         &self,
         block_id: Id<Block>,

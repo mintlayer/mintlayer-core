@@ -1651,6 +1651,92 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    /// The height through which the secondary history tables are complete;
+    /// `None` when no fast catch-up has deferred them. See the scanner-lib
+    /// backfill pass.
+    pub async fn secondary_indexed_height(
+        &mut self,
+    ) -> Result<Option<BlockHeight>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT value FROM ml.misc_data WHERE name = 'secondary_indexed_height';",
+                &[],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let Some(bytes) = row.map(|row| row.get::<_, Vec<u8>>(0)) else {
+            return Ok(None);
+        };
+        let bytes: [u8; 8] = bytes.try_into().map_err(|_| {
+            ApiServerStorageError::DeserializationError(
+                "Invalid secondary indexed height stored in the database".to_owned(),
+            )
+        })?;
+        Ok(Some(BlockHeight::new(u64::from_be_bytes(bytes))))
+    }
+
+    /// Records the height through which the secondary history tables are
+    /// complete.
+    pub async fn set_secondary_indexed_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let bytes = u64::to_be_bytes(block_height.into_int()).to_vec();
+        self.tx
+            .execute(
+                "INSERT INTO ml.misc_data (name, value) VALUES ('secondary_indexed_height', $1)
+                 ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+                &[&bytes],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// The `(transaction id, global index)` pairs of all transactions owned by
+    /// the main-chain block at `block_height`, ascending by index.
+    pub async fn get_block_transaction_indices(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<(Id<Transaction>, u64)>, ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+        let rows = self
+            .tx
+            .query(
+                "SELECT t.transaction_id, t.tx_global_index
+                 FROM ml.transactions t
+                 JOIN ml.blocks b ON t.owning_block_id = b.block_id
+                 WHERE b.block_height = $1
+                 ORDER BY t.tx_global_index ASC;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut result = Vec::with_capacity(rows.len());
+        for row in rows {
+            let tx_id_bytes: Vec<u8> = row.get(0);
+            let index: i64 = row.get(1);
+            let tx_id =
+                Id::<Transaction>::decode_all(&mut tx_id_bytes.as_slice()).map_err(|_| {
+                    ApiServerStorageError::DeserializationError(
+                        "Invalid transaction id in transactions table".to_owned(),
+                    )
+                })?;
+            result.push((
+                tx_id,
+                u64::try_from(index).map_err(|_| {
+                    ApiServerStorageError::DeserializationError(
+                        "Invalid transaction global index".to_owned(),
+                    )
+                })?,
+            ));
+        }
+        Ok(result)
+    }
+
     pub async fn initialize_database(
         &mut self,
         chain_config: &ChainConfig,

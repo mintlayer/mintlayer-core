@@ -152,6 +152,12 @@ pub async fn run<S: ApiServerStorage>(
             BlockchainState::new(Arc::clone(chain_config), storage)
         }
     };
+    // Seed the history-table watermark for databases written by builds that
+    // predate it; a no-op on fresh databases (see the method docs).
+    local_block
+        .seed_secondary_watermark_for_upgrade()
+        .await
+        .unwrap_or_else(|e| panic!("Seeding the secondary history watermark failed: {e}"));
 
     supervise_sync(
         chain_config,
@@ -323,10 +329,9 @@ async fn supervise_sync<S: ApiServerStorage>(
         // only reset after a successful sync, see below.
         // (experimental step 10) Fast catch-up decision: while the scanner is
         // more than CATCH_UP_THRESHOLD blocks behind the node, run in
-        // CatchingUp mode (secondary indexes deferred); within the threshold,
-        // run Full and complete any deferred backfill. The threshold is
-        // deliberately simple; the backfill pass is a follow-up tracked in the
-        // experimental notes.
+        // CatchingUp mode (secondary history rows deferred); within the
+        // threshold, run Full. The deferred history rows are rebuilt by the
+        // backfill pass that runs alongside Full-mode syncing, below.
         const CATCH_UP_THRESHOLD: u64 = 2_000;
         // Note: the RemoteNode wrapper already maps connection errors; reuse
         // the sync error handling by folding the decision into the sync cycle
@@ -369,19 +374,17 @@ async fn supervise_sync<S: ApiServerStorage>(
             };
             if local_block.scan_mode() != mode {
                 // Blocks scanned in CatchingUp mode skip the secondary history
-                // and statistics tables, and the backfill pass that rebuilds
-                // them is not implemented yet, so both transitions are
-                // surfaced loudly instead of failing silently.
+                // tables; the backfill pass rebuilds those rows afterwards.
                 if mode == api_blockchain_scanner_lib::blockchain_state::ScanMode::CatchingUp {
-                    logging::log::warn!(
-                        "(experimental) scanner entering fast catch-up mode: address/token \
-                         history and statistics will not be indexed for blocks scanned in this mode"
+                    logging::log::info!(
+                        "scanner entering fast catch-up mode: address/token history rows \
+                         are deferred for blocks scanned in this mode and rebuilt by the \
+                         backfill pass afterwards"
                     );
                 } else {
-                    logging::log::warn!(
-                        "(experimental) scanner leaving fast catch-up mode: any range indexed \
-                         while catching up lacks history/statistics rows until a backfill pass \
-                         (not yet implemented) is provided"
+                    logging::log::info!(
+                        "scanner leaving fast catch-up mode: deferred history rows are \
+                         being rebuilt by the backfill pass"
                     );
                 }
                 local_block.set_scan_mode(mode);
@@ -394,6 +397,21 @@ async fn supervise_sync<S: ApiServerStorage>(
                 // Note: the backoffs and the outage diagnostics are only reset here (after a
                 // successful sync), not after a successful connect: a flapping node must not
                 // pin the retry rate at the initial delay or reset the outage counters.
+                // Post-catch-up backfill: while in Full mode, rebuild the
+                // deferred secondary history tables for a chunk of the lagging
+                // range each cycle; live indexing keeps priority, so the pass
+                // is skipped while still catching up. The watermark makes
+                // this a no-op once the history tables are complete.
+                if local_block.scan_mode()
+                    == api_blockchain_scanner_lib::blockchain_state::ScanMode::Full
+                {
+                    const SECONDARY_BACKFILL_CHUNK: usize = 1_000;
+                    if let Err(err) =
+                        local_block.backfill_secondary_indexes(SECONDARY_BACKFILL_CHUNK).await
+                    {
+                        logging::log::warn!("Secondary history backfill failed: {err}");
+                    }
+                }
                 backoff.reset();
                 sync_error_backoff.reset();
                 outage = Outage::new();
