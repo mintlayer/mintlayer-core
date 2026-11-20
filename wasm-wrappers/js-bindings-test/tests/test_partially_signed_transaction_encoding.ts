@@ -39,7 +39,7 @@ import {
   TxAdditionalInfo,
 } from "../../pkg/wasm_wrappers.js";
 
-import { assert_eq_vals } from "./utils.js";
+import { assert_eq_vals, gen_random_int } from "./utils.js";
 
 import {
   ANOTHER_ORDER_ID,

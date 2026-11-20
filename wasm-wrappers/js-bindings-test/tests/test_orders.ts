@@ -25,7 +25,6 @@ import {
 import {
   assert_eq_arrays,
   gen_random_int,
-  get_err_msg,
 } from "./utils.js";
 
 import {
