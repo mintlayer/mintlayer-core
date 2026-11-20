@@ -25,12 +25,10 @@ import {
 import {
   assert_eq_arrays,
   gen_random_int,
-  get_err_msg,
 } from "./utils.js";
 
 import {
   ORDER_ID,
-  ORDERS_V1_TESTNET_FORK_HEIGHT,
   TOKEN_ID,
 } from "./defs.js";
 import {
@@ -78,31 +76,11 @@ export function test_orders() {
   assert_eq_arrays(create_order_output_2, expected_create_order_output_2);
   console.log("create order tokens for coins encoding ok");
 
-  // Note: the exact heights don't matter as long as they are at the "correct side" of the fork.
-  const order_v0_height = gen_random_int(0, ORDERS_V1_TESTNET_FORK_HEIGHT - 1, "order_v0_height");
-  const order_v1_height = order_v0_height + ORDERS_V1_TESTNET_FORK_HEIGHT;
+  // The Babbage testnet activates orders V1 from genesis, so the height is
+  // arbitrary and only the V1 encoding is reachable.
+  const order_v1_height = gen_random_int(0, 10_000_000_000, "order_v1_height");
   // Note: the nonce is ignored since orders v1.
   const order_v1_nonce = gen_random_int(0, 1000000, "order_v1_nonce");
-  const fill_order_v0_input = encode_input_for_fill_order(
-    ORDER_ID,
-    Amount.from_atoms("40000"),
-    ADDRESS,
-    BigInt(1),
-    BigInt(order_v0_height),
-    Network.Testnet
-  );
-  const expected_fill_order_v0_input = [
-    2, 4, 7, 49, 150, 254, 178, 75, 93, 83, 251,
-    1, 235, 159, 200, 27, 237, 187, 175, 123, 34, 179,
-    118, 53, 6, 173, 213, 7, 212, 102, 232, 253, 9,
-    244, 197, 2, 113, 2, 0, 1, 91, 58, 110, 176,
-    100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202,
-    103, 207, 80, 217, 178
-  ];
-
-  assert_eq_arrays(fill_order_v0_input, expected_fill_order_v0_input);
-  console.log("fill order v0 encoding ok");
-
   const fill_order_v1_input = encode_input_for_fill_order(
     ORDER_ID,
     Amount.from_atoms("40000"),
@@ -119,23 +97,6 @@ export function test_orders() {
 
   assert_eq_arrays(fill_order_v1_input, expected_fill_order_v1_input);
   console.log("fill order v1 encoding ok");
-
-  const conclude_order_v0_input = encode_input_for_conclude_order(
-    ORDER_ID,
-    BigInt(1),
-    BigInt(order_v0_height),
-    Network.Testnet
-  );
-  const expected_conclude_order_v0_input = [
-    2, 4, 6, 49, 150, 254, 178, 75,
-    93, 83, 251, 1, 235, 159, 200, 27,
-    237, 187, 175, 123, 34, 179, 118, 53,
-    6, 173, 213, 7, 212, 102, 232, 253,
-    9, 244, 197
-  ];
-
-  assert_eq_arrays(conclude_order_v0_input, expected_conclude_order_v0_input);
-  console.log("conclude order v0 encoding ok");
 
   const conclude_order_v1_input = encode_input_for_conclude_order(
     ORDER_ID,
@@ -170,17 +131,4 @@ export function test_orders() {
   assert_eq_arrays(freeze_order_input, expected_freeze_order_input);
   console.log("freeze order encoding ok");
 
-  try {
-    encode_input_for_freeze_order(
-      ORDER_ID,
-      BigInt(order_v0_height),
-      Network.Testnet
-    );
-    throw new Error("Freezing an order before v1 worked somehow!");
-  } catch (e) {
-    if (!get_err_msg(e).includes("Orders V1 not activated")) {
-      throw e;
-    }
-    console.log("Tested order freezing before v1 successfully");
-  }
 }
