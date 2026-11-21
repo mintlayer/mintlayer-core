@@ -1714,6 +1714,16 @@ impl ChainActivationContext {
 /// block, per the seal duplication index). A block that does not yield a
 /// well-formed seal is never classified as a duplicate, and an empty segment is
 /// never refused.
+///
+/// Sightings are permanent: the index is a historical record, so entries are
+/// not pruned when a block is invalidated, and the classification does not
+/// skip invalidated partner blocks. This is deliberate fail-closed behavior.
+/// An honest segment always carries at least one fresh seal (honestly-mined
+/// VRF proofs are unique), so the gate cannot refuse an honest chain, while
+/// counting only valid partners would let an attacker make a reused seal look
+/// unique again by having one of its twins invalidated -- re-opening exactly
+/// the trust-inflation construction the gate exists to refuse. A refused chain
+/// always recovers by extending with a single fresh-seal block.
 fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
     db_tx: &S,
     new_chain: &[BlockIndex],
