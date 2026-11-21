@@ -22,7 +22,6 @@ make_config_setting!(MaxDbCommitAttempts, usize, 10);
 make_config_setting!(MaxOrphanBlocks, usize, 512);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(PosSealDuplicationTracking, bool, true);
-make_config_setting!(PosSealActivationGate, bool, false);
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
@@ -57,8 +56,9 @@ pub struct ChainstateConfig {
     /// If true, a chain whose newly activated segment consists entirely of blocks whose
     /// PoS consensus proofs are duplicates of already-known proofs will not be activated.
     /// Only effective together with `pos_seal_duplication_tracking`, which maintains the
-    /// index this gate classifies against. Defaults to false.
-    pub pos_seal_activation_gate: PosSealActivationGate,
+    /// index this gate classifies against. `None` means the default for the chain type
+    /// applies: enabled on the testnet (hardening it from launch), disabled elsewhere.
+    pub pos_seal_activation_gate: Option<bool>,
 }
 
 impl ChainstateConfig {
@@ -86,8 +86,15 @@ impl ChainstateConfig {
         *self.pos_seal_duplication_tracking
     }
 
-    pub fn pos_seal_activation_gate_enabled(&self) -> bool {
-        *self.pos_seal_activation_gate
+    pub fn pos_seal_activation_gate_enabled(&self, chain_config: &ChainConfig) -> bool {
+        if let Some(pos_seal_activation_gate) = self.pos_seal_activation_gate {
+            return pos_seal_activation_gate;
+        }
+
+        match chain_config.chain_type() {
+            ChainType::Testnet => true,
+            ChainType::Mainnet | ChainType::Signet | ChainType::Regtest => false,
+        }
     }
 
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
@@ -110,5 +117,47 @@ impl ChainstateConfig {
 
     pub fn checkpoints_mismatch_allowed(&self) -> bool {
         self.allow_checkpoints_mismatch.unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::chain::Destination;
+    use common::chain::NetUpgrades;
+    use common::chain::config::Builder as ConfigBuilder;
+    use std::collections::BTreeMap;
+
+    fn chain_config_for(chain_type: ChainType) -> common::chain::config::ChainConfig {
+        ConfigBuilder::new(chain_type)
+            .consensus_upgrades(NetUpgrades::unit_tests())
+            .genesis_unittest(Destination::AnyoneCanSpend)
+            .checkpoints(BTreeMap::new())
+            .build()
+    }
+
+    #[test]
+    fn seal_gate_default_depends_on_chain_type() {
+        let config = ChainstateConfig::default();
+
+        assert!(config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Testnet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Mainnet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Signet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Regtest)));
+    }
+
+    #[test]
+    fn seal_gate_explicit_setting_overrides_the_default() {
+        let enabled = ChainstateConfig {
+            pos_seal_activation_gate: Some(true),
+            ..Default::default()
+        };
+        assert!(enabled.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Mainnet)));
+
+        let disabled = ChainstateConfig {
+            pos_seal_activation_gate: Some(false),
+            ..Default::default()
+        };
+        assert!(!disabled.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Testnet)));
     }
 }

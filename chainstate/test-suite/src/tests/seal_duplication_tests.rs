@@ -1278,6 +1278,9 @@ fn run_reused_proof_extension_scenario(
     } else {
         ChainstateConfig {
             pos_seal_duplication_tracking: true.into(),
+            // Explicitly disabled: the unit-test chain builder uses the testnet
+            // chain type, where the gate now defaults to enabled.
+            pos_seal_activation_gate: Some(false),
             ..Default::default()
         }
     };

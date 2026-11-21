@@ -244,7 +244,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         time_getter: TimeGetter,
         shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Self {
-        if chainstate_config.pos_seal_activation_gate_enabled()
+        if chainstate_config.pos_seal_activation_gate_enabled(&chain_config)
             && !chainstate_config.pos_seal_duplication_tracking_enabled()
         {
             // The gate classifies activation segments against the index that the

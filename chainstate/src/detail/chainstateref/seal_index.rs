@@ -665,8 +665,16 @@ mod tests {
     }
 
     #[test]
-    fn seal_activation_gate_is_disabled_by_default() {
-        assert!(!ChainstateConfig::default().pos_seal_activation_gate_enabled());
+    fn seal_activation_gate_defaults_off_on_non_testnet_chains() {
+        let chain_config = common::chain::config::Builder::test_chain()
+            .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
+            .genesis_unittest(common::chain::Destination::AnyoneCanSpend)
+            .checkpoints(std::collections::BTreeMap::new())
+            .build();
+        // The unit-test builder uses the testnet chain type, where the gate now
+        // defaults to enabled; the resolver tests in `config.rs` cover all chain
+        // types. Here the default-on behavior is what the suite relies on.
+        assert!(ChainstateConfig::default().pos_seal_activation_gate_enabled(&chain_config));
     }
 
     #[test]
