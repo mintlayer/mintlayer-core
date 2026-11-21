@@ -46,7 +46,7 @@ use chainstate_types::{
     BlockIndex, BlockStatus, BlockValidationStage, EpochData, EpochStorageWrite, GenBlockIndexRef,
     PropertyQueryError, SealedStorageTag, TipStorageTag, pos_randomness::PoSRandomness,
 };
-use chainstateref::{ChainstateRef, ReorgError};
+use chainstateref::{ChainActivationContext, ChainstateRef, ReorgError};
 use common::{
     Uint256,
     chain::{
@@ -244,6 +244,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         time_getter: TimeGetter,
         shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Self {
+        if chainstate_config.pos_seal_activation_gate_enabled()
+            && !chainstate_config.pos_seal_duplication_tracking_enabled()
+        {
+            // The gate classifies activation segments against the index that the
+            // seal duplication tracking maintains; without the tracking, the gate
+            // has nothing to look up and would silently never fire.
+            log::warn!(
+                "The PoS seal activation gate is enabled while the PoS seal duplication \
+                 tracking is disabled; the gate has no effect without its index"
+            );
+        }
+
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         let subsystem_events = EventsController::new();
         let rpc_events = broadcaster::Broadcaster::new();
@@ -379,6 +391,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: &WithId<Block>,
         block_index: BlockIndex,
         checked_against_tip: Option<Id<GenBlock>>,
+        in_initial_block_download: bool,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
@@ -451,7 +464,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // due to a bad parent. This will be done by the caller code.
         let result = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Connect);
-            chainstate_ref.activate_best_chain(&block_index, Some(block))
+            chainstate_ref.activate_best_chain(
+                &block_index,
+                Some(block),
+                ChainActivationContext::BlockProcessing {
+                    in_initial_block_download,
+                },
+            )
         };
 
         {
@@ -533,6 +552,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .unwrap_or_else(|e| e.into_inner())
             .remove(&block_id);
 
+        let in_initial_block_download = self.is_initial_block_download();
+
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
         let integrate_block_result = self.with_rw_tx(
@@ -542,6 +563,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     &block,
                     block_index.clone(),
                     checked_against_tip,
+                    in_initial_block_download,
                 )
             },
             |attempt_number| {
