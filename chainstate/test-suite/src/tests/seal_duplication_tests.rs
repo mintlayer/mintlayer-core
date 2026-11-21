@@ -495,7 +495,7 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
 #[should_panic(expected = "SealActivationGateWithoutTracking")]
 fn gate_enabled_without_tracking_is_rejected() {
     let mut rng = test_utils::random::make_seedable_rng(Seed::from_entropy());
-    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (_vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let chainstate_config = ChainstateConfig {
         pos_seal_duplication_tracking: false.into(),
