@@ -78,7 +78,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             enable_heavy_checks,
             allow_checkpoints_mismatch,
             pos_seal_duplication_tracking: pos_seal_duplication_tracking.into(),
-            pos_seal_activation_gate: pos_seal_activation_gate.into(),
+            pos_seal_activation_gate,
         }
     }
 }

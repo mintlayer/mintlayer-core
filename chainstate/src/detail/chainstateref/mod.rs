@@ -1485,7 +1485,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         best_block_id: &Id<GenBlock>,
         activation_context: ChainActivationContext,
     ) -> Result<bool, ReorgError> {
-        if !self.chainstate_config.pos_seal_activation_gate_enabled() {
+        if !self.chainstate_config.pos_seal_activation_gate_enabled(self.chain_config) {
             return Ok(false);
         }
         if activation_context.seal_activation_gate_bypassed() {

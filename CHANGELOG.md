@@ -13,12 +13,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Added
   - Node:
-    - chainstate: an optional `pos_seal_activation_gate` chainstate config setting
-      (disabled by default): when enabled, the node will not activate a chain whose
-      newly activated segment consists entirely of blocks whose PoS consensus proofs
-      are duplicates of proofs already seen on other known blocks. The initial block
-      download and the reorgs of the user-initiated block invalidation path are never
-      affected.
+    - chainstate: an optional `pos_seal_activation_gate` chainstate config setting:
+      when enabled, the node will not activate a chain whose newly activated segment
+      consists entirely of blocks whose PoS consensus proofs are duplicates of proofs
+      already seen on other known blocks. The initial block download and the reorgs
+      of the user-initiated block invalidation path are never affected. The default
+      depends on the chain type: enabled on the testnet (hardening it from launch),
+      disabled elsewhere; an explicit setting always overrides the default.
 
 ### Changed
   - Storage:
