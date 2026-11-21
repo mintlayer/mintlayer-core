@@ -19,7 +19,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       already seen on other known blocks. The initial block download and the reorgs
       of the user-initiated block invalidation path are never affected. The default
       depends on the chain type: enabled on the testnet (hardening it from launch),
-      disabled elsewhere; an explicit setting always overrides the default.
+      disabled elsewhere; an explicit setting always overrides the default. Enabling
+      the gate while the seal duplication tracking is disabled is now rejected at
+      chainstate initialization instead of being silently ignored.
 
 ### Changed
   - Storage:

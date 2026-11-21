@@ -1468,7 +1468,8 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     /// consensus proofs that were already seen on other known blocks).
     ///
     /// This is the PoS seal activation gate
-    /// (`ChainstateConfig::pos_seal_activation_gate`): it is disabled by default,
+    /// (`ChainstateConfig::pos_seal_activation_gate`): it is enabled by default only on
+    /// testnet chains and disabled by default elsewhere,
     /// it never fires during the initial block download or on the reorgs of the
     /// user-initiated block invalidation path, and it is fail-open: a block that
     /// does not yield a well-formed seal (PoW, genesis, malformed PoS data) is
