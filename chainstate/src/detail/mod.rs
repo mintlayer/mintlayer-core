@@ -209,6 +209,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             db_tx.get_best_block_id()?
         };
 
+        if chainstate_config.pos_seal_activation_gate_enabled(&chain_config)
+            && !chainstate_config.pos_seal_duplication_tracking_enabled()
+        {
+            // The gate classifies activation segments against the index that the
+            // seal duplication tracking maintains; without the tracking, the gate
+            // has nothing to look up and would silently never fire. Refuse the
+            // contradictory combination instead of neutralizing the hardening
+            // default with a single unrelated-looking config line.
+            return Err(InitializationError::SealActivationGateWithoutTracking.into());
+        }
+
         let mut chainstate = Self::new_no_genesis(
             chain_config,
             chainstate_config,
@@ -244,18 +255,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         time_getter: TimeGetter,
         shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
     ) -> Self {
-        if chainstate_config.pos_seal_activation_gate_enabled(&chain_config)
-            && !chainstate_config.pos_seal_duplication_tracking_enabled()
-        {
-            // The gate classifies activation segments against the index that the
-            // seal duplication tracking maintains; without the tracking, the gate
-            // has nothing to look up and would silently never fire.
-            log::warn!(
-                "The PoS seal activation gate is enabled while the PoS seal duplication \
-                 tracking is disabled; the gate has no effect without its index"
-            );
-        }
-
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         let subsystem_events = EventsController::new();
         let rpc_events = broadcaster::Broadcaster::new();

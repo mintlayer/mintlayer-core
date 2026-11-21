@@ -379,6 +379,9 @@ fn seal_tracking_disabled_records_nothing(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let chainstate_config = ChainstateConfig {
         pos_seal_duplication_tracking: false.into(),
+        // The gate defaults to enabled on this testnet-type chain; disabling the
+        // tracking with the gate on is now rejected at initialization.
+        pos_seal_activation_gate: Some(false),
         ..Default::default()
     };
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
@@ -477,12 +480,32 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
 // ---------------------------------------------------------------
 // PoS seal activation gate
 //
-// The gate (disabled by default in this release) refuses to activate a chain
+// The gate (enabled by default on testnet chains -- which includes the
+// testnet-type chains this suite builds -- and disabled by default elsewhere)
+// refuses to activate a chain
 // whose newly activated segment consists entirely of blocks reusing
 // already-known PoS consensus proofs. It never fires on a segment that
 // contains at least one block with a fresh proof, and it is bypassed for the
 // initial block download and for the reorgs of the user-initiated block
 // invalidation path.
+
+/// The contradictory combination (gate enabled, tracking disabled) is refused
+/// at chainstate initialization instead of silently neutralizing the gate.
+#[test]
+#[should_panic(expected = "SealActivationGateWithoutTracking")]
+fn gate_enabled_without_tracking_is_rejected() {
+    let mut rng = test_utils::random::make_seedable_rng(Seed::from_entropy());
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let chainstate_config = ChainstateConfig {
+        pos_seal_duplication_tracking: false.into(),
+        pos_seal_activation_gate: Some(true),
+        ..Default::default()
+    };
+
+    let _tf =
+        setup_chain_with_stake_pool_with_chainstate_config(&mut rng, vrf_pk, chainstate_config);
+}
 
 fn gate_enabled_config() -> ChainstateConfig {
     ChainstateConfig {
