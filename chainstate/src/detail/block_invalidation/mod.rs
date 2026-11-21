@@ -21,7 +21,10 @@ use derive_more::Display;
 use thiserror::Error;
 
 use self::best_chain_candidates::BestChainCandidates;
-use super::{Chainstate, chainstateref::ChainstateRef};
+use super::{
+    Chainstate,
+    chainstateref::{ChainActivationContext, ChainstateRef},
+};
 use crate::{
     BlockError, BlockProcessingErrorClassification, TransactionVerificationStrategy,
     detail::chainstateref::ReorgError,
@@ -208,7 +211,11 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                     let block_index =
                         get_existing_block_index(chainstate_ref, candidate.block_id())?;
                     let reorg_occured = chainstate_ref
-                        .activate_best_chain(&block_index, None)
+                        .activate_best_chain(
+                            &block_index,
+                            None,
+                            ChainActivationContext::InvalidationRecovery,
+                        )
                         .map_err(ReorgDuringInvalidationError::ReorgError)?;
                     assert!(reorg_occured);
                     Ok(())

@@ -11,6 +11,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+  - Node:
+    - chainstate: an optional `pos_seal_activation_gate` chainstate config setting:
+      when enabled, the node will not activate a chain whose newly activated segment
+      consists entirely of blocks whose PoS consensus proofs are duplicates of proofs
+      already seen on other known blocks. The initial block download and the reorgs
+      of the user-initiated block invalidation path are never affected. The default
+      depends on the chain type: enabled on the testnet (hardening it from launch),
+      disabled elsewhere; an explicit setting always overrides the default. Enabling
+      the gate while the seal duplication tracking is disabled is now rejected at
+      chainstate initialization instead of being silently ignored.
+
 ### Changed
   - Storage:
     - the internal storage iteration APIs (`prefix_iter`, `greater_equal_iter`) now
