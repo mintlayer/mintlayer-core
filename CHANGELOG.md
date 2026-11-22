@@ -36,6 +36,11 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       previous `2024-01-12 12:54:52 UTC`.
 
   - Wallet:
+    - decoded partially signed transactions (e.g. passed to the `signrawtransaction`
+      and `transactioninspect` RPC calls) are now checked for consistency right after
+      decoding, so a PSBT whose per-input vectors do not match the transaction shape
+      is rejected with a detailed `Invalid raw transaction` error instead of failing
+      later or panicking during signing.
     - coin selection leaves out redundant UTXOs: the selection algorithms stop as soon
       as the target is met, and among equally economical solutions the one spending
       fewer inputs is preferred, so default sends spend fewer UTXOs and produce smaller
