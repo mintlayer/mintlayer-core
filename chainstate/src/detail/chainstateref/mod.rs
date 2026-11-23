@@ -1470,8 +1470,8 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     /// This is the PoS seal activation gate
     /// (`ChainstateConfig::pos_seal_activation_gate`): it is enabled by default only on
     /// testnet chains and disabled by default elsewhere,
-    /// it never fires during the initial block download or on the reorgs of the
-    /// user-initiated block invalidation path, and it is fail-open: a block that
+    /// it never fires on the reorgs of the user-initiated block invalidation path,
+    /// and it is fail-open: a block that
     /// does not yield a well-formed seal (PoW, genesis, malformed PoS data) is
     /// never classified as a duplicate, and a segment that contains at least one
     /// non-duplicate block proceeds under the ordinary trust comparison.
@@ -1693,14 +1693,15 @@ pub enum ReorgError {
 /// The context of a best-chain activation attempt.
 ///
 /// The PoS seal activation gate (see
-/// `ChainstateConfig::pos_seal_activation_gate`) must never influence chain
-/// re-activations driven by the user-initiated block invalidation path, nor the
-/// initial block download, where the liveness of the bootstrap outweighs
-/// containment.
+/// `ChainstateConfig::pos_seal_activation_gate`) never influences chain
+/// re-activations driven by the user-initiated block invalidation path: the
+/// recovery must be able to re-activate any remaining chain. Block processing
+/// is always gated, including during the initial block download, so a syncing
+/// node refuses the same all-duplicate segments that its peers refuse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainActivationContext {
-    /// A newly processed block is being connected during normal operation.
-    BlockProcessing { in_initial_block_download: bool },
+    /// A newly processed block is being connected.
+    BlockProcessing,
     /// The best chain is being re-activated after user-initiated block invalidation.
     InvalidationRecovery,
 }
@@ -1709,9 +1710,7 @@ impl ChainActivationContext {
     /// Whether the PoS seal activation gate must be bypassed for this activation.
     fn seal_activation_gate_bypassed(&self) -> bool {
         match self {
-            ChainActivationContext::BlockProcessing {
-                in_initial_block_download,
-            } => *in_initial_block_download,
+            ChainActivationContext::BlockProcessing => false,
             ChainActivationContext::InvalidationRecovery => true,
         }
     }

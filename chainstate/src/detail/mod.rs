@@ -390,7 +390,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: &WithId<Block>,
         block_index: BlockIndex,
         checked_against_tip: Option<Id<GenBlock>>,
-        in_initial_block_download: bool,
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
@@ -466,9 +465,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             chainstate_ref.activate_best_chain(
                 &block_index,
                 Some(block),
-                ChainActivationContext::BlockProcessing {
-                    in_initial_block_download,
-                },
+                ChainActivationContext::BlockProcessing,
             )
         };
 
@@ -551,8 +548,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .unwrap_or_else(|e| e.into_inner())
             .remove(&block_id);
 
-        let in_initial_block_download = self.is_initial_block_download();
-
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
         // indicates whether a reorg has occurred.
         let integrate_block_result = self.with_rw_tx(
@@ -562,7 +557,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     &block,
                     block_index.clone(),
                     checked_against_tip,
-                    in_initial_block_download,
                 )
             },
             |attempt_number| {

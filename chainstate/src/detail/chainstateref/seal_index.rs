@@ -681,23 +681,14 @@ mod tests {
     fn seal_activation_gate_bypass_matrix() {
         use crate::detail::chainstateref::ChainActivationContext;
 
-        // Normal block processing: the gate applies unless the node is in the
-        // initial block download.
-        assert!(
-            !ChainActivationContext::BlockProcessing {
-                in_initial_block_download: false
-            }
-            .seal_activation_gate_bypassed()
-        );
-        assert!(
-            ChainActivationContext::BlockProcessing {
-                in_initial_block_download: true
-            }
-            .seal_activation_gate_bypassed()
-        );
+        // Normal block processing is always gated, including while the node is
+        // in the initial block download: a syncing node must refuse the same
+        // all-duplicate segments that its peers refuse.
+        assert!(!ChainActivationContext::BlockProcessing.seal_activation_gate_bypassed());
 
         // The reorgs of the user-initiated block invalidation path are never
-        // gated (ground rule: the gate must never fire there).
+        // gated: the invalidation recovery must be able to re-activate any
+        // remaining chain.
         assert!(ChainActivationContext::InvalidationRecovery.seal_activation_gate_bypassed());
     }
 

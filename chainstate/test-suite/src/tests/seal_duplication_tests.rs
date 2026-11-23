@@ -15,12 +15,15 @@
 
 //! Tests for the indexing of PoS block seals and the recording of duplicate seal evidence.
 
+use std::time::Duration;
+
 use rstest::rstest;
 
 use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, Transactional as _};
 use chainstate_test_framework::{
-    TestFramework, pos_mine, produce_kernel_signature as produce_block_reward_kernel_signature,
+    TestFramework, TestFrameworkBuilder, pos_mine,
+    produce_kernel_signature as produce_block_reward_kernel_signature,
 };
 use chainstate_types::{BlockSeal, pos_randomness::PoSRandomness};
 use common::{
@@ -482,12 +485,10 @@ fn duplicate_seal_records_survive_reorg(#[case] seed: Seed) {
 //
 // The gate (enabled by default on testnet chains -- which includes the
 // testnet-type chains this suite builds -- and disabled by default elsewhere)
-// refuses to activate a chain
-// whose newly activated segment consists entirely of blocks reusing
-// already-known PoS consensus proofs. It never fires on a segment that
-// contains at least one block with a fresh proof, and it is bypassed for the
-// initial block download and for the reorgs of the user-initiated block
-// invalidation path.
+// refuses to activate a chain whose newly activated segment consists entirely
+// of blocks reusing already-known PoS consensus proofs. It never fires on a
+// segment that contains at least one block with a fresh proof, and it is
+// bypassed only for the reorgs of the user-initiated block invalidation path.
 
 /// The contradictory combination (gate enabled, tracking disabled) is refused
 /// at chainstate initialization instead of silently neutralizing the gate.
@@ -1455,6 +1456,157 @@ fn activation_gate_refuses_reused_proof_extension(#[case] seed: Seed) {
         best_without_gate,
         Id::<common::chain::GenBlock>::from(reworked_id)
     );
+}
+
+/// Gate on, node in the initial block download: the gate is not bypassed
+/// while syncing. A node restarted from a storage whose tip is older than
+/// `max_tip_age` is back in the initial block download; the reused-proof
+/// extension of the incumbent chain is refused there exactly as it is outside
+/// of the initial block download (the tip does not move), and a fresh-seal
+/// child then activates the chain, its fresh tip ending the initial block
+/// download with it.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn activation_gate_is_not_bypassed_during_initial_block_download(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    // The long epoch of the reused-proof-extension scenario, so the VRF
+    // transcript of the side block stays valid at the next height.
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(consensus_upgrades_with_pos_at_height(
+            FIRST_POS_BLOCK_HEIGHT,
+        ))
+        .epoch_length(std::num::NonZeroU64::new(100).unwrap())
+        .sealed_epoch_distance_from_tip(0)
+        .build();
+    // A tip older than one second is stale, so a node whose tip is not within
+    // the last second stays in the initial block download.
+    let chainstate_config = ChainstateConfig {
+        max_tip_age: Duration::from_secs(1).into(),
+        ..gate_enabled_config()
+    };
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_chainstate_config(chainstate_config)
+        .with_initial_time_since_genesis(2)
+        .build();
+    // Two seconds after genesis the genesis tip is stale: the node starts in
+    // the initial block download.
+    assert!(tf.chainstate.is_initial_block_download());
+
+    let (stake_pool_data, staking_sk) =
+        chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk,
+        );
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    // The incumbent chain A, B and the losing sibling C, as in the
+    // reused-proof-extension scenario. Their fresh tips end the initial
+    // block download of this node.
+    let pool_block = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let block_a = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        pool_block,
+        60,
+    );
+    let block_b = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        block_a,
+        61,
+    );
+    let block_c = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        block_a,
+        100,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(block_b)
+    );
+    assert!(!tf.chainstate.is_initial_block_download());
+
+    // The node is restarted from its storage once its tip has gone stale: the
+    // recreated node is in the initial block download again.
+    let tip_timestamp = tf
+        .storage
+        .transaction_ro()
+        .unwrap()
+        .get_block(&block_b)
+        .unwrap()
+        .unwrap()
+        .header()
+        .timestamp();
+    let now_secs = tf.current_time().as_duration_since_epoch().as_secs();
+    tf.progress_time_seconds_since_epoch(tip_timestamp.as_int_seconds() - now_secs + 2);
+    let mut tf = TestFrameworkBuilder::from_existing_framework(tf).build();
+    assert!(tf.chainstate.is_initial_block_download());
+
+    // The reused-proof extension D of the incumbent chain is refused while the
+    // node is in the initial block download: the tip stays on B, D is stored,
+    // and the stale tip keeps the node in the initial block download.
+    let reworked_id = graft_reused_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &staking_sk,
+        staking_destination,
+        reward_outputs,
+        block_b,
+        block_c,
+        pool_id,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(block_b)
+    );
+    assert!(tf.storage.transaction_ro().unwrap().get_block(&reworked_id).unwrap().is_some());
+    assert!(tf.chainstate.is_initial_block_download());
+
+    // A fresh-seal child activates the refused chain, and its fresh tip ends
+    // the initial block download.
+    let fresh_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        reworked_id,
+        110,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(fresh_id)
+    );
+    assert!(!tf.chainstate.is_initial_block_download());
 }
 
 /// Sightings are permanent: invalidating one of the twin blocks does not
