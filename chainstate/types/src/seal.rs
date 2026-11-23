@@ -104,6 +104,17 @@ impl SealIndexEntry {
         &self.blocks
     }
 
+    /// Whether the seal is indexed for a block other than the given one.
+    ///
+    /// The given block's own sighting is not required to be present: the
+    /// indexing is best-effort, so a block whose own indexing failed must still
+    /// be recognized as a duplicate whenever the seal is known from another
+    /// block. Sightings beyond the indexing cap are not listed, but an entry at
+    /// the cap always lists blocks other than a newly seen one.
+    pub fn is_seen_on_block_other_than(&self, block_id: Id<Block>) -> bool {
+        self.blocks.iter().any(|(existing_id, _)| *existing_id != block_id)
+    }
+
     pub fn push_block(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         self.blocks.push((block_id, block_height));
     }
@@ -257,6 +268,35 @@ mod tests {
         // its encoding must stay readable (see `seal_encoding_is_stable`).
         let decoded = SealIndexEntry::decode(&mut &entry.encode()[..]).unwrap();
         assert_eq!(decoded, entry);
+    }
+
+    #[test]
+    fn seal_index_entry_is_seen_on_block_other_than() {
+        let (_, seal) = make_seal(0, H256::zero());
+        let block_id = Id::new(H256::from([3u8; 32]));
+        let other_block_id = Id::new(H256::from([4u8; 32]));
+
+        // Only the block itself is listed: the seal is not seen on another block.
+        let entry = SealIndexEntry::new(seal.clone(), vec![(block_id, BlockHeight::new(7))]);
+        assert!(!entry.is_seen_on_block_other_than(block_id));
+        assert!(entry.is_seen_on_block_other_than(other_block_id));
+
+        // Another block is listed, whether or not the block itself is listed too.
+        let entry = SealIndexEntry::new(
+            seal.clone(),
+            vec![(block_id, BlockHeight::new(7)), (other_block_id, BlockHeight::new(8))],
+        );
+        assert!(entry.is_seen_on_block_other_than(block_id));
+        assert!(entry.is_seen_on_block_other_than(other_block_id));
+
+        // A sighting beyond the cap is not listed, but the capped entry still
+        // lists blocks other than it.
+        let capped = SealIndexEntry::new(
+            seal,
+            (0..8u8).map(|i| (Id::new(H256::from([i; 32])), BlockHeight::new(1))).collect(),
+        );
+        let unlisted_block_id = Id::new(H256::from([9u8; 32]));
+        assert!(capped.is_seen_on_block_other_than(unlisted_block_id));
     }
 
     #[test]

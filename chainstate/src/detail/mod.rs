@@ -438,11 +438,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
         }
 
-        // Seal duplication tracking is observational: it feeds no validation
-        // rule, so its failure (e.g. a storage issue in the seal tables) must
-        // not reject an otherwise valid block and harm the liveness of the
-        // node. The indexing of the affected block is lost, which the logging
-        // makes visible.
+        // Seal duplication tracking is best-effort: a failed index write (e.g. a
+        // storage issue in the seal tables) must not reject an otherwise valid
+        // block and harm the liveness of the node. The indexing must still run
+        // before `activate_best_chain`, because the PoS seal activation gate
+        // classifies the candidate segment against this index; a failed seal
+        // read inside the rw transaction aborts the transaction like any other
+        // failed read. The gate classifies a block by the other sightings of
+        // its seal, so the lost sighting of this block cannot turn a reused
+        // seal into a fresh one; the loss is made visible by the logging.
         {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::SealIndex);
             if let Err(err) =

@@ -1751,7 +1751,7 @@ fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
             return Ok(false);
         };
         let duplicated = match db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
-            Some(entry) => entry.blocks().len() > 1,
+            Some(entry) => entry.is_seen_on_block_other_than(*block_index.block_id()),
             None => false,
         };
         if !duplicated {

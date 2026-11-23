@@ -812,6 +812,21 @@ mod tests {
         let segment = vec![make_index(&block_a)];
         assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
 
+        // Case: a block whose own sighting is missing from the entry (its
+        // indexing failed) is still refused, since the seal is known from
+        // another block.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a_twin, TEST_HEIGHT)],
+            ))));
+        let segment = vec![make_index(&block_a)];
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+
         // Case: one duplicate and one fresh block in the same segment never
         // refuses (the fresh block carries the ordinary trust comparison).
         let mut db = MockStoreTxRw::new();
