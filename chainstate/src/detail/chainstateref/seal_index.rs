@@ -695,8 +695,9 @@ mod tests {
     /// Pin the load-bearing classification semantics of the PoS seal activation
     /// gate: empty segments are never refused, any non-duplicate (fresh proof,
     /// unindexed proof, or missing seal) breaks the refusal, an index entry at
-    /// the cap still classifies as duplicated, and a fully duplicated segment is
-    /// refused.
+    /// the cap still classifies as duplicated, a fully duplicated segment is
+    /// refused whether it has one or two blocks, and a block whose own sighting
+    /// is missing from the entry is still refused.
     #[test]
     fn segment_seals_all_duplicated_classification() {
         use super::super::segment_seals_all_duplicated;

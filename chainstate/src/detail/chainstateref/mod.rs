@@ -1468,13 +1468,13 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     /// consensus proofs that were already seen on other known blocks).
     ///
     /// This is the PoS seal activation gate
-    /// (`ChainstateConfig::pos_seal_activation_gate`): it is enabled by default only on
-    /// testnet chains and disabled by default elsewhere,
-    /// it never fires on the reorgs of the user-initiated block invalidation path,
-    /// and it is fail-open: a block that
-    /// does not yield a well-formed seal (PoW, genesis, malformed PoS data) is
-    /// never classified as a duplicate, and a segment that contains at least one
-    /// non-duplicate block proceeds under the ordinary trust comparison.
+    /// (`ChainstateConfig::pos_seal_activation_gate`): it is enabled by default
+    /// only on testnet chains and disabled by default elsewhere, it never fires
+    /// on the reorgs of the user-initiated block invalidation path, and it is
+    /// fail-open: a block that does not yield a well-formed seal (PoW, genesis,
+    /// malformed PoS data) is never classified as a duplicate, and a segment that
+    /// contains at least one non-duplicate block proceeds under the ordinary
+    /// trust comparison.
     ///
     /// A refusal is a no-op: the candidate chain stays stored, valid and
     /// relayable, and every later activation attempt re-runs this classification,
@@ -1518,8 +1518,9 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             // becomes activatable with its next fresh-seal block.
             log::warn!(
                 "Not activating the chain of candidate block {} at height {} (current best \
-                 block {}): every block of its new segment ({}) reuses an already-known \
-                 PoS consensus proof",
+                 block {}): every block of its new segment ({} blocks) reuses an \
+                 already-known PoS consensus proof; the chain stays stored and becomes \
+                 activatable with its next fresh-seal block",
                 new_block_index.block_id(),
                 new_block_index.block_height(),
                 best_block_id,
