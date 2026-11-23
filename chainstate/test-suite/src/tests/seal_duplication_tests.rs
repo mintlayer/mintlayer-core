@@ -715,14 +715,13 @@ fn activation_gate_bypassed_for_invalidation_recovery(#[case] seed: Seed) {
 }
 
 // ---------------------------------------------------------------
-// S5 — containment suite for the PoS seal activation gate
+// Containment suite for the PoS seal activation gate
 //
-// Scenarios derived from the design note's reuse narratives: tip
-// equivocation races, withheld-variant release, partition halves, honest
-// resealing, and the variant cap. The gate must never fire on segments that
-// contain at least one fresh proof, must never prevent the storage or
-// retrieval of any variant, and must leave the ordinary trust comparison in
-// charge of every race that contains a fresh proof.
+// Reuse scenarios: tip equivocation races, withheld-variant release,
+// partition halves, honest resealing, and the variant cap. The gate never
+// fires on segments that contain at least one fresh proof, never prevents
+// the storage or retrieval of any variant, and leaves the ordinary trust
+// comparison in charge of every race that contains a fresh proof.
 // ---------------------------------------------------------------
 
 /// Tip equivocation race: the pool equivocates at two consecutive heights and

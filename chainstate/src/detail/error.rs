@@ -243,7 +243,9 @@ pub enum InitializationError {
     BestChainCandidatesError(#[from] BestChainCandidatesError),
     #[error(
         "The PoS seal activation gate is enabled while the PoS seal duplication tracking is \
-         disabled; the gate has no effect without its index"
+         disabled, so the gate would have no index to classify against; note that the gate \
+         defaults to enabled on testnet chains: either set pos_seal_activation_gate = false \
+         or re-enable the seal duplication tracking (pos_seal_duplication_tracking = true)"
     )]
     SealActivationGateWithoutTracking,
 }

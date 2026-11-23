@@ -53,9 +53,13 @@ pub struct ChainstateConfigFile {
 
     /// If true, a chain whose newly activated segment consists entirely of blocks whose
     /// PoS consensus proofs are duplicates of already-known proofs will not be activated.
-    /// Only effective together with `pos_seal_duplication_tracking`, which must stay
-    /// enabled. An absent value means the chain-type default applies: enabled on the
-    /// testnet, disabled elsewhere; an explicit value always overrides the default.
+    /// The gate requires at least one fresh proof per activated segment; it does not
+    /// discount the trust of duplicate-seal blocks within a mixed segment. The reorgs of
+    /// the user-initiated block invalidation path are the only activations that are never
+    /// gated. Requires `pos_seal_duplication_tracking`, which must stay enabled: enabling
+    /// the gate without the tracking is rejected at chainstate initialization. An absent
+    /// value means the chain-type default applies: enabled on the testnet, disabled
+    /// elsewhere; an explicit value always overrides the default.
     pub pos_seal_activation_gate: Option<bool>,
 }
 
