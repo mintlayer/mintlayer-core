@@ -1513,9 +1513,17 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         }
 
         if segment_seals_all_duplicated(&self.db_tx, &new_chain)? {
-            log::info!(
-                "Not activating a chain whose new segment consists only of blocks reusing \
-                 already-known PoS consensus proofs"
+            // Both a reused-proof attack and an honest same-pool re-seal of an
+            // orphaned slot land here; either way the chain stays stored and
+            // becomes activatable with its next fresh-seal block.
+            log::warn!(
+                "Not activating the chain of candidate block {} at height {} (current best \
+                 block {}): every block of its new segment ({}) reuses an already-known \
+                 PoS consensus proof",
+                new_block_index.block_id(),
+                new_block_index.block_height(),
+                best_block_id,
+                new_chain.len(),
             );
             return Ok(true);
         }
@@ -1717,13 +1725,17 @@ impl ChainActivationContext {
 ///
 /// Sightings are permanent: the index is a historical record, so entries are
 /// not pruned when a block is invalidated, and the classification does not
-/// skip invalidated partner blocks. This is deliberate fail-closed behavior.
-/// An honest segment always carries at least one fresh seal (honestly-mined
-/// VRF proofs are unique), so the gate cannot refuse an honest chain, while
+/// skip invalidated partner blocks. This is deliberate fail-closed behavior:
 /// counting only valid partners would let an attacker make a reused seal look
-/// unique again by having one of its twins invalidated -- re-opening exactly
-/// the trust-inflation construction the gate exists to refuse. A refused chain
-/// always recovers by extending with a single fresh-seal block.
+/// unique again by having one of its twins invalidated, re-opening exactly the
+/// trust-inflation construction the gate exists to refuse.
+///
+/// The gate can refuse an honest chain once, when the segment contains a
+/// same-pool same-timestamp re-seal: a pool whose block was orphaned by an
+/// earlier-timestamp winner starts its next job at the tip's timestamp plus
+/// one and lands on the orphan's slot again, because the VRF output binds the
+/// epoch randomness and the timestamp but not the parent. The refused block
+/// is stored, and the chain always recovers with its next fresh-seal block.
 fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
     db_tx: &S,
     new_chain: &[BlockIndex],

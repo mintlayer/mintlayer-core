@@ -514,12 +514,14 @@ fn gate_enabled_config() -> ChainstateConfig {
     }
 }
 
-/// Mine and process a fresh-proof PoS block on top of `parent_id`. The block is
-/// mined from a timestamp well after the current framework time, so its seal
-/// (which binds the timestamp) differs from the seals of all previously
-/// processed blocks.
+/// Mine a fresh-proof PoS block on top of `parent_id` without processing
+/// it. The block is mined from a timestamp well after the current framework
+/// time, so its seal (which binds the timestamp) differs from the seals of all
+/// previously processed blocks. The kernel signature is produced against the
+/// current tip's UTXO set, so siblings of a non-PoS parent must all be mined
+/// before any of them is processed.
 #[allow(clippy::too_many_arguments)]
-fn mine_and_process_fresh_proof_block(
+fn mine_pos_block_on_parent(
     rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
     vrf_sk: &VRFPrivateKey,
@@ -528,7 +530,7 @@ fn mine_and_process_fresh_proof_block(
     staking_sk: &PrivateKey,
     parent_id: Id<common::chain::Block>,
     timestamp_offset_seconds: u64,
-) -> Id<common::chain::Block> {
+) -> common::chain::Block {
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(staking_sk));
     let reward_outputs =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
@@ -611,6 +613,32 @@ fn mine_and_process_fresh_proof_block(
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs.clone())
         .build(rng);
+    block
+}
+
+/// Mine (`mine_pos_block_on_parent`) and process a fresh-proof PoS block on
+/// top of `parent_id`. Returns the new block's id.
+#[allow(clippy::too_many_arguments)]
+fn mine_and_process_fresh_proof_block(
+    rng: &mut impl CryptoRng,
+    tf: &mut TestFramework,
+    vrf_sk: &VRFPrivateKey,
+    stake_pool_outpoint: &UtxoOutPoint,
+    pool_id: PoolId,
+    staking_sk: &PrivateKey,
+    parent_id: Id<common::chain::Block>,
+    timestamp_offset_seconds: u64,
+) -> Id<common::chain::Block> {
+    let block = mine_pos_block_on_parent(
+        rng,
+        tf,
+        vrf_sk,
+        stake_pool_outpoint,
+        pool_id,
+        staking_sk,
+        parent_id,
+        timestamp_offset_seconds,
+    );
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
     block_id
@@ -1043,6 +1071,163 @@ fn honest_reseal_at_consecutive_heights_is_not_flagged(#[case] seed: Seed) {
         );
         assert!(db_tx.get_duplicate_seal_evidence(expected_seal).unwrap().is_none());
     }
+}
+
+/// Honest same-timestamp re-seal after an orphan. The pool's block O (slot
+/// T_B) is displaced by W (slot T_A < T_B), whose denser timestamp gives it
+/// the higher chain trust. The pool's next job starts at the tip's timestamp
+/// plus one, and since the VRF output binds the epoch randomness and the
+/// timestamp but not the parent, the search from T_A+1 lands on T_B again:
+/// the new block N carries O's seal. On every node that saw O the segment [N]
+/// is all-duplicate, so its activation is refused once (the tip stays on W
+/// while N stays stored), and the chain recovers with its next fresh-seal
+/// block.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn honest_same_timestamp_reseal_after_an_orphan_is_refused_once(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    // A chain with a long epoch, so the orphan (height h+1) and the re-seal
+    // (height h+2) share the epoch index and randomness of the VRF transcript.
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(consensus_upgrades_with_pos_at_height(
+            FIRST_POS_BLOCK_HEIGHT,
+        ))
+        .epoch_length(std::num::NonZeroU64::new(100).unwrap())
+        .sealed_epoch_distance_from_tip(0)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_chainstate_config(gate_enabled_config())
+        .build();
+
+    let (stake_pool_data, staking_sk) =
+        chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk,
+        );
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+
+    let parent = tf
+        .best_block_id()
+        .classify(tf.chainstate.get_chain_config())
+        .chain_block_id()
+        .unwrap();
+    let now_secs = tf.current_time().as_duration_since_epoch().as_secs();
+    // The mining helpers start the timestamp search at the current framework
+    // time plus an offset; convert a slot back into that offset.
+    let offset_of = |timestamp: BlockTimestamp| timestamp.as_int_seconds() - now_secs;
+
+    // Both siblings are mined before either is processed: the kernel of a
+    // sibling of the non-PoS parent is signed against the pool creation
+    // output, which the first processed sibling consumes.
+    // The orphan O is mined for T_B and the winner W for T_A < T_B.
+    let orphan = mine_pos_block_on_parent(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        parent,
+        1,
+    );
+    let winner = mine_pos_block_on_parent(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        parent,
+        0,
+    );
+    let orphan_id = orphan.get_id();
+    let winner_id = winner.get_id();
+    let t_b = orphan.header().timestamp();
+    let t_a = winner.header().timestamp();
+    assert!(
+        t_a < t_b,
+        "the orphan's slot must be later than the winner's"
+    );
+    let orphan_seal = BlockSeal::from_consensus_data(orphan.header().consensus_data()).unwrap();
+
+    // O arrives first and is the tip until W arrives.
+    tf.process_block(orphan, BlockSource::Local).unwrap();
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(orphan_id)
+    );
+
+    // W takes over: its denser timestamp gives it the higher chain trust, so
+    // O becomes an orphan. The segment [W] carries a fresh proof, so the gate
+    // lets the reorg through.
+    tf.process_block(winner, BlockSource::Local).unwrap();
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(winner_id)
+    );
+
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    assert_eq!(
+        db_tx.get_seal_index_entry(&orphan_seal).unwrap().unwrap().blocks(),
+        &[(orphan_id, FIRST_POS_BLOCK_HEIGHT)]
+    );
+    drop(db_tx);
+
+    // The pool's next block N on top of W, with the search started at T_A+1:
+    // it lands on the orphan's slot T_B again, so it carries O's seal.
+    let reseal_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        winner_id,
+        offset_of(t_a) + 1,
+    );
+    let db_tx = tf.storage.transaction_ro().unwrap();
+    let reseal = db_tx.get_block(&reseal_id).unwrap().unwrap();
+    assert_eq!(reseal.header().timestamp(), t_b);
+    let reseal_seal = BlockSeal::from_consensus_data(reseal.header().consensus_data()).unwrap();
+    assert_eq!(reseal_seal, orphan_seal);
+
+    // The activation of [N] is refused: the tip stays on W, N stays stored and
+    // its sighting joined the orphan's in the seal index.
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(winner_id)
+    );
+    assert_eq!(
+        db_tx.get_seal_index_entry(&reseal_seal).unwrap().unwrap().blocks(),
+        &[
+            (orphan_id, FIRST_POS_BLOCK_HEIGHT),
+            (reseal_id, FIRST_POS_BLOCK_HEIGHT.next_height()),
+        ]
+    );
+    drop(db_tx);
+
+    // The refused chain recovers with its next fresh-seal block: the segment
+    // [N, child] contains a fresh proof and activates.
+    let fresh_id = mine_and_process_fresh_proof_block(
+        &mut rng,
+        &mut tf,
+        &vrf_sk,
+        &stake_pool_outpoint,
+        pool_id,
+        &staking_sk,
+        reseal_id,
+        offset_of(t_b) + 1,
+    );
+    assert_eq!(
+        tf.best_block_id(),
+        Id::<common::chain::GenBlock>::from(fresh_id)
+    );
 }
 
 /// Variant cap: a pool reusing one proof across many variants.
