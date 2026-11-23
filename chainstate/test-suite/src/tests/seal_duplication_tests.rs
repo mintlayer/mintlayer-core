@@ -606,15 +606,13 @@ fn mine_pos_block_on_parent(
     )
     .expect("should be able to mine");
 
-    let block = tf
-        .make_block_builder()
+    tf.make_block_builder()
         .with_parent(parent_id.into())
         .with_consensus_data(ConsensusData::PoS(pos_data.into()))
         .with_block_signing_key(staking_sk.clone())
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs.clone())
-        .build(rng);
-    block
+        .build(rng)
 }
 
 /// Mine (`mine_pos_block_on_parent`) and process a fresh-proof PoS block on
@@ -825,7 +823,8 @@ fn withheld_variant_release_keeps_incumbent_stable(#[case] seed: Seed) {
         0,
         false,
     );
-    let withheld_id = withheld_block.as_ref().map(|b| b.get_id()).unwrap();
+    let withheld_block = withheld_block.expect("the second twin is withheld, not processed");
+    let withheld_id = withheld_block.get_id();
 
     // The incumbent chain extends with a fresh proof.
     let fresh_id = mine_and_process_fresh_proof_block(
@@ -841,7 +840,7 @@ fn withheld_variant_release_keeps_incumbent_stable(#[case] seed: Seed) {
 
     // The withheld variant is released: it is stored and its evidence exists,
     // but it never displaces the incumbent chain.
-    tf.process_block(withheld_block.unwrap(), BlockSource::Local).unwrap();
+    tf.process_block(withheld_block, BlockSource::Local).unwrap();
 
     assert_eq!(
         tf.best_block_id(),
@@ -856,13 +855,14 @@ fn withheld_variant_release_keeps_incumbent_stable(#[case] seed: Seed) {
     assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_some());
 }
 
-/// Partition halves: two identical nodes (same keys, same pool) process the
-/// two variants of an equivocation in opposite orders, with each node's
-/// variants being distinct blocks. The interim tips differ (there is no
-/// content-based canonicalization), every variant stays stored in its half
-/// (no first-seen drop), and both halves record the evidence. The halves keep
-/// their own valid chains: convergence comes from fresh proofs of other pools
-/// (see `equivocation_race_converges_via_fresh_proofs`).
+/// Partition halves: two identical nodes (same keys, same pool, same chain)
+/// receive the two variants of an equivocation in opposite orders. Each node
+/// keeps the variant it saw first as its tip (there is no content-based
+/// canonicalization), every variant stays stored in both halves (no first-seen
+/// drop), both halves record the evidence, and the index retains the arrival
+/// order of the sightings. The halves keep their own valid chains:
+/// convergence comes from fresh proofs of other pools (see
+/// `equivocation_race_converges_via_fresh_proofs`).
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -881,79 +881,73 @@ fn partition_halves_stay_valid_without_canonicalization(#[case] seed: Seed) {
             vrf_pk.clone(),
             gate_enabled_config(),
         );
-    let (mut tf2, stake_pool_outpoint2, pool_id2, staking_sk2) =
-        setup_chain_with_stake_pool_with_chainstate_config(
-            &mut rng2,
-            vrf_pk,
-            gate_enabled_config(),
-        );
+    let (mut tf2, ..) = setup_chain_with_stake_pool_with_chainstate_config(
+        &mut rng2,
+        vrf_pk,
+        gate_enabled_config(),
+    );
 
-    // The two equivocations use different randomness streams, so the halves
-    // hold different blocks (different ids) that share the same proof.
-    let _parent_1 = tf1
+    // The two variants are mined on the first node, the second one withheld.
+    // They share the proof (the transcript does not involve randomness) but
+    // differ in their VRF proof bytes, so they are distinct blocks. Both
+    // halves share the pool block, so the same blocks are valid on both.
+    let parent = tf1
         .best_block_id()
         .classify(tf1.chainstate.get_chain_config())
         .chain_block_id()
         .unwrap();
-    let (seal_1, main_1, side_1) = {
-        let mut rng = make_seedable_rng(seed);
-        let (seal, main, side) = process_two_blocks_with_same_seal(
-            &mut rng,
-            &mut tf1,
-            &vrf_sk,
-            &stake_pool_outpoint1,
-            pool_id1,
-            &staking_sk1,
-        );
-        (seal, main, side)
-    };
-    let _parent_2 = tf2
-        .best_block_id()
-        .classify(tf2.chainstate.get_chain_config())
-        .chain_block_id()
-        .unwrap();
-    let (seal_2, main_2, side_2) = {
-        // A different randomness stream: the proofs differ from half 1's, so
-        // the variants are different blocks (the seal itself is identical,
-        // since the transcript does not involve randomness).
-        let mut rng = make_seedable_rng(Seed::from_u64(seed.0 ^ 0xA5A5_A5A5));
-        let (seal, main, side) = process_two_blocks_with_same_seal(
-            &mut rng,
-            &mut tf2,
-            &vrf_sk,
-            &stake_pool_outpoint2,
-            pool_id2,
-            &staking_sk2,
-        );
-        (seal, main, side)
-    };
-    assert_eq!(seal_1, seal_2);
-    assert_ne!(main_1, main_2);
+    assert_eq!(
+        tf2.best_block_id(),
+        Id::<common::chain::GenBlock>::from(parent),
+        "the two halves must share the pool block"
+    );
+    let mut rng = make_seedable_rng(seed);
+    let (seal, variant_1, variant_2, withheld) = mine_and_process_same_seal_twins_on_parent(
+        &mut rng,
+        &mut tf1,
+        &vrf_sk,
+        &stake_pool_outpoint1,
+        pool_id1,
+        &staking_sk1,
+        parent,
+        0,
+        false,
+    );
+    assert_ne!(variant_1, variant_2);
+    let variant_2_block = withheld.expect("the second twin is withheld, not processed");
 
-    // Each half keeps its own first-processed variant as the tip: the choice
-    // is arrival-order based, never content-based.
+    // Half 1 receives the second variant after the first one; half 2 receives
+    // it first and the first variant after it.
+    tf1.process_block(variant_2_block.clone(), BlockSource::Local).unwrap();
+    tf2.process_block(variant_2_block, BlockSource::Local).unwrap();
+    let variant_1_block =
+        tf1.storage.transaction_ro().unwrap().get_block(&variant_1).unwrap().unwrap();
+    tf2.process_block(variant_1_block, BlockSource::Local).unwrap();
+
+    // Each half keeps the variant it saw first as the tip: the choice is
+    // arrival-order based, never content-based.
     assert_eq!(
         tf1.best_block_id(),
-        Id::<common::chain::GenBlock>::from(main_1)
+        Id::<common::chain::GenBlock>::from(variant_1)
     );
     assert_eq!(
         tf2.best_block_id(),
-        Id::<common::chain::GenBlock>::from(main_2)
+        Id::<common::chain::GenBlock>::from(variant_2)
     );
 
     // Both halves recorded the evidence and stored every variant, with the
     // index retaining the arrival order of the sightings.
-    for (db_tx, main, side) in [
-        (tf1.storage.transaction_ro().unwrap(), main_1, side_1),
-        (tf2.storage.transaction_ro().unwrap(), main_2, side_2),
+    for (db_tx, first, second) in [
+        (tf1.storage.transaction_ro().unwrap(), variant_1, variant_2),
+        (tf2.storage.transaction_ro().unwrap(), variant_2, variant_1),
     ] {
-        let index_entry = db_tx.get_seal_index_entry(&seal_1).unwrap().unwrap();
+        let index_entry = db_tx.get_seal_index_entry(&seal).unwrap().unwrap();
         assert_eq!(index_entry.blocks().len(), 2);
-        assert_eq!(index_entry.blocks()[0].0, main);
-        assert_eq!(index_entry.blocks()[1].0, side);
-        assert!(db_tx.get_block(&main).unwrap().is_some());
-        assert!(db_tx.get_block(&side).unwrap().is_some());
-        assert!(db_tx.get_duplicate_seal_evidence(&seal_1).unwrap().is_some());
+        assert_eq!(index_entry.blocks()[0].0, first);
+        assert_eq!(index_entry.blocks()[1].0, second);
+        assert!(db_tx.get_block(&first).unwrap().is_some());
+        assert!(db_tx.get_block(&second).unwrap().is_some());
+        assert!(db_tx.get_duplicate_seal_evidence(&seal).unwrap().is_some());
     }
 }
 
@@ -1063,12 +1057,11 @@ fn honest_reseal_at_consecutive_heights_is_not_flagged(#[case] seed: Seed) {
             Id::<common::chain::GenBlock>::from(expected_id),
             id_at_height
         );
-        let entry = db_tx.get_seal_index_entry(expected_seal).unwrap();
-        assert!(
-            entry.is_none()
-                || entry.as_ref().unwrap().blocks().len() == 1
-                    && entry.as_ref().unwrap().blocks()[0].0 == expected_id,
-        );
+        let entry = db_tx
+            .get_seal_index_entry(expected_seal)
+            .unwrap()
+            .expect("indexing precedes activation, so the seal of a main chain block is indexed");
+        assert_eq!(entry.blocks(), &[(expected_id, height)]);
         assert!(db_tx.get_duplicate_seal_evidence(expected_seal).unwrap().is_none());
     }
 }
@@ -1387,9 +1380,8 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     );
     assert_eq!(tf.best_block_id(), Id::<common::chain::GenBlock>::from(h4));
 
-    // The reseals carry distinct, unindexed proofs: no seal-index entries with
-    // multiplicity and no evidence records (honest same-pool progress is never
-    // flagged).
+    // The reseals carry distinct proofs: each seal has a single sighting and
+    // no evidence record (honest same-pool progress is never flagged).
     let db_tx_seals = tf.storage.transaction_ro().unwrap();
     let seal_h3 = BlockSeal::from_consensus_data(
         db_tx_seals.get_block(&h3).unwrap().unwrap().header().consensus_data(),
@@ -1401,12 +1393,17 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
     .unwrap();
     assert_ne!(seal_h3, seal_h4);
     let db_tx = tf.storage.transaction_ro().unwrap();
-    for seal in [&seal_h3, &seal_h4] {
-        let entry = db_tx.get_seal_index_entry(seal).unwrap();
-        assert!(
-            entry.is_none() || entry.as_ref().unwrap().blocks().len() == 1,
+    for (block_id, seal) in [(h3, &seal_h3), (h4, &seal_h4)] {
+        let entry = db_tx
+            .get_seal_index_entry(seal)
+            .unwrap()
+            .expect("indexing precedes activation, so the seal of a main chain block is indexed");
+        assert_eq!(
+            entry.blocks().len(),
+            1,
             "a single same-pool block must not be a duplicate sighting"
         );
+        assert_eq!(entry.blocks()[0].0, block_id);
         assert!(db_tx.get_duplicate_seal_evidence(seal).unwrap().is_none());
     }
 }
@@ -1418,11 +1415,11 @@ fn same_pool_chain_keeps_progressing(#[case] seed: Seed) {
 // by grafting a copied proof: a block whose consensus data re-uses the VRF
 // data of an already-sighted block (the seal binds the pool, the epoch
 // randomness and the timestamp, not the parent or the block content), built
-// as an extension of the incumbent chain — see the test below.
+// as an extension of the incumbent chain; see the test below.
 
 /// The gate's refusal in normal block processing. The seal binds the pool,
-/// the epoch randomness and the block timestamp — not the parent or the block
-/// content — so a block whose consensus data re-uses the VRF data of an
+/// the epoch randomness and the block timestamp, but not the parent or the
+/// block content, so a block whose consensus data re-uses the VRF data of an
 /// already-sighted block extends the incumbent chain with a strictly higher
 /// trust while carrying a duplicate proof. The epoch length of this chain is
 /// large enough that the copied block's transcript (epoch, randomness,
@@ -1574,7 +1571,6 @@ fn activation_gate_is_not_bypassed_during_initial_block_download(#[case] seed: S
     let reworked_id = graft_reused_proof_block(
         &mut rng,
         &mut tf,
-        &vrf_sk,
         &staking_sk,
         staking_destination,
         reward_outputs,
@@ -1702,7 +1698,6 @@ fn invalidated_partner_does_not_launder_a_reused_seal(#[case] seed: Seed) {
     let reworked_id = graft_reused_proof_block(
         &mut rng,
         &mut tf,
-        &vrf_sk,
         &staking_sk,
         staking_destination.clone(),
         reward_outputs.clone(),
@@ -1743,7 +1738,6 @@ fn invalidated_partner_does_not_launder_a_reused_seal(#[case] seed: Seed) {
     let reworked_id_2 = graft_reused_proof_block(
         &mut rng,
         &mut tf,
-        &vrf_sk,
         &staking_sk,
         staking_destination,
         alternate_reward_outputs,
@@ -1792,7 +1786,6 @@ fn invalidated_partner_does_not_launder_a_reused_seal(#[case] seed: Seed) {
 fn graft_reused_proof_block(
     rng: &mut impl CryptoRng,
     tf: &mut TestFramework,
-    vrf_sk: &VRFPrivateKey,
     staking_sk: &PrivateKey,
     staking_destination: Destination,
     reward_outputs: Vec<TxOutput>,
@@ -1800,7 +1793,6 @@ fn graft_reused_proof_block(
     proof_source: Id<common::chain::Block>,
     pool_id: PoolId,
 ) -> Id<common::chain::Block> {
-    let _ = vrf_sk; // the proof comes from the proof source, not from fresh mining
     let source_block =
         tf.storage.transaction_ro().unwrap().get_block(&proof_source).unwrap().unwrap();
     let source_pos_data = match source_block.header().consensus_data() {
