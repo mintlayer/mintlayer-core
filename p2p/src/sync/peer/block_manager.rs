@@ -787,19 +787,19 @@ where
         }
 
         // Note: we require a peer to send headers starting from a block that we already have
-        // in our chainstate. I.e. we don't allow:
-        // 1) Basing new headers on a previously sent header, because this would give a malicious
-        // peer an opportunity to flood the node with headers, potentially exhausting its memory.
-        // The downside of this restriction is that the peer may have to send the same headers
-        // multiple times. So, to avoid extra traffic, an honest peer should't send header updates
-        // when the node is already downloading blocks. (But still, the node shouldn't punish
-        // the peer for doing so, because it's possible for it to do so by accident, e.g.
-        // a "new tip" event may happen on the peer's side after it has sent us the last requested
-        // block but before we've asked it for more.)
-        // 2) Basing new headers on a block that we've requested from the peer but that has not
-        // yet been sent. This is a rather useless optimization (provided that peers don't send
-        // header updates when we're downloading blocks from them, as mentioned above) that
-        // would only complicate the logic.
+        // in our chainstate. Our header requests are anchored at the last block we processed,
+        // which lags behind the download pipeline, so while a download is in flight the list
+        // is expected to start with a prefix of headers that we hold in the pipeline: already
+        // requested from the peer, or staged in the look-ahead window. That prefix is skipped
+        // (see `trim_held_overlap`). The headers that follow may be based on an in-flight or
+        // staged header rather than on a chainstate block; they are not requested right away,
+        // but staged in the look-ahead window (see `stage_in_lookahead`), bounded by
+        // `lookahead_window_target` and by the remaining staging capacity. These bounds are
+        // what keeps a malicious peer from flooding the node with headers and exhausting its
+        // memory. (The node still shouldn't punish the peer for sending headers that we
+        // already hold, because it's possible for it to do so by accident, e.g. a "new tip"
+        // event may happen on the peer's side after it has sent us the last requested block
+        // but before we've asked it for more.)
 
         let first_header_prev_block_height = self
             .chainstate_handle
@@ -936,10 +936,15 @@ where
         self.request_blocks(new_block_headers)?;
 
         // Start the look-ahead window right away: when the peer signalled more headers,
-        // request the next list now rather than after the current block batch drains, so
-        // that header download overlaps block download from the start. The request is
-        // only issued when the window is below its target and the received list actually
-        // extended our knowledge, so it cannot be turned into a request loop.
+        // request the next list now rather than after the current block batch drains. Note
+        // that the request is anchored at the last block we processed, which only advances
+        // as the blocks arrive, so an honest single peer normally answers with a list that
+        // we already hold in full: nothing is staged and the only cost is one extra header
+        // list each time a list starts a download. Staging engages only when an answer
+        // extends past the held window, e.g. when this peer lags behind headers obtained
+        // from other peers or sends unsolicited lists. The request is only issued when the
+        // window is below its target and the received list actually extended our knowledge,
+        // so it cannot be turned into a request loop.
         if peer_may_have_more_headers
             && self.lookahead_window_len() < self.lookahead_window_target()
         {
@@ -1174,14 +1179,16 @@ where
         self.incoming.requested_blocks.len() + self.incoming.pending_headers.len()
     }
 
-    /// The upper bound for the look-ahead window: header and block requests issued by
-    /// the pipelining logic are only sent while the window is below this target, and
-    /// headers are only staged up to this bound, so both our own memory usage and the
-    /// amount of data we may have outstanding from any single peer stay bounded no
-    /// matter what the peer sends. (Every other header request — the initial one, the
-    /// consecutive-known-lists retry and the drain-path refill — is issued only while
-    /// the window is empty; the fork budget retry can fire at a full window, but is
-    /// rate-limited by the refill interval and its response is inert there.)
+    /// The upper bound for the look-ahead window: header requests issued by the pipelining
+    /// logic are only sent while the window is below this target, and headers are only
+    /// staged up to this bound, so both our own memory usage and the amount of data we may
+    /// have outstanding from any single peer stay bounded no matter what the peer sends.
+    /// Block top-ups do not grow the window: they move staged headers into requests and are
+    /// gated by the half-limit watermark in `handle_block_response` instead. (Every other
+    /// header request, namely the initial one, the consecutive-known-lists retry and the
+    /// drain-path refill, is issued only while the window is empty; the fork budget retry
+    /// can fire at a full window, but is rate-limited by the refill interval and its
+    /// response is inert there.)
     fn lookahead_window_target(&self) -> usize {
         2 * *self.p2p_config.protocol_config.msg_header_count_limit
     }
@@ -1221,9 +1228,12 @@ where
     ///   after the branch point are dropped and the new headers are appended there,
     ///   keeping the window a single connected chain;
     /// * otherwise the anchor is an in-flight requested header or a chainstate block:
-    ///   in the first case the anchor will be processed before the staged headers are
-    ///   ever requested, in the second case the known prefix is trimmed at request
-    ///   time, so the staged headers can be replaced wholesale.
+    ///   in the first case the anchor is requested before the staged headers, so it is
+    ///   processed before any of them, in the second case the known prefix is trimmed at
+    ///   request time. Either way the previously staged headers can be replaced wholesale,
+    ///   since none of them has been requested yet; the caller only passes the new headers
+    ///   that fit the remaining look-ahead capacity, the rest is dropped and will be
+    ///   received again after the anchor has advanced.
     fn stage_in_lookahead(&mut self, headers: Vec<SignedBlockHeader>) {
         debug_assert!(!headers.is_empty());
 
