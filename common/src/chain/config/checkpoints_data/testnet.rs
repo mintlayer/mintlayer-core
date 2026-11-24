@@ -18,5 +18,5 @@
 // The Babbage testnet starts from a fresh genesis; the entry at height 0 is
 // the genesis id itself, as for every network.
 pub const CHECKPOINTS_DATA: &[(u64, &str)] = &[
-    (0, "6DA00D2513E25C679BDAEDB49D9FE2A965F35988747B87BA0B706EF2EA8C8205"),
+    (0, "BB37DAFD5113CC4E7A9A8C51B6F79024394126CFB985FF044A0CBB7AC43A3D5A"),
 ];

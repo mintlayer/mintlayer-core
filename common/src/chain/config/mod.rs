@@ -42,6 +42,7 @@ use strum::EnumIter;
 use utils::const_nz_u64;
 
 use crate::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         GenBlock, Genesis, PoWChainConfig, TxOutput, block::timestamp::BlockTimestamp,
         transaction::Destination, upgrades::NetUpgrades,
@@ -847,26 +848,28 @@ fn create_testnet_genesis() -> Genesis {
     // was written for.
     let genesis_message = String::from("babbage");
 
-    // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
+    // To get these values, use the operator wallet: `address-reveal-public-key-as-hex`
+    // for the raw public keys and `staking-new-vrf-public-key` for the VRF key.
+    // The mint output goes to the operator's testnet address, whose revealed
+    // public key is also the staking and decommission key of the initial pool.
 
-    let genesis_mint_destination = decode_hex::<PublicKey>(
-        "0003e9d79eb6487c28dad9679461faa1ffcdbc52a10033e1ad625101a97db1ba8edd",
-    );
+    let genesis_mint_destination = Destination::PublicKeyHash(PublicKeyHash::from([
+        0x0d, 0x01, 0x3d, 0xf6, 0x2d, 0x6f, 0xda, 0x17, 0x38, 0x4c, 0x27, 0x14, 0xac, 0x65, 0x87,
+        0xcd, 0x33, 0x25, 0x75, 0x9c,
+    ]));
 
     let mint_output = TxOutput::Transfer(
         OutputValue::Coin(mint_output_amount),
-        Destination::PublicKey(genesis_mint_destination),
+        genesis_mint_destination,
     );
 
-    let decommission_pub_key = decode_hex::<PublicKey>(
-        "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
-    );
     let staker_pub_key = decode_hex::<PublicKey>(
-        "00039d905e919a49d42af16daf8719bde9a8745624affe299ddc7c5ce8091b60e41e",
+        "0003727094d1a790ac49b0753fe6f7e2caccf9c0040ba9ef30309b25f8be59b61dec",
     );
 
+    let decommission_pub_key = staker_pub_key.clone();
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
+        "009871371534ff208d3bde9f30c2ca641b6e1b45a995a0d35775dec99ca3fb0c65",
     );
 
     let initial_pool = TxOutput::CreateStakePool(
