@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::chain::{
     Block, block::signed_block_header::SignedBlockHeader, block::timestamp::BlockTimestamp,
@@ -330,8 +331,10 @@ async fn repeated_full_header_list_does_not_spin_requests(#[case] seed: Seed) {
 }
 
 /// A header list received during a download whose chain diverges from the
-/// staged look-ahead replaces the staged headers: after the in-flight batch
-/// completes, the node requests the replacement headers, not the stale ones.
+/// staged look-ahead replaces the staged headers: once the in-flight count
+/// drops below the watermark, the node requests the replacement headers, not
+/// the stale ones. A replacement header whose block reached the chainstate by
+/// another route in the meantime is skipped, as in the drain path.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -407,33 +410,133 @@ async fn diverging_header_list_replaces_staged_lookahead(#[case] seed: Seed) {
         expect_header_request(&mut node).await;
 
         // A diverging list arrives while the download is in flight. It does
-        // not connect to the staged look-ahead, so it must replace it.
+        // not connect to the staged look-ahead, so it must replace it. The list
+        // is not full, so no header request follows.
         peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers_of(
             &fork_blocks,
         ))))
         .await;
+        node.assert_no_sync_message().await;
+
+        // The first fork block reaches the chainstate by another route while its header
+        // is still staged. Its parent is already processed, so the chainstate accepts it
+        // directly.
+        let block = fork_blocks[0].clone();
+        node.chainstate()
+            .call_mut(move |cs| cs.process_block(block, BlockSource::Local).unwrap())
+            .await
+            .unwrap();
 
         // The next processed block drops the in-flight count below half the
         // limit: the replacement headers must be requested now, while the
-        // last mainchain block of the batch is still in flight.
+        // last mainchain block of the batch is still in flight. The staged
+        // header whose block is already known is filtered out.
         deliver_block(&peer, &blocks[2]).await;
         outstanding.on_block_received(&blocks[2].get_id());
 
         assert_eq!(
             expect_block_request(&mut node, &mut outstanding).await,
-            ids_of(&fork_blocks)
+            ids_of(&fork_blocks)[1..].to_vec()
         );
         assert!(outstanding.outstanding.contains(&blocks[3].get_id()));
 
-        // Complete the in-flight mainchain batch, then the fork blocks.
+        // Complete the in-flight mainchain batch, then the remaining fork block.
         deliver_block(&peer, &blocks[3]).await;
         outstanding.on_block_received(&blocks[3].get_id());
-        for block in &fork_blocks {
-            deliver_block(&peer, block).await;
-            outstanding.on_block_received(&block.get_id());
-        }
+        deliver_block(&peer, &fork_blocks[1]).await;
+        outstanding.on_block_received(&fork_blocks[1].get_id());
         expect_header_request(&mut node).await;
 
+        node.assert_no_error().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+/// When every staged header's block is already known by the time a top-up is due, the
+/// request that would be sent is empty: nothing must be sent, and the download simply
+/// continues with the blocks still in flight.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn top_up_of_known_staged_headers_sends_no_request(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = Arc::new(create_unit_test_config());
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+
+        let blocks = create_n_blocks(&mut rng, &mut tf, 4);
+
+        // A single block on a fork off the second mainchain block, with a different
+        // timestamp so that it is not trimmed as an already-held header.
+        let fork_base_time = blocks[1].header().timestamp().into_time();
+        let fork_block_0 = tf
+            .make_block_builder()
+            .with_parent(blocks[1].get_id().into())
+            .with_timestamp(BlockTimestamp::from_time(Time::from_secs_since_epoch(
+                fork_base_time.as_secs_since_epoch() + 1,
+            )))
+            .build(&mut rng);
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_chainstate(tf.into_chainstate())
+            .with_p2p_config(pipelining_test_config())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+        let mut outstanding = OutstandingRequests::new(BLOCK_REQUEST_LIMIT);
+
+        let headers = headers_of(&blocks);
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(
+            headers.clone(),
+        )))
+        .await;
+        assert_eq!(
+            expect_block_request(&mut node, &mut outstanding).await,
+            ids_of(&blocks)
+        );
+        expect_header_request(&mut node).await;
+
+        deliver_block(&peer, &blocks[0]).await;
+        outstanding.on_block_received(&blocks[0].get_id());
+        deliver_block(&peer, &blocks[1]).await;
+        outstanding.on_block_received(&blocks[1].get_id());
+
+        // A single diverging header is staged. The list is not full, so the peer is not
+        // asked for more headers, and nothing is requested while the in-flight count is
+        // at or above the watermark.
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+            fork_block_0.header().clone(),
+        ])))
+        .await;
+        node.assert_no_sync_message().await;
+
+        // The staged block reaches the chainstate by another route while its header is
+        // still staged.
+        let block = fork_block_0.clone();
+        node.chainstate()
+            .call_mut(move |cs| cs.process_block(block, BlockSource::Local).unwrap())
+            .await
+            .unwrap();
+
+        // The next processed block reaches the watermark, but the only staged header is
+        // known: nothing is left to request and no message is sent.
+        deliver_block(&peer, &blocks[2]).await;
+        outstanding.on_block_received(&blocks[2].get_id());
+        node.assert_no_sync_message().await;
+
+        // The download completes with the blocks in flight; nothing is staged anymore, so
+        // the node asks for headers.
+        deliver_block(&peer, &blocks[3]).await;
+        outstanding.on_block_received(&blocks[3].get_id());
+        expect_header_request(&mut node).await;
+
+        assert!(outstanding.outstanding.is_empty());
         node.assert_no_error().await;
         node.join_subsystem_manager().await;
     })
@@ -641,6 +744,94 @@ async fn small_block_request_limits_degrade_to_lockstep(
             blocks.len().div_ceil(block_request_limit),
             "the download must proceed in lockstep batches of the configured size"
         );
+        assert!(outstanding.outstanding.is_empty());
+        node.assert_no_error().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+/// A block top-up must fit in the capacity left by the blocks still in flight: the staging
+/// window normally holds more headers than a single request may contain, and the serving
+/// peer rejects a request that exceeds `max_request_blocks_count` together with its pending
+/// queue. Here the staged headers outnumber the capacity freed by the processed blocks at
+/// every top-up, so each request is bounded by the capacity rather than by the number of
+/// staged headers, while the stream stays continuous.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn top_up_block_request_is_capped_by_the_request_limit(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = Arc::new(create_unit_test_config());
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+
+        // Twice as many headers per list as blocks per request: after the first block
+        // request, the staged headers always outnumber the capacity that the processed
+        // blocks free up.
+        let header_limit = 8;
+        let block_limit = 4;
+        let blocks = create_n_blocks(&mut rng, &mut tf, header_limit);
+        let ids = ids_of(&blocks);
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_chainstate(tf.into_chainstate())
+            .with_p2p_config(pipelining_config_with_limits(header_limit, block_limit))
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+        let mut outstanding = OutstandingRequests::new(block_limit);
+
+        // A full header list starts the download: four blocks in flight, four staged, and
+        // a look-ahead header request because the window is below its target. The request
+        // is left unanswered: an honest peer would only repeat the headers we hold, which
+        // changes nothing (see `repeated_full_header_list_does_not_spin_requests`).
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers_of(
+            &blocks,
+        ))))
+        .await;
+        assert_eq!(
+            expect_block_request(&mut node, &mut outstanding).await,
+            ids[..block_limit].to_vec()
+        );
+        expect_header_request(&mut node).await;
+
+        // Three blocks processed leave one in flight, so the top-up may add three. Four
+        // headers are staged, but only three fit.
+        for block in &blocks[..3] {
+            deliver_block(&peer, block).await;
+            outstanding.on_block_received(&block.get_id());
+        }
+        assert_eq!(
+            expect_block_request(&mut node, &mut outstanding).await,
+            ids[4..7].to_vec()
+        );
+        assert_eq!(outstanding.outstanding, ids[3..7].to_vec());
+
+        // Three more processed leave one in flight again; the single remaining staged
+        // header fits exactly.
+        for block in &blocks[3..6] {
+            deliver_block(&peer, block).await;
+            outstanding.on_block_received(&block.get_id());
+        }
+        assert_eq!(
+            expect_block_request(&mut node, &mut outstanding).await,
+            ids[7..8].to_vec()
+        );
+
+        // The last two blocks drain the pipeline with nothing staged: the node asks for
+        // headers instead of topping up.
+        for block in &blocks[6..8] {
+            deliver_block(&peer, block).await;
+            outstanding.on_block_received(&block.get_id());
+        }
+        expect_header_request(&mut node).await;
+
         assert!(outstanding.outstanding.is_empty());
         node.assert_no_error().await;
         node.join_subsystem_manager().await;
