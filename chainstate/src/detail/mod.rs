@@ -46,7 +46,7 @@ use chainstate_types::{
     BlockIndex, BlockStatus, BlockValidationStage, EpochData, EpochStorageWrite, GenBlockIndexRef,
     PropertyQueryError, SealedStorageTag, TipStorageTag, pos_randomness::PoSRandomness,
 };
-use chainstateref::{ChainstateRef, ReorgError};
+use chainstateref::{ChainActivationContext, ChainstateRef, ReorgError};
 use common::{
     Uint256,
     chain::{
@@ -208,6 +208,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             let db_tx = chainstate_storage.transaction_ro()?;
             db_tx.get_best_block_id()?
         };
+
+        if chainstate_config.pos_seal_activation_gate_enabled(&chain_config)
+            && !chainstate_config.pos_seal_duplication_tracking_enabled()
+        {
+            // The gate classifies activation segments against the index that the
+            // seal duplication tracking maintains; without the tracking, the gate
+            // has nothing to look up and would silently never fire. Refuse the
+            // contradictory combination instead of neutralizing the hardening
+            // default with a single unrelated-looking config line.
+            return Err(InitializationError::SealActivationGateWithoutTracking.into());
+        }
 
         let mut chainstate = Self::new_no_genesis(
             chain_config,
@@ -427,11 +438,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
         }
 
-        // Seal duplication tracking is observational: it feeds no validation
-        // rule, so its failure (e.g. a storage issue in the seal tables) must
-        // not reject an otherwise valid block and harm the liveness of the
-        // node. The indexing of the affected block is lost, which the logging
-        // makes visible.
+        // Seal duplication tracking is best-effort: a failed index write (e.g. a
+        // storage issue in the seal tables) must not reject an otherwise valid
+        // block and harm the liveness of the node. The indexing must still run
+        // before `activate_best_chain`, because the PoS seal activation gate
+        // classifies the candidate segment against this index; a failed seal
+        // read inside the rw transaction aborts the transaction like any other
+        // failed read. The gate classifies a block by the other sightings of
+        // its seal, so the lost sighting of this block cannot turn a reused
+        // seal into a fresh one; the loss is made visible by the logging.
         {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::SealIndex);
             if let Err(err) =
@@ -451,7 +466,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // due to a bad parent. This will be done by the caller code.
         let result = {
             let _t = perf_timing::TimingGuard::stage(perf_timing::Stage::Connect);
-            chainstate_ref.activate_best_chain(&block_index, Some(block))
+            chainstate_ref.activate_best_chain(
+                &block_index,
+                Some(block),
+                ChainActivationContext::BlockProcessing,
+            )
         };
 
         {

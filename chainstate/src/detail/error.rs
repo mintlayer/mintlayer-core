@@ -241,6 +241,13 @@ pub enum InitializationError {
     StorageCompatibilityCheckError(#[from] StorageCompatibilityCheckError),
     #[error("Error initializing best chain candidates: {0}")]
     BestChainCandidatesError(#[from] BestChainCandidatesError),
+    #[error(
+        "The PoS seal activation gate is enabled while the PoS seal duplication tracking is \
+         disabled, so the gate would have no index to classify against; note that the gate \
+         defaults to enabled on testnet chains: either set pos_seal_activation_gate = false \
+         or re-enable the seal duplication tracking (pos_seal_duplication_tracking = true)"
+    )]
+    SealActivationGateWithoutTracking,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

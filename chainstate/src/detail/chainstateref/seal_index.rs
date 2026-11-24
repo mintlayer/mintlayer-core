@@ -663,4 +663,198 @@ mod tests {
         db.expect_set_duplicate_seal_evidence().times(0);
         index_block_seal_if_enabled(&chainstate_config, &mut db, &block, TEST_HEIGHT).unwrap();
     }
+
+    #[test]
+    fn seal_activation_gate_defaults_on_for_test_chain() {
+        let chain_config = common::chain::config::Builder::test_chain()
+            .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
+            .genesis_unittest(common::chain::Destination::AnyoneCanSpend)
+            .checkpoints(std::collections::BTreeMap::new())
+            .build();
+        // The unit-test builder uses the testnet chain type, where the gate
+        // defaults to enabled; the resolver tests in `chainstate/src/config.rs`
+        // cover all chain types and the explicit-override behavior.
+        assert!(ChainstateConfig::default().pos_seal_activation_gate_enabled(&chain_config));
+    }
+
+    #[test]
+    fn seal_activation_gate_bypass_matrix() {
+        use crate::detail::chainstateref::ChainActivationContext;
+
+        // Normal block processing is always gated, including while the node is
+        // in the initial block download: a syncing node must refuse the same
+        // all-duplicate segments that its peers refuse.
+        assert!(!ChainActivationContext::BlockProcessing.seal_activation_gate_bypassed());
+
+        // The reorgs of the user-initiated block invalidation path are never
+        // gated: the invalidation recovery must be able to re-activate any
+        // remaining chain.
+        assert!(ChainActivationContext::InvalidationRecovery.seal_activation_gate_bypassed());
+    }
+
+    /// Pin the load-bearing classification semantics of the PoS seal activation
+    /// gate: empty segments are never refused, any non-duplicate (fresh proof,
+    /// unindexed proof, or missing seal) breaks the refusal, an index entry at
+    /// the cap still classifies as duplicated, a fully duplicated segment is
+    /// refused whether it has one or two blocks, and a block whose own sighting
+    /// is missing from the entry is still refused.
+    #[test]
+    fn segment_seals_all_duplicated_classification() {
+        use super::super::segment_seals_all_duplicated;
+        use chainstate_types::BlockStatus;
+        use common::Uint256;
+
+        let mut rng =
+            test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let chain_config =
+            ConfigBuilder::test_chain().epoch_length(NonZeroU64::new(3).unwrap()).build();
+
+        let block_a = make_pos_block(
+            H256::from_low_u64_be(1),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(42),
+        );
+        // The twin differs structurally (different parent) so the different
+        // block id does not rely on the randomization of the VRF proof bytes;
+        // the seal (pool id + VRF output) is identical, as required.
+        let block_a_twin = make_pos_block(
+            H256::from_low_u64_be(2),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(42),
+        );
+        let block_b = make_pos_block(
+            H256::from_low_u64_be(2),
+            &vrf_sk,
+            &vrf_pk,
+            H256::from_low_u64_be(43),
+        );
+        assert_ne!(block_a.get_id(), block_a_twin.get_id());
+
+        let seal_a = BlockSeal::from_consensus_data(block_a.header().consensus_data()).unwrap();
+        let index_a = block_a.get_id();
+        let index_a_twin = block_a_twin.get_id();
+
+        // A non-PoS (or otherwise seal-less) block.
+        let plain_block = WithId::new(
+            common::chain::Block::new(
+                vec![],
+                chain_config.genesis_block_id(),
+                BlockTimestamp::from_int_seconds(1),
+                ConsensusData::None,
+                BlockReward::new(vec![]),
+            )
+            .unwrap(),
+        );
+
+        let make_index = |block: &WithId<Block>| {
+            chainstate_types::BlockIndex::new(
+                block,
+                Uint256::ZERO,
+                chain_config.genesis_block_id(),
+                TEST_HEIGHT,
+                BlockTimestamp::from_int_seconds(1),
+                0,
+                BlockStatus::new(),
+            )
+        };
+
+        // An index entry at the cap: a seal seen on MAX_BLOCKS_PER_SEAL blocks
+        // still classifies every one of its blocks as duplicated.
+        let at_cap_entry = SealIndexEntry::new(
+            seal_a.clone(),
+            (0..MAX_BLOCKS_PER_SEAL.get())
+                .map(|i| (if i == 0 { index_a } else { index_a_twin }, TEST_HEIGHT))
+                .collect(),
+        );
+
+        // Case: an empty segment never refuses (no lookups happen).
+        let db = MockStoreTxRw::new();
+        assert!(!segment_seals_all_duplicated(&db, &[]).unwrap());
+
+        // Case: a single block with an unindexed (fresh) proof never refuses.
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
+        let segment = vec![make_index(&block_a)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a single block whose seal has only one known block (its twin is
+        // unknown) never refuses.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a, TEST_HEIGHT)],
+            ))));
+        let segment = vec![make_index(&block_a)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a block without a well-formed seal never refuses (fail-open).
+        let mut db = MockStoreTxRw::new();
+        db.expect_get_seal_index_entry().times(0);
+        let segment = vec![make_index(&plain_block)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a fully duplicated segment is refused; an index entry at the
+        // cap still classifies as duplicated.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        let entry = at_cap_entry;
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(entry)));
+        let segment = vec![make_index(&block_a)];
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a two-block all-duplicate segment is refused (every block of
+        // the segment is looked up).
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(2)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a, TEST_HEIGHT), (index_a_twin, TEST_HEIGHT)],
+            ))));
+        let segment = vec![make_index(&block_a), make_index(&block_a_twin)];
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: a block whose own sighting is missing from the entry (its
+        // indexing failed) is still refused, since the seal is known from
+        // another block.
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a_twin, TEST_HEIGHT)],
+            ))));
+        let segment = vec![make_index(&block_a)];
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+
+        // Case: one duplicate and one fresh block in the same segment never
+        // refuses (the fresh block carries the ordinary trust comparison).
+        let mut db = MockStoreTxRw::new();
+        let expected_seal = seal_a.clone();
+        db.expect_get_seal_index_entry()
+            .times(1)
+            .withf(move |seal: &BlockSeal| seal == &expected_seal)
+            .return_const(Ok(Some(SealIndexEntry::new(
+                seal_a.clone(),
+                vec![(index_a, TEST_HEIGHT), (index_a_twin, TEST_HEIGHT)],
+            ))));
+        db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
+        let segment = vec![make_index(&block_a), make_index(&block_b)];
+        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+    }
 }

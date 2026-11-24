@@ -52,6 +52,17 @@ pub struct ChainstateConfig {
     /// If true, the seals (stake pool id + VRF output) of the processed PoS blocks will be
     /// indexed and the evidence of a seal seen on more than one block will be recorded.
     pub pos_seal_duplication_tracking: PosSealDuplicationTracking,
+
+    /// If true, a chain whose newly activated segment consists entirely of blocks whose
+    /// PoS consensus proofs are duplicates of already-known proofs will not be activated.
+    /// The gate requires at least one fresh proof per activated segment; it does not
+    /// discount the trust of duplicate-seal blocks within a mixed segment. The reorgs of
+    /// the user-initiated block invalidation path are the only activations that are never
+    /// gated. Requires `pos_seal_duplication_tracking`, which maintains the index this
+    /// gate classifies against (enabling the gate without the tracking is rejected at
+    /// chainstate initialization). `None` means the default for the chain type applies:
+    /// enabled on the testnet, disabled elsewhere.
+    pub pos_seal_activation_gate: Option<bool>,
 }
 
 impl ChainstateConfig {
@@ -79,6 +90,17 @@ impl ChainstateConfig {
         *self.pos_seal_duplication_tracking
     }
 
+    pub fn pos_seal_activation_gate_enabled(&self, chain_config: &ChainConfig) -> bool {
+        if let Some(pos_seal_activation_gate) = self.pos_seal_activation_gate {
+            return pos_seal_activation_gate;
+        }
+
+        match chain_config.chain_type() {
+            ChainType::Testnet => true,
+            ChainType::Mainnet | ChainType::Signet | ChainType::Regtest => false,
+        }
+    }
+
     pub fn db_reckless_mode_in_ibd_enabled(&self) -> bool {
         // The library default stays identical to master (opt-in): the experimental
         // default-on behavior lives at the node-daemon layer (node-lib/src/runner.rs),
@@ -99,5 +121,47 @@ impl ChainstateConfig {
 
     pub fn checkpoints_mismatch_allowed(&self) -> bool {
         self.allow_checkpoints_mismatch.unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::chain::Destination;
+    use common::chain::NetUpgrades;
+    use common::chain::config::Builder as ConfigBuilder;
+    use std::collections::BTreeMap;
+
+    fn chain_config_for(chain_type: ChainType) -> common::chain::config::ChainConfig {
+        ConfigBuilder::new(chain_type)
+            .consensus_upgrades(NetUpgrades::unit_tests())
+            .genesis_unittest(Destination::AnyoneCanSpend)
+            .checkpoints(BTreeMap::new())
+            .build()
+    }
+
+    #[test]
+    fn seal_gate_default_depends_on_chain_type() {
+        let config = ChainstateConfig::default();
+
+        assert!(config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Testnet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Mainnet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Signet)));
+        assert!(!config.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Regtest)));
+    }
+
+    #[test]
+    fn seal_gate_explicit_setting_overrides_the_default() {
+        let enabled = ChainstateConfig {
+            pos_seal_activation_gate: Some(true),
+            ..Default::default()
+        };
+        assert!(enabled.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Mainnet)));
+
+        let disabled = ChainstateConfig {
+            pos_seal_activation_gate: Some(false),
+            ..Default::default()
+        };
+        assert!(!disabled.pos_seal_activation_gate_enabled(&chain_config_for(ChainType::Testnet)));
     }
 }

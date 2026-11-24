@@ -154,6 +154,7 @@ fn chainstate_config(
         enable_heavy_checks,
         allow_checkpoints_mismatch,
         pos_seal_duplication_tracking,
+        pos_seal_activation_gate,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
@@ -176,6 +177,8 @@ fn chainstate_config(
         // Intentionally not overridden by a CLI option: the config file is the only
         // control surface for this setting.
         pos_seal_duplication_tracking,
+        // Same as above: the config file is the only control surface for this setting.
+        pos_seal_activation_gate,
     };
     ChainstateLauncherConfigFile {
         storage_backend,

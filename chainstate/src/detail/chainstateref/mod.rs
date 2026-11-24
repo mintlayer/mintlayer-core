@@ -30,8 +30,8 @@ use thiserror::Error;
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    BlockIndex, BlockIndexHandle, BlockStatus, BlockValidationStage, EpochData, EpochDataCache,
-    GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
+    BlockIndex, BlockIndexHandle, BlockSeal, BlockStatus, BlockValidationStage, EpochData,
+    EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
     block_index_ancestor_getter, get_skip_height,
 };
 use common::{
@@ -1438,17 +1438,94 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         &mut self,
         new_block_index: &BlockIndex,
         in_memory_block: Option<&WithId<Block>>,
+        activation_context: ChainActivationContext,
     ) -> Result<bool, ReorgError> {
         let current_best_block_index =
             self.get_best_block_index().map_err(BlockError::BestBlockIndexQueryError)?;
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
+            if self.reorg_segment_activation_refused(
+                new_block_index,
+                &current_best_block_index.block_id(),
+                activation_context,
+            )? {
+                return Ok(false);
+            }
             // Chain trust is higher than the best block
             self.reorganize(
                 &current_best_block_index.block_id(),
                 new_block_index,
                 in_memory_block,
             )?;
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    /// Classifies whether the activation of the candidate chain must be refused
+    /// because its new segment consists entirely of duplicate-seal blocks (PoS
+    /// consensus proofs that were already seen on other known blocks).
+    ///
+    /// This is the PoS seal activation gate
+    /// (`ChainstateConfig::pos_seal_activation_gate`): it is enabled by default
+    /// only on testnet chains and disabled by default elsewhere, it never fires
+    /// on the reorgs of the user-initiated block invalidation path, and it is
+    /// fail-open: a block that does not yield a well-formed seal (PoW, genesis,
+    /// malformed PoS data) is never classified as a duplicate, and a segment that
+    /// contains at least one non-duplicate block proceeds under the ordinary
+    /// trust comparison.
+    ///
+    /// A refusal is a no-op: the candidate chain stays stored, valid and
+    /// relayable, and every later activation attempt re-runs this classification,
+    /// so a refused branch that gains a block with a fresh seal becomes
+    /// activatable.
+    fn reorg_segment_activation_refused(
+        &mut self,
+        new_block_index: &BlockIndex,
+        best_block_id: &Id<GenBlock>,
+        activation_context: ChainActivationContext,
+    ) -> Result<bool, ReorgError> {
+        if !self.chainstate_config.pos_seal_activation_gate_enabled(self.chain_config) {
+            return Ok(false);
+        }
+        if activation_context.seal_activation_gate_bypassed() {
+            return Ok(false);
+        }
+
+        let new_chain = self
+            .get_new_chain(new_block_index)
+            .map_err(|e| {
+                BlockError::InvariantErrorFailedToFindNewChainPath(
+                    (*new_block_index.block_id()).into(),
+                    *best_block_id,
+                    e,
+                )
+            })
+            .log_err()?;
+
+        if new_chain.is_empty() {
+            // Unreachable through the current callers: a candidate with strictly
+            // higher trust is never part of the main chain, so the walk to it is
+            // non-empty. The gate declines to refuse here; the ordinary path
+            // below then enforces its own empty-chain invariant.
+            return Ok(false);
+        }
+
+        if segment_seals_all_duplicated(&self.db_tx, &new_chain)? {
+            // Both a reused-proof attack and an honest same-pool re-seal of an
+            // orphaned slot land here; either way the chain stays stored and
+            // becomes activatable with its next fresh-seal block.
+            log::warn!(
+                "Not activating the chain of candidate block {} at height {} (current best \
+                 block {}): every block of its new segment ({} blocks) reuses an \
+                 already-known PoS consensus proof; the chain stays stored and becomes \
+                 activatable with its next fresh-seal block",
+                new_block_index.block_id(),
+                new_block_index.block_height(),
+                best_block_id,
+                new_chain.len(),
+            );
             return Ok(true);
         }
 
@@ -1612,6 +1689,77 @@ pub enum ReorgError {
     ConnectTipFailed(Id<Block>, BlockError),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
+}
+
+/// The context of a best-chain activation attempt.
+///
+/// The PoS seal activation gate (see
+/// `ChainstateConfig::pos_seal_activation_gate`) never influences chain
+/// re-activations driven by the user-initiated block invalidation path: the
+/// recovery must be able to re-activate any remaining chain. Block processing
+/// is always gated, including during the initial block download, so a syncing
+/// node refuses the same all-duplicate segments that its peers refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainActivationContext {
+    /// A newly processed block is being connected.
+    BlockProcessing,
+    /// The best chain is being re-activated after user-initiated block invalidation.
+    InvalidationRecovery,
+}
+
+impl ChainActivationContext {
+    /// Whether the PoS seal activation gate must be bypassed for this activation.
+    fn seal_activation_gate_bypassed(&self) -> bool {
+        match self {
+            ChainActivationContext::BlockProcessing => false,
+            ChainActivationContext::InvalidationRecovery => true,
+        }
+    }
+}
+
+/// Classifies whether every block of the given activation segment carries a
+/// duplicate-seal PoS consensus proof (a proof already seen on another known
+/// block, per the seal duplication index). A block that does not yield a
+/// well-formed seal is never classified as a duplicate, and an empty segment is
+/// never refused.
+///
+/// Sightings are permanent: the index is a historical record, so entries are
+/// not pruned when a block is invalidated, and the classification does not
+/// skip invalidated partner blocks. This is deliberate fail-closed behavior:
+/// counting only valid partners would let an attacker make a reused seal look
+/// unique again by having one of its twins invalidated, re-opening exactly the
+/// trust-inflation construction the gate exists to refuse.
+///
+/// The gate can refuse an honest chain once, when the segment contains a
+/// same-pool same-timestamp re-seal: a pool whose block was orphaned by an
+/// earlier-timestamp winner starts its next job at the tip's timestamp plus
+/// one and lands on the orphan's slot again, because the VRF output binds the
+/// epoch randomness and the timestamp but not the parent. The refused block
+/// is stored, and the chain always recovers with its next fresh-seal block.
+fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
+    db_tx: &S,
+    new_chain: &[BlockIndex],
+) -> Result<bool, BlockError> {
+    if new_chain.is_empty() {
+        return Ok(false);
+    }
+    for block_index in new_chain {
+        let Some(seal) =
+            BlockSeal::from_consensus_data(block_index.block_header().consensus_data())
+        else {
+            // The block does not yield a well-formed seal, so it cannot be
+            // classified as a duplicate and the segment is not fully duplicated.
+            return Ok(false);
+        };
+        let duplicated = match db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
+            Some(entry) => entry.is_seen_on_block_other_than(*block_index.block_id()),
+            None => false,
+        };
+        if !duplicated {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

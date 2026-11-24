@@ -136,6 +136,7 @@ impl BlockprodTestSetupBuilder {
             max_orphan_blocks: Default::default(),
             allow_checkpoints_mismatch: Default::default(),
             pos_seal_duplication_tracking: Default::default(),
+            pos_seal_activation_gate: Default::default(),
         };
 
         let mempool_config = self.mempool_config.unwrap_or_default();
