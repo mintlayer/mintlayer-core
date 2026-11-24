@@ -814,7 +814,7 @@ async fn top_up_block_request_is_capped_by_the_request_limit(#[case] seed: Seed)
         assert_eq!(outstanding.outstanding, ids[3..7].to_vec());
 
         // Three more processed leave one in flight again; the single remaining staged
-        // header fits exactly.
+        // header fits within the remaining capacity.
         for block in &blocks[3..6] {
             deliver_block(&peer, block).await;
             outstanding.on_block_received(&block.get_id());
