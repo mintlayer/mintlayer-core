@@ -1,6 +1,11 @@
 
 # cargo-vet audits file
 
+[[audits.form_urlencoded]]
+who = "nullPointerEnjoyer <dev1@mintlayer.org>"
+criteria = "safe-to-deploy"
+version = "1.2.3"
+
 [[audits.libc]]
 criteria = "safe-to-deploy"
 delta = "0.2.180 -> 0.2.183"
