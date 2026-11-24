@@ -25,6 +25,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       chainstate initialization.
 
 ### Changed
+  - Consensus:
+    - the mainnet activation height of the consensus tightening rules (kernel
+      utxo and PoS data pool id mismatch, zero-amount token transfers, and
+      invalid characters in `ChangeTokenMetadataUri` URIs) is scheduled at
+      block height 806,500 (activating in early March 2027, with lead time for operators;
+      testnet activated the same rules at height 787,640).
+
   - Storage:
     - the internal storage iteration APIs (`prefix_iter`, `greater_equal_iter`) now
       take the key prefix by reference and return iterators that no longer borrow it,
@@ -65,6 +72,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - coin selection itself now leaves out inputs that aren't worth more than the fee of
       spending them, instead of relying on its caller to filter them out first, so such
       an input can no longer make it panic.
+
 
   - Node:
     - `node-daemon` and `node-gui`: the "reckless" mode of the chainstate database is now
