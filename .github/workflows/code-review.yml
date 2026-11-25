@@ -31,6 +31,6 @@ jobs:
           llm_reasoning_effort: low
           incremental: 'true'
           route_severity_below: 'low'
-          max_tokens_budget: '1500000'
+          max_tokens_budget: '0' # unlimited; the review_task_timeout bounds cost
           review_task_timeout: '15'
           stream_progress: 'true'
