@@ -653,6 +653,12 @@ fn long_epoch_chain_config() -> ChainConfig {
         ))
         .epoch_length(std::num::NonZeroU64::new(100).unwrap())
         .sealed_epoch_distance_from_tip(0)
+        // With every upgrade active from genesis (the Babbage reset), HTLC is
+        // active at these heights and the default max future block time
+        // offset is the tight 30 s value, while these chains mint blocks up
+        // to 110 s ahead of the mocked clock; keep the 120 s offset the old
+        // testnet fork schedule implied.
+        .max_future_block_time_offset(Some(Duration::from_secs(120)))
         .build()
 }
 

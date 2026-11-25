@@ -49,7 +49,6 @@ import {
   MNEMONIC,
   POOL_ID,
   ORDER_ID,
-  SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT,
   TOKEN_ID,
   HTLC_SECRET_HASH,
   HTLC_SECRET,
@@ -62,21 +61,12 @@ import {
   OUTPUTS,
 } from "./test_encode_other_outputs.js";
 
-// Note: the exact heights don't matter as long as they are at the "correct side" of the fork.
-const SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT =
-  gen_random_int(0, SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT - 1, "SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT");
-const SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT = SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT + SIGHASH_INPUT_COMMITMENTS_V1_TESTNET_FORK_HEIGHT;
+// The Babbage testnet activates input commitments V1 from genesis, so only
+// the V1 encoding is reachable; the height is arbitrary.
+const SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT = gen_random_int(0, 10_000_000_000, "SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT");
 
 export function test_input_commitments() {
-  function v0() {
-    test_impl(false);
-  }
-  function v1() {
-    test_impl(true);
-  }
-
-  run_one_test(v0);
-  run_one_test(v1);
+  run_one_test(test_impl);
 }
 
 const POOL_INFO = {
@@ -129,13 +119,8 @@ const DIFFERENT_ORDER_INFO = {
   give_balance: { atoms: "5000000000000000" }
 };
 
-function test_impl(is_v1: boolean) {
-  let height: number;
-  if (is_v1) {
-    height = SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT;
-  } else {
-    height = SIGHASH_INPUT_COMMITMENTS_V0_HEIGHT;
-  };
+function test_impl() {
+  const height = SIGHASH_INPUT_COMMITMENTS_V1_HEIGHT;
 
   const account_privkey = make_default_account_privkey(
     MNEMONIC,
@@ -294,7 +279,7 @@ function test_impl(is_v1: boolean) {
     witness_verification_func(witness, correct_tx_info);
 
     console.log("Testing verification with incorrect tx info");
-    if (is_v1) {
+    {
       // In v1 we do commit to the info, so passing incorrect info should result in verification
       // failure.
       expect_exception(
@@ -303,14 +288,6 @@ function test_impl(is_v1: boolean) {
         },
         signature_verification_failure_msg
       );
-    } else {
-      // In v0, we only commit to UTXOs, so passing incorrect info won't cause the verification
-      // to fail.
-      // Note though that *some* info has to be passed anyway. This is because we want the input
-      // commitment construction to have the same requirements on the provided objects both in V0
-      // and V1. See the note and the TODO in `make_sighash_input_commitments_for_transaction_inputs`
-      // in `common`.
-      witness_verification_func(witness, different_tx_info);
     }
 
     console.groupEnd();

@@ -42,6 +42,7 @@ use strum::EnumIter;
 use utils::const_nz_u64;
 
 use crate::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         GenBlock, Genesis, PoWChainConfig, TxOutput, block::timestamp::BlockTimestamp,
         transaction::Destination, upgrades::NetUpgrades,
@@ -133,7 +134,7 @@ pub enum ChainType {
 
 impl ChainType {
     pub const MAINNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xB0, 0x07, 0x5F, 0xA0]);
-    pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0x2b, 0x7e, 0x19, 0xf8]);
+    pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xBA, 0xBB, 0x18, 0x71]);
     pub const REGTEST_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xaa, 0xbb, 0xcc, 0xdd]);
     pub const SIGNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xf3, 0xf7, 0x7b, 0x45]);
 
@@ -832,34 +833,43 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // We add 3_300_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
-    let extra_testnet_mint = Amount::from_atoms(3_300_000_000 * CoinUnit::ATOMS_PER_COIN);
-    let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
+    // The Babbage testnet mints a generous total initial supply of
+    // 40 trillion TML, so that test-faucet airdrops of one minimum stake
+    // pledge (40,000 TML) per tester can never crowd out the supply while
+    // staking is being exercised.
+    let total_amount = Amount::from_atoms(40_000_000_000_000 * CoinUnit::ATOMS_PER_COIN);
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
 
-    let genesis_message = String::new();
+    // The Babbage testnet epoch: this message is part of the genesis hash, so
+    // changing it resets the testnet (new genesis id, fresh chain). Named
+    // after Charles Babbage, designer of the Analytical Engine -- the machine
+    // the first program, by Ada Lovelace (the previous testnet's namesake),
+    // was written for.
+    let genesis_message = String::from("babbage");
 
-    // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
+    // To get these values, use the operator wallet: `address-reveal-public-key-as-hex`
+    // for the raw public keys and `staking-new-vrf-public-key` for the VRF key.
+    // The mint output goes to the operator's testnet address, whose revealed
+    // public key is also the staking and decommission key of the initial pool.
 
-    let genesis_mint_destination = decode_hex::<PublicKey>(
-        "0003e9d79eb6487c28dad9679461faa1ffcdbc52a10033e1ad625101a97db1ba8edd",
-    );
+    let genesis_mint_destination = Destination::PublicKeyHash(PublicKeyHash::from([
+        0x0d, 0x01, 0x3d, 0xf6, 0x2d, 0x6f, 0xda, 0x17, 0x38, 0x4c, 0x27, 0x14, 0xac, 0x65, 0x87,
+        0xcd, 0x33, 0x25, 0x75, 0x9c,
+    ]));
 
     let mint_output = TxOutput::Transfer(
         OutputValue::Coin(mint_output_amount),
-        Destination::PublicKey(genesis_mint_destination),
+        genesis_mint_destination,
     );
 
-    let decommission_pub_key = decode_hex::<PublicKey>(
-        "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
-    );
     let staker_pub_key = decode_hex::<PublicKey>(
-        "00039d905e919a49d42af16daf8719bde9a8745624affe299ddc7c5ce8091b60e41e",
+        "0003727094d1a790ac49b0753fe6f7e2caccf9c0040ba9ef30309b25f8be59b61dec",
     );
 
+    let decommission_pub_key = staker_pub_key.clone();
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
+        "009871371534ff208d3bde9f30c2ca641b6e1b45a995a0d35775dec99ca3fb0c65",
     );
 
     let initial_pool = TxOutput::CreateStakePool(
@@ -1014,7 +1024,7 @@ mod tests {
     fn testnet_creation() {
         let config = create_testnet();
 
-        assert_eq!(3, config.consensus_upgrades.len());
+        assert_eq!(2, config.consensus_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
@@ -1057,7 +1067,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:?}", ChainType::Testnet.magic_bytes()),
-            "MagicBytes(0x2B7E19F8)"
+            "MagicBytes(0xBABB1871)"
         );
         assert_eq!(
             format!("{:?}", ChainType::Regtest.magic_bytes()),

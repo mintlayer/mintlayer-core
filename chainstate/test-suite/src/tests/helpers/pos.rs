@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{borrow::Cow, num::NonZeroU64};
+use std::{borrow::Cow, num::NonZeroU64, time::Duration};
 
 use chainstate::ChainstateConfig;
 use chainstate_test_framework::{
@@ -151,6 +151,12 @@ pub fn setup_chain_with_stake_pool_with_chainstate_config(
         .consensus_upgrades(net_upgrades)
         .epoch_length(TEST_EPOCH_LENGTH)
         .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        // The testnet now activates every upgrade from genesis (the Babbage
+        // reset), so HTLC is active at these heights and the default max
+        // future block time offset is the tight 30 s value. These chains
+        // mint blocks up to 100 s ahead of the mocked clock, which the old
+        // fork schedule implicitly allowed with the 120 s offset, so pin it.
+        .max_future_block_time_offset(Some(Duration::from_secs(120)))
         .build();
 
     let mut tf = TestFramework::builder(rng)
