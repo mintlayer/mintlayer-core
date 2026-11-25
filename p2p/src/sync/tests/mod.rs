@@ -20,6 +20,7 @@ mod block_response;
 mod fork_download_budget;
 mod header_list_request;
 mod header_list_response;
+mod header_sync_pipelining;
 pub mod helpers;
 mod network_sync;
 mod no_discouragement_after_tx_reorg;

@@ -787,19 +787,19 @@ where
         }
 
         // Note: we require a peer to send headers starting from a block that we already have
-        // in our chainstate. I.e. we don't allow:
-        // 1) Basing new headers on a previously sent header, because this would give a malicious
-        // peer an opportunity to flood the node with headers, potentially exhausting its memory.
-        // The downside of this restriction is that the peer may have to send the same headers
-        // multiple times. So, to avoid extra traffic, an honest peer should't send header updates
-        // when the node is already downloading blocks. (But still, the node shouldn't punish
-        // the peer for doing so, because it's possible for it to do so by accident, e.g.
-        // a "new tip" event may happen on the peer's side after it has sent us the last requested
-        // block but before we've asked it for more.)
-        // 2) Basing new headers on a block that we've requested from the peer but that has not
-        // yet been sent. This is a rather useless optimization (provided that peers don't send
-        // header updates when we're downloading blocks from them, as mentioned above) that
-        // would only complicate the logic.
+        // in our chainstate. Our header requests are anchored at the last block we processed,
+        // which lags behind the download pipeline, so while a download is in flight the list
+        // is expected to start with a prefix of headers that we hold in the pipeline: already
+        // requested from the peer, or staged in the look-ahead window. That prefix is skipped
+        // (see `trim_held_overlap`). The headers that follow may be based on an in-flight or
+        // staged header rather than on a chainstate block; they are not requested right away,
+        // but staged in the look-ahead window (see `stage_in_lookahead`), bounded by
+        // `lookahead_window_target` and by the remaining staging capacity. These bounds are
+        // what keeps a malicious peer from flooding the node with headers and exhausting its
+        // memory. (The node still shouldn't punish the peer for sending headers that we
+        // already hold, because it's possible for it to do so by accident, e.g. a "new tip"
+        // event may happen on the peer's side after it has sent us the last requested block
+        // but before we've asked it for more.)
 
         let first_header_prev_block_height = self
             .chainstate_handle
@@ -844,21 +844,64 @@ where
             self.incoming.peers_best_block_that_we_have.as_displayable()
         );
 
+        let downloading = !self.incoming.requested_blocks.is_empty();
+
         // Now use preliminary_headers_check; this can be done because the first header
-        // is known to be connected to the chainstate.
-        {
+        // is known to be connected to the chainstate. Note that the check must run on
+        // the list before the overlap trimming below: after trimming, the remaining
+        // headers are anchored at a header held in the download pipeline rather than at
+        // a block in the chainstate, which the check requires. The cost stays bounded:
+        // at most one full check per received list, the same bound as for any header
+        // list, and the trimming below keeps repeated headers out of the pipeline and
+        // out of subsequent requests.
+        if !new_block_headers.is_empty() {
             let new_block_headers = new_block_headers.clone();
             self.chainstate_handle
                 .call(move |c| Ok(c.preliminary_headers_check(&new_block_headers)?))
                 .await?;
         }
 
-        if !self.incoming.requested_blocks.is_empty() {
-            // We are already downloading blocks, so bail out.
-            // Note that we unconditionally replace pending_headers with new_block_headers
-            // even if the latter is empty (because this will just mean that the peer has reorged
-            // to something similar to our mainchain, so the old pending_headers are stale now).
-            self.incoming.pending_headers = new_block_headers;
+        // While blocks are in flight, the peer's response is anchored at the last block
+        // we processed (the request locator lags the download pipeline), so it may
+        // legitimately repeat headers that we are still downloading or that are staged
+        // in the look-ahead window. Skip that leading overlap: those headers were
+        // checked above, and staging or requesting them again would be wrong. What
+        // remains after the skip is by construction a connected suffix of the received
+        // list.
+        let mut new_block_headers = if downloading {
+            self.trim_held_overlap(new_block_headers)
+        } else {
+            new_block_headers
+        };
+
+        if downloading {
+            // Stage the genuinely new headers in the look-ahead window, keeping the
+            // in-flight headers untouched. An entirely known (or empty) response leaves
+            // the window as is: the staged headers are still valid, the peer simply had
+            // nothing new for the current anchor.
+            //
+            // Staging is capped by the remaining look-ahead window capacity: headers
+            // that do not fit are dropped and will be received again later, once the
+            // window has room, because our locator will still reach them after the
+            // anchor advances. This keeps the window, and with it the per-list
+            // processing cost, bounded no matter what the peer sends.
+            let staging_capacity =
+                self.lookahead_window_target().saturating_sub(self.lookahead_window_len());
+            new_block_headers.truncate(staging_capacity);
+            if !new_block_headers.is_empty() {
+                self.stage_in_lookahead(new_block_headers);
+
+                // Keep the look-ahead topped up while downloading: request more headers
+                // when the peer indicated it has further ones and the window is not full.
+                // This is only reached when the response contained headers that were
+                // actually staged, so a peer that keeps answering with headers we
+                // already hold cannot make us issue requests in a loop.
+                if peer_may_have_more_headers
+                    && self.lookahead_window_len() < self.lookahead_window_target()
+                {
+                    self.request_headers().await?;
+                }
+            }
             return Ok(());
         }
 
@@ -890,7 +933,24 @@ where
         }
 
         self.consecutive_known_full_header_lists = 0;
-        self.request_blocks(new_block_headers)
+        self.request_blocks(new_block_headers)?;
+
+        // Start the look-ahead window right away: when the peer signalled more headers,
+        // request the next list now rather than after the current block batch drains. Note
+        // that the request is anchored at the last block we processed, which only advances
+        // as the blocks arrive, so an honest single peer normally answers with a list that
+        // we already hold in full: nothing is staged and the only cost is one extra header
+        // list each time a list starts a download. Staging engages only when an answer
+        // extends past the held window, e.g. when this peer lags behind headers obtained
+        // from other peers or sends unsolicited lists. The request is only issued when the
+        // window is below its target and the received list actually extended our knowledge,
+        // so it cannot be turned into a request loop.
+        if peer_may_have_more_headers
+            && self.lookahead_window_len() < self.lookahead_window_target()
+        {
+            self.request_headers().await?;
+        }
+        Ok(())
     }
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
@@ -1052,6 +1112,28 @@ where
                 // Download remaining blocks.
                 self.request_blocks(headers)?;
             }
+        } else if !self.incoming.pending_headers.is_empty()
+            && self.incoming.requested_blocks.len()
+                < *self.p2p_config.protocol_config.max_request_blocks_count / 2
+        {
+            // Keep the peer's send stream continuous across batch boundaries: request the
+            // next portion of the staged look-ahead while the current portion is still in
+            // flight. The total number of outstanding requested blocks stays within
+            // max_request_blocks_count, which is the serving limit that peers enforce on
+            // their side, and no block id is ever requested twice.
+            //
+            // Note that with a very small max_request_blocks_count (1, 2 or 3) the
+            // watermark can never be reached while a batch is in flight, so the download
+            // proceeds in lockstep batches as before and pipelining is a no-op. This
+            // only matters for artificially small test values; production limits are
+            // far above it.
+            //
+            // Note also that the header requests armed by the pipelining logic run
+            // concurrently with the block download: the peer is expected to answer
+            // header requests while serving blocks, and the header progress deadline
+            // (see `disconnect_if_stalling`) applies to them exactly as it applies to a
+            // header-only exchange.
+            self.top_up_blocks().await?;
         }
 
         Ok(())
@@ -1087,6 +1169,141 @@ where
         self.incoming.requested_blocks = block_ids.into();
 
         self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
+
+        Ok(())
+    }
+
+    /// The look-ahead window: blocks requested from the peer but not yet received,
+    /// plus headers staged for future block requests.
+    fn lookahead_window_len(&self) -> usize {
+        self.incoming.requested_blocks.len() + self.incoming.pending_headers.len()
+    }
+
+    /// The upper bound for the look-ahead window: header requests issued by the pipelining
+    /// logic are only sent while the window is below this target, and headers are only
+    /// staged up to this bound, so both our own memory usage and the amount of data we may
+    /// have outstanding from any single peer stay bounded no matter what the peer sends.
+    /// Block top-ups do not grow the window: they move staged headers into requests and are
+    /// gated by the half-limit watermark in `handle_block_response` instead. (Every other
+    /// header request, namely the initial one, the consecutive-known-lists retry and the
+    /// drain-path refill, is issued only while the window is empty; the fork budget retry
+    /// can fire at a full window, but is rate-limited by the refill interval and its
+    /// response is inert there.)
+    fn lookahead_window_target(&self) -> usize {
+        2 * *self.p2p_config.protocol_config.msg_header_count_limit
+    }
+
+    /// Skips the leading headers that we already hold in the download pipeline: those
+    /// requested from the peer but not yet received, and those staged in the look-ahead
+    /// window. The peer may legitimately repeat such headers, because our header
+    /// requests are anchored at the last block we processed, which lags behind the
+    /// download pipeline.
+    fn trim_held_overlap(&self, mut headers: Vec<SignedBlockHeader>) -> Vec<SignedBlockHeader> {
+        let held: BTreeSet<Id<Block>> = self
+            .incoming
+            .requested_blocks
+            .iter()
+            .copied()
+            .chain(
+                self.incoming
+                    .pending_headers
+                    .iter()
+                    .map(|header: &SignedBlockHeader| header.get_id()),
+            )
+            .collect();
+        let new_headers_count = headers
+            .iter()
+            .position(|header| !held.contains(&header.get_id()))
+            .unwrap_or(headers.len());
+        headers.drain(..new_headers_count);
+        headers
+    }
+
+    /// Adds validated headers to the look-ahead window. After the overlap trimming the
+    /// headers anchor at a header of the download pipeline or at a chainstate block:
+    /// * if they connect to the staged tail, they extend it (the common case: the
+    ///   response continues the chain we are already downloading);
+    /// * otherwise, if they branch off a header staged in the middle of the window
+    ///   (the peer reorganized away from the staged continuation), the staged headers
+    ///   after the branch point are dropped and the new headers are appended there,
+    ///   keeping the window a single connected chain;
+    /// * otherwise the anchor is an in-flight requested header or a chainstate block:
+    ///   in the first case the anchor is requested before the staged headers, so it is
+    ///   processed before any of them, in the second case the known prefix is trimmed at
+    ///   request time. Either way the previously staged headers can be replaced wholesale,
+    ///   since none of them has been requested yet; the caller only passes the new headers
+    ///   that fit the remaining look-ahead capacity, the rest is dropped and will be
+    ///   received again after the anchor has advanced.
+    fn stage_in_lookahead(&mut self, headers: Vec<SignedBlockHeader>) {
+        debug_assert!(!headers.is_empty());
+
+        let anchor: Id<GenBlock> = *headers.first().expect("headers is not empty").prev_block_id();
+
+        let connects_to_staged = self.incoming.pending_headers.last().is_some_and(|last| {
+            let staged_tail: Id<GenBlock> = last.get_id().into();
+            staged_tail == anchor
+        });
+        if connects_to_staged {
+            self.incoming.pending_headers.extend(headers);
+            return;
+        }
+
+        // The headers branch off a staged header strictly inside the window: keep the
+        // staged prefix up to and including the branch point and continue with the new
+        // headers. The staged headers after the branch point belong to the abandoned
+        // chain and are dropped.
+        let branch_position = self.incoming.pending_headers.iter().position(|header| {
+            let header_id: Id<GenBlock> = header.get_id().into();
+            header_id == anchor
+        });
+        if let Some(branch_position) = branch_position {
+            self.incoming.pending_headers.truncate(branch_position + 1);
+            self.incoming.pending_headers.extend(headers);
+            return;
+        }
+
+        self.incoming.pending_headers = headers;
+    }
+
+    /// Sends a block list request for the next portion of the staged look-ahead while
+    /// the previous portion is still being downloaded.
+    ///
+    /// The request size is capped so that the total number of outstanding requested
+    /// blocks never exceeds `ProtocolConfig::max_request_blocks_count`, which is also
+    /// the serving limit that peers enforce for a single request together with their
+    /// pending serving queue. Block ids are moved from the head of the staged window,
+    /// so no id is ever requested twice while outstanding. Already-known blocks are
+    /// filtered out first, mirroring the drain path: a staged header's block may have
+    /// been obtained from another peer in the meantime.
+    async fn top_up_blocks(&mut self) -> Result<()> {
+        debug_assert!(!self.incoming.requested_blocks.is_empty());
+        debug_assert!(!self.incoming.pending_headers.is_empty());
+
+        let limit = *self.p2p_config.protocol_config.max_request_blocks_count;
+        let capacity = limit - self.incoming.requested_blocks.len();
+        debug_assert!(capacity > 0);
+
+        let take = capacity.min(self.incoming.pending_headers.len());
+        let headers: Vec<_> = self.incoming.pending_headers.drain(..take).collect();
+        let headers = self
+            .chainstate_handle
+            .call(|c| Ok(c.split_off_leading_known_headers(headers)?))
+            .await?
+            .1;
+        if headers.is_empty() {
+            return Ok(());
+        }
+        let block_ids: Vec<_> = headers.iter().map(|header| header.get_id()).collect();
+        log::debug!(
+            "Requesting more blocks from the peer: {}-{} ({})",
+            block_ids.first().expect("block_ids is not empty"),
+            block_ids.last().expect("block_ids is not empty"),
+            block_ids.len(),
+        );
+        self.send_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            block_ids.clone(),
+        )))?;
+        self.incoming.requested_blocks.extend(block_ids);
 
         Ok(())
     }
