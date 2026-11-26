@@ -17,7 +17,10 @@ mod handshake_handler;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use tokio::{
     sync::mpsc::{self, unbounded_channel},
@@ -42,7 +45,7 @@ use utils::tokio_spawn_in_current_tracing_span;
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
-    error::{P2pError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
     net::{
         default_backend::{
@@ -232,7 +235,7 @@ where
         } = self;
 
         let handshake_handler = HandshakeHandler::new(
-            peer_address,
+            peer_address.clone(),
             connection_info,
             chain_config,
             Arc::clone(&p2p_config),
@@ -244,6 +247,8 @@ where
         let common_protocol_version = handshake_handler
             .run_handshake(&peer_event_sender, &mut socket_reader, &mut socket_writer)
             .await?;
+
+        let connected_at = Instant::now();
 
         // The channel to the sync manager peer task (set when the peer is accepted)
         let mut sync_msg_senders_opt = None;
@@ -266,6 +271,10 @@ where
 
         // Note: if the outer Option is set, an explicit disconnection should be initiated via
         // the writer task. Otherwise the writer task is supposed to be already closed.
+        //
+        // How the connection ended is recorded alongside, to report it once the writer task
+        // has confirmed the closure; it is set right before every exit of the loop.
+        let connection_end: Option<ConnectionEnd>;
         let reason_for_explicit_disconnect: Option<Option<DisconnectionReason>> = loop {
             tokio::select! {
                 // Sending messages should have higher priority
@@ -283,10 +292,16 @@ where
                                 "Socket writer task already closed when trying to send a message with tag {:?}",
                                 message_tag
                             );
+                            connection_end = Some(ConnectionEnd::local(format!(
+                                "socket writer task already closed when trying to send a message with tag {message_tag:?}"
+                            )));
                             break None;
                         }
                     },
                     BackendEvent::Disconnect { reason } => {
+                        connection_end = Some(ConnectionEnd::disconnected_by_peer_manager(
+                            reason.as_ref(),
+                        ));
                         break Some(reason);
                     },
                 },
@@ -295,11 +310,14 @@ where
                         Some(WriterEvent::WriterClosed(result)) => {
                             match result {
                                 Err(err) => {
-                                    log::info!("Connection closed, reason: {err:?}");
+                                    connection_end = Some(ConnectionEnd::from_p2p_error(&err));
                                 }
                                 Ok(()) => {
                                     // Note: this shouldn't really happen.
                                     log::warn!("Socket writer task closed without disconnection request");
+                                    connection_end = Some(ConnectionEnd::local(
+                                        "socket writer task closed without disconnection request",
+                                    ));
                                 }
                             }
                             break None;
@@ -307,6 +325,9 @@ where
                         None => {
                             // Note: this can happen if the writer task has panicked.
                             log::warn!("Socket writer task closed unexpectedly");
+                            connection_end = Some(ConnectionEnd::local(
+                                "socket writer task closed unexpectedly",
+                            ));
                             break None;
                         },
                     }
@@ -344,11 +365,15 @@ where
                         // do a proper disconnect, attempting to send the reason to the peer. Otherwise we're done.
                         let disconnection_reason = DisconnectionReason::from_error(&err, &p2p_config);
                         if let Some(disconnection_reason) =  disconnection_reason {
-                            log::info!("Closing connection, reason: {err:?}");
+                            // The error is ours to act on: close the connection and tell the
+                            // peer why.
+                            connection_end = Some(ConnectionEnd::local(format!(
+                                "{err}; disconnecting the peer with the reason: {disconnection_reason}"
+                            )));
                              break Some(Some(disconnection_reason));
                         }
                         else {
-                            log::info!("Connection closed, reason: {err:?}");
+                            connection_end = Some(ConnectionEnd::from_p2p_error(&err));
                             break None;
                         }
                     }
@@ -391,13 +416,51 @@ where
 
         writer_join_handle.abort();
 
+        if let Some(connection_end) = connection_end {
+            // The peer has completed the handshake, so its closing the connection is an
+            // operator-worthy event in both directions.
+            log_connection_closed(
+                peer_id,
+                &peer_address,
+                connection_info.as_direction(),
+                &connection_end,
+                log::Level::Info,
+                Some(connected_at.elapsed()),
+            );
+        }
+
         Ok(())
     }
 
-    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.peer_id), level = tracing::Level::ERROR)]
+    #[tracing::instrument(skip_all, name = "", fields(peer_id = %self.peer_id, peer_address = %self.peer_address), level = tracing::Level::ERROR)]
     pub async fn run(self) -> crate::Result<()> {
         let peer_event_sender = self.peer_event_sender.clone();
+        let (peer_id, peer_address, direction) = (
+            self.peer_id,
+            self.peer_address.clone(),
+            self.connection_info.as_direction(),
+        );
         let run_result = self.run_impl().await;
+
+        if let Err(err) = &run_result {
+            // The connection ended before or outside of the message loop, e.g. because the
+            // handshake failed; `run_impl` reports the endings that go through the loop.
+            // An inbound peer that never completed its handshake is unauthenticated, so
+            // anyone can make the node produce this line; it stays at debug for them.
+            let level = match direction {
+                ConnectionDirection::Inbound => log::Level::Debug,
+                ConnectionDirection::Outbound => log::Level::Info,
+            };
+            log_connection_closed(
+                peer_id,
+                &peer_address,
+                direction,
+                &ConnectionEnd::from_p2p_error(err),
+                level,
+                None,
+            );
+        }
+
         let send_result = peer_event_sender.send(PeerEvent::ConnectionClosed).await;
 
         if send_result.is_err() {
@@ -408,6 +471,91 @@ where
 
         run_result
     }
+}
+
+/// How and why a peer connection ended, reported once when the peer task ends.
+struct ConnectionEnd {
+    /// Whether this node (`local`) or the remote node (`remote`) ended the connection.
+    initiated_by: &'static str,
+    reason: String,
+}
+
+impl ConnectionEnd {
+    fn local(reason: impl Into<String>) -> Self {
+        Self {
+            initiated_by: "local",
+            reason: reason.into(),
+        }
+    }
+
+    fn disconnected_by_peer_manager(reason: Option<&DisconnectionReason>) -> Self {
+        let reason = reason.map_or_else(|| "no reason given".to_owned(), ToString::to_string);
+        Self::local(format!(
+            "disconnection requested by the peer manager: {reason}"
+        ))
+    }
+
+    /// Judge by a socket error which side ended the connection: the io error kinds below are
+    /// what a socket reports when the peer has closed or reset it; anything else, including
+    /// our own write timeout and a malformed message, ends with this node closing it.
+    fn from_networking_error(err: &NetworkingError) -> Self {
+        let closed_by_remote = matches!(
+            err,
+            NetworkingError::IoError(
+                std::io::ErrorKind::UnexpectedEof
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::BrokenPipe
+                    | std::io::ErrorKind::NotConnected
+            )
+        );
+
+        let mut res = Self::local(err.to_string());
+        if closed_by_remote {
+            res.initiated_by = "remote";
+        }
+        res
+    }
+
+    /// The connection ended with the given error before the message loop could report it.
+    fn from_p2p_error(err: &P2pError) -> Self {
+        match err {
+            P2pError::PeerError(PeerError::PeerWillDisconnect) => Self {
+                initiated_by: "remote",
+                reason: "the peer announced that it is going to disconnect us".to_owned(),
+            },
+            P2pError::NetworkingError(err) => Self::from_networking_error(err),
+            _ => Self::local(err.to_string()),
+        }
+    }
+}
+
+/// Report the end of a peer connection with everything needed to tell who dropped whom.
+///
+/// The peer manager only learns the peer id of a closed connection from the
+/// `ConnectionClosed` event, and the lines inside the message loop are at debug, so this is
+/// the line that carries the reason at the default verbosity.
+fn log_connection_closed(
+    peer_id: PeerId,
+    peer_address: &PeerAddress,
+    direction: ConnectionDirection,
+    connection_end: &ConnectionEnd,
+    level: log::Level,
+    uptime: Option<Duration>,
+) {
+    // The uptime is unknown if the connection ended before the handshake completed.
+    let uptime = uptime.map_or_else(|| "unknown".to_owned(), |uptime| format!("{uptime:?}"));
+
+    log::log!(
+        level,
+        "Connection closed, peer_id: {}, address: {}, direction: {:?}, initiated_by: {}, uptime: {}, reason: {}",
+        peer_id,
+        peer_address,
+        direction,
+        connection_end.initiated_by,
+        uptime,
+        connection_end.reason,
+    );
 }
 
 async fn maybe_send_will_disconnect<S: PeerStream>(

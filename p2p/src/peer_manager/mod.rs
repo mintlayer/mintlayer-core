@@ -1271,6 +1271,18 @@ where
         } = self.pending_outbound_connects.remove(&address).expect(
             "the address must be present in pending_outbound_connects (handle_outbound_error)",
         );
+
+        // The role is only known here, and the failure happens after the dial, so the
+        // backend has nothing to report about it. Feeler connections probe addresses of
+        // unknown peers and are expected to fail; the other roles are the ones that an
+        // operator waits for.
+        let peer_role = PeerRole::from(&outbound_connect_type);
+        if peer_role == PeerRole::Feeler {
+            log::debug!("Outbound connection to {address} failed (role: {peer_role:?}): {error}");
+        } else {
+            log::info!("Outbound connection to {address} failed (role: {peer_role:?}): {error}");
+        }
+
         match outbound_connect_type {
             OutboundConnectType::Automatic {
                 block_relay_only: _,
