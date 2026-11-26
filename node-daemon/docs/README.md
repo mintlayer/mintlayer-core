@@ -14,7 +14,7 @@ To use the commands mentioned above, we provide simple examples on how to do it 
 
 The node logs to stderr and, when `--log-to-file true` is given (the default for node-gui, off for node-daemon), also to a file.
 
-Every logging option can be given on the command line, set with an environment variable (`ML_NODE_` followed by the option name in upper case with underscores) or written in the `[logging]` section of the `config.toml` file in the data directory. A command line value wins over the config file, which wins over the default.
+Every logging option can be given on the command line, set with an environment variable (`ML_NODE_` followed by the option name in upper case with underscores) or written in the `[logging]` section of the `config.toml` file in the data directory. A command line value wins over the environment variable, which wins over the config file, which wins over the default.
 
 | Option | Config file key | Default | Meaning |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Notes:
 
 #### Enriched fields and the json format
 
-Every log line carries the node version, the chain type and the process id, plus the `--log-fields` entries. In the json format they are the first element of the `spans` array; with `--log-source-location` and `--log-thread-info` the location and thread fields are added to the line as well:
+Every log line emitted by the node and its subsystems carries the node version, the chain type and the process id, plus the `--log-fields` entries. In the json format they are the first element of the `spans` array; with `--log-source-location` and `--log-thread-info` the location and thread fields are added to the line as well:
 
 ```json
 {"timestamp":"2026-11-25T12:00:00.123456Z","level":"INFO","target":"chainstate",
@@ -53,7 +53,7 @@ Each line is a complete json object, so the file can be consumed line by line by
 2026-11-25T12:00:00.123456Z  INFO node{version="1.5.0" chain="mainnet" pid=12345 role="seed"}: chainstate: Block processed
 ```
 
-The lines emitted by the node's subsystems carry the fields as well. To leave the prefix out of the stderr output, disable the target of the enrichment span with `RUST_LOG=logging::enrichment=off`; the file sink cannot be configured this way.
+The fields come from a span that the node enters on the thread running its startup and that the node manager, which runs the subsystems, is run under explicitly. In node-daemon the lines emitted during the startup carry the fields as well; in node-gui the startup runs on an executor thread, so only the lines of the node manager and its subsystems are guaranteed to carry them. Lines emitted from threads started outside the node, such as blocking tasks, do not carry the fields either way. To leave the prefix out of the stderr output, disable the target of the enrichment span with `RUST_LOG=logging::enrichment=off`; the file sink cannot be configured this way.
 
 #### `config.toml` example
 

@@ -59,11 +59,14 @@ static ROOT_SPAN: OnceLock<Span> = OnceLock::new();
 /// has to stay entered and alive for the whole process. The leak is a single, bounded
 /// allocation, since the span is entered once at startup.
 ///
-/// Note that an entered span only applies to the calling thread. The node enters the span
-/// on its main thread before its subsystems are started, and the subsystem crate starts
-/// subsystem tasks and runs calls into them inside the span that is current at that point,
-/// so their events (emitted on the tokio worker threads) carry the enrichment as well. Only
-/// events on threads that are started outside of that instrumentation, such as a plain
+/// Note that an entered span only applies to the calling thread, which is the thread running
+/// the node setup: the main thread of node-daemon, or one of the executor threads of node-gui.
+/// The subsystem crate starts subsystem tasks and runs calls into them inside the span that
+/// is current at that point, so the events of the subsystems (emitted on the tokio worker
+/// threads) carry the enrichment only when the node manager itself runs inside the span. The
+/// node manager is therefore run under [`root_span`] explicitly, which does not depend on the
+/// thread; entering the same span again on a thread where it is already entered is harmless.
+/// Only events on threads that are started outside of that instrumentation, such as a plain
 /// `tokio::spawn` or a blocking task, do not carry the span.
 pub fn enter_root_span(
     version: impl Into<Cow<'static, str>>,
@@ -84,6 +87,15 @@ pub fn enter_root_span(
         std::mem::forget(span.enter());
         span
     });
+}
+
+/// The enrichment root span (see [`enter_root_span`]), to run a future under with
+/// `tracing::Instrument` when the thread it is polled on is not known to have the span entered.
+///
+/// Returns an empty span until [`enter_root_span`] has created the root span, so that
+/// instrumenting with it is a no-op before that.
+pub fn root_span() -> Span {
+    ROOT_SPAN.get().cloned().unwrap_or_else(Span::none)
 }
 
 /// The callsite of the root span.
@@ -272,6 +284,10 @@ mod tests {
             enter_root_span("1.5.0", "mainnet", 42, Vec::new());
             // A second call must not enter the span again (no nested `node` spans).
             enter_root_span("0.0.0", "othernet", 1, Vec::new());
+            // Instrumenting with the root span on a thread that already has it entered adds
+            // nothing, so the node manager can be run under it whatever the thread.
+            let root_span = root_span();
+            let _guard = root_span.enter();
             tracing::info!("hello");
         });
 

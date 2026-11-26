@@ -23,6 +23,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use file_rotate::{ContentLimit, FileRotate, compression::Compression, suffix::AppendCount};
+use logging::Instrument as _;
 
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate::{ChainstateError, InitializationError, rpc::ChainstateRpcServer};
@@ -66,7 +67,11 @@ pub struct Node {
 
 impl Node {
     pub async fn main(self) {
-        self.manager.main().await;
+        // The subsystems inherit the span that is current when the manager starts them, so the
+        // manager itself has to run inside the enrichment root span. Entering the span on the
+        // thread running the setup is not enough: this future may be polled on another thread,
+        // as it is in node-gui, where the setup runs on an executor thread.
+        self.manager.main().instrument(logging::root_span()).await;
         drop(self.lock_file);
     }
 
