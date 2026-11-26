@@ -15,6 +15,8 @@
 
 //! Records of the DEX trades (order fills) performed by the transactions of a block.
 
+use std::collections::HashSet;
+
 use common::{
     chain::{Block, Currency, OrderId, Transaction},
     primitives::{Amount, BlockHeight, Id},
@@ -172,6 +174,50 @@ fn compute_in_block_position(tx_index: u64, input_ordinal: u64, match_ordinal: u
         .expect("the bounds above leave room for every component")
 }
 
+/// A set of trading pairs, each `(base, quote)`: the currency the maker gives and the currency
+/// the maker asks for. Used to select the trades belonging to any of its pairs.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DexTradePairSet(HashSet<(Currency, Currency)>);
+
+impl DexTradePairSet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add the pair `(base, quote)`; a pair present already is ignored.
+    pub fn insert(&mut self, base: Currency, quote: Currency) {
+        self.0.insert((base, quote));
+    }
+
+    /// The number of distinct pairs.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether the set has no pairs.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Whether the trade has one of the pairs of the set: both of its sides must match, so a
+    /// trade of the reversed pair does not.
+    pub fn matches(&self, trade: &DexTradeInfo) -> bool {
+        self.0.contains(&(trade.base, trade.quote))
+    }
+}
+
+impl<T: IntoIterator<Item = (Currency, Currency)>> From<T> for DexTradePairSet {
+    fn from(pairs: T) -> Self {
+        pairs.into_iter().collect()
+    }
+}
+
+impl FromIterator<(Currency, Currency)> for DexTradePairSet {
+    fn from_iter<I: IntoIterator<Item = (Currency, Currency)>>(pairs: I) -> Self {
+        Self(pairs.into_iter().collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use common::{
@@ -276,6 +322,49 @@ mod tests {
         assert_eq!(
             positions.iter().collect::<std::collections::BTreeSet<_>>().len(),
             positions.len()
+        );
+    }
+
+    #[test]
+    fn pair_set_matches_both_sides_only() {
+        let trade = |base: Currency, quote: Currency| {
+            DexTradeInfo::new(
+                Id::zero(),
+                BlockHeight::zero(),
+                0,
+                DexTradeMatch {
+                    tx_id: Id::zero(),
+                    input_ordinal: 0,
+                    match_ordinal: 0,
+                    maker_order_id: OrderId::zero(),
+                    base,
+                    quote,
+                    base_amount: Amount::from_atoms(1),
+                    quote_amount: Amount::from_atoms(1),
+                },
+            )
+            .unwrap()
+        };
+        let token = Currency::Token(TokenId::zero());
+        let other = Currency::Token(TokenId::new(H256::from_low_u64_be(1)));
+        let mut pairs = DexTradePairSet::new();
+        assert!(pairs.is_empty());
+        pairs.insert(Currency::Coin, token);
+        // a duplicate pair is counted once
+        pairs.insert(Currency::Coin, token);
+        assert_eq!(pairs.len(), 1);
+        assert!(!pairs.is_empty());
+
+        assert!(pairs.matches(&trade(Currency::Coin, token)));
+        // the reversed pair and the other side do not match
+        assert!(!pairs.matches(&trade(token, Currency::Coin)));
+        assert!(!pairs.matches(&trade(Currency::Coin, other)));
+        assert!(!pairs.matches(&trade(Currency::Coin, Currency::Coin)));
+        // an empty set matches nothing
+        assert!(!DexTradePairSet::new().matches(&trade(Currency::Coin, token)));
+        assert_eq!(
+            DexTradePairSet::from([(Currency::Coin, token), (token, Currency::Coin)]).len(),
+            2
         );
     }
 
