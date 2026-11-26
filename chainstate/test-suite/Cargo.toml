@@ -29,6 +29,11 @@ utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 utxo = { path = "../../utxo" }
 
+rpc = { path = "../../rpc" }
+subsystem = { path = "../../subsystem" }
+
+serde_json.workspace = true
+
 ctor.workspace = true
 hex.workspace = true
 itertools.workspace = true
