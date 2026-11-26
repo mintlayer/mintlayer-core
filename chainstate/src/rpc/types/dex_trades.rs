@@ -120,7 +120,7 @@ pub enum RpcDexTradeEvent {
         /// The height of the block.
         block_height: BlockHeight,
         /// The position of the trade in the block:
-        /// `(tx_index << 40) | (input_ordinal << 8) | match_ordinal`.
+        /// `(tx_index << 20) | (input_ordinal << 4) | match_ordinal`; below 2^40.
         in_block_position: u64,
     },
 }
@@ -248,7 +248,7 @@ mod tests {
             format!("{:x}", Id::<Block>::new(H256::from_low_u64_be(0x11)))
         );
         assert_eq!(json["block_height"], 7);
-        assert_eq!(json["in_block_position"], (3u64 << 40) | (1 << 8));
+        assert_eq!(json["in_block_position"], (3u64 << 20) | (1 << 4));
 
         // the event deserializes back (the client side of the subscription)
         assert_eq!(

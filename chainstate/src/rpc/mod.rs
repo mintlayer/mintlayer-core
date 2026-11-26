@@ -237,10 +237,11 @@ trait ChainstateRpc {
     /// references). A trade is uniquely identified by the tuple
     /// `(block_id, tx_id, input_ordinal, match_ordinal)`.
     ///
-    /// `in_block_position` is `(tx_index << 40) | (input_ordinal << 8) | match_ordinal`, where
-    /// `tx_index` is the index of the transaction in the block (`< 2^24`), `input_ordinal` is
-    /// the index of the input in the transaction (`< 2^32`) and `match_ordinal` is `< 256`; the
-    /// positions of the trades of a block are therefore increasing in delivery order.
+    /// `in_block_position` is `(tx_index << 20) | (input_ordinal << 4) | match_ordinal`, where
+    /// `tx_index` is the index of the transaction in the block (`< 2^20`), `input_ordinal` is
+    /// the index of the input in the transaction (`< 2^16`) and `match_ordinal` is `< 16`; the
+    /// positions of the trades of a block are therefore increasing in delivery order, and a
+    /// position is always below 2^40, i.e. an exactly representable JSON number.
     ///
     /// The `pairs` parameter filters the events by trading pair: a pair is
     /// `{ "base": <currency>, "quote": <currency> }` where a currency is either the literal

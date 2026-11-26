@@ -477,7 +477,7 @@ async fn fill_block_announces_trade_with_new_tip(
         )
     );
     // the fill input is the second input of the only transaction of the block
-    assert_eq!(trades[0].in_block_position(), 1 << 8);
+    assert_eq!(trades[0].in_block_position(), 1 << 4);
     expect_new_tip(&mut tips_rx, &tf, block_id).await;
 
     let empty_block_id = process_empty_block(&mut tf, &mut rng);
@@ -545,7 +545,7 @@ async fn multiple_fills_announced_in_block_order(
                 fill_amount,
             )
         );
-        expected_positions.push(((tx_index as u64) << 40) | (fill_tx.input_ordinal as u64) << 8);
+        expected_positions.push(((tx_index as u64) << 20) | (fill_tx.input_ordinal as u64) << 4);
     }
     let positions: Vec<_> = trades.iter().map(DexTradeInfo::in_block_position).collect();
     assert_eq!(positions, expected_positions);

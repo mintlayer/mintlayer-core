@@ -47,20 +47,20 @@ pub struct DexTradeMatch {
 }
 
 /// Number of bits of the transaction index in [`DexTradeInfo::in_block_position`].
-const TX_INDEX_BITS: u32 = 24;
+const TX_INDEX_BITS: u32 = 20;
 /// Number of bits of the input ordinal in [`DexTradeInfo::in_block_position`].
-const INPUT_ORDINAL_BITS: u32 = 32;
+const INPUT_ORDINAL_BITS: u32 = 16;
 /// Number of bits of the match ordinal in [`DexTradeInfo::in_block_position`].
-const MATCH_ORDINAL_BITS: u32 = 8;
+const MATCH_ORDINAL_BITS: u32 = 4;
 
 /// A trade whose position in the block cannot be encoded in [`DexTradeInfo::in_block_position`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DexTradePositionError {
-    #[error("transaction index {0} is out of the in-block position bounds (must be below 2^24)")]
+    #[error("transaction index {0} is out of the in-block position bounds (must be below 2^20)")]
     TxIndexTooLarge(usize),
-    #[error("input ordinal {0} is out of the in-block position bounds (must be below 2^32)")]
+    #[error("input ordinal {0} is out of the in-block position bounds (must be below 2^16)")]
     InputOrdinalTooLarge(usize),
-    #[error("match ordinal {0} is out of the in-block position bounds (must be below 256)")]
+    #[error("match ordinal {0} is out of the in-block position bounds (must be below 16)")]
     MatchOrdinalTooLarge(usize),
 }
 
@@ -91,9 +91,10 @@ pub struct DexTradeInfo {
 impl DexTradeInfo {
     /// Position the match of the transaction at `tx_index` within the block.
     ///
-    /// The block size limit keeps the transaction index below 2^24 and the input count of a
-    /// transaction below 2^32, and a fill input yields well below 256 matches, so the position
-    /// always fits; the error is a defensive guard for the contrary case.
+    /// A block holds at most 1 MiB of transactions, which keeps the transaction index far below
+    /// 2^20 and the input count of a transaction far below 2^16, and a fill input yields a
+    /// handful of matches at most, so the position always fits; the error is a defensive guard
+    /// for the contrary case.
     pub fn new(
         block_id: Id<Block>,
         block_height: BlockHeight,
@@ -114,28 +115,25 @@ impl DexTradeInfo {
         if tx_index >= (1 << TX_INDEX_BITS) {
             return Err(DexTradePositionError::TxIndexTooLarge(tx_index));
         }
-        let input_ordinal = u32::try_from(input_ordinal)
-            .map_err(|_| DexTradePositionError::InputOrdinalTooLarge(input_ordinal))?;
-        let match_ordinal = u32::try_from(match_ordinal)
-            .map_err(|_| DexTradePositionError::MatchOrdinalTooLarge(match_ordinal))?;
+        if input_ordinal >= (1 << INPUT_ORDINAL_BITS) {
+            return Err(DexTradePositionError::InputOrdinalTooLarge(input_ordinal));
+        }
         if match_ordinal >= (1 << MATCH_ORDINAL_BITS) {
-            return Err(DexTradePositionError::MatchOrdinalTooLarge(
-                match_ordinal as usize,
-            ));
+            return Err(DexTradePositionError::MatchOrdinalTooLarge(match_ordinal));
         }
 
         let in_block_position = compute_in_block_position(
             u64::try_from(tx_index).expect("bounded above"),
-            input_ordinal,
-            match_ordinal,
+            u64::try_from(input_ordinal).expect("bounded above"),
+            u64::try_from(match_ordinal).expect("bounded above"),
         );
 
         Ok(Self {
             block_id,
             block_height,
             tx_id,
-            input_ordinal,
-            match_ordinal,
+            input_ordinal: u32::try_from(input_ordinal).expect("bounded above"),
+            match_ordinal: u32::try_from(match_ordinal).expect("bounded above"),
             maker_order_id,
             base,
             quote,
@@ -146,28 +144,31 @@ impl DexTradeInfo {
     }
 
     /// The position of the trade in the block, computed from the canonical in-block indices only:
-    /// `(tx_index << 40) | (input_ordinal << 8) | match_ordinal`, so that the positions of the
+    /// `(tx_index << 20) | (input_ordinal << 4) | match_ordinal`, so that the positions of the
     /// trades of a block ordered by `(tx_index, input_ordinal, match_ordinal)` are increasing.
     ///
-    /// Bounds: `tx_index < 2^24`, `input_ordinal < 2^32`, `match_ordinal < 256`.
+    /// Bounds: `tx_index < 2^20`, `input_ordinal < 2^16`, `match_ordinal < 16`; a position is
+    /// therefore below 2^40, within the range of integers that every JSON client represents
+    /// exactly.
     pub fn in_block_position(&self) -> u64 {
         self.in_block_position
     }
 }
 
 /// Compute [`DexTradeInfo::in_block_position`] from the components validated by [`DexTradeInfo::new`].
-fn compute_in_block_position(tx_index: u64, input_ordinal: u32, match_ordinal: u32) -> u64 {
+fn compute_in_block_position(tx_index: u64, input_ordinal: u64, match_ordinal: u64) -> u64 {
     debug_assert!(tx_index < (1 << TX_INDEX_BITS));
+    debug_assert!(input_ordinal < (1 << INPUT_ORDINAL_BITS));
     debug_assert!(match_ordinal < (1 << MATCH_ORDINAL_BITS));
 
     tx_index
         .checked_shl(INPUT_ORDINAL_BITS + MATCH_ORDINAL_BITS)
         .and_then(|position| {
-            u64::from(input_ordinal)
+            input_ordinal
                 .checked_shl(MATCH_ORDINAL_BITS)
                 .map(|input_bits| position | input_bits)
         })
-        .map(|position| position | u64::from(match_ordinal))
+        .map(|position| position | match_ordinal)
         .expect("the bounds above leave room for every component")
 }
 
@@ -207,42 +208,36 @@ mod tests {
     fn in_block_position_layout() {
         assert_eq!(info(0, 0, 0).in_block_position(), 0);
         assert_eq!(info(0, 0, 1).in_block_position(), 1);
-        assert_eq!(info(0, 1, 0).in_block_position(), 1 << 8);
-        assert_eq!(info(1, 0, 0).in_block_position(), 1 << 40);
-        assert_eq!(info(0, 1, 1).in_block_position(), (1 << 8) | 1);
-        assert_eq!(info(3, 5, 7).in_block_position(), (3 << 40) | (5 << 8) | 7);
-        // the last encodable position
-        assert_eq!(
-            info((1 << 24) - 1, (1usize << 32) - 1, 255).in_block_position(),
-            u64::MAX
-        );
+        assert_eq!(info(0, 1, 0).in_block_position(), 1 << 4);
+        assert_eq!(info(1, 0, 0).in_block_position(), 1 << 20);
+        assert_eq!(info(0, 1, 1).in_block_position(), (1 << 4) | 1);
+        assert_eq!(info(3, 5, 7).in_block_position(), (3 << 20) | (5 << 4) | 7);
+        // the last encodable position stays below 2^40: exactly representable as a JSON number
+        let last = info((1 << 20) - 1, (1 << 16) - 1, 15).in_block_position();
+        assert_eq!(last, (1 << 40) - 1);
+        assert!(last < (1u64 << 53));
     }
 
     #[test]
     fn in_block_position_bounds() {
         assert_eq!(
-            DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 1 << 24, trade(1, 0, 0)),
-            Err(DexTradePositionError::TxIndexTooLarge(1 << 24))
+            DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 1 << 20, trade(1, 0, 0)),
+            Err(DexTradePositionError::TxIndexTooLarge(1 << 20))
         );
         assert_eq!(
-            DexTradeInfo::new(
-                Id::zero(),
-                BlockHeight::zero(),
-                0,
-                trade(1, 1usize << 32, 0)
-            ),
-            Err(DexTradePositionError::InputOrdinalTooLarge(1 << 32))
+            DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 0, trade(1, 1 << 16, 0)),
+            Err(DexTradePositionError::InputOrdinalTooLarge(1 << 16))
         );
         assert_eq!(
-            DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 0, trade(1, 0, 256)),
-            Err(DexTradePositionError::MatchOrdinalTooLarge(256))
+            DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 0, trade(1, 0, 16)),
+            Err(DexTradePositionError::MatchOrdinalTooLarge(16))
         );
         // the last values within the bounds are accepted
         assert!(
             DexTradeInfo::new(
                 Id::zero(),
                 BlockHeight::zero(),
-                (1 << 24) - 1,
+                (1 << 20) - 1,
                 trade(1, 0, 0)
             )
             .is_ok()
@@ -252,11 +247,11 @@ mod tests {
                 Id::zero(),
                 BlockHeight::zero(),
                 0,
-                trade(1, (1usize << 32) - 1, 0)
+                trade(1, (1 << 16) - 1, 0)
             )
             .is_ok()
         );
-        assert!(DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 0, trade(1, 0, 255)).is_ok());
+        assert!(DexTradeInfo::new(Id::zero(), BlockHeight::zero(), 0, trade(1, 0, 15)).is_ok());
     }
 
     #[test]
@@ -264,7 +259,7 @@ mod tests {
         let mut positions = Vec::new();
         for tx_index in [0, 1, 5] {
             for input_ordinal in [0, 1, 300] {
-                for match_ordinal in [0, 1, 255] {
+                for match_ordinal in [0, 1, 15] {
                     positions
                         .push(info(tx_index, input_ordinal, match_ordinal).in_block_position());
                 }
