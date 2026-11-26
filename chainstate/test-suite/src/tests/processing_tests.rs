@@ -123,9 +123,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::BlockRewardMaturityError(
-                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
-                )
+                CheckBlockError::BlockRewardMaturityError {
+                    block_id,
+                    source: OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
+                }
             ))
         );
 
@@ -145,9 +146,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::BlockRewardMaturityError(
-                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
-                )
+                CheckBlockError::BlockRewardMaturityError {
+                    block_id,
+                    source: OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
+                }
             ))
         );
 
@@ -167,9 +169,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::BlockRewardMaturityError(
-                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
-                )
+                CheckBlockError::BlockRewardMaturityError {
+                    block_id,
+                    source: OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
+                }
             ))
         );
 
@@ -205,13 +208,14 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::BlockRewardMaturityError(
-                    OutputMaturityError::InvalidOutputMaturityDistance(
+                CheckBlockError::BlockRewardMaturityError {
+                    block_id,
+                    source: OutputMaturityError::InvalidOutputMaturityDistance(
                         outpoint,
                         BlockCount::new(reward_lock_distance.to_int() - 1),
-                        reward_lock_distance
-                    )
-                )
+                        reward_lock_distance,
+                    ),
+                }
             ))
         );
 
@@ -1105,7 +1109,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                    CheckBlockError::BlockTimeOrderInvalid(_, _)
+                    CheckBlockError::BlockTimeOrderInvalid { .. }
                 ))
             ));
         }

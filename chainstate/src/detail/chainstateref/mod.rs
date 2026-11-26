@@ -525,7 +525,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     /// Enforce checkpoints for the passed header.
     /// The header's parent block must be known.
-    #[log_error]
+    #[log_error(level = "trace")]
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         let prev_block_index = self.get_previous_block_index(header)?;
         let current_height = prev_block_index.block_height().next_height();
@@ -591,7 +591,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_height_vs_max_reorg_depth(
         &self,
         header: &SignedBlockHeader,
@@ -615,7 +615,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Return Ok(parent_block_index) if the specified block has a valid parent and an error otherwise.
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
@@ -719,7 +719,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             &pos_delta,
         )
         .map_err(CheckBlockError::ConsensusVerificationFailed)
-        .log_err()?;
+        .log_lvl(log::Level::Trace)?;
 
         // This enforces the minimum accepted timestamp for the block. Depending on the consensus algorithm,
         // there might be extra checks. For example, PoS requires the timestamp to be greater the previous
@@ -727,7 +727,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let median_time_past = calculate_median_time_past(self, header.prev_block_id());
         ensure!(
             header.timestamp() >= median_time_past,
-            CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
+            CheckBlockError::BlockTimeOrderInvalid {
+                block_id: *WithId::id(header),
+                block_timestamp: header.timestamp(),
+                median_time_past,
+            },
         );
 
         let max_future_offset = self
@@ -747,7 +751,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         block
             .block_reward()
@@ -772,7 +776,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             tx_verifier::timelock_check::check_output_maturity_setting(
                                 tl, required, outpoint,
                             )
-                            .map_err(CheckBlockError::BlockRewardMaturityError)
+                            .map_err(|source| {
+                                CheckBlockError::BlockRewardMaturityError {
+                                    block_id: block.get_id(),
+                                    source,
+                                }
+                            })
                         }
                         TxOutput::Transfer(_, _)
                         | TxOutput::CreateStakePool(_, _)
@@ -811,7 +820,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             })
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {
         let size = header.header_size();
         ensure!(
@@ -822,7 +831,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_size(&self, block: &Block) -> Result<(), BlockSizeError> {
         let block_size = block.block_size();
 
@@ -854,7 +863,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Reject the block if it has duplicate inputs, with the exception of v1 FillOrder inputs,
         // which can't be unique (because they only contain the order id and the amount).
@@ -884,7 +893,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_transactions(
         &self,
         block: &Block,
@@ -908,7 +917,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(block_index.block_id())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         let header_with_id = WithId::as_sub_obj(block);
         if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header_with_id))? {
@@ -932,7 +941,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let merkle_tree_root = block.merkle_root();
             ensure!(
                 merkle_tree_root == merkle_proxy.merkle_tree().root(),
-                CheckBlockError::MerkleRootMismatch
+                CheckBlockError::MerkleRootMismatch {
+                    block_id: block.get_id()
+                }
             );
         }
         {
@@ -940,7 +951,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let witness_merkle_root = block.witness_merkle_root();
             ensure!(
                 witness_merkle_root == merkle_proxy.witness_merkle_tree().root(),
-                CheckBlockError::MerkleRootMismatch
+                CheckBlockError::MerkleRootMismatch {
+                    block_id: block.get_id()
+                }
             );
         }
 
@@ -958,7 +971,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn get_block_proof(
         &self,
         prev_block_timestamp: BlockTimestamp,
@@ -1052,7 +1065,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn create_block_index_for_new_block(
         &self,
         block: &WithId<Block>,

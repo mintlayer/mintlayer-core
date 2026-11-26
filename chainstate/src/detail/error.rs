@@ -138,15 +138,21 @@ pub enum CheckBlockError {
     PropertyQueryError(#[from] PropertyQueryError),
     #[error("Block merkle root calculation failed for block {0} with error: {1}")]
     MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
-    #[error("Block has an invalid merkle root")]
-    MerkleRootMismatch,
+    #[error("Block {block_id} has an invalid merkle root")]
+    MerkleRootMismatch { block_id: Id<Block> },
     #[error("Parent block {parent_block_id} of block {block_id} not found in database")]
     ParentBlockMissing {
         block_id: Id<Block>,
         parent_block_id: Id<GenBlock>,
     },
-    #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
-    BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
+    #[error(
+        "Block {block_id} time ({block_timestamp:?}) must be equal or higher than the median of its ancestors ({median_time_past:?})"
+    )]
+    BlockTimeOrderInvalid {
+        block_id: Id<Block>,
+        block_timestamp: BlockTimestamp,
+        median_time_past: BlockTimestamp,
+    },
     #[error(
         "Block {block_id} time too far into the future (block timestamp = {block_timestamp}, current time = {current_time})"
     )]
@@ -163,8 +169,12 @@ pub enum CheckBlockError {
     ConsensusVerificationFailed(ConsensusVerificationError),
     #[error("Invalid block reward output type for block {0}")]
     InvalidBlockRewardOutputType(Id<Block>),
-    #[error("Block reward maturity error: {0}")]
-    BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputMaturityError),
+    #[error("Block {block_id} reward maturity error: {source}")]
+    BlockRewardMaturityError {
+        block_id: Id<Block>,
+        #[source]
+        source: tx_verifier::timelock_check::OutputMaturityError,
+    },
     #[error("Checkpoint mismatch at height {height}: expected {expected:x}, given {given:x}")]
     CheckpointMismatch {
         height: BlockHeight,

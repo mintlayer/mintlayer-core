@@ -61,8 +61,8 @@ pub enum ConsensusPoSError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS randomness error: `{0}`")]
     RandomnessError(#[from] PoSRandomnessError),
-    #[error("Invalid target value: `{0:?}`")]
-    InvalidTarget(Compact),
+    #[error("Invalid target value for pool {pool_id}: `{target:?}`")]
+    InvalidTarget { pool_id: PoolId, target: Compact },
     #[error("Decoding bits of block failed: `{0:?}`")]
     DecodingBitsFailed(Compact),
     #[error("Failed to convert target type: `{0:?}`")]

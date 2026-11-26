@@ -108,7 +108,10 @@ fn invalid_target(#[case] seed: Seed) {
         res,
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
-                ConsensusPoSError::InvalidTarget(invalid_target)
+                ConsensusPoSError::InvalidTarget {
+                    pool_id,
+                    target: invalid_target,
+                }
             ))
         ))
     );
