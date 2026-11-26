@@ -46,6 +46,23 @@ pub struct FillOrderUndo {
     pub(crate) give_balance: Amount,
 }
 
+impl FillOrderUndo {
+    /// The order that was filled.
+    pub fn id(&self) -> OrderId {
+        self.id
+    }
+
+    /// The amount of the ask currency taken from the order by the fill.
+    pub fn ask_balance(&self) -> Amount {
+        self.ask_balance
+    }
+
+    /// The amount of the give currency paid out by the order for the fill.
+    pub fn give_balance(&self) -> Amount {
+        self.give_balance
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct FreezeOrderUndo {
     pub(crate) id: OrderId,
