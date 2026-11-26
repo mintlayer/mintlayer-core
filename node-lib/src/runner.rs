@@ -428,6 +428,8 @@ pub async fn setup(
                 log_style: logging::ValueOrEnvVar::Value(logging::LogStyle::Text(
                     logging::TextColoring::Off,
                 )),
+                source_location: false,
+                thread_info: false,
             }),
         );
     } else {

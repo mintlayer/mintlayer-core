@@ -77,6 +77,8 @@ pub fn init_logging_to(file: impl Write + Send + 'static, is_terminal: bool) {
                 default_value: SIMPLE_INIT_DEFAULT_FILTER.to_owned(),
             },
             log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
+            source_location: false,
+            thread_info: false,
         },
         no_writer_settings(),
     );
@@ -96,6 +98,8 @@ pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() ->
         },
         // Use the default env var for style.
         log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
+        source_location: false,
+        thread_info: false,
     }
 }
 
@@ -129,6 +133,10 @@ pub struct WriterSettings<MW> {
     pub is_terminal: bool,
     pub filter: ValueOrEnvVarWithDefault<String, String>,
     pub log_style: ValueOrEnvVar<LogStyle>,
+    /// Whether to include the source file name and line number of every event in the output.
+    pub source_location: bool,
+    /// Whether to include the thread id and thread name of every event in the output.
+    pub thread_info: bool,
 }
 
 /// Generic version of init_logging that allows to have an auxiliary writer with its own settings
@@ -198,6 +206,8 @@ where
         writer_settings.is_terminal,
         filter,
         log_style,
+        writer_settings.source_location,
+        writer_settings.thread_info,
     )
 }
 
@@ -206,20 +216,32 @@ fn make_layer_impl<MW, S>(
     is_terminal: bool,
     filter: EnvFilter,
     log_style: LogStyle,
+    source_location: bool,
+    thread_info: bool,
 ) -> Box<dyn Layer<S> + Send + Sync>
 where
     MW: for<'a> MakeWriter<'a> + Send + Sync + 'static,
     S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
+    // Both flags default to `false` in the layer, so passing them unconditionally is
+    // equivalent to applying the methods only when they are set.
     match log_style {
         LogStyle::Json => tracing_subscriber::fmt::Layer::new()
             .json()
             .with_writer(make_writer)
+            .with_file(source_location)
+            .with_line_number(source_location)
+            .with_thread_ids(thread_info)
+            .with_thread_names(thread_info)
             .with_filter(filter)
             .boxed(),
         LogStyle::Text(preferred_coloring) => tracing_subscriber::fmt::Layer::new()
             .with_writer(make_writer)
             .with_ansi(should_use_coloring(preferred_coloring, is_terminal))
+            .with_file(source_location)
+            .with_line_number(source_location)
+            .with_thread_ids(thread_info)
+            .with_thread_names(thread_info)
             .with_filter(filter)
             .boxed(),
     }
@@ -346,11 +368,167 @@ fn should_use_coloring(preferred_coloring: TextColoring, is_terminal: bool) -> b
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
 
     #[test]
     fn initialize_twice() {
         init_logging();
         init_logging();
+    }
+
+    /// A log output collector that can be shared between the subscriber and the test.
+    ///
+    /// Unlike the global initialization functions, the subscriber built here is installed
+    /// with `with_default` for the duration of a closure, so each test captures only its own
+    /// output.
+    #[derive(Clone, Default)]
+    struct LogOutput(Arc<Mutex<Vec<u8>>>);
+
+    impl LogOutput {
+        fn take(&self) -> String {
+            let mut vec = self.0.lock().unwrap();
+            String::from_utf8(std::mem::take(&mut *vec)).unwrap()
+        }
+
+        /// Runs the closure with a subscriber writing to this buffer, returning the output.
+        fn capture<R>(
+            &self,
+            log_style: LogStyle,
+            source_location: bool,
+            thread_info: bool,
+            f: impl FnOnce() -> R,
+        ) -> String {
+            let mut errors = Vec::new();
+            let layer = make_layer(
+                WriterSettings {
+                    make_writer: write_to_make_writer(self.clone()),
+                    is_terminal: false,
+                    filter: ValueOrEnvVarWithDefault::Value("trace".to_owned()),
+                    log_style: ValueOrEnvVar::Value(log_style),
+                    source_location,
+                    thread_info,
+                },
+                &mut errors,
+            );
+            assert!(errors.is_empty(), "unexpected log init errors: {errors:?}");
+
+            let subscriber = Registry::default().with(layer);
+            tracing::subscriber::with_default(subscriber, f);
+            self.take()
+        }
+    }
+
+    impl Write for LogOutput {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    const MESSAGE: &str = "captured test event";
+
+    /// Emits the test event and returns the line it was emitted from (both `line!()` and the
+    /// event metadata resolve to the line of this macro's invocation).
+    macro_rules! emit_test_event {
+        () => {{
+            let line = line!();
+            tracing::info!("{}", MESSAGE);
+            line
+        }};
+    }
+
+    #[test]
+    fn source_location_flag_in_json_output() {
+        let output = LogOutput::default();
+
+        let off = output.capture(LogStyle::Json, false, false, || emit_test_event!());
+        assert!(off.contains("\"fields\":{\"message\":\""), "{off}");
+        assert!(off.contains(MESSAGE), "{off}");
+        assert!(!off.contains("\"filename\""), "{off}");
+        assert!(!off.contains("\"line_number\""), "{off}");
+
+        let mut line = 0;
+        let on = output.capture(LogStyle::Json, true, false, || {
+            line = emit_test_event!();
+        });
+        // The file is the test's source path and the line is the `tracing::info!` call site.
+        assert!(on.contains("\"filename\":\"logging/src/lib.rs\""), "{on}");
+        assert!(on.contains(&format!("\"line_number\":{line}")), "{on}");
+    }
+
+    #[test]
+    fn source_location_flag_in_text_output() {
+        let output = LogOutput::default();
+
+        let off = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            false,
+            || emit_test_event!(),
+        );
+        // The legacy text layout: timestamp, level, target, message; nothing else.
+        assert!(
+            off.contains(&format!(" INFO logging::tests: {MESSAGE}")),
+            "{off}"
+        );
+        assert!(!off.contains("logging/src/lib.rs"), "{off}");
+
+        let mut line = 0;
+        let on = output.capture(LogStyle::Text(TextColoring::Off), true, false, || {
+            line = emit_test_event!()
+        });
+        // The location is printed between the target and the message.
+        assert!(
+            on.contains(&format!(
+                "logging::tests: logging/src/lib.rs:{line}: {MESSAGE}"
+            )),
+            "{on}"
+        );
+    }
+
+    #[test]
+    fn thread_info_flag_in_json_output() {
+        let output = LogOutput::default();
+        let thread_name = std::thread::current().name().unwrap().to_owned();
+
+        let off = output.capture(LogStyle::Json, false, false, || emit_test_event!());
+        assert!(!off.contains("\"threadId\""), "{off}");
+        assert!(!off.contains("\"threadName\""), "{off}");
+
+        let on = output.capture(LogStyle::Json, false, true, || emit_test_event!());
+        assert!(on.contains("\"threadId\":\"ThreadId("), "{on}");
+        assert!(
+            on.contains(&format!("\"threadName\":\"{thread_name}\"")),
+            "{on}"
+        );
+    }
+
+    #[test]
+    fn thread_info_flag_in_text_output() {
+        let output = LogOutput::default();
+        let thread_name = std::thread::current().name().unwrap().to_owned();
+
+        let off = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            false,
+            || emit_test_event!(),
+        );
+        assert!(!off.contains("ThreadId("), "{off}");
+
+        let on = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            true,
+            || emit_test_event!(),
+        );
+        // The thread name and id are printed right before the target.
+        assert!(on.contains(&format!("{thread_name} ThreadId(")), "{on}");
     }
 }
