@@ -1249,7 +1249,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         Ok(disconnected_count)
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn reorganize(
         &mut self,
         best_block_id: &Id<GenBlock>,
@@ -1265,7 +1265,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                     e,
                 )
             })
-            .log_err()?;
+            .log_lvl(log::Level::Trace)?;
         debug_assert!(!new_chain.is_empty()); // there has to always be at least one new block
 
         let common_ancestor_id = {
@@ -1289,7 +1289,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         for block_index in new_chain {
             self.connect_tip(&block_index, in_memory_block)
                 .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
-                .log_err()?;
+                .log_lvl(log::Level::Trace)?;
         }
 
         // A chain switch is a primary operator signal (wallets, exchanges and indexers follow
@@ -1309,7 +1309,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn connect_transactions(
         &mut self,
         block_index: &BlockIndex,
@@ -1328,7 +1328,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 block,
                 median_time_past,
             )
-            .log_err()?;
+            .log_lvl(log::Level::Trace)?;
 
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
@@ -1359,7 +1359,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     }
 
     // Connect new block
-    #[log_error]
+    #[log_error(level = "trace")]
     fn connect_tip(
         &mut self,
         block_index: &BlockIndex,
@@ -1392,7 +1392,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                         );
                         BlockError::BlockDataMissingForValidBlockIndex(id)
                     })
-                    .log_err()?
+                    .log_lvl(log::Level::Trace)?
                     .into(),
             };
 
@@ -1469,7 +1469,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     /// Perform a reorg to the specified block if needed.
     /// Return true if the reorg has been performed, and false otherwise.
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
@@ -1560,11 +1560,18 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             // becomes activatable with its next fresh-seal block. The sightings
             // tell the two apart: a re-seal has one partner block per seal, while
             // a reused proof accumulates partners.
-            let evidence = sightings
+            let mut evidence = sightings
                 .iter()
+                .take(MAX_REPORTED_SEAL_SIGHTINGS)
                 .map(|sighting| sighting.to_string())
                 .collect::<Vec<_>>()
                 .join("; ");
+            // A segment reports one sighting per block, so the evidence is capped to keep
+            // the line bounded; the rest are counted.
+            let unreported_count = sightings.len().saturating_sub(MAX_REPORTED_SEAL_SIGHTINGS);
+            if unreported_count > 0 {
+                evidence.push_str(&format!("; ... and {unreported_count} more"));
+            }
             log::warn!(
                 "Not activating the chain of candidate block {} at height {} (current best \
                  block {}): every block of its new segment ({} blocks) reuses an \
@@ -1672,7 +1679,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {
         let tip_height = tip_index.block_height();
         epoch_seal::update_epoch_seal(
@@ -1827,6 +1834,9 @@ fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
     }
     Ok(Some(sightings))
 }
+
+/// The number of duplicate-seal sightings listed in the evidence of a refused activation.
+const MAX_REPORTED_SEAL_SIGHTINGS: usize = 5;
 
 /// A block whose PoS consensus proof is already known from the other blocks listed in
 /// the seal index; reported with the refusal of the PoS seal activation gate.

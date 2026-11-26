@@ -180,3 +180,55 @@ fn reckless_mode_counter_retry_after_failed_switch_off() {
     counter.dec(&config, &storage).unwrap();
     assert_eq!(counter.counter, 0);
 }
+
+/// The level of the rejection line follows the error class, with the two wording-only
+/// special cases at info.
+#[test]
+fn rejected_block_report_levels() {
+    use crate::detail::{BlockProcessingErrorClass, CheckBlockError, OrphanCheckError};
+    use common::{Uint256, primitives::Id};
+
+    let block_id = Id::new(Uint256::from_u64(0).into());
+
+    // A misbehaving peer's block is a warning, a block that may become valid later is
+    // part of the normal operation and a failure of this node is an error.
+    assert_eq!(
+        rejected_block_report(&BlockError::CheckBlockFailed(
+            CheckBlockError::MerkleRootMismatch { block_id }
+        )),
+        (log::Level::Warn, "Rejected", "error class: BadBlock")
+    );
+    assert_eq!(
+        rejected_block_report(&BlockError::PrevBlockNotFoundForNewBlock(block_id)),
+        (
+            log::Level::Info,
+            "Rejected",
+            "error class: TemporarilyBadBlock"
+        )
+    );
+    assert_eq!(
+        rejected_block_report(&BlockError::InvariantErrorInvalidTip(block_id.into())),
+        (log::Level::Error, "Rejected", "error class: General")
+    );
+
+    // A block that is already known is a repeated submission, whatever its class says.
+    for err in [
+        BlockError::BlockAlreadyProcessed(block_id),
+        BlockError::BlockAlreadyExists(block_id),
+        BlockError::BlockIndexAlreadyExists(block_id),
+    ] {
+        assert_eq!(err.classify(), BlockProcessingErrorClass::General);
+        assert_eq!(
+            rejected_block_report(&err),
+            (log::Level::Info, "Rejected", "already known")
+        );
+    }
+
+    // A local orphan is stored, not rejected.
+    assert_eq!(
+        rejected_block_report(&BlockError::OrphanCheckFailed(
+            OrphanCheckError::LocalOrphan
+        )),
+        (log::Level::Info, "Deferred", "orphan")
+    );
+}

@@ -497,19 +497,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Attempt to process the block. On success, return Some(block_index_of_the_passed_block)
     /// if a reorg has occurred and the passed block is now the best block, otherwise return None.
     ///
-    /// This is the single place where a rejected block is logged: the layers below only log
-    /// the same error at trace, so a rejected block produces one line at the level of its
-    /// error class instead of a chain of identical error lines.
+    /// This is the single place where a block rejected by processing is logged: the layers
+    /// below only log the same error at trace, so a rejected block produces one line at the
+    /// level of its error class instead of a chain of identical error lines. The preliminary
+    /// check (`BlockChecker::preliminary_block_check`) reports its rejections the same way.
     fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let block_id = block.get_id();
-        let pool_id = match block.header().consensus_data() {
-            ConsensusData::PoS(pos_data) => Some(*pos_data.stake_pool_id()),
-            ConsensusData::None | ConsensusData::PoW(_) => None,
-        };
+        let pool_id = block_pool_id(&block);
 
         let result = self.attempt_to_process_block_inner(block, block_source);
         if let Err(err) = &result {
@@ -1140,38 +1138,80 @@ where
         .map_err(|err| BlockError::IsBlockInMainChainQueryError(*block_id, err))
 }
 
+/// The id of the stake pool that produced the block; `None` for blocks of other consensus types.
+pub(crate) fn block_pool_id(block: &Block) -> Option<PoolId> {
+    match block.header().consensus_data() {
+        ConsensusData::PoS(pos_data) => Some(*pos_data.stake_pool_id()),
+        ConsensusData::None | ConsensusData::PoW(_) => None,
+    }
+}
+
 /// Log a block that was rejected by `attempt_to_process_block_inner`.
-///
-/// The level follows the error class, so that the log tells a misbehaving peer (`BadBlock`)
-/// apart from a block that may become valid later (`TemporarilyBadBlock`, e.g. a block from
-/// the future, which is part of normal operation) and from a storage or invariant failure
-/// of this node (`General`).
-fn log_rejected_block(
+pub(crate) fn log_rejected_block(
     block_id: Id<Block>,
     pool_id: Option<PoolId>,
     block_source: BlockSource,
     err: &BlockError,
 ) {
+    log_rejected(block_id, pool_id, &format!("from {block_source:?}"), err);
+}
+
+/// Log a block that was rejected by the preliminary check, which does not know where the
+/// block came from; see [`log_rejected_block`] for the level.
+pub(crate) fn log_rejected_preliminary_check(
+    block_id: Id<Block>,
+    pool_id: Option<PoolId>,
+    err: &BlockError,
+) {
+    log_rejected(block_id, pool_id, "in the preliminary check", err);
+}
+
+/// Reports a rejected block once, at the level of its error (see [`rejected_block_report`]).
+///
+/// The layers below log the same error at trace only, so a rejected block produces one line
+/// instead of a chain of identical error lines.
+fn log_rejected(block_id: Id<Block>, pool_id: Option<PoolId>, origin: &str, err: &BlockError) {
     // The pool id is only meaningful for PoS blocks; it identifies the pool whose block was
     // rejected, which the error itself usually does not carry.
     let pool = pool_id.map(|pool_id| format!(" of pool {pool_id}")).unwrap_or_default();
+    let (level, action, reason) = rejected_block_report(err);
+    log::log!(
+        level,
+        "{action} block {block_id}{pool} {origin} ({reason}): {err}"
+    );
+}
 
-    match err.classify() {
-        BlockProcessingErrorClass::BadBlock => {
-            log::warn!(
-                "Rejected block {block_id}{pool} from {block_source:?} (error class: BadBlock): {err}"
-            )
+/// The level and the wording of the report of a rejected block.
+///
+/// The level follows the error class, so that the log tells a misbehaving peer (`BadBlock`)
+/// apart from a block that may become valid later (`TemporarilyBadBlock`, e.g. a block from
+/// the future, which is part of normal operation) and from a storage or invariant failure
+/// of this node (`General`). Two kinds of errors are special cases of the wording only: a
+/// block that this node already knows is a repeated submission rather than a failure of the
+/// block or of this node, so it is reported at info, and a local orphan is stored until its
+/// parent arrives rather than rejected. The classification itself is untouched, since it
+/// drives the invalidation and ban logic.
+fn rejected_block_report(err: &BlockError) -> (log::Level, &'static str, &'static str) {
+    match err {
+        BlockError::BlockAlreadyProcessed(_)
+        | BlockError::BlockAlreadyExists(_)
+        | BlockError::BlockIndexAlreadyExists(_) => (log::Level::Info, "Rejected", "already known"),
+        BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan) => {
+            (log::Level::Info, "Deferred", "orphan")
         }
-        BlockProcessingErrorClass::TemporarilyBadBlock => {
-            log::info!(
-                "Rejected block {block_id}{pool} from {block_source:?} (error class: TemporarilyBadBlock): {err}"
-            )
-        }
-        BlockProcessingErrorClass::General => {
-            log::error!(
-                "Rejected block {block_id}{pool} from {block_source:?} (error class: General): {err}"
-            )
-        }
+        err => match err.classify() {
+            BlockProcessingErrorClass::BadBlock => {
+                (log::Level::Warn, "Rejected", "error class: BadBlock")
+            }
+            BlockProcessingErrorClass::TemporarilyBadBlock => (
+                log::Level::Info,
+                "Rejected",
+                "error class: TemporarilyBadBlock",
+            ),
+            BlockProcessingErrorClass::General => {
+                (log::Level::Error, "Rejected", "error class: General")
+            }
+        },
     }
 }
 
