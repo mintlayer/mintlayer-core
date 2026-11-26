@@ -20,10 +20,12 @@ use std::{
 };
 
 use crate::{
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, NonZeroPoolBalances,
-    detail::BlockSource,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, DexTradesSubscribeError,
+    NonZeroPoolBalances, detail::BlockSource,
 };
-use chainstate_types::{BlockIndex, DexTradeInfo, EpochData, GenBlockIndex, Locator};
+use chainstate_types::{
+    BlockIndex, DexTradeInfo, DexTradePairSet, EpochData, GenBlockIndex, Locator,
+};
 use common::{
     chain::{
         AccountNonce, AccountType, BlockTxFees, ChainConfig, Currency, DelegationId, OrderId,
@@ -48,8 +50,13 @@ pub trait ChainstateInterface: Send + Sync {
         handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>,
     );
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
-    /// Subscribe to the stream of the DEX trades of the blocks that become the best chain.
-    fn subscribe_to_rpc_dex_trades(&mut self) -> broadcaster::Receiver<DexTradeInfo>;
+    /// Subscribe to the stream of the DEX trades of the blocks that become the best chain,
+    /// selecting the trades of `pairs` (all trades if `None`). The queue of the subscriber
+    /// closes when the subscriber is dropped (see `chainstate::detail::dex_trades`).
+    fn subscribe_to_rpc_dex_trades(
+        &mut self,
+        pairs: Option<DexTradePairSet>,
+    ) -> Result<tokio::sync::mpsc::Receiver<DexTradeInfo>, DexTradesSubscribeError>;
     /// Process the given block. If a reorg occurs, return the block index of the new tip.
     /// Otherwise return None.
     fn process_block(

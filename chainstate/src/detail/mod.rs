@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod chainstateref;
+pub mod dex_trades;
 
 pub use chainstateref::seal_index::index_block_seal_if_enabled;
 mod error;
@@ -37,14 +38,14 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    BlockIndex, BlockStatus, BlockValidationStage, DexTradeInfo, EpochData, EpochStorageWrite,
-    GenBlockIndexRef, PropertyQueryError, SealedStorageTag, TipStorageTag,
+    BlockIndex, BlockStatus, BlockValidationStage, DexTradeInfo, DexTradePairSet, EpochData,
+    EpochStorageWrite, GenBlockIndexRef, PropertyQueryError, SealedStorageTag, TipStorageTag,
     pos_randomness::PoSRandomness,
 };
 use chainstateref::{ChainActivationContext, ChainstateRef, ReorgError};
@@ -82,13 +83,14 @@ use crate::{
 
 use self::{
     block_invalidation::BlockInvalidator,
+    dex_trades::{DISPATCHER_QUEUE_CAPACITY, DexTradesDispatchError, DexTradesDispatcher},
     orphan_blocks::{OrphanBlocksMut, OrphansProxy},
     query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
 };
 
 pub use self::{
-    error::*, info::ChainInfo, median_time::MEDIAN_TIME_SPAN,
+    dex_trades::DexTradesSubscribeError, error::*, info::ChainInfo, median_time::MEDIAN_TIME_SPAN,
     median_time::calculate_median_time_past,
     median_time::calculate_median_time_past_from_blocktimestamps,
 };
@@ -137,8 +139,9 @@ pub struct Chainstate<S, V> {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     subsystem_events: EventsController<ChainstateEvent>,
     rpc_events: broadcaster::Broadcaster<ChainstateEvent>,
-    /// The DEX trades of the blocks that became the best chain, next to `rpc_events`.
-    rpc_dex_trades: broadcaster::Broadcaster<DexTradeInfo>,
+    /// The fan-out of the DEX trades of the blocks that became the best chain, started when the
+    /// first subscriber arrives; see [`dex_trades`].
+    dex_trades_dispatcher: Option<DexTradesDispatcher>,
     time_getter: TimeGetter,
     is_initial_block_download_finished: SetFlag,
     shutdown_initiated_rx: Option<watch::Receiver<SetFlag>>,
@@ -208,8 +211,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.rpc_events.subscribe()
     }
 
-    pub fn subscribe_to_dex_trades_broadcast(&mut self) -> broadcaster::Receiver<DexTradeInfo> {
-        self.rpc_dex_trades.subscribe()
+    /// Subscribe to the DEX trades of the blocks that become the best chain, selecting the
+    /// trades of `pairs` (all trades if `None`); see [`dex_trades`] for the delivery policy.
+    /// The queue of the subscriber closes when the subscriber is dropped.
+    pub fn subscribe_to_dex_trades_broadcast(
+        &mut self,
+        pairs: Option<DexTradePairSet>,
+    ) -> Result<mpsc::Receiver<DexTradeInfo>, DexTradesSubscribeError> {
+        let dispatcher = match &mut self.dex_trades_dispatcher {
+            Some(dispatcher) => dispatcher,
+            None => self.dex_trades_dispatcher.insert(DexTradesDispatcher::start()?),
+        };
+        dispatcher.subscribe(pairs)
     }
 
     #[log_error]
@@ -276,7 +289,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         let subsystem_events = EventsController::new();
         let rpc_events = broadcaster::Broadcaster::new();
-        let rpc_dex_trades = broadcaster::Broadcaster::new();
         Self {
             chain_config,
             chainstate_config: chainstate_config.into(),
@@ -286,7 +298,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             custom_orphan_error_hook,
             subsystem_events,
             rpc_events,
-            rpc_dex_trades,
+            dex_trades_dispatcher: None,
             time_getter,
             is_initial_block_download_finished: SetFlag::new(),
             shutdown_initiated_rx,
@@ -341,19 +353,52 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Announce the new best chain tip: first the DEX trades of the blocks that were connected
     /// to reach it (in connect order, see [`Self::broadcast_dex_trades`]), then the new tip
     /// event. The two always go together, in this order.
+    ///
+    /// The trades are only announced once the initial block download is complete: a node
+    /// syncing from scratch would otherwise stream the whole history of fills, at sync speed.
     fn broadcast_new_tip_with_trades(
         &mut self,
         best_block_index: GenBlockIndexRef<'_>,
         dex_trades: &[DexTradeInfo],
     ) {
-        self.broadcast_dex_trades(dex_trades);
-        self.broadcast_new_tip_event(best_block_index, self.is_initial_block_download());
+        let is_initial_block_download = self.is_initial_block_download();
+        if !is_initial_block_download {
+            self.broadcast_dex_trades(dex_trades);
+        }
+        self.broadcast_new_tip_event(best_block_index, is_initial_block_download);
     }
 
-    /// Hand the DEX trades of the blocks that just became the best chain to the RPC subscribers,
-    /// in connect order.
+    /// Hand the DEX trades of the blocks that just became the best chain to the dispatcher with a
+    /// single send, in connect order; see [`dex_trades`] for what happens to them next. A
+    /// dispatcher that is unrealistically far behind loses the trades of the block, which is
+    /// reported; the chainstate never waits for the subscribers.
     fn broadcast_dex_trades(&mut self, dex_trades: &[DexTradeInfo]) {
-        dex_trades.iter().for_each(|trade| self.rpc_dex_trades.broadcast(trade));
+        let Some(dispatcher) = &self.dex_trades_dispatcher else {
+            // nobody ever subscribed
+            return;
+        };
+        if dispatcher.subscriber_count() == 0 {
+            return;
+        }
+        let first_block_id = dex_trades.first().map(|trade| trade.block_id);
+        match dispatcher.dispatch(dex_trades.to_vec()) {
+            Ok(()) => (),
+            Err(DexTradesDispatchError::QueueFull) => log::error!(
+                "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
+                 dropping {} trades from block {first_block_id:x?}",
+                dex_trades.len()
+            ),
+            Err(DexTradesDispatchError::Closed) => {
+                log::error!(
+                    "The DEX trades dispatcher task is gone; dropping {} trades from block \
+                     {first_block_id:x?}; the subscriptions are closed and a later subscription \
+                     starts a fresh dispatcher",
+                    dex_trades.len()
+                );
+                // the subscribers' queues were held by the task and are closed with it
+                self.dex_trades_dispatcher = None;
+            }
+        }
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.

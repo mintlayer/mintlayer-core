@@ -17,6 +17,7 @@
 //! [Ethereum pubsub spec](https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub).
 
 use jsonrpsee::{PendingSubscriptionAcceptError, SubscriptionMessage};
+use tokio::sync::mpsc;
 
 use utils_networking::broadcaster;
 
@@ -112,6 +113,25 @@ pub async fn connect_broadcast_map<T, U: serde::Serialize>(
     mut map_fn: impl FnMut(T) -> U,
 ) -> Reply {
     connect_broadcast_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
+}
+
+/// Connect a bounded queue of events to the subscription sink, transforming and filtering the
+/// events on the go. The queue is fed by the producer of the events with `try_send`; closing it
+/// ends the subscription.
+pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
+    mut event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+    mut filter_map_fn: impl FnMut(T) -> Option<U>,
+) -> Reply {
+    let subscription = accept::<U>(pending).await?;
+
+    while let Some(event) = event_receiver.recv().await {
+        if let Some(event) = filter_map_fn(event) {
+            subscription.send(&event).await?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Connect a broadcaster to event sink

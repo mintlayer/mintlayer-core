@@ -604,23 +604,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 return Ok(());
             }
         };
-        let trade_rx = self.call_mut(move |this| this.subscribe_to_rpc_dex_trades()).await?;
-
-        match pairs {
-            // the filter drops the non-matching trades before they are serialized
-            Some(pairs) => {
-                rpc::subscription::connect_broadcast_filter_map(trade_rx, pending, |trade| {
-                    pairs.matches(&trade).then(|| RpcDexTradeEvent::from_trade(&trade))
-                })
-                .await
-            }
-            None => {
-                rpc::subscription::connect_broadcast_map(trade_rx, pending, |trade| {
-                    RpcDexTradeEvent::from_trade(&trade)
-                })
-                .await
-            }
-        }
+        // the chainstate filters the trades by the pairs before queueing them for the subscriber
+        let trade_rx =
+            match self.call_mut(move |this| this.subscribe_to_rpc_dex_trades(pairs)).await {
+                Ok(Ok(trade_rx)) => trade_rx,
+                Ok(Err(err)) => {
+                    rpc::subscription::reject(pending, err).await;
+                    return Ok(());
+                }
+                Err(err) => return Err(err.into()),
+            };
+        rpc::subscription::connect_mpsc_filter_map(trade_rx, pending, |trade| {
+            Some(RpcDexTradeEvent::from_trade(&trade))
+        })
+        .await
     }
 }
 
