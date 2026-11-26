@@ -820,6 +820,78 @@ Unsubscribe using `chainstate_unsubscribe_to_events`.
 
 Note: Subscriptions only work over WebSockets.
 
+### Subscription `chainstate_dex_subscribe_to_trades`
+
+Subscribe to the DEX trades (order fills) of the blocks that become the best chain.
+
+One event is produced per fill-order input of the transactions of a block, when the block
+is connected as part of the best chain; the events of a block are delivered in the order
+of the transactions in the block and of the inputs in each transaction. The trade is
+described from the point of view of the maker (the order being filled): `base_token_id`
+is the currency the maker gives and `quote_token_id` is the currency the maker asks for,
+so the price of the trade in quote per base is `quote_amount / base_amount`; the amounts
+are in atoms. `match_ordinal` is always 0 (a fill input matches exactly the order it
+references). A trade is uniquely identified by the tuple
+`(block_id, tx_id, input_ordinal, match_ordinal)`.
+
+`in_block_position` is `(tx_index << 40) | (input_ordinal << 8) | match_ordinal`, where
+`tx_index` is the index of the transaction in the block (`< 2^24`), `input_ordinal` is
+the index of the input in the transaction (`< 2^32`) and `match_ordinal` is `< 256`; the
+positions of the trades of a block are therefore increasing in delivery order.
+
+The `pairs` parameter filters the events by trading pair: a pair is
+`{ "base": <currency>, "quote": <currency> }` where a currency is either the literal
+`"coin"` or the hex-encoded token id, as used in the events. A trade matches a pair only
+if both of its sides match, so a trade of the reversed pair does not match. An absent or
+empty list delivers all the events; a well-formed pair of a market that has no trades
+simply delivers nothing. A malformed pair rejects the subscription with an error naming
+the offending value.
+
+The events reflect what the best chain said when the block was connected: no compensating
+events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`
+and re-derive the trades from the blocks of the new best chain.
+
+
+Parameters:
+```
+{ "pairs": EITHER OF
+     1) [ {
+            "base": EITHER OF
+                 1) "coin"
+                 2) hex string,
+            "quote": EITHER OF
+                 1) "coin"
+                 2) hex string,
+        }, .. ]
+     2) null }
+```
+
+Produces:
+```
+{
+    "type": "DexTrade",
+    "tx_id": hex string,
+    "input_ordinal": number,
+    "match_ordinal": number,
+    "base_token_id": EITHER OF
+         1) "coin"
+         2) hex string,
+    "quote_token_id": EITHER OF
+         1) "coin"
+         2) hex string,
+    "base_amount": number string,
+    "quote_amount": number string,
+    "maker_order_id": hex string,
+    "block_id": hex string,
+    "block_height": number,
+    "in_block_position": number,
+}
+```
+
+Unsubscribe using `chainstate_dex_unsubscribe_to_trades`.
+
+Note: Subscriptions only work over WebSockets.
+
 ## Module `mempool`
 
 ### Method `mempool_contains_tx`
