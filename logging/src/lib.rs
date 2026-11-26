@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod enrichment;
 mod log_style;
 mod utils;
 
@@ -27,6 +28,7 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
+pub use enrichment::enter_root_span;
 pub use log;
 pub use log_style::{LogStyle, TextColoring};
 pub use log_style::{LogStyleParseError, get_log_style_from_env};
