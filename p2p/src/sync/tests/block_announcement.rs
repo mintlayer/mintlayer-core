@@ -24,7 +24,7 @@ use common::{
         block::{BlockReward, ConsensusData, timestamp::BlockTimestamp},
         config::{Builder as ChainConfigBuilder, ChainType, create_unit_test_config},
     },
-    primitives::{BlockHeight, Idable, user_agent::mintlayer_core_user_agent},
+    primitives::{BlockHeight, H256, Id, Idable, user_agent::mintlayer_core_user_agent},
 };
 use consensus::ConsensusVerificationError;
 use logging::log;
@@ -117,10 +117,11 @@ async fn invalid_timestamp() {
         assert_eq!(
             score,
             P2pError::ChainstateError(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid(
-                    BlockTimestamp::from_int_seconds(40),
-                    BlockTimestamp::from_int_seconds(50),
-                )),
+                BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid {
+                    block_id: Id::new(H256::zero()),
+                    block_timestamp: BlockTimestamp::from_int_seconds(40),
+                    median_time_past: BlockTimestamp::from_int_seconds(50),
+                }),
             ))
             .ban_score()
         );

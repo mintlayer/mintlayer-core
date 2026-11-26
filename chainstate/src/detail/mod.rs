@@ -50,7 +50,7 @@ use chainstateref::{ChainActivationContext, ChainstateRef, ReorgError};
 use common::{
     Uint256,
     chain::{
-        Block, GenBlock, TxOutput,
+        Block, GenBlock, PoolId, TxOutput,
         block::{ConsensusData, timestamp::BlockTimestamp},
         config::ChainConfig,
     },
@@ -324,7 +324,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// again until it succeeds or the maximum number of commit attempts is reached. If the maximum
     /// number of attempts is reached, use `on_db_err` to create a BlockError and return it. On each
     /// iteration, before doing anything else, call `on_new_attempt` (this can be used for logging).
-    #[log_error]
+    #[log_error(level = "trace")]
     fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, Err>(
         &mut self,
         mut main_action: MainAction,
@@ -344,7 +344,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             let is_last_attempt = attempts_count >= *self.chainstate_config.max_db_commit_attempts;
 
             let mut chainstate_ref = self.make_db_tx().map_err(Err::from)?;
-            let main_action_result = main_action(&mut chainstate_ref).log_err();
+            let main_action_result = main_action(&mut chainstate_ref).log_lvl(log::Level::Trace);
 
             let result = match main_action_result {
                 Ok(result) => result,
@@ -384,7 +384,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Integrate the block into the blocktree, performing all the necessary checks.
     /// The returned bool indicates whether a reorg has occurred.
-    #[log_error]
+    #[log_error(level = "trace")]
     fn integrate_block(
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
@@ -496,13 +496,26 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Attempt to process the block. On success, return Some(block_index_of_the_passed_block)
     /// if a reorg has occurred and the passed block is now the best block, otherwise return None.
-    #[log_error]
+    ///
+    /// This is the single place where a rejected block is logged: the layers below only log
+    /// the same error at trace, so a rejected block produces one line at the level of its
+    /// error class instead of a chain of identical error lines.
     fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        let block_id = block.get_id();
+        let pool_id = match block.header().consensus_data() {
+            ConsensusData::PoS(pos_data) => Some(*pos_data.stake_pool_id()),
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+        };
+
         let result = self.attempt_to_process_block_inner(block, block_source);
+        if let Err(err) = &result {
+            log_rejected_block(block_id, pool_id, block_source, err);
+        }
+
         // count every processed block, on success and failure
         // alike, so the timing window doesn't drift.
         perf_timing::on_block_processed();
@@ -717,7 +730,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
             block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
                 Some(handler) => handler(&e),
-                None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+                // The rejection itself is logged with its block id and error class by
+                // `attempt_to_process_block`; this line only adds the orphan context.
+                None => logging::log::debug!("Failed to process a chain of orphan blocks: {}", e),
             });
         }
 
@@ -736,7 +751,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn process_block_and_related_orphans(
         &mut self,
         block: WithId<Block>,
@@ -787,7 +802,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// returns the block index of the new tip
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn process_block(
         &mut self,
         block: WithId<Block>,
@@ -991,7 +1006,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
@@ -1083,7 +1098,7 @@ impl From<chainstate_storage::Error> for BlockIntegrationError {
     }
 }
 
-#[log_error]
+#[log_error(level = "trace")]
 fn get_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -1097,7 +1112,7 @@ where
         .map_err(|err| BlockError::BlockIndexQueryError((*block_id).into(), err))
 }
 
-#[log_error]
+#[log_error(level = "trace")]
 fn get_existing_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -1111,7 +1126,7 @@ where
         .map_err(|err| BlockError::BlockIndexQueryError((*block_id).into(), err))
 }
 
-#[log_error]
+#[log_error(level = "trace")]
 fn is_block_in_main_chain<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<GenBlock>,
@@ -1123,6 +1138,41 @@ where
     chainstate_ref
         .is_block_in_main_chain(block_id)
         .map_err(|err| BlockError::IsBlockInMainChainQueryError(*block_id, err))
+}
+
+/// Log a block that was rejected by `attempt_to_process_block_inner`.
+///
+/// The level follows the error class, so that the log tells a misbehaving peer (`BadBlock`)
+/// apart from a block that may become valid later (`TemporarilyBadBlock`, e.g. a block from
+/// the future, which is part of normal operation) and from a storage or invariant failure
+/// of this node (`General`).
+fn log_rejected_block(
+    block_id: Id<Block>,
+    pool_id: Option<PoolId>,
+    block_source: BlockSource,
+    err: &BlockError,
+) {
+    // The pool id is only meaningful for PoS blocks; it identifies the pool whose block was
+    // rejected, which the error itself usually does not carry.
+    let pool = pool_id.map(|pool_id| format!(" of pool {pool_id}")).unwrap_or_default();
+
+    match err.classify() {
+        BlockProcessingErrorClass::BadBlock => {
+            log::warn!(
+                "Rejected block {block_id}{pool} from {block_source:?} (error class: BadBlock): {err}"
+            )
+        }
+        BlockProcessingErrorClass::TemporarilyBadBlock => {
+            log::info!(
+                "Rejected block {block_id}{pool} from {block_source:?} (error class: TemporarilyBadBlock): {err}"
+            )
+        }
+        BlockProcessingErrorClass::General => {
+            log::error!(
+                "Rejected block {block_id}{pool} from {block_source:?} (error class: General): {err}"
+            )
+        }
+    }
 }
 
 /// A counter that enters the reckless db mode (if enabled) when going from 0 to 1 and exits it
