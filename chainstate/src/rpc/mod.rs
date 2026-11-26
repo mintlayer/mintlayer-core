@@ -228,20 +228,31 @@ trait ChainstateRpc {
     /// Subscribe to the DEX trades (order fills) of the blocks that become the best chain.
     ///
     /// One event is produced per fill-order input of the transactions of a block, when the block
-    /// is connected as part of the best chain. The trade is described from the point of view of
-    /// the maker (the order being filled): `base_token_id` is the currency the maker gives and
-    /// `quote_token_id` is the currency the maker asks for; the amounts are in atoms.
+    /// is connected as part of the best chain; the events of a block are delivered in the order
+    /// of the transactions in the block and of the inputs in each transaction. The trade is
+    /// described from the point of view of the maker (the order being filled): `base_token_id`
+    /// is the currency the maker gives and `quote_token_id` is the currency the maker asks for,
+    /// so the price of the trade in quote per base is `quote_amount / base_amount`; the amounts
+    /// are in atoms. `match_ordinal` is always 0 (a fill input matches exactly the order it
+    /// references). A trade is uniquely identified by the tuple
+    /// `(block_id, tx_id, input_ordinal, match_ordinal)`.
     ///
-    /// The `pairs` parameter filters the events by trading pair: a pair is `{ "base": <currency>,
-    /// "quote": <currency> }` where a currency is either the literal `"coin"` or the hex-encoded
-    /// token id, as used in the events. A trade matches a pair only if both of its sides match,
-    /// so a trade of the reversed pair does not match. An absent or empty list delivers all the
-    /// events; a well-formed pair of a market that has no trades simply delivers nothing.
-    /// A malformed pair rejects the subscription with an error naming the offending value.
+    /// `in_block_position` is `(tx_index << 40) | (input_ordinal << 8) | match_ordinal`, where
+    /// `tx_index` is the index of the transaction in the block (`< 2^24`), `input_ordinal` is
+    /// the index of the input in the transaction (`< 2^32`) and `match_ordinal` is `< 256`; the
+    /// positions of the trades of a block are therefore increasing in delivery order.
     ///
-    /// Events reflect what the best chain said when the block was connected: no compensating
-    /// events are produced on a reorg, so consumers should use `subscribe_to_events` to detect
-    /// reorgs and re-derive the trades from the blocks.
+    /// The `pairs` parameter filters the events by trading pair: a pair is
+    /// `{ "base": <currency>, "quote": <currency> }` where a currency is either the literal
+    /// `"coin"` or the hex-encoded token id, as used in the events. A trade matches a pair only
+    /// if both of its sides match, so a trade of the reversed pair does not match. An absent or
+    /// empty list delivers all the events; a well-formed pair of a market that has no trades
+    /// simply delivers nothing. A malformed pair rejects the subscription with an error naming
+    /// the offending value.
+    ///
+    /// The events reflect what the best chain said when the block was connected: no compensating
+    /// events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`
+    /// and re-derive the trades from the blocks of the new best chain.
     #[subscription(
         name = "dex_subscribe_to_trades",
         unsubscribe = "dex_unsubscribe_to_trades",
