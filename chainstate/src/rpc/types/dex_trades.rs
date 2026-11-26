@@ -110,7 +110,8 @@ fn parse_currency(side: &'static str, value: &str) -> Result<Currency, RpcTradin
 /// echoed back in full.
 fn truncate(value: &str) -> String {
     match value.char_indices().nth(ECHOED_VALUE_CHARS) {
-        Some((index, _)) => value[..index].to_owned(),
+        // the index is a character boundary by construction
+        Some((index, _)) => value.get(..index).unwrap_or(value).to_owned(),
         None => value.to_owned(),
     }
 }
