@@ -248,8 +248,9 @@ impl TopLevelOptions {
     }
 }
 
-/// Parses one `key=value` entry of `--log-fields` (see [`TopLevelOptions::log_fields`]).
-fn parse_log_field(entry: &str) -> Result<(String, String), String> {
+/// Parses one `key=value` entry of `--log-fields` and of `[logging] log_fields` (see
+/// [`TopLevelOptions::log_fields`]).
+pub(crate) fn parse_log_field(entry: &str) -> Result<(String, String), String> {
     let entry = entry.trim();
     match entry.split_once('=') {
         Some((key, value)) if !key.trim().is_empty() => {
@@ -886,8 +887,10 @@ mod reckless_mode_option_tests {
     }
 }
 
+/// Test support for the logging options, shared by the option tests and the tests of the
+/// resolved logging settings.
 #[cfg(test)]
-mod logging_cli_options_tests {
+pub(crate) mod logging_options_test_support {
     use super::*;
 
     /// The environment variables bound to the logging options by `clap_utils::env_adder`.
@@ -905,24 +908,33 @@ mod logging_cli_options_tests {
         "ML_NODE_LOG_THREAD_INFO",
     ];
 
-    fn clear_logging_env_vars() {
+    pub(crate) fn clear_logging_env_vars() {
         // SAFETY: the tests using this are `#[serial_test::serial]`-serialized.
         for var in LOGGING_ENV_VARS {
             unsafe { std::env::remove_var(var) };
         }
     }
 
-    fn try_parse_top_level_options(args: &[&str]) -> Result<TopLevelOptions, clap::Error> {
+    /// Parses `mintlayerd <args...> mainnet` and returns the top-level options.
+    pub(crate) fn try_parse_top_level_options(
+        args: &[&str],
+    ) -> Result<TopLevelOptions, clap::Error> {
         let full_args = std::iter::once("mintlayerd")
             .chain(args.iter().copied())
             .chain(std::iter::once("mainnet"));
         <Options as clap::Parser>::try_parse_from(full_args).map(|options| options.top_level)
     }
 
-    fn parse_top_level_options(args: &[&str]) -> TopLevelOptions {
+    pub(crate) fn parse_top_level_options(args: &[&str]) -> TopLevelOptions {
         try_parse_top_level_options(args)
             .unwrap_or_else(|err| panic!("arguments must parse: {err}"))
     }
+}
+
+#[cfg(test)]
+mod logging_cli_options_tests {
+    use super::logging_options_test_support::*;
+    use super::*;
 
     #[test]
     #[serial_test::serial]

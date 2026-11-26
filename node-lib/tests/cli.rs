@@ -378,3 +378,64 @@ fn config_file_boolean_value_survives_when_cli_flag_absent() {
         Some(true)
     );
 }
+
+// The `[logging]` section is read as is: the merge with the command line is done by
+// `LoggingOptions::resolve`, since the logging command line options are top-level options.
+#[test]
+fn read_logging_section() {
+    let data_dir = TempDir::new().unwrap();
+    let config_path = data_dir.path().join(CONFIG_NAME);
+    std::fs::write(
+        &config_path,
+        "[logging]\n\
+         log_to_file = true\n\
+         log_file_path = \"logs/node.jsonl\"\n\
+         log_file_format = \"json\"\n\
+         log_file_max_files = 3\n\
+         log_fields = [\"role=seed\", \"dc=eu\"]\n\
+         log_thread_info = true\n",
+    )
+    .unwrap();
+
+    let chain_config = create_testnet();
+    let config = NodeConfigFile::read(&chain_config, &config_path, &RunOptions::default()).unwrap();
+
+    let logging = config.logging.expect("the section is present");
+    assert_eq!(logging.log_to_file, Some(true));
+    assert_eq!(
+        logging.log_file_path.as_deref(),
+        Some(Path::new("logs/node.jsonl"))
+    );
+    assert_eq!(logging.log_file_format.as_deref(), Some("json"));
+    assert_eq!(logging.log_file_max_files, Some(3));
+    assert_eq!(
+        logging.log_fields,
+        Some(vec!["role=seed".to_owned(), "dc=eu".to_owned()])
+    );
+    assert_eq!(logging.log_source_location, None);
+    assert_eq!(logging.log_thread_info, Some(true));
+}
+
+#[test]
+fn read_logging_section_rejects_unknown_keys() {
+    let data_dir = TempDir::new().unwrap();
+    let config_path = data_dir.path().join(CONFIG_NAME);
+    std::fs::write(&config_path, "[logging]\nlog_file_formatt = \"json\"\n").unwrap();
+
+    let chain_config = create_testnet();
+    let err = NodeConfigFile::read(&chain_config, &config_path, &RunOptions::default())
+        .expect_err("the config must be rejected");
+    // The full chain is needed: the outer context is the generic "Failed to parse config".
+    assert!(format!("{err:#}").contains("log_file_formatt"), "{err:#}");
+}
+
+#[test]
+fn read_config_without_logging_section() {
+    let data_dir = TempDir::new().unwrap();
+    let config_path = data_dir.path().join(CONFIG_NAME);
+    std::fs::write(&config_path, "[rpc]\nrpc_enabled = false\n").unwrap();
+
+    let chain_config = create_testnet();
+    let config = NodeConfigFile::read(&chain_config, &config_path, &RunOptions::default()).unwrap();
+    assert_eq!(config.logging, None);
+}
