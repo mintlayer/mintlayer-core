@@ -23,7 +23,10 @@ use super::{
     helpers::in_memory_storage_wrapper::InMemoryStorageWrapper,
     orders_tests::create_test_framework_with_orders,
 };
-use chainstate::{ChainstateEvent, chainstate_interface::ChainstateInterface as _};
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, ChainstateEvent, OrphanCheckError,
+    chainstate_interface::ChainstateInterface as _,
+};
 use chainstate_test_framework::{
     TestFramework, TransactionBuilder,
     helpers::{calculate_fill_order, issue_and_mint_random_token_from_best_block, split_utxo},
@@ -890,4 +893,71 @@ async fn trades_are_announced_only_after_the_initial_block_download(#[case] seed
         )
     );
     expect_new_tip(&mut tips_rx, &tf, block1_id).await;
+}
+
+// A block with a fill that arrives before its parent waits in the orphan pool; when the parent
+// arrives, the branch is connected and the trade of the child is announced with the child's tip.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn orphan_fill_announced_when_its_parent_arrives(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let version = OrdersVersion::V1;
+    let mut tf = create_test_framework_with_orders(&mut rng, version);
+    let fixture = create_fixture(&mut rng, &mut tf, 1);
+
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
+    let mut tips_rx = tf.chainstate.subscribe_to_rpc_events();
+    let fill_amount = Amount::from_atoms(100);
+
+    // an empty parent on the tip, and a child with a fill on top of it
+    let parent = tf.best_block_id();
+    let parent_block = build_block(&mut tf, &mut rng, parent, []);
+    let parent_block_id = parent_block.get_id();
+    let fill = make_fill_tx(
+        &tf,
+        version,
+        &fixture.coin,
+        fixture.token_id,
+        fixture.order_ids[0],
+        fill_amount,
+        false,
+    );
+    let child_block = build_block(&mut tf, &mut rng, parent_block_id.into(), [fill.tx.clone()]);
+    let child_block_id = child_block.get_id();
+
+    // the child arrives first and waits as an orphan: nothing is connected
+    assert_eq!(
+        tf.process_block(WithId::take(child_block), BlockSource::Local).unwrap_err(),
+        ChainstateError::ProcessBlockError(BlockError::OrphanCheckFailed(
+            OrphanCheckError::LocalOrphan
+        ))
+    );
+    assert_eq!(tf.chainstate.orphans_count(), 1);
+    expect_trades(&mut trades_rx, 0).await;
+
+    // the parent unlocks the child: the trade of the child is announced with the child's tip,
+    // which is the only tip announced
+    let new_tip = tf
+        .process_block(WithId::take(parent_block), BlockSource::Local)
+        .unwrap()
+        .unwrap();
+    assert_eq!(new_tip.block_id(), &child_block_id);
+    let trades = expect_trades(&mut trades_rx, 1).await;
+    assert_eq!(
+        trades[0],
+        expected_trade(
+            child_block_id,
+            tf.block_index(&child_block_id).block_height(),
+            0,
+            &fill,
+            fixture.token_id,
+            fixture.order_ids[0],
+            fill_amount,
+        )
+    );
+    expect_new_tip(&mut tips_rx, &tf, child_block_id).await;
+    assert!(tokio::time::timeout(NO_TRADE_TIMEOUT, tips_rx.recv()).await.is_err());
+    assert_eq!(tf.chainstate.orphans_count(), 0);
 }
