@@ -852,6 +852,16 @@ The events reflect what the best chain said when the block was connected: no com
 events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`
 and re-derive the trades from the blocks of the new best chain.
 
+The events are only produced once the initial block download of the node is complete; a
+node that is still syncing announces none, and the trades of the blocks synced that way
+are never announced.
+
+Delivery policy: the node keeps up with the chain, not with the subscribers. Every
+subscriber has a bounded queue of events; a subscriber that stops reading is closed by
+the node once its queue overflows (its subscription ends) and has to subscribe again,
+re-deriving what it missed from the blocks. At most 32 subscribers are served at a time;
+a subscription beyond that is rejected with an error.
+
 
 Parameters:
 ```
