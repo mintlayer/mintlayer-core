@@ -124,12 +124,18 @@ pub async fn connect_broadcast_map<T, U: serde::Serialize>(
     connect_broadcast_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
 }
 
+/// The error sent to the client when the node ended a subscription because its producer closed
+/// the event queue: the subscriber fell behind, or the stream stopped.
+pub const CLOSED_BY_NODE: &str =
+    "subscription closed by the node: the subscriber fell behind or the stream ended";
+
 /// Connect a bounded queue of events to the subscription sink, transforming and filtering the
-/// events on the go. The queue is fed by the producer of the events with `try_send`; closing it
-/// ends the subscription.
+/// events on the go. The queue is fed by the producer of the events with `try_send`.
 ///
-/// When the client goes away, the queue is dropped at once (the subscription is watched for
-/// closing while waiting for events), so that the producer sees its receiver as closed.
+/// Closing the queue ends the subscription with the [`CLOSED_BY_NODE`] error, so that the client
+/// sees the end of the stream rather than waiting for the next event forever. When the client
+/// goes away, the queue is dropped at once (the subscription is watched for closing while
+/// waiting for events), so that the producer sees its receiver as closed.
 pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
     mut event_receiver: mpsc::Receiver<T>,
     pending: Pending,
@@ -144,14 +150,13 @@ pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
             () = subscription.closed() => return Ok(()),
         };
         let Some(event) = event else {
-            break;
+            // the producer closed the queue: tell the client that the subscription is over
+            return Err(CLOSED_BY_NODE.into());
         };
         if let Some(event) = filter_map_fn(event) {
             subscription.send(&event).await?;
         }
     }
-
-    Ok(())
 }
 
 /// Connect a broadcaster to event sink
