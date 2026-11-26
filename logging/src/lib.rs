@@ -25,13 +25,14 @@ use std::{
 
 use tracing::{Subscriber, level_filters::LevelFilter};
 use tracing_subscriber::{
-    EnvFilter, Layer, Registry, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
+    EnvFilter, Layer, Registry, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
 pub use enrichment::enter_root_span;
 pub use log;
 pub use log_style::{LogFormat, LogStyleParseError, get_log_style_from_env};
 pub use log_style::{LogStyle, TextColoring};
+pub use tracing_subscriber::fmt::MakeWriter;
 pub use utils::{GetFromEnvError, get_from_env};
 
 /// Default value for `RUST_LOG` used by the "simple" log initialization functions.

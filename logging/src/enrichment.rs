@@ -53,9 +53,11 @@ static ROOT_SPAN: OnceLock<Span> = OnceLock::new();
 /// allocation, since the span is entered once at startup.
 ///
 /// Note that an entered span only applies to the calling thread. The node enters the span
-/// on its main thread, so startup, shutdown and configuration lines carry the enrichment;
-/// events emitted from subsystem tasks on other threads do not, until those tasks are
-/// instrumented with the root span (planned for the log call-site hygiene follow-up).
+/// on its main thread before its subsystems are started, and the subsystem crate starts
+/// subsystem tasks and runs calls into them inside the span that is current at that point,
+/// so their events (emitted on the tokio worker threads) carry the enrichment as well. Only
+/// events on threads that are started outside of that instrumentation, such as a plain
+/// `tokio::spawn` or a blocking task, do not carry the span.
 pub fn enter_root_span(
     version: impl Into<Cow<'static, str>>,
     chain: impl Into<Cow<'static, str>>,

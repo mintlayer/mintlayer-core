@@ -49,7 +49,7 @@ pub struct LoggingConfigFile {
 
     /// Size of the log file at which it is rotated, in bytes.
     ///
-    /// Defaults to 10000000.
+    /// Defaults to 10000000. Must be at least 1.
     pub log_file_max_size_bytes: Option<u64>,
 
     /// Number of rotated log files to keep, including the one being written to.

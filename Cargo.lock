@@ -5640,6 +5640,8 @@ dependencies = [
  "logging",
  "node-lib",
  "rpc-description",
+ "serde_json",
+ "tempfile",
  "tokio",
  "utils",
 ]

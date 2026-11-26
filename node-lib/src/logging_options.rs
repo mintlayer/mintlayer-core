@@ -70,11 +70,20 @@ impl LoggingOptions {
                 .unwrap_or(LogFormat::Text);
         let log_format = resolve_format(options.log_format, log_format, "log_format")?;
 
+        let log_file_max_size_bytes = options
+            .log_file_max_size_bytes
+            .or(log_file_max_size_bytes)
+            .unwrap_or(DEFAULT_LOG_FILE_MAX_SIZE_BYTES);
         let log_file_max_files = options
             .log_file_max_files
             .or(log_file_max_files)
             .unwrap_or(DEFAULT_LOG_FILE_MAX_FILES);
-        // The command line parser rejects smaller values; the config file is checked here.
+        // The command line parser rejects smaller values, but they would make the rotation
+        // panic, so the config file is checked here as well.
+        anyhow::ensure!(
+            log_file_max_size_bytes >= 1,
+            "`[logging] log_file_max_size_bytes` must be at least 1, got {log_file_max_size_bytes}"
+        );
         anyhow::ensure!(
             log_file_max_files >= 1,
             "`[logging] log_file_max_files` must be at least 1, got {log_file_max_files}"
@@ -98,10 +107,7 @@ impl LoggingOptions {
             log_file_path: options.log_file_path.clone().or(log_file_path),
             log_file_format,
             log_format,
-            log_file_max_size_bytes: options
-                .log_file_max_size_bytes
-                .or(log_file_max_size_bytes)
-                .unwrap_or(DEFAULT_LOG_FILE_MAX_SIZE_BYTES),
+            log_file_max_size_bytes,
             log_file_max_files,
             log_fields,
             log_source_location: options
@@ -340,15 +346,14 @@ mod tests {
     #[serial_test::serial]
     fn invalid_file_values_are_rejected() {
         clear_logging_env_vars();
-        let max_files_zero = LoggingOptions::resolve(
-            &default_cli_options(),
-            config_from_toml("[logging]\nlog_file_max_files = 0\n"),
-        )
-        .unwrap_err();
-        assert!(
-            max_files_zero.to_string().contains("log_file_max_files"),
-            "{max_files_zero}"
-        );
+        for (key, value) in [("log_file_max_files", "0"), ("log_file_max_size_bytes", "0")] {
+            let err = LoggingOptions::resolve(
+                &default_cli_options(),
+                config_from_toml(&format!("[logging]\n{key} = {value}\n")),
+            )
+            .unwrap_err();
+            assert!(err.to_string().contains(key), "{err}");
+        }
 
         let bad_format = LoggingOptions::resolve(
             &default_cli_options(),

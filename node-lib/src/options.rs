@@ -174,10 +174,10 @@ pub struct TopLevelOptions {
 
     /// Size of the log file at which it is rotated, in bytes.
     ///
-    /// Defaults to 10000000.
+    /// Defaults to 10000000. Must be at least 1.
     ///
     /// Config file equivalent: `[logging] log_file_max_size_bytes`.
-    #[clap(long, value_name = "BYTES")]
+    #[clap(long, value_name = "BYTES", value_parser = clap::value_parser!(u64).range(1..))]
     pub log_file_max_size_bytes: Option<u64>,
 
     /// Number of rotated log files to keep, including the one being written to.
@@ -1012,6 +1012,7 @@ mod logging_cli_options_tests {
             &["--log-file-format", "jsn"],
             &["--log-format", "xml"],
             &["--log-file-max-size-bytes", "ten"],
+            &["--log-file-max-size-bytes", "0"],
             &["--log-file-max-files", "0"],
             &["--log-fields", "no-equals-sign"],
             &["--log-fields", "=value"],

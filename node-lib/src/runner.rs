@@ -16,7 +16,7 @@
 //! Node initialization routine.
 
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -37,7 +37,7 @@ use test_rpc_functions::{
 };
 
 use crate::{
-    RpcConfigFile,
+    LoggingOptions, RpcConfigFile,
     config_files::{DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED, NodeConfigFile},
     mock_time::set_mock_time,
     node_controller::NodeController,
@@ -384,17 +384,32 @@ pub async fn setup(
     // Lock data dir
     let lock_file = lock_data_dir(&data_dir)?;
 
+    let mut options = options;
+
+    // Bootstrapping runs with networking disabled, whatever the options and the config file say.
+    // This has to happen before the config file is merged into the run options below.
+    if options.top_level.import_bootstrap_file.is_some() {
+        options.command.run_options_mut().p2p_networking_enabled = Some(false);
+    }
+
+    // Read the config file before initializing logging, since its `[logging]` section
+    // configures the log sinks. A `--clean-data` run wipes the directory instead of starting
+    // the node, so it does not need the config file (which is deleted with the rest anyway).
+    let config_path = options.top_level.config_path(*chain_config.chain_type());
+    let run_options = options.command.run_options();
+    let node_config = if options.clean_data_option_set() {
+        NodeConfigFile::new()?
+    } else {
+        NodeConfigFile::read(&chain_config, &config_path, run_options)
+            .context("Failed to initialize config")?
+    };
+
     // Init logging
-    let main_log_writer_settings = logging::default_writer_settings(default_log_filter.to_owned());
-    let log_file_name = std::env::current_exe().map_or_else(
-        |_| DEFAULT_LOG_FILE_NAME.to_owned(),
-        |exe| {
-            exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
-                || DEFAULT_LOG_FILE_NAME.to_owned(),
-                |s| format!("{}.log", s.to_owned()),
-            )
-        },
-    );
+    let logging_options = LoggingOptions::resolve(
+        &options.top_level,
+        node_config.logging.clone().unwrap_or_default(),
+    )?;
+    let log_file_name = default_log_file_name();
     // Log files written by earlier versions may have wider permissions; restrict them too.
     // This best-effort hardening runs even when this invocation does not write logs to a
     // file. The scan and the mode change are separate steps, so a path swapped in between
@@ -408,33 +423,19 @@ pub async fn setup(
     } else {
         collect_log_permission_fix_errors(&data_dir, &log_file_name)
     };
-    if options.log_to_file_option_set() {
-        let log_file = FileRotate::new(
-            data_dir.join(format!("logs/{}", log_file_name)),
-            AppendCount::new(13),            // total 14 files
-            ContentLimit::Bytes(10_000_000), // 10MB each
-            Compression::None,
-            #[cfg(unix)]
-            // Logs can contain sensitive information, so they are only readable by the owner,
-            // like the RPC cookie file.
-            Some(0o600),
-        );
-        logging::init_logging_generic(
-            main_log_writer_settings,
-            Some(logging::WriterSettings {
-                make_writer: logging::write_to_make_writer(log_file),
-                is_terminal: false,
-                filter: logging::ValueOrEnvVarWithDefault::Value("info".into()),
-                log_style: logging::ValueOrEnvVar::Value(logging::LogStyle::Text(
-                    logging::TextColoring::Off,
-                )),
-                source_location: false,
-                thread_info: false,
-            }),
-        );
-    } else {
-        logging::init_logging_generic(main_log_writer_settings, logging::no_writer_settings());
-    }
+    init_logging(
+        &data_dir,
+        default_log_filter,
+        &logging_options,
+        &log_file_name,
+    )?;
+    // The enrichment span is entered once the sinks exist and before any subsystem starts.
+    logging::enter_root_span(
+        utils::app_version_with_git_info!().to_semver_string(),
+        chain_config.chain_type().name(),
+        std::process::id(),
+        logging_options.log_fields,
+    );
     #[cfg(unix)]
     for (path, err) in &permission_fix_errors {
         logging::log::warn!(
@@ -491,22 +492,11 @@ pub async fn setup(
         log_to_file,
     );
 
-    let mut options = options;
-
     if options.top_level.import_bootstrap_file.is_some() {
         logging::log::info!("Disabling p2p networking due to bootstrapping");
-        options.command.run_options_mut().p2p_networking_enabled = Some(false);
     }
 
-    let run_options = options.command.run_options();
-
-    let (manager, controller) = start(
-        &options.top_level.config_path(*chain_config.chain_type()),
-        &data_dir,
-        run_options,
-        chain_config,
-    )
-    .await?;
+    let (manager, controller) = start(&data_dir, run_options, node_config, chain_config).await?;
 
     let node = Node {
         manager,
@@ -519,6 +509,111 @@ pub async fn setup(
     } else {
         Ok(NodeSetupResult::RunNode(node))
     }
+}
+
+/// The name of the default log file, derived from the executable name.
+fn default_log_file_name() -> String {
+    std::env::current_exe().map_or_else(
+        |_| DEFAULT_LOG_FILE_NAME.to_owned(),
+        |exe| {
+            exe.as_path().file_stem().and_then(|stem| stem.to_str()).map_or_else(
+                || DEFAULT_LOG_FILE_NAME.to_owned(),
+                |s| format!("{}.log", s.to_owned()),
+            )
+        },
+    )
+}
+
+/// Initializes logging: the stderr sink always, plus the file sink when it is enabled.
+///
+/// The sinks are configured by `logging_options`; `default_log_filter` is the filter of the
+/// stderr sink that applies when `RUST_LOG` is not set. An unusable log file path is an
+/// error, so that the node does not run with its file output silently dropped.
+fn init_logging(
+    data_dir: &Path,
+    default_log_filter: &str,
+    logging_options: &LoggingOptions,
+    default_log_file_name: &str,
+) -> Result<()> {
+    let default_settings = logging::default_writer_settings(default_log_filter.to_owned());
+    let main_writer_settings = logging::WriterSettings {
+        // An explicitly requested format wins over the ML_LOG_STYLE env variable; without
+        // one the env variable (and its text default) keeps applying.
+        log_style: match logging_options.log_format {
+            Some(format) => {
+                logging::ValueOrEnvVar::Value(format.to_log_style(logging::TextColoring::Auto))
+            }
+            None => default_settings.log_style,
+        },
+        source_location: logging_options.log_source_location,
+        thread_info: logging_options.log_thread_info,
+        ..default_settings
+    };
+    let file_writer_settings = logging_options
+        .log_to_file
+        .then(|| file_writer_settings(data_dir, logging_options, default_log_file_name))
+        .transpose()?;
+
+    logging::init_logging_generic(main_writer_settings, file_writer_settings);
+    Ok(())
+}
+
+/// Builds the settings of the file sink (see [`init_logging`]).
+fn file_writer_settings(
+    data_dir: &Path,
+    logging_options: &LoggingOptions,
+    default_log_file_name: &str,
+) -> Result<logging::WriterSettings<impl for<'a> logging::MakeWriter<'a> + Send + Sync + 'static>> {
+    let log_file_path = logging_options.log_file_path(data_dir, default_log_file_name);
+    let parent_dir = log_file_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .with_context(|| format!("Log file path {:?} has no parent directory", log_file_path))?;
+
+    // `FileRotate` creates the parent directory and opens the file itself, but it panics on
+    // the former and ignores the errors of the latter, which would silently drop the file
+    // output. Both are done here first to turn an unusable path into a startup error.
+    std::fs::create_dir_all(parent_dir)
+        .with_context(|| format!("Failed to create the log file directory {:?}", parent_dir))?;
+    let mut open_options = OpenOptions::new();
+    open_options.read(true).create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        // Logs can contain sensitive information, so they are only readable by the owner,
+        // like the RPC cookie file. The mode only applies to a file created here.
+        open_options.mode(0o600);
+    }
+    open_options
+        .open(&log_file_path)
+        .with_context(|| format!("Failed to open the log file {:?}", log_file_path))?;
+
+    let max_size_bytes = usize::try_from(logging_options.log_file_max_size_bytes)
+        .context("log_file_max_size_bytes does not fit in the platform's size type")?;
+    // The current file counts as one of the kept files; the rest are the rotated ones.
+    let rotated_files_count = usize::try_from(logging_options.log_file_max_files - 1)
+        .context("log_file_max_files does not fit in the platform's size type")?;
+    let log_file = FileRotate::new(
+        log_file_path,
+        AppendCount::new(rotated_files_count),
+        ContentLimit::Bytes(max_size_bytes),
+        Compression::None,
+        #[cfg(unix)]
+        Some(0o600),
+    );
+
+    Ok(logging::WriterSettings {
+        make_writer: logging::write_to_make_writer(log_file),
+        is_terminal: false,
+        // The file sink always logs at the info level: it does not follow RUST_LOG, so that
+        // the file keeps being useful whatever the stderr filter is.
+        filter: logging::ValueOrEnvVarWithDefault::Value("info".into()),
+        log_style: logging::ValueOrEnvVar::Value(
+            logging_options.log_file_format.to_log_style(logging::TextColoring::Off),
+        ),
+        source_location: logging_options.log_source_location,
+        thread_info: logging_options.log_thread_info,
+    })
 }
 
 /// Creates an exclusive lock file in the specified directory.
@@ -551,9 +646,9 @@ fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
 }
 
 async fn start(
-    config_path: &Path,
     datadir_path: &Path,
     run_options: &RunOptions,
+    node_config: NodeConfigFile,
     chain_config: ChainConfig,
 ) -> Result<(subsystem::Manager, NodeController)> {
     run_options.force_allow_run_as_root_outer.ensure_not_running_as_root_user()?;
@@ -561,9 +656,6 @@ async fn start(
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
-
-    let node_config = NodeConfigFile::read(&chain_config, config_path, run_options)
-        .context("Failed to initialize config")?;
 
     log::info!(
         "Starting mintlayer-core version {}",
