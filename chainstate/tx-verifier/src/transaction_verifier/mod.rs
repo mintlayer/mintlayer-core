@@ -62,7 +62,7 @@ use self::{
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
-use ::utils::{ensure, shallow_clone::ShallowClone};
+use ::utils::{debug_panic_or_log, ensure, shallow_clone::ShallowClone};
 pub use reward_distribution::{RewardDistributionError, distribute_pos_reward};
 
 use chainstate_types::{BlockIndex, DexTradeMatch, TipStorageTag};
@@ -943,6 +943,9 @@ where
     /// Fill an order and, if the transaction is being connected to a block, record the
     /// resulting trade (see [`DexTradeMatch`]). Fills verified for the mempool are not trades
     /// and are not recorded.
+    ///
+    /// Recording the trade is best-effort: it must never change the outcome of connecting the
+    /// transaction, so a trade that cannot be described is reported and skipped.
     fn fill_order(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -960,34 +963,29 @@ where
         if tx_source.chain_block_index().is_some()
             && let OrdersAccountingUndo::FillOrder(fill_undo) = &undo
         {
-            let order_data = self
-                .orders_accounting_cache
-                .get_order_data(&order_id)
-                .map_err(ConnectTransactionError::OrdersAccountingError)?
-                .ok_or(ConnectTransactionError::OrdersAccountingError(
-                    orders_accounting::Error::OrderDataNotFound(order_id),
-                ))?;
-
-            // Orders cannot be created with token v0 currencies, so both sides resolve.
-            let (base, quote) = match (
-                Currency::from_output_value(order_data.give()),
-                Currency::from_output_value(order_data.ask()),
-            ) {
-                (Some(base), Some(quote)) => (base, quote),
-                _ => {
-                    return Err(ConnectTransactionError::OrdersAccountingError(
-                        orders_accounting::Error::UnsupportedTokenVersion,
-                    ));
-                }
-            };
-
-            self.dex_trade_matches.extend(fill_order_matches(
-                tx.get_id(),
-                input_ordinal,
-                fill_undo,
-                base,
-                quote,
-            ));
+            let sides =
+                self.orders_accounting_cache.get_order_data(&order_id).ok().flatten().and_then(
+                    |order_data| {
+                        // Orders cannot be created with token v0 currencies, so both sides resolve.
+                        let base = Currency::from_output_value(order_data.give())?;
+                        let quote = Currency::from_output_value(order_data.ask())?;
+                        Some((base, quote))
+                    },
+                );
+            match sides {
+                Some((base, quote)) => self.dex_trade_matches.extend(fill_order_matches(
+                    tx.get_id(),
+                    input_ordinal,
+                    fill_undo,
+                    base,
+                    quote,
+                )),
+                None => debug_panic_or_log!(
+                    "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                     transaction {:x}: the currencies of the order could not be determined",
+                    tx.get_id()
+                ),
+            }
         }
 
         Ok(undo)
