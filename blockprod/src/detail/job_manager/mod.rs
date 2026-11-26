@@ -30,7 +30,7 @@ use common::{
 };
 use logging::log;
 use serialization::{Decode, Encode};
-use utils::{ensure, tap_log::TapLog, tokio_spawn};
+use utils::{ensure, tap_log::TapLog, tokio_spawn, tokio_spawn_in_current_tracing_span};
 
 use crate::detail::CustomId;
 
@@ -241,7 +241,7 @@ impl JobManager {
         mut stop_job_receiver: UnboundedReceiver<(Option<JobKey>, oneshot::Sender<usize>)>,
         mut shutdown_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
     ) {
-        tokio_spawn(
+        tokio_spawn_in_current_tracing_span(
             async move {
                 let mut jobs = jobs_container::JobsContainer::default();
 
@@ -277,7 +277,7 @@ impl JobManager {
             None => return,
         };
 
-        tokio_spawn(
+        tokio_spawn_in_current_tracing_span(
             async move {
                 chainstate_handle
                     .call_mut(|this| {
