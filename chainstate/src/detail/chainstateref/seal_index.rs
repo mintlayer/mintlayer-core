@@ -773,13 +773,13 @@ mod tests {
 
         // Case: an empty segment never refuses (no lookups happen).
         let db = MockStoreTxRw::new();
-        assert!(!segment_seals_all_duplicated(&db, &[]).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &[]).unwrap().is_none());
 
         // Case: a single block with an unindexed (fresh) proof never refuses.
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
         let segment = vec![make_index(&block_a)];
-        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_none());
 
         // Case: a single block whose seal has only one known block (its twin is
         // unknown) never refuses.
@@ -793,13 +793,13 @@ mod tests {
                 vec![(index_a, TEST_HEIGHT)],
             ))));
         let segment = vec![make_index(&block_a)];
-        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_none());
 
         // Case: a block without a well-formed seal never refuses (fail-open).
         let mut db = MockStoreTxRw::new();
         db.expect_get_seal_index_entry().times(0);
         let segment = vec![make_index(&plain_block)];
-        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_none());
 
         // Case: a fully duplicated segment is refused; an index entry at the
         // cap still classifies as duplicated.
@@ -811,7 +811,7 @@ mod tests {
             .withf(move |seal: &BlockSeal| seal == &expected_seal)
             .return_const(Ok(Some(entry)));
         let segment = vec![make_index(&block_a)];
-        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_some());
 
         // Case: a two-block all-duplicate segment is refused (every block of
         // the segment is looked up).
@@ -825,7 +825,19 @@ mod tests {
                 vec![(index_a, TEST_HEIGHT), (index_a_twin, TEST_HEIGHT)],
             ))));
         let segment = vec![make_index(&block_a), make_index(&block_a_twin)];
-        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+        let sightings = segment_seals_all_duplicated(&db, &segment)
+            .unwrap()
+            .expect("every block of the segment carries a duplicated seal");
+
+        // The evidence of each sighting names the pool and the other blocks that
+        // carry the seal, but not the block being classified.
+        assert_eq!(sightings.len(), 2);
+        assert_eq!(sightings[0].block_id, index_a);
+        assert_eq!(sightings[0].block_height, TEST_HEIGHT);
+        assert_eq!(sightings[0].pool_id, *seal_a.pool_id());
+        assert_eq!(sightings[0].seen_on, vec![(index_a_twin, TEST_HEIGHT)]);
+        assert_eq!(sightings[1].block_id, index_a_twin);
+        assert_eq!(sightings[1].seen_on, vec![(index_a, TEST_HEIGHT)]);
 
         // Case: a block whose own sighting is missing from the entry (its
         // indexing failed) is still refused, since the seal is known from
@@ -840,7 +852,7 @@ mod tests {
                 vec![(index_a_twin, TEST_HEIGHT)],
             ))));
         let segment = vec![make_index(&block_a)];
-        assert!(segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_some());
 
         // Case: one duplicate and one fresh block in the same segment never
         // refuses (the fresh block carries the ordinary trust comparison).
@@ -855,6 +867,6 @@ mod tests {
             ))));
         db.expect_get_seal_index_entry().times(1).return_const(Ok(None));
         let segment = vec![make_index(&block_a), make_index(&block_b)];
-        assert!(!segment_seals_all_duplicated(&db, &segment).unwrap());
+        assert!(segment_seals_all_duplicated(&db, &segment).unwrap().is_none());
     }
 }
