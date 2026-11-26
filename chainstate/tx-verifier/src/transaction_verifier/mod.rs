@@ -963,28 +963,51 @@ where
         if tx_source.chain_block_index().is_some()
             && let OrdersAccountingUndo::FillOrder(fill_undo) = &undo
         {
-            let sides =
-                self.orders_accounting_cache.get_order_data(&order_id).ok().flatten().and_then(
-                    |order_data| {
-                        // Orders cannot be created with token v0 currencies, so both sides resolve.
-                        let base = Currency::from_output_value(order_data.give())?;
-                        let quote = Currency::from_output_value(order_data.ask())?;
-                        Some((base, quote))
-                    },
-                );
-            match sides {
-                Some((base, quote)) => self.dex_trade_matches.extend(fill_order_matches(
+            // Orders cannot be created with token v0 currencies, so both sides of a stored
+            // order resolve into currencies.
+            let sides = match self.orders_accounting_cache.get_order_data(&order_id) {
+                Ok(Some(order_data)) => match (
+                    Currency::from_output_value(order_data.give()),
+                    Currency::from_output_value(order_data.ask()),
+                ) {
+                    (Some(base), Some(quote)) => Some((base, quote)),
+                    _ => {
+                        debug_panic_or_log!(
+                            "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                             transaction {:x}: a side of the order is not a currency",
+                            tx.get_id()
+                        );
+                        None
+                    }
+                },
+                // a failed read is a storage problem, not a broken invariant: report it and
+                // carry on
+                Err(err) => {
+                    logging::log::error!(
+                        "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                         transaction {:x}: reading the order failed: {err}",
+                        tx.get_id()
+                    );
+                    None
+                }
+                // the fill above just read the order: its data cannot be gone
+                Ok(None) => {
+                    debug_panic_or_log!(
+                        "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                         transaction {:x}: the order data is missing",
+                        tx.get_id()
+                    );
+                    None
+                }
+            };
+            if let Some((base, quote)) = sides {
+                self.dex_trade_matches.extend(fill_order_matches(
                     tx.get_id(),
                     input_ordinal,
                     fill_undo,
                     base,
                     quote,
-                )),
-                None => debug_panic_or_log!(
-                    "Skipping the DEX trade record of the fill of order {order_id:x} in \
-                     transaction {:x}: the currencies of the order could not be determined",
-                    tx.get_id()
-                ),
+                ));
             }
         }
 
@@ -1345,6 +1368,12 @@ where
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
+        // the DEX trades are not part of the delta: they must have been taken (see
+        // [`TransactionVerifier::take_dex_trade_infos`]) before the state is consumed
+        debug_assert!(
+            self.dex_trade_matches.is_empty(),
+            "DEX trade matches left untaken before consuming the verifier"
+        );
         let (accounting_delta, accounting_block_deltas) = self.pos_accounting_adapter.consume();
         Ok(TransactionVerifierDelta {
             utxo_cache: self.utxo_cache.consume(),
