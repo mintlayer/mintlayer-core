@@ -262,6 +262,11 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                         return Err(BlockInvalidatorError::GenericReorgError(Box::new(err)));
                     }
                     ReorgError::ConnectTipFailed(block_id, err) => {
+                        // The reorg path logs this error at trace only, so this is the line
+                        // that reports it; the stale chain is set aside below either way.
+                        log::warn!(
+                            "Block {block_id} failed to connect while activating a chain after an invalidation: {err}"
+                        );
                         let should_invalidate = err.classify().block_should_be_invalidated();
                         let indices_to_remove = if should_invalidate {
                             self.invalidate_stale_block(&block_id, IsExplicit::No)?

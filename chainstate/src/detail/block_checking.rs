@@ -18,9 +18,10 @@ use crate::{BlockError, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorage;
 use common::{
     chain::{Block, block::signed_block_header::SignedBlockHeader},
-    primitives::id::WithId,
+    primitives::{Idable, id::WithId},
 };
-use utils::tap_log::TapLog;
+
+use super::{block_pool_id, log_rejected_preliminary_check};
 
 pub struct BlockChecker<'a, S, V> {
     chainstate: &'a Chainstate<S, V>,
@@ -36,7 +37,13 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
         block: WithId<Block>,
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block(&block).log_err()?;
+        // The check itself logs a failure at trace only; like block processing, the check
+        // reports a rejected block once here, at the level of its error class.
+        if let Err(err) = chainstate_ref.check_block(&block) {
+            let err = BlockError::CheckBlockFailed(err);
+            log_rejected_preliminary_check(block.get_id(), block_pool_id(&block), &err);
+            return Err(err);
+        }
         // (experimental) step 11: remember that this block was fully checked,
         // along with the tip it was validated against, so integrate_block can
         // skip the duplicate check after re-verifying the tip and the parent
