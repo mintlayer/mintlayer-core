@@ -858,9 +858,11 @@ are never announced.
 
 Delivery policy: the node keeps up with the chain, not with the subscribers. Every
 subscriber has a bounded queue of events; a subscriber that stops reading is closed by
-the node once its queue overflows (its subscription ends) and has to subscribe again,
-re-deriving what it missed from the blocks. At most 32 subscribers are served at a time;
-a subscription beyond that is rejected with an error.
+the node once its queue overflows: the client receives a final error notification
+("subscription closed by the node: the subscriber fell behind or the stream ended",
+the same one that ends every subscription when the node stops) and has to subscribe
+again, re-deriving what it missed from the blocks. At most 32 subscribers are served at
+a time; a subscription beyond that is rejected with an error.
 
 
 Parameters:
