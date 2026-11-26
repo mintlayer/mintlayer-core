@@ -35,8 +35,21 @@ use common::{
 };
 use test_utils::random::{Seed, make_seedable_rng};
 
+/// How long to wait for an expected event.
+const EVENT_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long to wait for an event that is not expected to come.
 const NO_EVENT_TIMEOUT: Duration = Duration::from_millis(200);
+
+/// Receive the next trade of a subscription, failing if it does not come in time.
+macro_rules! next_trade {
+    ($subscription:expr) => {
+        tokio::time::timeout(EVENT_TIMEOUT, $subscription.next())
+            .await
+            .expect("timed out waiting for the trade")
+            .unwrap()
+            .unwrap()
+    };
+}
 
 /// A fresh chainstate with the chain configuration of `tf`, served over websockets.
 struct RunningRpc {
@@ -60,7 +73,9 @@ impl RunningRpc {
                 storage,
                 DefaultTransactionVerificationStrategy::new(),
                 None,
-                Default::default(),
+                // the clock of the framework, so that the blocks of the test chain are fresh and
+                // the chainstate leaves the initial block download like the framework's one
+                tf.time_getter.clone(),
                 None,
             )
             .unwrap(),
@@ -169,16 +184,16 @@ async fn rpc_subscription_delivers_filtered_trades(#[case] seed: Seed) {
             .unwrap();
     }
 
-    let all_event = all_trades.next().await.unwrap().unwrap();
+    let all_event = next_trade!(all_trades);
     let all_json = serde_json::to_value(&all_event).unwrap();
     assert_eq!(
         all_json,
-        serde_json::to_value(pair_trades.next().await.unwrap().unwrap()).unwrap()
+        serde_json::to_value(next_trade!(pair_trades)).unwrap()
     );
     // an empty list of pairs delivers everything, like an absent one
     assert_eq!(
         all_json,
-        serde_json::to_value(empty_filter_trades.next().await.unwrap().unwrap()).unwrap()
+        serde_json::to_value(next_trade!(empty_filter_trades)).unwrap()
     );
     let RpcDexTradeEvent::DexTrade {
         tx_id,

@@ -34,6 +34,7 @@ use common::{
     chain::{
         AccountCommand, AccountNonce, Block, Currency, Destination, GenBlock, OrderAccountCommand,
         OrderData, OrderId, OrdersVersion, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
         make_order_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
@@ -43,6 +44,7 @@ use common::{
 };
 use randomness::RngExt as _;
 use test_utils::random::{Seed, make_seedable_rng};
+use tokio::sync::mpsc;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 use utils_networking::broadcaster;
 
@@ -246,7 +248,7 @@ fn expected_trade(
 
 /// Receive exactly `count` trades, then make sure no other trade is announced.
 async fn expect_trades(
-    trades_rx: &mut broadcaster::Receiver<DexTradeInfo>,
+    trades_rx: &mut mpsc::Receiver<DexTradeInfo>,
     count: usize,
 ) -> Vec<DexTradeInfo> {
     let mut trades = Vec::with_capacity(count);
@@ -451,7 +453,7 @@ async fn fill_block_announces_trade_with_new_tip(
     let mut tf = create_test_framework_with_orders(&mut rng, version);
     let fixture = create_fixture(&mut rng, &mut tf, 1);
 
-    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades();
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
     let mut tips_rx = tf.chainstate.subscribe_to_rpc_events();
 
     let fill_amount = Amount::from_atoms(rng.random_range(1..500));
@@ -504,7 +506,7 @@ async fn multiple_fills_announced_in_block_order(
     let mut tf = create_test_framework_with_orders(&mut rng, version);
     let fixture = create_fixture(&mut rng, &mut tf, 4);
 
-    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades();
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
 
     let fill_amount = Amount::from_atoms(100);
     // each transaction pays with the coins left by the previous one; the fill input alternates
@@ -583,7 +585,7 @@ async fn side_branch_trades_announced_when_the_branch_is_activated(#[case] seed:
     let mut tf = create_test_framework_with_orders(&mut rng, version);
     let fixture = create_fixture(&mut rng, &mut tf, 2);
 
-    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades();
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
     let fork_point = tf.best_block_id();
     let fill_amount = Amount::from_atoms(100);
 
@@ -674,7 +676,7 @@ async fn invalidation_announces_trades_of_the_activated_branch(#[case] seed: See
     let mut tf = create_test_framework_with_orders(&mut rng, version);
     let fixture = create_fixture(&mut rng, &mut tf, 3);
 
-    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades();
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
     let mut tips_rx = tf.chainstate.subscribe_to_rpc_events();
     let fill_amount = Amount::from_atoms(100);
 
@@ -785,4 +787,107 @@ async fn invalidation_announces_trades_of_the_activated_branch(#[case] seed: See
     assert_main_trades(&trades);
     expect_new_tip(&mut tips_rx, &tf, main_block1_id).await;
     assert_eq!(tf.best_block_id(), Id::<GenBlock>::from(main_block1_id));
+}
+
+// The trades are only announced once the initial block download is complete: a node syncing
+// from scratch must not stream the history of fills at sync speed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn trades_are_announced_only_after_the_initial_block_download(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let version = OrdersVersion::V1;
+    // a tip age of zero keeps the chainstate in initial block download as long as the tip is
+    // not from the future
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(
+            common::chain::config::Builder::test_chain()
+                .chainstate_upgrades(
+                    common::chain::NetUpgrades::initialize(vec![(
+                        BlockHeight::zero(),
+                        common::chain::ChainstateUpgradeBuilder::latest()
+                            .orders_version(version)
+                            .build(),
+                    )])
+                    .unwrap(),
+                )
+                .build(),
+        )
+        .with_max_tip_age(chainstate::MaxTipAge::from(Duration::ZERO))
+        .build();
+    let fixture = create_fixture(&mut rng, &mut tf, 2);
+    assert!(tf.chainstate.is_initial_block_download());
+
+    let mut trades_rx = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
+    let mut tips_rx = tf.chainstate.subscribe_to_rpc_events();
+    let fill_amount = Amount::from_atoms(100);
+
+    // a block with a fill, like the blocks so far: the tip is not fresh, the chainstate is
+    // still syncing and the trade is not announced, but the tip is
+    let fill0 = make_fill_tx(
+        &tf,
+        version,
+        &fixture.coin,
+        fixture.token_id,
+        fixture.order_ids[0],
+        fill_amount,
+        false,
+    );
+    let parent = tf.best_block_id();
+    let block0_id = process_block_with_txs(&mut tf, &mut rng, parent, [fill0.tx.clone()]);
+    expect_trades(&mut trades_rx, 0).await;
+    let tip = tokio::time::timeout(TRADE_TIMEOUT, tips_rx.recv()).await.unwrap().unwrap();
+    assert!(
+        matches!(
+            &tip,
+            ChainstateEvent::NewTip {
+                id,
+                is_initial_block_download: true,
+                ..
+            } if *id == Id::<GenBlock>::from(block0_id)
+        ),
+        "{tip:?}"
+    );
+    assert!(tf.chainstate.is_initial_block_download());
+
+    // a tip from the near future is fresh: the initial block download completes
+    let now = tf.current_time().as_duration_since_epoch().as_secs();
+    let fresh_block_index = tf
+        .make_block_builder()
+        .with_timestamp(BlockTimestamp::from_int_seconds(now + 1))
+        .build_and_process(&mut rng)
+        .unwrap()
+        .unwrap();
+    let fresh_block_id = *fresh_block_index.block_id();
+    expect_trades(&mut trades_rx, 0).await;
+    expect_new_tip(&mut tips_rx, &tf, fresh_block_id).await;
+    assert!(!tf.chainstate.is_initial_block_download());
+
+    // from now on the trades are announced
+    let fill1 = make_fill_tx(
+        &tf,
+        version,
+        &fill0.coins_left,
+        fixture.token_id,
+        fixture.order_ids[1],
+        fill_amount,
+        false,
+    );
+    let block1_id =
+        process_block_with_txs(&mut tf, &mut rng, fresh_block_id.into(), [fill1.tx.clone()]);
+    let trades = expect_trades(&mut trades_rx, 1).await;
+    assert_eq!(
+        trades[0],
+        expected_trade(
+            block1_id,
+            tf.block_index(&block1_id).block_height(),
+            0,
+            &fill1,
+            fixture.token_id,
+            fixture.order_ids[1],
+            fill_amount,
+        )
+    );
+    expect_new_tip(&mut tips_rx, &tf, block1_id).await;
 }
