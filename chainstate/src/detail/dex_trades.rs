@@ -89,11 +89,15 @@ impl DexTradesDispatcher {
 
     /// Register a subscriber selecting the trades of `pairs` (all trades if `None`) and return
     /// the queue of its trades; the queue closes when the subscriber is dropped.
+    ///
+    /// Subscribers whose queue is closed, i.e. whose client went away, are reclaimed first, so
+    /// that they do not count against the cap.
     pub fn subscribe(
         &self,
         pairs: Option<DexTradePairSet>,
     ) -> Result<mpsc::Receiver<DexTradeInfo>, DexTradesSubscribeError> {
         let mut subscribers = Self::lock_subscribers(&self.subscribers);
+        Self::reap_closed(&mut subscribers);
         if subscribers.len() >= MAX_DEX_TRADES_SUBSCRIBERS {
             return Err(DexTradesSubscribeError::TooManySubscribers);
         }
@@ -102,8 +106,17 @@ impl DexTradesDispatcher {
         Ok(trades_rx)
     }
 
-    /// The number of live subscribers.
+    /// The number of live subscribers, not counting the ones whose queue is closed.
     pub fn subscriber_count(&self) -> usize {
+        let mut subscribers = Self::lock_subscribers(&self.subscribers);
+        Self::reap_closed(&mut subscribers);
+        subscribers.len()
+    }
+
+    /// The number of registered subscribers, including the ones whose queue is closed but have
+    /// not been reclaimed yet.
+    #[cfg(test)]
+    fn registered_subscriber_count(&self) -> usize {
         Self::lock_subscribers(&self.subscribers).len()
     }
 
@@ -123,7 +136,12 @@ impl DexTradesDispatcher {
         subscribers: Arc<Mutex<Vec<DexTradesSubscriber>>>,
     ) {
         while let Some(block_trades) = block_trades_rx.recv().await {
+            // the subscribers whose client went away since the last block are reclaimed here:
+            // a subscriber that selected pairs with no trades is never tried otherwise
+            Self::reap_closed(&mut Self::lock_subscribers(&subscribers));
+
             for trade in block_trades {
+                let mut dropped_for_falling_behind = 0;
                 Self::lock_subscribers(&subscribers).retain(|subscriber| {
                     let selected =
                         subscriber.pairs.as_ref().is_none_or(|pairs| pairs.matches(&trade));
@@ -133,18 +151,27 @@ impl DexTradesDispatcher {
                     match subscriber.trades_tx.try_send(trade.clone()) {
                         Ok(()) => true,
                         Err(mpsc::error::TrySendError::Full(_)) => {
-                            log::warn!(
-                                "Dropping a DEX trades subscriber that fell behind by more than \
-                                 {SUBSCRIBER_QUEUE_CAPACITY} trades; its subscription is closed"
-                            );
+                            dropped_for_falling_behind += 1;
                             false
                         }
                         // the subscriber is gone; nothing to announce
                         Err(mpsc::error::TrySendError::Closed(_)) => false,
                     }
                 });
+                if dropped_for_falling_behind > 0 {
+                    log::warn!(
+                        "Dropping {dropped_for_falling_behind} DEX trades subscriber(s) that fell \
+                         behind by more than {SUBSCRIBER_QUEUE_CAPACITY} trades; their \
+                         subscriptions are closed"
+                    );
+                }
             }
         }
+    }
+
+    /// Remove the subscribers whose queue is closed, i.e. whose client went away.
+    fn reap_closed(subscribers: &mut Vec<DexTradesSubscriber>) {
+        subscribers.retain(|subscriber| !subscriber.trades_tx.is_closed());
     }
 
     /// The subscribers are shared with the dispatcher task, which never panics while holding
@@ -207,6 +234,46 @@ mod tests {
             dispatcher.subscribe(None).unwrap_err(),
             DexTradesSubscribeError::TooManySubscribers
         );
+    }
+
+    #[tokio::test]
+    async fn disconnected_subscribers_are_reclaimed() {
+        let dispatcher = DexTradesDispatcher::start().unwrap();
+        // subscribers of pairs that never trade fill the cap
+        let never_trading = || {
+            Some(DexTradePairSet::from_iter([(
+                Currency::Coin,
+                Currency::Coin,
+            )]))
+        };
+        let mut receivers = Vec::new();
+        for _ in 0..MAX_DEX_TRADES_SUBSCRIBERS {
+            receivers.push(dispatcher.subscribe(never_trading()).unwrap());
+        }
+        assert_eq!(
+            dispatcher.registered_subscriber_count(),
+            MAX_DEX_TRADES_SUBSCRIBERS
+        );
+        assert_eq!(
+            dispatcher.subscribe(None).unwrap_err(),
+            DexTradesSubscribeError::TooManySubscribers
+        );
+
+        // the clients go away without any trade ever trying their queues: the next subscription
+        // reclaims their slots instead of being rejected
+        drop(receivers);
+        let mut last = dispatcher.subscribe(None).unwrap();
+        assert_eq!(dispatcher.registered_subscriber_count(), 1);
+
+        // a subscriber that goes away while another one keeps receiving is reclaimed when the
+        // next block is dispatched, even if no trade would have selected it
+        let gone = dispatcher.subscribe(never_trading()).unwrap();
+        assert_eq!(dispatcher.registered_subscriber_count(), 2);
+        drop(gone);
+        dispatcher.dispatch(vec![trade(1)]).unwrap();
+        // the trade reaching the live subscriber means the block was processed
+        assert_eq!(last.recv().await.unwrap().tx_id, trade(1).tx_id);
+        assert_eq!(dispatcher.registered_subscriber_count(), 1);
     }
 
     #[tokio::test]
