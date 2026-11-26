@@ -15,6 +15,7 @@
 
 mod enrichment;
 mod log_style;
+mod panic_hook;
 #[cfg(test)]
 mod test_utils;
 mod utils;
@@ -34,6 +35,7 @@ pub use enrichment::enter_root_span;
 pub use log;
 pub use log_style::{LogFormat, LogStyleParseError, get_log_style_from_env};
 pub use log_style::{LogStyle, TextColoring};
+pub use panic_hook::install_panic_hook;
 pub use tracing_subscriber::fmt::MakeWriter;
 pub use utils::{GetFromEnvError, get_from_env};
 
@@ -167,6 +169,9 @@ pub fn init_logging_generic<MW1, MW2>(
             // initializes a 'log' compatibility layer, so that 'log' macros continue to work
             // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
             .init();
+
+        // The subscriber is in place, so panics can be reported through it from now on.
+        install_panic_hook();
 
         // Now that we've initialized logging somehow, we can complain about errors, if any.
         for error in errors {
