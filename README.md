@@ -63,6 +63,8 @@ and on Windows in `C:\Users\Username\AppData\Roaming\Mintlayer\mainnet\logs` and
 This is controlled by the `--log-to-file` option (e.g. `--log-to-file true`), which is accepted by both node-daemon and node-gui.
 By default, its value is false for node-daemon and true for node-gui. The log files are rotated based on size, so older logs
 will be automatically deleted eventually. Also note that the log level used in this case is always `info`, regardless of the value of `RUST_LOG`.
+The location and format of the log file (`text` or `json`), the rotation limits and the extra fields added to every line can be
+configured with further options or in the `[logging]` section of `config.toml`; see the [node-daemon logging documentation](node-daemon/docs/README.md#logging).
 
 Here are the commands as recommended for different scenarios:
 
