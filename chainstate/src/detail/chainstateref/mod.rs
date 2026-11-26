@@ -30,8 +30,8 @@ use thiserror::Error;
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    BlockIndex, BlockIndexHandle, BlockSeal, BlockStatus, BlockValidationStage, EpochData,
-    EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
+    BlockIndex, BlockIndexHandle, BlockSeal, BlockStatus, BlockValidationStage, DexTradeInfo,
+    EpochData, EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError, TipStorageTag,
     block_index_ancestor_getter, get_skip_height,
 };
 use common::{
@@ -1238,7 +1238,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         best_block_id: &Id<GenBlock>,
         new_block_index: &BlockIndex,
         in_memory_block: Option<&WithId<Block>>,
-    ) -> Result<(), ReorgError> {
+    ) -> Result<Vec<DexTradeInfo>, ReorgError> {
         let new_chain = self
             .get_new_chain(new_block_index)
             .map_err(|e| {
@@ -1263,14 +1263,17 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             self.disconnect_until(&best_block_id, common_ancestor_id)?;
         }
 
-        // Connect the new chain
+        // Connect the new chain, keeping the DEX trades of its blocks in connect order
+        let mut dex_trades = Vec::new();
         for block_index in new_chain {
-            self.connect_tip(&block_index, in_memory_block)
+            let block_dex_trades = self
+                .connect_tip(&block_index, in_memory_block)
                 .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
                 .log_err()?;
+            dex_trades.extend(block_dex_trades);
         }
 
-        Ok(())
+        Ok(dex_trades)
     }
 
     #[log_error]
@@ -1278,11 +1281,11 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         &mut self,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<(), BlockError> {
+    ) -> Result<Vec<DexTradeInfo>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let (connected_txs, block_tx_fees) = self
+        let (connected_txs, block_tx_fees, dex_trades) = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
@@ -1301,7 +1304,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         // during connect, for serving to API consumers.
         self.db_tx.set_block_tx_fees(block_index.block_id(), &block_tx_fees)?;
 
-        Ok(())
+        Ok(dex_trades)
     }
 
     #[log_error]
@@ -1328,7 +1331,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         &mut self,
         block_index: &BlockIndex,
         in_memory_block: Option<&WithId<Block>>,
-    ) -> Result<(), BlockError> {
+    ) -> Result<Vec<DexTradeInfo>, BlockError> {
         let (block, block_status) = {
             let mut block_status = block_index.status();
             ensure!(
@@ -1374,7 +1377,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             BlockError::InvariantErrorInvalidTip(block.get_id().into()),
         );
 
-        self.connect_transactions(block_index, &block)?;
+        let dex_trades = self.connect_transactions(block_index, &block)?;
 
         self.db_tx.set_block_id_at_height(
             block_index.block_height(),
@@ -1389,7 +1392,9 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             self.set_block_index(&new_block_index)?;
         }
 
-        self.post_connect_tip(block_index, block.as_ref())
+        self.post_connect_tip(block_index, block.as_ref())?;
+
+        Ok(dex_trades)
     }
 
     /// Does a read-modify-write operation on the database and disconnects a block
@@ -1433,13 +1438,14 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     /// Perform a reorg to the specified block if needed.
     /// Return true if the reorg has been performed, and false otherwise.
+    /// The returned DEX trades are those of the blocks connected by the reorg, in connect order.
     #[log_error]
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
         in_memory_block: Option<&WithId<Block>>,
         activation_context: ChainActivationContext,
-    ) -> Result<bool, ReorgError> {
+    ) -> Result<(bool, Vec<DexTradeInfo>), ReorgError> {
         let current_best_block_index =
             self.get_best_block_index().map_err(BlockError::BestBlockIndexQueryError)?;
 
@@ -1449,18 +1455,18 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 &current_best_block_index.block_id(),
                 activation_context,
             )? {
-                return Ok(false);
+                return Ok((false, Vec::new()));
             }
             // Chain trust is higher than the best block
-            self.reorganize(
+            let dex_trades = self.reorganize(
                 &current_best_block_index.block_id(),
                 new_block_index,
                 in_memory_block,
             )?;
-            return Ok(true);
+            return Ok((true, dex_trades));
         }
 
-        Ok(false)
+        Ok((false, Vec::new()))
     }
 
     /// Classifies whether the activation of the candidate chain must be refused

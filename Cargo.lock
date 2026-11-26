@@ -1550,6 +1550,7 @@ dependencies = [
  "tokio",
  "tx-verifier",
  "utils",
+ "utils-networking",
  "utxo",
 ]
 

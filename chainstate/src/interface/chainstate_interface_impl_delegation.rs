@@ -20,7 +20,7 @@ use std::{
     sync::Arc,
 };
 
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
+use chainstate_types::{BlockIndex, DexTradeInfo, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
         AccountNonce, AccountType, Block, BlockTxFees, Currency, DelegationId, GenBlock, OrderId,
@@ -55,6 +55,10 @@ where
 
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
         self.deref_mut().subscribe_to_rpc_events()
+    }
+
+    fn subscribe_to_rpc_dex_trades(&mut self) -> broadcaster::Receiver<DexTradeInfo> {
+        self.deref_mut().subscribe_to_rpc_dex_trades()
     }
 
     fn process_block(

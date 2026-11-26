@@ -30,7 +30,7 @@ use crate::{
     detail::chainstateref::ReorgError,
 };
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, BlockStatus, DexTradeInfo, GenBlockIndex, PropertyQueryError};
 use common::{
     Uint256,
     chain::{Block, GenBlock},
@@ -123,12 +123,15 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     /// Invalidate the specified block and its descendants; `is_explicit_invalidation`
     /// specifies whether the invalidation is being triggered implicitly during block processing
     /// or explicitly via ChainstateInterface.
+    ///
+    /// If invalidating the block made the node switch to another chain, return the DEX trades of
+    /// the blocks connected by the switch, in connect order.
     #[log_error]
     pub fn invalidate_block(
         &mut self,
         block_id: &Id<Block>,
         is_explicit_invalidation: IsExplicit,
-    ) -> Result<(), BlockInvalidatorError> {
+    ) -> Result<Option<Vec<DexTradeInfo>>, BlockInvalidatorError> {
         let (block_index, best_block_index, min_height_with_allowed_reorg) = {
             let chainstate_ref = self.chainstate.make_db_tx_ro()?;
             let is_block_in_main_chain = is_block_in_main_chain(&chainstate_ref, block_id.into())?;
@@ -136,7 +139,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             if !is_block_in_main_chain {
                 drop(chainstate_ref);
                 self.invalidate_stale_block(block_id, is_explicit_invalidation)?;
-                return Ok(());
+                return Ok(None);
             }
 
             let block_index = get_existing_block_index(&chainstate_ref, block_id)?;
@@ -173,20 +176,23 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
 
         self.invalidate_stale_block(block_id, is_explicit_invalidation)?;
 
-        let reorg_succeeded = self.find_and_activate_best_chain()?;
+        let dex_trades = self.find_and_activate_best_chain()?;
 
-        if !reorg_succeeded {
+        if dex_trades.is_none() {
             log::warn!("No better chain was found after invalidating block {block_id}");
         }
 
-        Ok(())
+        Ok(dex_trades)
     }
 
     /// Search among stale chains for ones with more trust than the current mainchain;
     /// activate the best valid chain among them.
-    /// Return true if a reorg has occurred.
+    /// Return the DEX trades of the blocks connected by the activation, in connect order,
+    /// or None if no chain was activated.
     #[log_error]
-    fn find_and_activate_best_chain(&mut self) -> Result<bool, BlockInvalidatorError> {
+    fn find_and_activate_best_chain(
+        &mut self,
+    ) -> Result<Option<Vec<DexTradeInfo>>, BlockInvalidatorError> {
         let (min_chain_trust, best_chain_candidates) = {
             let chainstate_ref = self.chainstate.make_db_tx_ro()?;
             let cur_best_block_index = get_best_block_index(&chainstate_ref)?;
@@ -210,7 +216,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 |chainstate_ref| {
                     let block_index =
                         get_existing_block_index(chainstate_ref, candidate.block_id())?;
-                    let reorg_occured = chainstate_ref
+                    let (reorg_occured, dex_trades) = chainstate_ref
                         .activate_best_chain(
                             &block_index,
                             None,
@@ -218,7 +224,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                         )
                         .map_err(ReorgDuringInvalidationError::ReorgError)?;
                     assert!(reorg_occured);
-                    Ok(())
+                    Ok(dex_trades)
                 },
                 |attempt_number| {
                     log::info!(
@@ -237,7 +243,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             );
 
             match result {
-                Ok(()) => return Ok(true),
+                Ok(dex_trades) => return Ok(Some(dex_trades)),
                 Err(ReorgDuringInvalidationError::OtherDbError(err)) => {
                     return Err(BlockInvalidatorError::StorageError(err));
                 }
@@ -271,16 +277,19 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             };
         }
 
-        Ok(false)
+        Ok(None)
     }
 
     /// Reset fail flags in block indices for all blocks in the subtree that starts at the specified block.
     /// Block indices for which no block data exists in the db will be deleted.
+    ///
+    /// If this made the node switch to another chain, return the DEX trades of the blocks connected
+    /// by the switch, in connect order.
     #[log_error]
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
-    ) -> Result<(), BlockInvalidatorError> {
+    ) -> Result<Option<Vec<DexTradeInfo>>, BlockInvalidatorError> {
         let block_indices_to_clear = {
             let chainstate_ref =
                 self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
@@ -325,9 +334,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             },
         )?;
 
-        self.find_and_activate_best_chain()?;
-
-        Ok(())
+        self.find_and_activate_best_chain()
     }
 }
 
