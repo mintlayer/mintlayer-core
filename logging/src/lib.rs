@@ -112,13 +112,34 @@ pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() ->
 
 /// Convert a `Write` instance to `MakeWriter`.
 ///
-/// The sink is written under a mutex (that of the `MakeWriter` impl for `Mutex`), and the
-/// writer marks the writing thread as such for the duration of every write, so that the
-/// panic hook can keep away from the sink when the panic occurs inside it.
+/// The sink is written under a mutex, and the writer marks the writing thread for as long
+/// as the lock is held (from handing the writer out to the formatted event being written),
+/// so that the panic hook can keep away from the sink whenever a panic occurs under it.
 pub fn write_to_make_writer(
     writer: impl Write + Send + 'static,
 ) -> impl for<'a> MakeWriter<'a> + Send + Sync + 'static {
-    Mutex::new(Box::new(SinkWriteGuardWriter(writer)))
+    SinkMakeWriter(Mutex::new(writer))
+}
+
+/// A [`MakeWriter`] that marks the writing thread while its lock is held.
+struct SinkMakeWriter<W>(Mutex<W>);
+
+impl<'a, W> MakeWriter<'a> for SinkMakeWriter<W>
+where
+    W: Write + 'a,
+{
+    type Writer = SinkGuardedWriter<'a, W>;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        // The mark is entered before the lock is taken, so a re-entrant call from the
+        // panic hook on this thread always sees the mark and stays off the sink.
+        let guard = SinkWriteGuard::enter();
+        let inner = self.0.lock().expect("Log sink mutex poisoned");
+        SinkGuardedWriter {
+            inner,
+            _guard: guard,
+        }
+    }
 }
 
 thread_local! {
@@ -132,18 +153,19 @@ pub(crate) fn in_sink_write() -> bool {
     IN_SINK_WRITE.with(|in_sink_write| in_sink_write.get())
 }
 
-/// A writer that enters the sink-write guard (see [`SinkWriteGuard`]) around every write.
-struct SinkWriteGuardWriter<W>(W);
+/// A writer that hands the sink out with the sink-write guard held (see [`SinkWriteGuard`]).
+struct SinkGuardedWriter<'a, W> {
+    inner: std::sync::MutexGuard<'a, W>,
+    _guard: SinkWriteGuard,
+}
 
-impl<W: Write> Write for SinkWriteGuardWriter<W> {
+impl<'a, W: Write> Write for SinkGuardedWriter<'a, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let _guard = SinkWriteGuard::enter();
-        self.0.write(buf)
+        self.inner.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let _guard = SinkWriteGuard::enter();
-        self.0.flush()
+        self.inner.flush()
     }
 }
 
