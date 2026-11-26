@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use logging::log;
 use node_lib::run_node_daemon;
 
 utils::enable_rust_backtrace!();
@@ -20,6 +21,9 @@ utils::enable_rust_backtrace!();
 #[tokio::main]
 async fn main() {
     let exit_code = run_node_daemon().await.unwrap_or_else(|err| {
+        // The log keeps the failure with the rest of the node output, but stderr may be the
+        // only channel that exists if the failure happened before the log was initialized.
+        log::error!("Mintlayer node launch failed: {err:?}");
         eprintln!("Mintlayer node launch failed: {err:?}");
         std::process::exit(1)
     });
