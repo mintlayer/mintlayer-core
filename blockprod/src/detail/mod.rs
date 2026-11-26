@@ -382,8 +382,13 @@ impl BlockProduction {
             )
             .await;
 
-        if let Err(err) = &result {
-            self.log_block_production_failure(pool_id, err);
+        match &result {
+            Ok(_) => {
+                // A success ends the failure episode: the same error recurring after it is
+                // a new episode and is reported again.
+                *self.last_reported_failure.lock().unwrap_or_else(|err| err.into_inner()) = None;
+            }
+            Err(err) => self.log_block_production_failure(pool_id, err),
         }
 
         result
@@ -393,9 +398,10 @@ impl BlockProduction {
     ///
     /// Stakers attempt to produce a block every few seconds, so a persistent failure (e.g.
     /// the pool of the staker does not exist) would otherwise repeat with every attempt: it
-    /// is reported once as a warning until a different failure occurs, and the repeats are
-    /// left at debug, like the failures that are part of the normal operation (no stake found
-    /// in the current round, waiting for the chain to sync, a cancelled attempt).
+    /// is reported once as a warning until a different failure occurs or a block is produced
+    /// successfully, and the repeats are left at debug, like the failures that are part of the
+    /// normal operation (no stake found in the current round, waiting for the chain to sync,
+    /// a cancelled attempt).
     fn log_block_production_failure(&self, pool_id: Option<PoolId>, err: &BlockProductionError) {
         let is_routine = matches!(
             err,
