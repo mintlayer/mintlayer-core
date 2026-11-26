@@ -98,20 +98,64 @@ pub async fn reject(pending: Pending, message: impl std::fmt::Display) {
         .await;
 }
 
-/// Connect a broadcaster to event sink, transforming and filtering the events on the go
-pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
-    mut event_receiver: broadcaster::Receiver<T>,
+/// A source of events for a subscription that ends when it yields `None`.
+trait EventQueue<T> {
+    async fn next_event(&mut self) -> Option<T>;
+}
+
+impl<T> EventQueue<T> for broadcaster::Receiver<T> {
+    async fn next_event(&mut self) -> Option<T> {
+        self.recv().await
+    }
+}
+
+impl<T> EventQueue<T> for mpsc::Receiver<T> {
+    async fn next_event(&mut self) -> Option<T> {
+        self.recv().await
+    }
+}
+
+/// Why the forwarding of the events of a queue to a subscription stopped.
+#[derive(Debug, PartialEq, Eq)]
+enum ForwardingEnd {
+    /// The client closed the subscription or went away.
+    ClientGone,
+    /// The queue ended: its producer closed it.
+    QueueEnded,
+}
+
+/// Accept the subscription and forward the events of the queue to the client until the client
+/// goes away or the queue ends. The subscription is watched for closing while waiting for an
+/// event, so that a client that went away releases its queue promptly.
+async fn forward_queue<T, U: serde::Serialize, Q: EventQueue<T>>(
+    mut queue: Q,
     pending: Pending,
     mut filter_map_fn: impl FnMut(T) -> Option<U>,
-) -> Reply {
+) -> Result<ForwardingEnd, Error> {
     let subscription = accept::<U>(pending).await?;
 
-    while let Some(event) = event_receiver.recv().await {
+    loop {
+        let event = tokio::select! {
+            event = queue.next_event() => event,
+            // the client is gone: nothing left to forward
+            () = subscription.closed() => return Ok(ForwardingEnd::ClientGone),
+        };
+        let Some(event) = event else {
+            return Ok(ForwardingEnd::QueueEnded);
+        };
         if let Some(event) = filter_map_fn(event) {
             subscription.send(&event).await?;
         }
     }
+}
 
+/// Connect a broadcaster to event sink, transforming and filtering the events on the go
+pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
+    event_receiver: broadcaster::Receiver<T>,
+    pending: Pending,
+    filter_map_fn: impl FnMut(T) -> Option<U>,
+) -> Reply {
+    forward_queue(event_receiver, pending, filter_map_fn).await?;
     Ok(())
 }
 
@@ -124,8 +168,8 @@ pub async fn connect_broadcast_map<T, U: serde::Serialize>(
     connect_broadcast_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
 }
 
-/// The error sent to the client when the node ended a subscription because its producer closed
-/// the event queue: the subscriber fell behind, or the stream stopped.
+/// The error sent to the client when the node ended a subscription because the producer closed
+/// its event queue: the subscriber fell behind, or the stream stopped.
 pub const CLOSED_BY_NODE: &str =
     "subscription closed by the node: the subscriber fell behind or the stream ended";
 
@@ -134,29 +178,34 @@ pub const CLOSED_BY_NODE: &str =
 ///
 /// Closing the queue ends the subscription with the [`CLOSED_BY_NODE`] error, so that the client
 /// sees the end of the stream rather than waiting for the next event forever. When the client
-/// goes away, the queue is dropped at once (the subscription is watched for closing while
-/// waiting for events), so that the producer sees its receiver as closed.
+/// goes away, the queue is dropped at once, so that the producer sees its receiver as closed.
 pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
-    mut event_receiver: mpsc::Receiver<T>,
+    event_receiver: mpsc::Receiver<T>,
     pending: Pending,
-    mut filter_map_fn: impl FnMut(T) -> Option<U>,
+    filter_map_fn: impl FnMut(T) -> Option<U>,
 ) -> Reply {
-    let subscription = accept::<U>(pending).await?;
-
-    loop {
-        let event = tokio::select! {
-            event = event_receiver.recv() => event,
-            // the client is gone: nothing left to forward
-            () = subscription.closed() => return Ok(()),
-        };
-        let Some(event) = event else {
-            // the producer closed the queue: tell the client that the subscription is over
-            return Err(CLOSED_BY_NODE.into());
-        };
-        if let Some(event) = filter_map_fn(event) {
-            subscription.send(&event).await?;
-        }
+    match forward_queue(event_receiver, pending, filter_map_fn).await? {
+        // the producer closed the queue: tell the client that the subscription is over
+        ForwardingEnd::QueueEnded => Err(CLOSED_BY_NODE.into()),
+        ForwardingEnd::ClientGone => Ok(()),
     }
+}
+
+/// Connect a bounded queue of events to the subscription sink, transforming the events on the go
+pub async fn connect_mpsc_map<T, U: serde::Serialize>(
+    event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+    mut map_fn: impl FnMut(T) -> U,
+) -> Reply {
+    connect_mpsc_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
+}
+
+/// Connect a bounded queue of events to the subscription sink
+pub async fn connect_mpsc<T: serde::Serialize>(
+    event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+) -> Reply {
+    connect_mpsc_filter_map(event_receiver, pending, Some).await
 }
 
 /// Connect a broadcaster to event sink
