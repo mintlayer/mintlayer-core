@@ -372,9 +372,14 @@ fn collect_log_permission_fix_errors(
 }
 
 /// Processes options and potentially runs the node.
+///
+/// `default_log_filter` is the stderr filter that applies when `RUST_LOG` is not set;
+/// `default_log_to_file` is whether the node logs to a file when neither the command line
+/// nor the config file says (node-gui passes `true`).
 pub async fn setup(
     options: OptionsWithResolvedCommand,
     default_log_filter: &str,
+    default_log_to_file: bool,
 ) -> Result<NodeSetupResult> {
     let chain_config = options.command.create_chain_config()?;
 
@@ -410,9 +415,10 @@ pub async fn setup(
     };
 
     // Init logging
-    let logging_options = LoggingOptions::resolve(
+    let logging_options = LoggingOptions::resolve_with_default(
         &options.top_level,
         std::mem::take(&mut node_config.logging).unwrap_or_default(),
+        default_log_to_file,
     )?;
     let log_file_name = default_log_file_name();
     // Log files written by earlier versions may have wider permissions; restrict them too.
@@ -472,11 +478,12 @@ pub async fn setup(
     // top-level options exhaustively forces a decision about what the line includes
     // whenever a new option is added.
     // The logging options are not repeated here: they configure the sinks this very line
-    // is written to and are applied when logging is initialized above.
+    // is written to and are applied when logging is initialized above. The resolved
+    // `log to file` is the exception, since it tells whether there is a file to look at.
     let TopLevelOptions {
         data_dir: _,
         create_data_dir_if_missing,
-        log_to_file,
+        log_to_file: _,
         log_file_path: _,
         log_file_format: _,
         log_format: _,
@@ -490,11 +497,11 @@ pub async fn setup(
     } = &options.top_level;
     logging::log::info!(
         "Command line options (secrets omitted): network: {}, data directory: {:?}, \
-         create data dir if missing: {:?}, log to file: {:?}",
+         create data dir if missing: {:?}, log to file: {}",
         options.command.chain_type().name(),
         data_dir,
         create_data_dir_if_missing,
-        log_to_file,
+        logging_options.log_to_file,
     );
 
     if options.top_level.import_bootstrap_file.is_some() {

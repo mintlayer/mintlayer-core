@@ -121,10 +121,10 @@ pub async fn node_initialize(
         let mut opts = opts;
         let run_opts = opts.command.run_options_mut();
 
-        // For the GUI, we configure different defaults, such as disabling RPC server binding
-        // and enabling logging to a file.
+        // For the GUI, we configure different defaults, such as disabling RPC server binding.
+        // Logging to a file is enabled by default as well; that default is passed to `setup`
+        // below, which applies it below the command line and the config file.
         run_opts.rpc_enabled = Some(run_opts.rpc_enabled.unwrap_or(false));
-        opts.top_level.log_to_file = Some(opts.top_level.log_to_file.unwrap_or(true));
 
         opts
     };
@@ -136,7 +136,7 @@ pub async fn node_initialize(
 
     let (chain_config, chain_info) = match mode {
         WalletMode::Hot => {
-            let setup_result = node_lib::setup(opts, DEFAULT_LOG_FILTER).await?;
+            let setup_result = node_lib::setup(opts, DEFAULT_LOG_FILTER, true).await?;
             let node = match setup_result {
                 node_lib::NodeSetupResult::RunNode(node) => node,
                 node_lib::NodeSetupResult::Bootstrap(_, _) => {

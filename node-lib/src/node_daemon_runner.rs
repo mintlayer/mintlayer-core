@@ -30,6 +30,7 @@ pub async fn run_node_daemon() -> anyhow::Result<ExitCode> {
     let setup_result = setup(
         opts.with_resolved_command(),
         logging::SIMPLE_INIT_DEFAULT_FILTER,
+        false,
     )
     .await?;
     match setup_result {
