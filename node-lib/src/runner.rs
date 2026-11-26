@@ -621,8 +621,11 @@ fn file_writer_settings(
     {
         use std::os::unix::fs::PermissionsExt as _;
         // The change goes through the open file, so a path swapped in after the check above
-        // cannot redirect it to another file.
-        if log_file.metadata()?.permissions().mode() != 0o600 {
+        // cannot redirect it to another file. Only the permission bits are compared, the
+        // file type bits of `st_mode` would always differ. A file owned by another user
+        // fails the change and fails the startup with it: the node does not run with logs
+        // it cannot restrict to the owner.
+        if log_file.metadata()?.permissions().mode() & 0o7777 != 0o600 {
             log_file
                 .set_permissions(std::fs::Permissions::from_mode(0o600))
                 .with_context(|| {
