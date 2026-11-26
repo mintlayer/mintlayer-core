@@ -465,10 +465,20 @@ pub async fn setup(
     // curated subset of options that cannot hold secrets is logged. Destructuring the
     // top-level options exhaustively forces a decision about what the line includes
     // whenever a new option is added.
+    // The logging options are not repeated here: they configure the sinks this very line
+    // is written to and are applied when logging is initialized above.
     let TopLevelOptions {
         data_dir: _,
         create_data_dir_if_missing,
         log_to_file,
+        log_file_path: _,
+        log_file_format: _,
+        log_format: _,
+        log_file_max_size_bytes: _,
+        log_file_max_files: _,
+        log_fields: _,
+        log_source_location: _,
+        log_thread_info: _,
         clean_data: _,
         import_bootstrap_file: _,
     } = &options.top_level;

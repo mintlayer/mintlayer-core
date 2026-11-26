@@ -30,8 +30,8 @@ use tracing_subscriber::{
 
 pub use enrichment::enter_root_span;
 pub use log;
+pub use log_style::{LogFormat, LogStyleParseError, get_log_style_from_env};
 pub use log_style::{LogStyle, TextColoring};
-pub use log_style::{LogStyleParseError, get_log_style_from_env};
 pub use utils::{GetFromEnvError, get_from_env};
 
 /// Default value for `RUST_LOG` used by the "simple" log initialization functions.
