@@ -73,6 +73,21 @@ pub async fn accept<T>(pending: Pending) -> Result<Sink<T>, Error> {
     Sink::accept(pending).await
 }
 
+/// Reject a subscription request with an invalid-parameters error delivered to the client,
+/// e.g. when the subscription parameters fail validation.
+///
+/// Note that returning an error from a subscription method does not reach the client; the
+/// request must be rejected explicitly.
+pub async fn reject(pending: Pending, message: impl std::fmt::Display) {
+    pending
+        .reject(jsonrpsee::types::error::ErrorObjectOwned::owned(
+            jsonrpsee::types::error::INVALID_PARAMS_CODE,
+            message.to_string(),
+            None::<Box<serde_json::value::RawValue>>,
+        ))
+        .await;
+}
+
 /// Connect a broadcaster to event sink, transforming and filtering the events on the go
 pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
     mut event_receiver: broadcaster::Receiver<T>,

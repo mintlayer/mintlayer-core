@@ -598,7 +598,13 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         // is reported to the client in reply to the subscription request
         let pairs = match pairs {
             Some(pairs) => {
-                Some(pairs.iter().map(|pair| pair.parse()).collect::<Result<Vec<_>, _>>()?)
+                match pairs.iter().map(|pair| pair.parse()).collect::<Result<Vec<_>, _>>() {
+                    Ok(pairs) => Some(pairs),
+                    Err(err) => {
+                        rpc::subscription::reject(pending, err).await;
+                        return Ok(());
+                    }
+                }
             }
             None => None,
         };
