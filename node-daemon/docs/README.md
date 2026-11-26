@@ -24,7 +24,7 @@ Every logging option can be given on the command line, set with an environment v
 | `--log-format <text\|json>` | `log_format` | unset | format of the stderr output; when unset, the `ML_LOG_STYLE` env variable applies as before |
 | `--log-file-max-size-bytes <BYTES>` | `log_file_max_size_bytes` | `10000000` | size at which the log file is rotated |
 | `--log-file-max-files <COUNT>` | `log_file_max_files` | `14` | number of files kept by the rotation, including the current one |
-| `--log-fields <KEY=VALUE,...>` | `log_fields` | unset | extra `key=value` fields added to every log line |
+| `--log-fields <KEY=VALUE,...>` | `log_fields` | unset | extra `key=value` fields added to the log lines that carry the enrichment fields (see below) |
 | `--log-source-location <true\|false>` | `log_source_location` | `false` | include the source file name and line number |
 | `--log-thread-info <true\|false>` | `log_thread_info` | `false` | include the thread id and thread name |
 
@@ -39,7 +39,7 @@ Notes:
 
 #### Enriched fields and the json format
 
-Every log line emitted by the node and its subsystems carries the node version, the chain type and the process id, plus the `--log-fields` entries. In the json format they are the first element of the `spans` array; with `--log-source-location` and `--log-thread-info` the location and thread fields are added to the line as well:
+The log lines of the node and its subsystems that run inside the node's span (see below) carry the node version, the chain type and the process id, plus the `--log-fields` entries. In the json format they are the first element of the `spans` array; with `--log-source-location` and `--log-thread-info` the location and thread fields are added to the line as well:
 
 ```json
 {"timestamp":"2026-11-25T12:00:00.123456Z","level":"INFO","target":"chainstate",
