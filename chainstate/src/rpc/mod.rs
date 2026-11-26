@@ -255,9 +255,10 @@ trait ChainstateRpc {
     /// events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`
     /// and re-derive the trades from the blocks of the new best chain.
     ///
-    /// The events are only produced once the initial block download of the node is complete; a
-    /// node that is still syncing announces none, and the trades of the blocks synced that way
-    /// are never announced.
+    /// The events are only produced for the blocks connected once the initial block download
+    /// of the node is complete: a node that is still syncing announces nothing, and the trades
+    /// of the blocks connected before the download completed are never announced (the tip
+    /// events of `subscribe_to_events` tell when the download completes).
     ///
     /// Delivery policy: the node keeps up with the chain, not with the subscribers. Every
     /// subscriber has a bounded queue of events; a subscriber that stops reading is closed by

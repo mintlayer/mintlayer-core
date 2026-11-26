@@ -20,7 +20,8 @@
 //! started with the first subscriber dispatches the trades: for every trade, every subscriber
 //! whose pairs select it gets the trade in its own bounded queue, from which the subscription
 //! forwarder sends it to the client. A subscriber that falls behind by a full queue is dropped,
-//! which closes its subscription; a client that cannot keep up reconnects and re-derives.
+//! which closes its subscription with an error notification to the client; a client that cannot
+//! keep up reconnects and re-derives.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
