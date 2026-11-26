@@ -111,10 +111,59 @@ pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() ->
 }
 
 /// Convert a `Write` instance to `MakeWriter`.
+///
+/// The sink is written under a mutex (that of the `MakeWriter` impl for `Mutex`), and the
+/// writer marks the writing thread as such for the duration of every write, so that the
+/// panic hook can keep away from the sink when the panic occurs inside it.
 pub fn write_to_make_writer(
     writer: impl Write + Send + 'static,
 ) -> impl for<'a> MakeWriter<'a> + Send + Sync + 'static {
-    Mutex::new(Box::new(writer))
+    Mutex::new(Box::new(SinkWriteGuardWriter(writer)))
+}
+
+thread_local! {
+    /// Whether the current thread is inside a write to a log sink made by [`write_to_make_writer`].
+    static IN_SINK_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether the current thread is writing to a log sink, and therefore holds the lock that
+/// serializes the writes to it.
+pub(crate) fn in_sink_write() -> bool {
+    IN_SINK_WRITE.with(|in_sink_write| in_sink_write.get())
+}
+
+/// A writer that enters the sink-write guard (see [`SinkWriteGuard`]) around every write.
+struct SinkWriteGuardWriter<W>(W);
+
+impl<W: Write> Write for SinkWriteGuardWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let _guard = SinkWriteGuard::enter();
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let _guard = SinkWriteGuard::enter();
+        self.0.flush()
+    }
+}
+
+/// Marks the current thread as writing to a log sink until dropped.
+///
+/// A panic that unwinds through the guard leaves the thread marked until the guard is
+/// dropped, which is what the panic hook, running before the unwinding, needs to see.
+#[derive(Debug)]
+pub(crate) struct SinkWriteGuard(bool);
+
+impl SinkWriteGuard {
+    pub(crate) fn enter() -> Self {
+        Self(IN_SINK_WRITE.with(|in_sink_write| in_sink_write.replace(true)))
+    }
+}
+
+impl Drop for SinkWriteGuard {
+    fn drop(&mut self) {
+        IN_SINK_WRITE.with(|in_sink_write| in_sink_write.set(self.0));
+    }
 }
 
 static LOG_STYLE_ENV_VAR_NAME: &str = "ML_LOG_STYLE";
@@ -382,6 +431,7 @@ mod tests {
     use crate::test_utils::LogOutput;
 
     #[test]
+    #[serial_test::serial]
     fn initialize_twice() {
         init_logging();
         init_logging();
