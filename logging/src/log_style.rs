@@ -67,13 +67,12 @@ impl FromStr for LogFormat {
 
 impl LogStyle {
     pub fn parse(str: &str) -> Result<LogStyle, LogStyleParseError> {
-        let str = str.to_lowercase();
-        match str.as_str() {
-            "json" => Ok(LogStyle::Json),
-            "text" => Ok(LogStyle::Text(TextColoring::Auto)),
+        match str.to_lowercase().as_str() {
             "text-colored" => Ok(LogStyle::Text(TextColoring::On)),
             "text-uncolored" => Ok(LogStyle::Text(TextColoring::Off)),
-            _ => Err(LogStyleParseError::UnrecognizedFormat(str)),
+            // The spellings shared with the command line parse the same way there; plain
+            // text keeps detecting the terminal, as it has always done in the env variable.
+            _ => str.parse::<LogFormat>().map(|format| format.to_log_style(TextColoring::Auto)),
         }
     }
 }
@@ -108,6 +107,33 @@ mod tests {
                 Err(LogStyleParseError::UnrecognizedFormat(invalid.to_owned()))
             );
         }
+    }
+
+    #[test]
+    fn log_style_parse() {
+        assert_eq!(LogStyle::parse("json"), Ok(LogStyle::Json));
+        assert_eq!(LogStyle::parse("JSON"), Ok(LogStyle::Json));
+        assert_eq!(
+            LogStyle::parse("Text"),
+            Ok(LogStyle::Text(TextColoring::Auto))
+        );
+        assert_eq!(
+            LogStyle::parse("text-colored"),
+            Ok(LogStyle::Text(TextColoring::On))
+        );
+        assert_eq!(
+            LogStyle::parse("text-uncolored"),
+            Ok(LogStyle::Text(TextColoring::Off))
+        );
+        assert_eq!(
+            LogStyle::parse("TEXT-UNCOLORED"),
+            Ok(LogStyle::Text(TextColoring::Off))
+        );
+        // The error names the input as it was given, like the command line parser.
+        assert_eq!(
+            LogStyle::parse("Jsx"),
+            Err(LogStyleParseError::UnrecognizedFormat("Jsx".to_owned()))
+        );
     }
 
     #[test]
