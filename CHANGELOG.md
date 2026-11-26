@@ -20,16 +20,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       `ML_LOG_STYLE` env variable keeps applying as before).
     - logging: `--log-source-location` and `--log-thread-info` add the source file name
       and line number, or the thread id and name, to every log line; `--log-fields` adds
-      static `key=value` fields to every log line.
+      static `key=value` fields to the log lines that carry the node fields (next item).
     - logging: the log lines of the node manager and its subsystems (and, in `node-daemon`,
       the startup lines as well) carry the node version, the chain type and the process
       id: in the json output as the `node` entry of `spans`, in the text output as a
       `node{...}` prefix in front of the target. The json file can therefore be consumed
       line by line by external tools. An invocation without the new options is otherwise
       unchanged (text on stderr, optional text file in the default location).
-    - p2p: an outbound connection whose handshake fails is reported by `node_connect` and
-      `p2p_connect` as `Connection closed before the handshake completed` instead of the
-      generic `Connection refused or timed out`.
+    - p2p: an outbound connection whose handshake fails is reported by `p2p_connect` (and
+      the wallet's `node_connect_to_peer`) as `Connection closed before the handshake
+      completed` instead of the generic `Connection refused or timed out`.
     - logging: the new `[logging]` section of `config.toml` holds the equivalents of the
       logging command line options, with the command line taking precedence over the
       `ML_NODE_*` environment variables, which take precedence over the file. An older
