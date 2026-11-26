@@ -37,7 +37,15 @@ pub const MAX_DEX_TRADES_SUBSCRIBERS: usize = 32;
 pub(crate) const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 /// The number of trades a subscriber may have pending; a subscriber that falls behind by a full
 /// queue is dropped.
-const SUBSCRIBER_QUEUE_CAPACITY: usize = 1024;
+///
+/// A block holds at most about 8k fills (one per transaction, in a 1 MiB block). The dispatcher
+/// pushes the trades of one block in a millisecond or two, while a forwarder moves hundreds to a
+/// few thousand events per scheduling window (serialization plus the per-connection buffer of
+/// 1024 messages). The queue holds two maximum-volume blocks, and the dispatcher yields after
+/// every block so that the forwarders drain in between: a reader that keeps up with the chain
+/// never overflows, even on a block full of fills. A reader that stopped reading holds at most
+/// these many trades before it is dropped.
+const SUBSCRIBER_QUEUE_CAPACITY: usize = 16_384;
 
 /// A subscription that cannot be accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -71,19 +79,32 @@ struct DexTradesSubscriber {
 pub struct DexTradesDispatcher {
     block_trades_tx: mpsc::Sender<Vec<DexTradeInfo>>,
     subscribers: Arc<Mutex<Vec<DexTradesSubscriber>>>,
+    subscriber_queue_capacity: usize,
 }
 
 impl DexTradesDispatcher {
     /// Start the dispatcher task; it ends when the dispatcher is dropped.
     pub fn start() -> Result<Self, DexTradesSubscribeError> {
+        Self::start_with_queue_capacity(SUBSCRIBER_QUEUE_CAPACITY)
+    }
+
+    /// Start the dispatcher with the given per-subscriber queue capacity.
+    fn start_with_queue_capacity(
+        subscriber_queue_capacity: usize,
+    ) -> Result<Self, DexTradesSubscribeError> {
         let runtime = tokio::runtime::Handle::try_current()
             .map_err(|_| DexTradesSubscribeError::NoRuntime)?;
         let (block_trades_tx, block_trades_rx) = mpsc::channel(DISPATCHER_QUEUE_CAPACITY);
         let subscribers = Arc::new(Mutex::new(Vec::new()));
-        runtime.spawn(Self::run(block_trades_rx, Arc::clone(&subscribers)));
+        runtime.spawn(Self::run(
+            block_trades_rx,
+            Arc::clone(&subscribers),
+            subscriber_queue_capacity,
+        ));
         Ok(Self {
             block_trades_tx,
             subscribers,
+            subscriber_queue_capacity,
         })
     }
 
@@ -101,7 +122,7 @@ impl DexTradesDispatcher {
         if subscribers.len() >= MAX_DEX_TRADES_SUBSCRIBERS {
             return Err(DexTradesSubscribeError::TooManySubscribers);
         }
-        let (trades_tx, trades_rx) = mpsc::channel(SUBSCRIBER_QUEUE_CAPACITY);
+        let (trades_tx, trades_rx) = mpsc::channel(self.subscriber_queue_capacity);
         subscribers.push(DexTradesSubscriber { pairs, trades_tx });
         Ok(trades_rx)
     }
@@ -134,6 +155,7 @@ impl DexTradesDispatcher {
     async fn run(
         mut block_trades_rx: mpsc::Receiver<Vec<DexTradeInfo>>,
         subscribers: Arc<Mutex<Vec<DexTradesSubscriber>>>,
+        subscriber_queue_capacity: usize,
     ) {
         while let Some(block_trades) = block_trades_rx.recv().await {
             // the subscribers whose client went away since the last block are reclaimed here:
@@ -161,11 +183,13 @@ impl DexTradesDispatcher {
                 if dropped_for_falling_behind > 0 {
                     log::warn!(
                         "Dropping {dropped_for_falling_behind} DEX trades subscriber(s) that fell \
-                         behind by more than {SUBSCRIBER_QUEUE_CAPACITY} trades; their \
+                         behind by more than {subscriber_queue_capacity} trades; their \
                          subscriptions are closed"
                     );
                 }
             }
+            // let the forwarders drain the queues before the next block is pushed
+            tokio::task::yield_now().await;
         }
     }
 
@@ -326,6 +350,39 @@ mod tests {
         dispatcher.dispatch(vec![trade(5000)]).unwrap();
         drop(dispatcher);
         assert!(receive_all(selective).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_block_full_of_fills_does_not_drop_a_reader_that_keeps_up() {
+        let dispatcher = DexTradesDispatcher::start().unwrap();
+        let all = dispatcher.subscribe(None).unwrap();
+        // about the most fills a block can hold, pushed before the reader gets to run
+        let fills_in_a_full_block = 8_000_u64;
+        let trades: Vec<_> = (0..fills_in_a_full_block).map(trade).collect();
+        dispatcher.dispatch(trades).unwrap();
+        assert_eq!(dispatcher.registered_subscriber_count(), 1);
+
+        drop(dispatcher);
+        assert_eq!(receive_all(all).await.len(), fills_in_a_full_block as usize);
+    }
+
+    #[tokio::test]
+    async fn the_dispatcher_yields_between_blocks_so_that_readers_keep_up() {
+        // a small queue and lists that do not fit in it back to back: the reader must get to
+        // drain between the lists, which the yield after every block list makes possible (a
+        // reader of a tokio queue is budgeted to a few pops per scheduling slot, so it cannot
+        // keep up with a dispatcher that never yields)
+        let dispatcher = DexTradesDispatcher::start_with_queue_capacity(256).unwrap();
+        let all = dispatcher.subscribe(None).unwrap();
+        let reader = tokio::spawn(async move { receive_all(all).await });
+        for block in 0..3_u64 {
+            let trades: Vec<_> = (0..100_u64).map(|i| trade(block * 100 + i)).collect();
+            dispatcher.dispatch(trades).unwrap();
+        }
+        drop(dispatcher);
+        let received = reader.await.unwrap();
+        assert_eq!(received.len(), 300);
+        assert!(received.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
     #[tokio::test]
