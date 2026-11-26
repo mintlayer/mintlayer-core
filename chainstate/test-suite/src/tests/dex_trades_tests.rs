@@ -402,12 +402,16 @@ fn verifier_records_trade_matches_of_block_fills(
             )
             .unwrap();
 
-        let matches = verifier.take_dex_trade_matches();
-        assert_eq!(matches.len(), 1);
-        let trade = &matches[0];
+        // the drained trades are positioned in the block of the transaction (at index 0)
+        let trades = verifier.take_dex_trade_infos(&block_index, 0);
+        assert_eq!(trades.len(), 1);
+        let trade = &trades[0];
+        assert_eq!(trade.block_id, block.get_id());
+        assert_eq!(trade.block_height, block_index.block_height());
         assert_eq!(trade.tx_id, fill.tx.transaction().get_id());
         assert_eq!(trade.input_ordinal, 1);
         assert_eq!(trade.match_ordinal, 0);
+        assert_eq!(trade.in_block_position(), 1 << 4);
         assert_eq!(trade.maker_order_id, fixture.order_ids[0]);
         assert_eq!(trade.base, Currency::Token(fixture.token_id));
         assert_eq!(trade.quote, Currency::Coin);
@@ -417,8 +421,8 @@ fn verifier_records_trade_matches_of_block_fills(
             calculate_fill_order(&tf, &fixture.order_ids[0], fill_amount, version)
         );
         assert_eq!(trade.base_amount, fill.payouts[0]);
-        // taking the matches drains them
-        assert!(verifier.take_dex_trade_matches().is_empty());
+        // taking the trades drains them
+        assert!(verifier.take_dex_trade_infos(&block_index, 0).is_empty());
 
         let mut mempool_verifier = TransactionVerifier::new(&storage, chain_config);
         mempool_verifier
@@ -428,7 +432,7 @@ fn verifier_records_trade_matches_of_block_fills(
                 &median_time_past,
             )
             .unwrap();
-        assert!(mempool_verifier.take_dex_trade_matches().is_empty());
+        assert!(mempool_verifier.take_dex_trade_infos(&block_index, 0).is_empty());
     });
 }
 

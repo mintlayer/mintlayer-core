@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use chainstate::{
-    DexTradeInfo, TransactionVerificationStrategy, TransactionVerifierMakerFn,
-    TransactionVerifierStorageError, position_dex_trade_matches,
+    ConnectBlockOutput, TransactionVerificationStrategy, TransactionVerifierMakerFn,
+    TransactionVerifierStorageError,
 };
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, DexTradeInfo};
 use common::{
     chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::{Idable, id::WithId},
@@ -57,6 +57,22 @@ pub struct RandomizedTransactionVerificationStrategy {
     rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 }
 
+/// The result of connecting a run of transactions with a derived verifier (see
+/// [`TransactionVerifier::derive_child`]): the consumed state of the derived verifier, to be
+/// flushed into its parent, the fees of the transactions, the index of the next transaction
+/// and the DEX trades of the connected transactions.
+/// The result of [`RandomizedTransactionVerificationStrategy::connect_with_base`]: the verifier
+/// with the connected transactions and the DEX trades of the block.
+type ConnectWithBaseResult<C, S, U, A, T, O> =
+    (TransactionVerifier<C, S, U, A, T, O>, Vec<DexTradeInfo>);
+
+struct DerivedConnectResult {
+    consumed: TransactionVerifierDelta,
+    fees: AccumulatedFee,
+    next_tx_index: usize,
+    dex_trades: Vec<DexTradeInfo>,
+}
+
 impl RandomizedTransactionVerificationStrategy {
     pub fn new(seed: Seed) -> Self {
         Self {
@@ -74,14 +90,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<
-        (
-            TransactionVerifier<C, S, U, A, T, O>,
-            BlockTxFees,
-            Vec<DexTradeInfo>,
-        ),
-        ConnectTransactionError,
-    >
+    ) -> Result<ConnectBlockOutput<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -135,7 +144,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 }
 
 impl RandomizedTransactionVerificationStrategy {
-    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn connect_with_base<C, S, M, U, A, T, O>(
         &self,
         tx_verifier_maker: M,
@@ -144,7 +153,7 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, Vec<DexTradeInfo>), ConnectTransactionError>
+    ) -> Result<ConnectWithBaseResult<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -163,23 +172,22 @@ impl RandomizedTransactionVerificationStrategy {
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().random::<bool>() {
                 // derive a new cache
-                let (consumed_cache, fee, new_tx_index, derived_dex_trades) = self
-                    .connect_with_derived(
-                        &tx_verifier,
-                        block,
-                        block_index,
-                        median_time_past,
-                        tx_num,
-                    )?;
+                let derived = self.connect_with_derived(
+                    &tx_verifier,
+                    block,
+                    block_index,
+                    median_time_past,
+                    tx_num,
+                )?;
 
-                total_fees = total_fees.combine(fee).map_err(|_| {
+                total_fees = total_fees.combine(derived.fees).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
-                dex_trades.extend(derived_dex_trades);
+                dex_trades.extend(derived.dex_trades);
 
-                flush_to_storage(&mut tx_verifier, consumed_cache)
+                flush_to_storage(&mut tx_verifier, derived.consumed)
                     .map_err(ConnectTransactionError::from)?;
-                tx_num = new_tx_index;
+                tx_num = derived.next_tx_index;
             } else {
                 // connect transactable using current verifier
 
@@ -191,16 +199,11 @@ impl RandomizedTransactionVerificationStrategy {
                     median_time_past,
                 )?;
 
-                dex_trades.extend(position_dex_trade_matches(
-                    block_index,
-                    tx_num,
-                    tx_verifier.take_dex_trade_matches(),
-                ));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_num));
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
-
                 tx_num += 1;
             }
         }
@@ -230,7 +233,6 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((tx_verifier, dex_trades))
     }
 
-    #[allow(clippy::type_complexity)]
     fn connect_with_derived<C, S, U, A, T, O>(
         &self,
         base_tx_verifier: &TransactionVerifier<C, S, U, A, T, O>,
@@ -238,15 +240,7 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
         mut tx_num: usize,
-    ) -> Result<
-        (
-            TransactionVerifierDelta,
-            AccumulatedFee,
-            usize,
-            Vec<DexTradeInfo>,
-        ),
-        ConnectTransactionError,
-    >
+    ) -> Result<DerivedConnectResult, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         U: UtxosView,
@@ -273,11 +267,7 @@ impl RandomizedTransactionVerificationStrategy {
                     median_time_past,
                 )?;
 
-                dex_trades.extend(position_dex_trade_matches(
-                    block_index,
-                    tx_num,
-                    tx_verifier.take_dex_trade_matches(),
-                ));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_num));
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
@@ -285,8 +275,13 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_num += 1;
             }
         }
-        let cache = tx_verifier.consume()?;
-        Ok((cache, total_fees, tx_num, dex_trades))
+        let consumed = tx_verifier.consume()?;
+        Ok(DerivedConnectResult {
+            consumed,
+            fees: total_fees,
+            next_tx_index: tx_num,
+            dex_trades,
+        })
     }
 
     fn disconnect_with_base<C, S, M, U, A, T, O>(

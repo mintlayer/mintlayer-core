@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use chainstate::{
-    DexTradeInfo, TransactionVerificationStrategy, TransactionVerifierMakerFn,
-    TransactionVerifierStorageError, position_dex_trade_matches,
+    ConnectBlockOutput, TransactionVerificationStrategy, TransactionVerifierMakerFn,
+    TransactionVerifierStorageError,
 };
 use chainstate_types::BlockIndex;
 use common::{
@@ -62,14 +62,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<
-        (
-            TransactionVerifier<C, S, U, A, T, O>,
-            BlockTxFees,
-            Vec<DexTradeInfo>,
-        ),
-        ConnectTransactionError,
-    >
+    ) -> Result<ConnectBlockOutput<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -98,11 +91,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &median_time_past,
                     )
                     .log_err()?;
-                dex_trades.extend(position_dex_trade_matches(
-                    block_index,
-                    tx_index,
-                    tx_verifier.take_dex_trade_matches(),
-                ));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_index));
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
