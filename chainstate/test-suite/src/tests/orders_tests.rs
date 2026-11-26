@@ -66,7 +66,7 @@ use tx_verifier::{
     input_check::signature_only_check::verify_tx_signature,
 };
 
-fn create_test_framework_with_orders(
+pub(super) fn create_test_framework_with_orders(
     rng: &mut impl CryptoRng,
     orders_version: OrdersVersion,
 ) -> TestFramework {
