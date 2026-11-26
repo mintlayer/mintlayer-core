@@ -58,6 +58,15 @@ impl<T: serde::Serialize> Sink<T> {
         self.sink.send(msg).await.map_err(|_| Error::ConnectionClosed)
     }
 
+    /// Complete when the client closed the subscription or went away.
+    ///
+    /// Use it to stop a forwarder that would otherwise wait for the next event of a quiet
+    /// stream forever; the call is cancel-safe, so it can be awaited in a `select!` with the
+    /// next event.
+    pub async fn closed(&self) {
+        self.sink.closed().await
+    }
+
     /// Get subscription ID.
     pub fn subscription_id(&self) -> SubscriptionId {
         self.sink.subscription_id()
@@ -118,6 +127,9 @@ pub async fn connect_broadcast_map<T, U: serde::Serialize>(
 /// Connect a bounded queue of events to the subscription sink, transforming and filtering the
 /// events on the go. The queue is fed by the producer of the events with `try_send`; closing it
 /// ends the subscription.
+///
+/// When the client goes away, the queue is dropped at once (the subscription is watched for
+/// closing while waiting for events), so that the producer sees its receiver as closed.
 pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
     mut event_receiver: mpsc::Receiver<T>,
     pending: Pending,
@@ -125,7 +137,15 @@ pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
 ) -> Reply {
     let subscription = accept::<U>(pending).await?;
 
-    while let Some(event) = event_receiver.recv().await {
+    loop {
+        let event = tokio::select! {
+            event = event_receiver.recv() => event,
+            // the client is gone: nothing left to forward
+            () = subscription.closed() => return Ok(()),
+        };
+        let Some(event) = event else {
+            break;
+        };
         if let Some(event) = filter_map_fn(event) {
             subscription.send(&event).await?;
         }
