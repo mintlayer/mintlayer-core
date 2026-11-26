@@ -55,7 +55,7 @@ use crate::{
     PeerManagerEvent,
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
-    error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
+    error::{ConnectionValidationError, DialError, P2pError, PeerError, ProtocolError},
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
@@ -1272,16 +1272,22 @@ where
             "the address must be present in pending_outbound_connects (handle_outbound_error)",
         );
 
-        // The role is only known here, and the failure happens after the dial, so the
-        // backend has nothing to report about it. Feeler connections probe addresses of
-        // unknown peers and are expected to fail; the other roles are the ones that an
-        // operator waits for.
+        // The role is only known here. A failure of the dial itself has no peer task to
+        // report it, so this is the line that does; a connection closed before the handshake
+        // completed is reported by the peer task with the actual error, so that one stays at
+        // debug. Feeler connections probe addresses of unknown peers and are expected to
+        // fail; the other roles are the ones that an operator waits for.
         let peer_role = PeerRole::from(&outbound_connect_type);
-        if peer_role == PeerRole::Feeler {
-            log::debug!("Outbound connection to {address} failed (role: {peer_role:?}): {error}");
-        } else {
-            log::info!("Outbound connection to {address} failed (role: {peer_role:?}): {error}");
-        }
+        let level = match (&error, peer_role) {
+            (P2pError::DialError(DialError::HandshakeFailed), _) | (_, PeerRole::Feeler) => {
+                log::Level::Debug
+            }
+            (_, _) => log::Level::Info,
+        };
+        log::log!(
+            level,
+            "Outbound connection to {address} failed (role: {peer_role:?}): {error}"
+        );
 
         match outbound_connect_type {
             OutboundConnectType::Automatic {
@@ -1306,7 +1312,8 @@ where
     fn connection_closed(&mut self, peer_id: PeerId) {
         // The peer will not be in `peers` for rejected connections
         if let Some(peer) = self.peers.remove(&peer_id) {
-            log::info!(
+            // The end of the connection is reported at info by the peer task, with the reason.
+            log::debug!(
                 "Peer disconnected, peer_id: {}, address: {:?}",
                 peer.info.peer_id,
                 peer.peer_address
