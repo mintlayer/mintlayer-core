@@ -120,12 +120,14 @@ async fn disable_networking_impl(seed: Seed) {
 
     log::debug!("other_node2 starts connecting");
 
-    // Make other_node2 try connecting to test_node; the connection attempt fails.
+    // Make other_node2 try connecting to test_node. The socket is accepted, but test_node
+    // closes it without a handshake while its networking is disabled, so the connection
+    // fails in the handshake rather than in the dial.
     let connect_result_receiver = other_node2.start_connecting(test_node_addr);
     let connect_result = connect_result_receiver.await.unwrap();
     assert_eq!(
         connect_result,
-        Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))
+        Err(P2pError::DialError(DialError::HandshakeFailed))
     );
     // For completeness, check that test_node still has no connections.
     let peer_addresses = test_node.get_all_peer_ip_addresses().await;
