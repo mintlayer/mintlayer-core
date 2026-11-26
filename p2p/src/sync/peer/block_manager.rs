@@ -751,12 +751,26 @@ where
             let headers_count =
                 headers.len().min(*self.p2p_config.protocol_config.max_fork_downloads_per_peer);
             if !self.fork_download_budget.try_take(headers_count, self.time_getter.get_time()) {
-                log::info!(
-                    "Deferring the processing of a header list of {} headers ({} charged against \
-                     the fork budget): the peer's fork download budget is exhausted",
-                    headers.len(),
-                    headers_count
-                );
+                // The deferral repeats for every list the peer sends while its budget is
+                // exhausted, so the episode is reported once, when the retry is first armed,
+                // and the repeats are left at debug.
+                let is_first_deferral = self.fork_budget_retry_at.is_none();
+                let peer_id = self.id();
+                if is_first_deferral {
+                    log::info!(
+                        "Deferring the processing of a header list of {} headers ({} charged against \
+                         the fork budget) from peer {peer_id}: the peer's fork download budget is exhausted",
+                        headers.len(),
+                        headers_count
+                    );
+                } else {
+                    log::debug!(
+                        "Deferring the processing of a header list of {} headers ({} charged against \
+                         the fork budget) from peer {peer_id}: the peer's fork download budget is exhausted",
+                        headers.len(),
+                        headers_count
+                    );
+                }
                 // No error is returned and no ban score is issued: the peer hasn't violated
                 // the protocol, it has merely exhausted a resource quota. Also note that
                 // `expecting_headers_since` has already been reset at the beginning of this
@@ -887,7 +901,21 @@ where
             // processing cost, bounded no matter what the peer sends.
             let staging_capacity =
                 self.lookahead_window_target().saturating_sub(self.lookahead_window_len());
+            let dropped_count = new_block_headers.len().saturating_sub(staging_capacity);
+            let first_dropped_id =
+                new_block_headers.get(staging_capacity).map(|header| header.get_id());
             new_block_headers.truncate(staging_capacity);
+            if dropped_count > 0 {
+                // Log the loss, because the locator may never reach the dropped range again.
+                log::debug!(
+                    "Dropping {dropped_count} headers from peer {} that do not fit the look-ahead window \
+                     (staged: {}, window target: {}); the first dropped header is {}",
+                    self.id(),
+                    self.lookahead_window_len(),
+                    self.lookahead_window_target(),
+                    first_dropped_id.map_or_else(|| "<none>".to_owned(), |id| id.to_string()),
+                );
+            }
             if !new_block_headers.is_empty() {
                 self.stage_in_lookahead(new_block_headers);
 
@@ -921,9 +949,9 @@ where
                 {
                     self.request_headers().await?;
                 } else {
-                    log::info!(
-                        "Not requesting more headers from the peer:\
-                         it keeps sending already-known header lists"
+                    log::debug!(
+                        "Not requesting more headers from peer {}: it keeps sending already-known header lists",
+                        self.id()
                     );
                 }
             } else {
@@ -1257,11 +1285,27 @@ where
             header_id == anchor
         });
         if let Some(branch_position) = branch_position {
+            let dropped_count = self.incoming.pending_headers.len() - branch_position - 1;
             self.incoming.pending_headers.truncate(branch_position + 1);
             self.incoming.pending_headers.extend(headers);
+            log::debug!(
+                "A diverging header list from peer {} replaces {} staged headers after the branch point {}",
+                self.id(),
+                dropped_count,
+                anchor
+            );
             return;
         }
 
+        if !self.incoming.pending_headers.is_empty() {
+            log::debug!(
+                "A diverging header list of {} headers from peer {} replaces all {} staged headers (anchored at {})",
+                headers.len(),
+                self.id(),
+                self.incoming.pending_headers.len(),
+                anchor
+            );
+        }
         self.incoming.pending_headers = headers;
     }
 

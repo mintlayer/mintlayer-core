@@ -455,7 +455,9 @@ where
                 match peer.run().await {
                     Ok(()) => {}
                     Err(P2pError::ChannelClosed) if shutdown.load() => {}
-                    Err(e) => log::error!("Peer {peer_id} failed: {e}"),
+                    // Note: the peer task reports the failure and the end of the connection
+                    // with the peer address itself.
+                    Err(e) => log::debug!("Peer {peer_id} failed: {e}"),
                 }
             },
             &format!("Peer[id={peer_id}]"),
