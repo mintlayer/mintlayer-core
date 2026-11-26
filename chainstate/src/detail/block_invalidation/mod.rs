@@ -84,6 +84,12 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         is_explicit_invalidation: IsExplicit,
     ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
         let block_indices_to_invalidate = self.collect_stale_block_indices_in_branch(block_id)?;
+        // The root of the branch is the invalidated block itself, the rest are its descendants.
+        let descendant_count = block_indices_to_invalidate.len().saturating_sub(1);
+        let initiator = match is_explicit_invalidation {
+            IsExplicit::Yes => "requested via ChainstateInterface",
+            IsExplicit::No => "implicit, after a validation failure",
+        };
 
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
@@ -104,7 +110,9 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 Ok(())
             },
             |attempt_number| {
-                log::info!("Invalidating block {block_id}, attempt #{attempt_number}");
+                log::info!(
+                    "Invalidating block {block_id} ({initiator}) with {descendant_count} descendant(s), attempt #{attempt_number}"
+                );
             },
             |attempts_count, db_err| {
                 BlockInvalidatorError::DbCommitError(
@@ -157,19 +165,24 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             BlockInvalidatorError::BlockTooDeepToInvalidate(*block_id)
         );
 
-        self.chainstate.with_rw_tx(
-            |chainstate_ref| {
-                let disconnect_until_id = block_index.prev_block_id();
-                chainstate_ref.disconnect_until(&best_block_id, disconnect_until_id).map_err(
+        let disconnected_count = self
+            .chainstate
+            .with_rw_tx(
+                |chainstate_ref| {
+                    let disconnect_until_id = block_index.prev_block_id();
+                    chainstate_ref.disconnect_until(&best_block_id, disconnect_until_id).map_err(
                     |err| BlockInvalidatorError::BlocksDisconnectionError { disconnect_until: *disconnect_until_id, error: Box::new(err) })
-            },
-            |attempt_number| {
-                log::info!("Disconnecting main chain blocks until block {block_id}, attempt #{attempt_number}");
-            },
-            |attempts_count, db_err| {
-                BlockInvalidatorError::DbCommitError(attempts_count, db_err, DbCommittingContext::BlockTreeDisconnection(*block_id))
-            },
-        )?;
+                },
+                |attempt_number| {
+                    log::info!("Disconnecting main chain blocks from tip {best_block_id} until the parent of block {block_id}, attempt #{attempt_number}");
+                },
+                |attempts_count, db_err| {
+                    BlockInvalidatorError::DbCommitError(attempts_count, db_err, DbCommittingContext::BlockTreeDisconnection(*block_id))
+                },
+            )?;
+        log::info!(
+            "Disconnected {disconnected_count} main chain block(s) to invalidate block {block_id}"
+        );
 
         self.invalidate_stale_block(block_id, is_explicit_invalidation)?;
 
@@ -222,7 +235,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 },
                 |attempt_number| {
                     log::info!(
-                        "Processing block {}, attempt #{}",
+                        "Activating the chain of block {}, attempt #{}",
                         candidate.block_id(),
                         attempt_number
                     );
@@ -314,7 +327,11 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 Ok(())
             },
             |attempt_number| {
-                log::info!("Clearing block failure flags, attempt #{}", attempt_number);
+                log::info!(
+                    "Clearing the failure flags of block {block_id} and its {} descendant(s), attempt #{}",
+                    block_indices_to_clear.len().saturating_sub(1),
+                    attempt_number
+                );
             },
             |attempts_count, db_err| {
                 BlockInvalidatorError::DbCommitError(
