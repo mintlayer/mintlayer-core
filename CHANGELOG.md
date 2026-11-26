@@ -52,7 +52,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
       per subscriber; absent or empty delivers all trades. The events reflect the best chain at
       connect time and are not compensated on reorgs; use `chainstate_subscribe_to_events` to
       detect reorgs. Trades are announced only once the initial block download is complete;
-      subscribers that fall behind are closed by the node (at most 32 are served at a time).
+      subscribers that fall behind are closed by the node with an error notification (at most
+      32 are served at a time).
 
 ### Changed
   - Consensus:

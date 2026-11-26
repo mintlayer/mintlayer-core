@@ -57,15 +57,15 @@ pub struct RandomizedTransactionVerificationStrategy {
     rng: std::sync::Mutex<Box<dyn Rng + Send>>,
 }
 
-/// The result of connecting a run of transactions with a derived verifier (see
-/// [`TransactionVerifier::derive_child`]): the consumed state of the derived verifier, to be
-/// flushed into its parent, the fees of the transactions, the index of the next transaction
-/// and the DEX trades of the connected transactions.
 /// The result of [`RandomizedTransactionVerificationStrategy::connect_with_base`]: the verifier
 /// with the connected transactions and the DEX trades of the block.
 type ConnectWithBaseResult<C, S, U, A, T, O> =
     (TransactionVerifier<C, S, U, A, T, O>, Vec<DexTradeInfo>);
 
+/// The result of connecting a run of transactions with a derived verifier (see
+/// [`TransactionVerifier::derive_child`]): the consumed state of the derived verifier, to be
+/// flushed into its parent, the fees of the transactions, the index of the next transaction
+/// and the DEX trades of the connected transactions.
 struct DerivedConnectResult {
     consumed: TransactionVerifierDelta,
     fees: AccumulatedFee,

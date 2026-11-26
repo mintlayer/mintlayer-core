@@ -350,12 +350,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.subsystem_events.broadcast(event);
     }
 
-    /// Announce the new best chain tip: first the DEX trades of the blocks that were connected
-    /// to reach it (in connect order, see [`Self::broadcast_dex_trades`]), then the new tip
-    /// event. The two always go together, in this order.
+    /// Announce the new best chain tip together with the DEX trades of the blocks that were
+    /// connected to reach it (in connect order, see [`Self::broadcast_dex_trades`]): the trades
+    /// are handed to the dispatcher before the tip event is broadcast. The two streams then
+    /// travel through different tasks and channels, so a client subscribed to both has no
+    /// guarantee of receiving the trades of a tip before the tip event.
     ///
-    /// The trades are only announced once the initial block download is complete: a node
-    /// syncing from scratch would otherwise stream the whole history of fills, at sync speed.
+    /// The trades are only announced for the blocks connected once the initial block download is
+    /// complete: a node syncing from scratch would otherwise stream the whole history of fills,
+    /// at sync speed.
     fn broadcast_new_tip_with_trades(
         &mut self,
         best_block_index: GenBlockIndexRef<'_>,
