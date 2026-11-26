@@ -580,18 +580,49 @@ fn file_writer_settings(
     // output. Both are done here first to turn an unusable path into a startup error.
     std::fs::create_dir_all(parent_dir)
         .with_context(|| format!("Failed to create the log file directory {:?}", parent_dir))?;
+    // Only a regular file is written to, and the check does not follow links: a symbolic
+    // link would send the logs, and the renames of the rotation, wherever it points, and a
+    // special file such as a FIFO would block every logging thread once its buffer is full.
+    match std::fs::symlink_metadata(&log_file_path) {
+        Ok(metadata) if !metadata.is_file() => {
+            return Err(anyhow!(
+                "Refusing to use {log_file_path:?} as the log file: it is not a regular file"
+            ));
+        }
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("Failed to inspect the log file {log_file_path:?}"));
+        }
+    }
     let mut open_options = OpenOptions::new();
     open_options.read(true).create(true).append(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt as _;
         // Logs can contain sensitive information, so they are only readable by the owner,
-        // like the RPC cookie file. The mode only applies to a file created here.
+        // like the RPC cookie file. The mode only applies to a file created here; a file
+        // that exists already is restricted below, since the scan of the default logs
+        // directory does not cover a custom path.
         open_options.mode(0o600);
     }
-    open_options
+    let log_file = open_options
         .open(&log_file_path)
         .with_context(|| format!("Failed to open the log file {:?}", log_file_path))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        // The change goes through the open file, so a path swapped in after the check above
+        // cannot redirect it to another file.
+        if log_file.metadata()?.permissions().mode() != 0o600 {
+            log_file
+                .set_permissions(std::fs::Permissions::from_mode(0o600))
+                .with_context(|| {
+                    format!("Failed to restrict the log file {log_file_path:?} to owner-only permissions")
+                })?;
+        }
+    }
 
     let max_size_bytes = usize::try_from(logging_options.log_file_max_size_bytes)
         .context("log_file_max_size_bytes does not fit in the platform's size type")?;
@@ -601,7 +632,10 @@ fn file_writer_settings(
     let log_file = FileRotate::new(
         log_file_path,
         AppendCount::new(rotated_files_count),
-        ContentLimit::Bytes(max_size_bytes),
+        // Rotate once a write has pushed the size past the limit, rather than in the middle
+        // of the write that crosses it, so that no line is ever split between two files and
+        // every line of the json file stays a complete object.
+        ContentLimit::BytesSurpassed(max_size_bytes),
         Compression::None,
         #[cfg(unix)]
         Some(0o600),

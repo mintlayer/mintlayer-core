@@ -330,3 +330,83 @@ fn logging_config_file_values_are_validated() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("log_file_max_files"), "stderr: {stderr}");
 }
+
+/// Rotation happens between lines, so every line of every file is a complete json object.
+#[test]
+fn rotation_keeps_json_lines_whole() {
+    let node = TestNode::new();
+    let log_file = node.data_dir().join("node.jsonl");
+    let first_rotated = node.data_dir().join("node.jsonl.1");
+
+    // The smallest limit rotates before every line but the first one of each file, so the
+    // first rotated file appears as soon as the node has written two lines.
+    let (log, _) = node.run_until_logged(
+        &[
+            "--log-to-file",
+            "true",
+            "--log-file-path",
+            log_file.to_str().unwrap(),
+            "--log-file-format",
+            "json",
+            "--log-file-max-size-bytes",
+            "1",
+        ],
+        &first_rotated,
+        1,
+    );
+
+    let rotated = std::fs::read_to_string(&first_rotated).unwrap();
+    assert!(!json_events(&log).is_empty());
+    assert!(!json_events(&rotated).is_empty());
+}
+
+/// A symbolic link is not followed: the logs and the renames of the rotation would land on
+/// whatever it points to.
+#[cfg(unix)]
+#[test]
+fn symbolic_link_log_file_path_is_a_startup_error() {
+    let node = TestNode::new();
+    let target = node.data_dir().join("target.log");
+    std::fs::write(&target, "untouched\n").unwrap();
+    let link = node.data_dir().join("node.log");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let output = node.run_to_completion(&[
+        "--log-to-file",
+        "true",
+        "--log-file-path",
+        link.to_str().unwrap(),
+    ]);
+
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("it is not a regular file"),
+        "stderr: {stderr}"
+    );
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "untouched\n");
+}
+
+/// A log file left with wider permissions by an earlier version is restricted to the owner.
+#[cfg(unix)]
+#[test]
+fn existing_log_file_is_restricted_to_the_owner() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let node = TestNode::new();
+    let log_file = node.data_dir().join("node.log");
+    File::create(&log_file).unwrap();
+    std::fs::set_permissions(&log_file, std::fs::Permissions::from_mode(0o666)).unwrap();
+
+    let (log, _) = node.run_until_logged(
+        &["--log-to-file", "true", "--log-file-path", log_file.to_str().unwrap()],
+        &log_file,
+        2,
+    );
+
+    assert_eq!(
+        std::fs::metadata(&log_file).unwrap().permissions().mode() & 0o777,
+        0o600,
+        "{log}"
+    );
+}

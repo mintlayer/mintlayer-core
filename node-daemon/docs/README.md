@@ -32,7 +32,8 @@ Notes:
 
 - Setting `--log-file-path` does not enable logging to a file; `--log-to-file true` is still required.
 - The file always receives the logs of the `info` level and above, regardless of `RUST_LOG`. `RUST_LOG` and the default filter apply to stderr only.
-- The log file is created with owner-only permissions on Linux and macOS. A path that cannot be used (for example a directory that cannot be created) stops the node with an error before it starts.
+- The log file is created with owner-only permissions on Linux and macOS; a file that already exists at `--log-file-path` with wider permissions is restricted to the owner when the node starts. Anything but a regular file at that path (a directory, a symbolic link, a device) is refused. A path that cannot be used (for example a directory that cannot be created) stops the node with an error before it starts.
+- The file is rotated once a write has pushed its size past `--log-file-max-size-bytes`, so a line is never split between two files and every line of the json file stays a complete object.
 - The `[logging]` section is new in this version: an older node rejects a `config.toml` that contains it, and the section itself rejects unknown keys.
 - With none of these options set, the sinks are the same as before: text on stderr, and the optional text file in the default location. The enriched fields described below are added either way.
 
