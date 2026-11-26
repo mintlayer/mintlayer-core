@@ -126,8 +126,6 @@ impl DexTradeInfo {
 
         let input_ordinal = u32::try_from(input_ordinal).expect("bounded above");
         let match_ordinal = u32::try_from(match_ordinal).expect("bounded above");
-        let input_ordinal = u32::try_from(input_ordinal).expect("bounded above");
-        let match_ordinal = u32::try_from(match_ordinal).expect("bounded above");
         let in_block_position = compute_in_block_position(
             u64::try_from(tx_index).expect("bounded above"),
             u64::from(input_ordinal),
