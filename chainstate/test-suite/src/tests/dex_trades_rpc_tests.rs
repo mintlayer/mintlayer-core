@@ -40,6 +40,7 @@ use test_utils::random::{Seed, make_seedable_rng};
 const EVENT_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long to wait for an event that is not expected to come.
 const NO_EVENT_TIMEOUT: Duration = Duration::from_millis(200);
+const NOTIFICATION_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Receive the next trade of a subscription, failing if it does not come in time.
 macro_rules! next_trade {
@@ -275,4 +276,33 @@ async fn disconnected_subscribers_free_their_slots(#[case] seed: Seed) {
     drop(subscription);
 
     rpc.stop().await;
+}
+
+/// The end of the stream is observable: when the node (and with it the dispatcher queues) goes
+/// away, the client's subscription stream ENDS (next() yields None) instead of waiting forever.
+/// The final error notification jsonrpsee sends is swallowed by the jsonrpsee Rust client
+/// itself (process_subscription_close_response drops the payload); non-jsonrpsee clients see
+/// the full notification on the wire.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn the_client_sees_the_subscription_end(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let version = OrdersVersion::V1;
+    let mut tf = create_test_framework_with_orders(&mut rng, version);
+    let _fixture = create_fixture(&mut rng, &mut tf, 1);
+    let rpc = RunningRpc::start(&tf).await;
+
+    let client = rpc.connect().await;
+    let mut trades = client.dex_subscribe_to_trades(None).await.unwrap();
+
+    rpc.stop().await;
+    let final_item = tokio::time::timeout(NOTIFICATION_TIMEOUT, trades.next())
+        .await
+        .expect("the subscription termination was not observed by the client");
+    assert!(
+        final_item.is_none(),
+        "the subscription must end with the stream, not with another item: {final_item:?}"
+    );
 }

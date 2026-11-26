@@ -256,17 +256,22 @@ trait ChainstateRpc {
     /// and re-derive the trades from the blocks of the new best chain.
     ///
     /// The events are only produced for the blocks connected once the initial block download
-    /// of the node is complete: a node that is still syncing announces nothing, and the trades
-    /// of the blocks connected before the download completed are never announced (the tip
-    /// events of `subscribe_to_events` tell when the download completes).
+    /// of the node is complete: a node that is still syncing announces nothing. The trades of
+    /// the blocks connected while the download was still running are never announced, except
+    /// for the batch whose connection completes the download: those are announced with the
+    /// first tip event that reports `is_initial_block_download: false` (see
+    /// `subscribe_to_events`).
     ///
     /// Delivery policy: the node keeps up with the chain, not with the subscribers. Every
     /// subscriber has a bounded queue of events; a subscriber that stops reading is closed by
-    /// the node once its queue overflows: the client receives a final error notification
+    /// the node once its queue overflows: the node sends a final error notification
     /// ("subscription closed by the node: the subscriber fell behind or the stream ended",
-    /// the same one that ends every subscription when the node stops) and has to subscribe
-    /// again, re-deriving what it missed from the blocks. At most 32 subscribers are served at
-    /// a time; a subscription beyond that is rejected with an error.
+    /// the same one that ends every subscription when the node stops) and the subscription
+    /// stream ends; jsonrpsee-based Rust clients observe that end as `next()` returning
+    /// `None` (the client library does not surface the notification body). The client has
+    /// to subscribe again, re-deriving what it missed from the blocks. At most 32
+    /// subscribers are served at a time; a subscription beyond that is rejected with an
+    /// error.
     #[subscription(
         name = "dex_subscribe_to_trades",
         unsubscribe = "dex_unsubscribe_to_trades",
@@ -627,8 +632,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 }
                 Err(err) => return Err(err.into()),
             };
-        rpc::subscription::connect_mpsc_filter_map(trade_rx, pending, |trade| {
-            Some(RpcDexTradeEvent::from_trade(&trade))
+        rpc::subscription::connect_mpsc_map(trade_rx, pending, |trade| {
+            RpcDexTradeEvent::from_trade(&trade)
         })
         .await
     }

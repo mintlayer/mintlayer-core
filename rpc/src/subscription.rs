@@ -179,7 +179,7 @@ pub const CLOSED_BY_NODE: &str =
 /// Closing the queue ends the subscription with the [`CLOSED_BY_NODE`] error, so that the client
 /// sees the end of the stream rather than waiting for the next event forever. When the client
 /// goes away, the queue is dropped at once, so that the producer sees its receiver as closed.
-pub async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
+async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
     event_receiver: mpsc::Receiver<T>,
     pending: Pending,
     filter_map_fn: impl FnMut(T) -> Option<U>,

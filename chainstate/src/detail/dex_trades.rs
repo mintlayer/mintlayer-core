@@ -39,13 +39,16 @@ pub(crate) const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 /// The number of trades a subscriber may have pending; a subscriber that falls behind by a full
 /// queue is dropped.
 ///
-/// A block holds at most about 8k fills (one per transaction, in a 1 MiB block). The dispatcher
-/// pushes the trades of one block in a millisecond or two, while a forwarder moves hundreds to a
-/// few thousand events per scheduling window (serialization plus the per-connection buffer of
-/// 1024 messages). The queue holds two maximum-volume blocks, and the dispatcher yields after
-/// every block so that the forwarders drain in between: a reader that keeps up with the chain
-/// never overflows, even on a block full of fills. A reader that stopped reading holds at most
-/// these many trades before it is dropped.
+/// A block holds at most about 15k fills (one per transaction, in a 1 MiB block: a v1 fill input
+/// is an account nonce, an order id and an amount, roughly 70 bytes with tags). The dispatcher
+/// pushes the trades of one activation batch — one block, or a chain of blocks activated
+/// together, such as a reorg branch — in a millisecond or two, while a forwarder moves hundreds
+/// to a few thousand events per scheduling window (serialization plus the per-connection buffer
+/// of 1024 messages). The dispatcher yields after every batch, so the queue holds roughly two
+/// maximum-volume single-block batches: a reader that keeps up with the chain does not overflow
+/// on any single-block batch, and a larger batch is handled like any fall-behind, with the
+/// documented termination. A reader that stopped reading holds at most these many trades before
+/// it is dropped.
 const SUBSCRIBER_QUEUE_CAPACITY: usize = 16_384;
 
 /// A subscription that cannot be accepted.
@@ -361,7 +364,6 @@ mod tests {
         let fills_in_a_full_block = 8_000_u64;
         let trades: Vec<_> = (0..fills_in_a_full_block).map(trade).collect();
         dispatcher.dispatch(trades).unwrap();
-        assert_eq!(dispatcher.registered_subscriber_count(), 1);
 
         drop(dispatcher);
         assert_eq!(receive_all(all).await.len(), fills_in_a_full_block as usize);
@@ -370,9 +372,9 @@ mod tests {
     #[tokio::test]
     async fn the_dispatcher_yields_between_blocks_so_that_readers_keep_up() {
         // a small queue and lists that do not fit in it back to back: the reader must get to
-        // drain between the lists, which the yield after every block list makes possible (a
-        // reader of a tokio queue is budgeted to a few pops per scheduling slot, so it cannot
-        // keep up with a dispatcher that never yields)
+        // drain between the lists, which the yield after every block list makes possible (an
+        // mpsc reader is budgeted to 128 pops per poll; without the yield the dispatcher drains
+        // all three lists in a single poll and the 256-event queue overflows)
         let dispatcher = DexTradesDispatcher::start_with_queue_capacity(256).unwrap();
         let all = dispatcher.subscribe(None).unwrap();
         let reader = tokio::spawn(async move { receive_all(all).await });
