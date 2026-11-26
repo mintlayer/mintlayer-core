@@ -29,11 +29,13 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
-pub use enrichment::enter_root_span;
+pub use enrichment::{enter_root_span, root_span};
 pub use log;
 pub use log_style::{LogFormat, LogStyleParseError, get_log_style_from_env};
 pub use log_style::{LogStyle, TextColoring};
 pub use panic_hook::install_panic_hook;
+/// Re-exported for instrumenting futures with [`root_span`] without a direct `tracing` dependency.
+pub use tracing::Instrument;
 pub use tracing_subscriber::fmt::MakeWriter;
 pub use utils::{GetFromEnvError, get_from_env};
 

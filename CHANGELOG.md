@@ -21,13 +21,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
     - logging: `--log-source-location` and `--log-thread-info` add the source file name
       and line number, or the thread id and name, to every log line; `--log-fields` adds
       static `key=value` fields to every log line.
-    - logging: every log line carries the node version, the chain type and the process
-      id: in the json output as the `node` entry of `spans`, in the text output as a
-      `node{...}` prefix in front of the target. The json file can therefore be consumed
-      line by line by external tools. An invocation without the new options is otherwise
-      unchanged (text on stderr, optional text file in the default location).
+    - logging: the log lines of the node and its subsystems carry the node version, the
+      chain type and the process id: in the json output as the `node` entry of `spans`, in
+      the text output as a `node{...}` prefix in front of the target. The json file can
+      therefore be consumed line by line by external tools. An invocation without the new
+      options is otherwise unchanged (text on stderr, optional text file in the default
+      location).
     - logging: the new `[logging]` section of `config.toml` holds the equivalents of the
-      logging command line options, with the command line taking precedence. An older
+      logging command line options, with the command line taking precedence over the
+      `ML_NODE_*` environment variables, which take precedence over the file. An older
       node rejects a config file that contains the section.
     - chainstate: an optional `pos_seal_activation_gate` chainstate config setting:
       when enabled, the node will not activate a chain whose newly activated segment
