@@ -196,7 +196,7 @@ async fn rpc_subscription_delivers_filtered_trades(#[case] seed: Seed) {
     assert_eq!(quote_token_id, "coin");
     assert_eq!(base_amount, fill.payouts[0].into_atoms().to_string());
     assert_eq!(quote_amount, "100");
-    assert_eq!(in_block_position, 1 << 8);
+    assert_eq!(in_block_position, 1 << 4);
 
     // the reversed pair delivers nothing, and no other trade was announced
     assert!(
