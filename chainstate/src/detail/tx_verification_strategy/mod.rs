@@ -16,7 +16,7 @@
 pub mod default_strategy;
 pub use default_strategy::DefaultTransactionVerificationStrategy;
 
-use chainstate_types::{BlockIndex, DexTradeInfo, DexTradeMatch};
+use chainstate_types::{BlockIndex, DexTradeInfo};
 use common::{
     chain::{Block, BlockTxFees, ChainConfig, block::timestamp::BlockTimestamp},
     primitives::id::WithId,
@@ -31,7 +31,7 @@ use tx_verifier::{
         storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
     },
 };
-use utils::{debug_panic_or_log, shallow_clone::ShallowClone};
+use utils::shallow_clone::ShallowClone;
 use utxo::UtxosView;
 
 // TODO: replace with trait_alias when stabilized
@@ -49,45 +49,11 @@ impl<C, S, U, A, T, O, F> TransactionVerifierMakerFn<C, S, U, A, T, O> for F whe
 /// The output of [`TransactionVerificationStrategy::connect_block`]: the
 /// transaction verifier for the connected block, the per-transaction
 /// fees of the block and the DEX trades performed by its transactions, in block order.
-type ConnectBlockOutput<C, S, U, A, T, O> = (
+pub type ConnectBlockOutput<C, S, U, A, T, O> = (
     TransactionVerifier<C, S, U, A, T, O>,
     BlockTxFees,
     Vec<DexTradeInfo>,
 );
-
-/// Position the DEX trade matches drained from a transaction verifier after connecting the
-/// transaction at `tx_index` of the block with the given index (see
-/// [`TransactionVerifier::take_dex_trade_matches`]).
-///
-/// The block size limit guarantees that every match can be positioned; a match that cannot be is
-/// reported and skipped rather than affecting the connection of the block.
-pub fn position_dex_trade_matches(
-    block_index: &BlockIndex,
-    tx_index: usize,
-    matches: impl IntoIterator<Item = DexTradeMatch>,
-) -> Vec<DexTradeInfo> {
-    matches
-        .into_iter()
-        .filter_map(|trade| {
-            let tx_id = trade.tx_id;
-            match DexTradeInfo::new(
-                *block_index.block_id(),
-                block_index.block_height(),
-                tx_index,
-                trade,
-            ) {
-                Ok(info) => Some(info),
-                Err(err) => {
-                    debug_panic_or_log!(
-                        "Failed to position the DEX trade of transaction {tx_id:x} of block {}: {err}",
-                        block_index.block_id()
-                    );
-                    None
-                }
-            }
-        })
-        .collect()
-}
 
 pub trait TransactionVerificationStrategy: Sized + Send {
     /// Connect the transactions given by block and block_index,

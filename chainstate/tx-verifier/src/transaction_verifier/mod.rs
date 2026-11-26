@@ -65,7 +65,7 @@ use self::{
 use ::utils::{debug_panic_or_log, ensure, shallow_clone::ShallowClone};
 pub use reward_distribution::{RewardDistributionError, distribute_pos_reward};
 
-use chainstate_types::{BlockIndex, DexTradeMatch, TipStorageTag};
+use chainstate_types::{BlockIndex, DexTradeInfo, DexTradeMatch, TipStorageTag};
 use common::{
     chain::{
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig, Currency,
@@ -130,7 +130,7 @@ pub struct TransactionVerifier<C, S, U, A, T, O> {
     orders_accounting_block_undo: AccountingBlockUndoCache<OrdersAccountingUndo>,
 
     /// The DEX trade matches of the transactions connected to a block so far; see
-    /// [`TransactionVerifier::take_dex_trade_matches`].
+    /// [`TransactionVerifier::take_dex_trade_infos`].
     dex_trade_matches: Vec<DexTradeMatch>,
 
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
@@ -991,11 +991,39 @@ where
         Ok(undo)
     }
 
-    /// Take the DEX trade matches of the transactions connected to a block so far, in the order
-    /// in which their inputs were connected (see [`DexTradeMatch`]).
-    /// Transactions connected for the mempool produce no matches.
-    pub fn take_dex_trade_matches(&mut self) -> Vec<DexTradeMatch> {
+    /// Take the DEX trades of the transactions connected to the block since the last call (see
+    /// [`DexTradeMatch`]) and position them as the trades of the transaction at `tx_index` of
+    /// `block_index`.
+    ///
+    /// The block size limit guarantees that every trade can be positioned; a trade that cannot
+    /// be is reported and skipped rather than affecting the connection of the block.
+    /// Transactions connected for the mempool produce no trades.
+    pub fn take_dex_trade_infos(
+        &mut self,
+        block_index: &BlockIndex,
+        tx_index: usize,
+    ) -> Vec<DexTradeInfo> {
         std::mem::take(&mut self.dex_trade_matches)
+            .into_iter()
+            .filter_map(|trade| {
+                let tx_id = trade.tx_id;
+                match DexTradeInfo::new(
+                    *block_index.block_id(),
+                    block_index.block_height(),
+                    tx_index,
+                    trade,
+                ) {
+                    Ok(info) => Some(info),
+                    Err(err) => {
+                        debug_panic_or_log!(
+                            "Skipping the DEX trade of transaction {tx_id:x} of block {}: {err}",
+                            block_index.block_id()
+                        );
+                        None
+                    }
+                }
+            })
+            .collect()
     }
 
     fn disconnect_orders_accounting_outputs(

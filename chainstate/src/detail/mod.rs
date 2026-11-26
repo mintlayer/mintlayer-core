@@ -212,12 +212,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.rpc_dex_trades.subscribe()
     }
 
-    /// Send the DEX trades of the blocks that just became the best chain to the RPC subscribers,
-    /// in connect order. Called from the same place as the new tip event.
-    fn broadcast_dex_trades(&mut self, dex_trades: &[DexTradeInfo]) {
-        dex_trades.iter().for_each(|trade| self.rpc_dex_trades.broadcast(trade));
-    }
-
     #[log_error]
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -342,6 +336,24 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         self.rpc_events.broadcast(&event);
         self.subsystem_events.broadcast(event);
+    }
+
+    /// Announce the new best chain tip: first the DEX trades of the blocks that were connected
+    /// to reach it (in connect order, see [`Self::broadcast_dex_trades`]), then the new tip
+    /// event. The two always go together, in this order.
+    fn broadcast_new_tip_with_trades(
+        &mut self,
+        best_block_index: GenBlockIndexRef<'_>,
+        dex_trades: &[DexTradeInfo],
+    ) {
+        self.broadcast_dex_trades(dex_trades);
+        self.broadcast_new_tip_event(best_block_index, self.is_initial_block_download());
+    }
+
+    /// Hand the DEX trades of the blocks that just became the best chain to the RPC subscribers,
+    /// in connect order.
+    fn broadcast_dex_trades(&mut self, dex_trades: &[DexTradeInfo]) {
+        dex_trades.iter().for_each(|trade| self.rpc_dex_trades.broadcast(trade));
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
@@ -810,10 +822,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             // disk: the flag stays unset for retry, and tip events resume (including
             // the pending block) once a sync succeeds.
             self.update_initial_block_download_flag(best_block_index_ref, false)?;
-            // Only the trades of the blocks connected on the way to the new tip are collected;
-            // they are announced together with it.
-            self.broadcast_dex_trades(&dex_trades);
-            self.broadcast_new_tip_event(best_block_index_ref, self.is_initial_block_download());
+            self.broadcast_new_tip_with_trades(best_block_index_ref, &dex_trades);
 
             let compact_target = match best_block_index.block_header().consensus_data() {
                 ConsensusData::None => Compact::from(Uint256::ZERO),
@@ -916,13 +925,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if new_best_block_index.block_id() != prev_best_block_id {
             // The trades of the blocks connected by the reorg caused by the invalidation, if it
-            // went through; they are announced together with the new tip.
-            if let Some(dex_trades) = result.as_ref().ok().and_then(|trades| trades.as_deref()) {
-                self.broadcast_dex_trades(dex_trades);
-            }
-            self.broadcast_new_tip_event(
+            // went through, are announced together with the new tip.
+            let dex_trades = result.as_ref().ok().and_then(|trades| trades.as_deref());
+            self.broadcast_new_tip_with_trades(
                 new_best_block_index.as_ref(),
-                self.is_initial_block_download(),
+                dex_trades.unwrap_or(&[]),
             );
         }
 
@@ -947,13 +954,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .map_err(BlockInvalidatorError::BestBlockIndexQueryError)?;
 
         if new_best_block_index.block_id() != prev_best_block_id {
-            // The trades of the blocks connected by the reorg, announced together with the new tip.
-            if let Some(dex_trades) = dex_trades.as_deref() {
-                self.broadcast_dex_trades(dex_trades);
-            }
-            self.broadcast_new_tip_event(
+            // The trades of the blocks connected by the reorg are announced together with the new tip.
+            self.broadcast_new_tip_with_trades(
                 new_best_block_index.as_ref(),
-                self.is_initial_block_download(),
+                dex_trades.as_deref().unwrap_or(&[]),
             );
         }
 
