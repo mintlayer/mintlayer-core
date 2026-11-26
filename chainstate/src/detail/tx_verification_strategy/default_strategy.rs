@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::TransactionVerificationStrategy;
+use super::{ConnectBlockOutput, TransactionVerificationStrategy, position_dex_trade_matches};
 use crate::TransactionVerifierMakerFn;
 use chainstate_types::BlockIndex;
 use common::{
@@ -57,7 +57,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
+    ) -> Result<ConnectBlockOutput<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef,
@@ -72,11 +72,14 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
 
         // (experimental) step 9: collect the per-transaction fee of each tx
         // while connecting, to be persisted for serving to API consumers.
+        // The DEX trades performed by the transactions are collected alongside.
         let mut block_tx_fees = Vec::with_capacity(block.transactions().len());
+        let mut block_dex_trades = Vec::new();
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(AccumulatedFee::new(), |total, tx| {
+            .enumerate()
+            .try_fold(AccumulatedFee::new(), |total, (tx_index, tx)| {
                 let fee = tx_verifier
                     .connect_transaction(
                         &TransactionSourceForConnect::Chain {
@@ -86,6 +89,11 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                         &median_time_past,
                     )
                     .log_err()?;
+                block_dex_trades.extend(position_dex_trade_matches(
+                    block_index,
+                    tx_index,
+                    tx_verifier.take_dex_trade_matches(),
+                ));
                 let tx_fee = fee
                     .clone()
                     .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
@@ -125,7 +133,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
 
         tx_verifier.set_best_block(block.get_id().into());
 
-        Ok((tx_verifier, BlockTxFees(block_tx_fees)))
+        Ok((tx_verifier, BlockTxFees(block_tx_fees), block_dex_trades))
     }
 
     fn disconnect_block<C, S, M, U, A, T, O>(

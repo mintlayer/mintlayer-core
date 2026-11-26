@@ -29,7 +29,7 @@ use crate::{
     },
 };
 use chainstate_storage::BlockchainStorage;
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, DexTradeInfo, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         AccountNonce, AccountType, BlockTxFees, Currency, DelegationId, OrderId, PoolId,
@@ -69,6 +69,11 @@ where
     #[tracing::instrument(skip_all)]
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
         self.chainstate.subscribe_to_event_broadcast()
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn subscribe_to_rpc_dex_trades(&mut self) -> broadcaster::Receiver<DexTradeInfo> {
+        self.chainstate.subscribe_to_dex_trades_broadcast()
     }
 
     // Note: in this and some other functions below (in particular, in those that are called from

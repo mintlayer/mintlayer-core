@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use chainstate::{
-    TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
+    DexTradeInfo, TransactionVerificationStrategy, TransactionVerifierMakerFn,
+    TransactionVerifierStorageError, position_dex_trade_matches,
 };
 use chainstate_types::BlockIndex;
 use common::{
@@ -73,7 +74,14 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
+    ) -> Result<
+        (
+            TransactionVerifier<C, S, U, A, T, O>,
+            BlockTxFees,
+            Vec<DexTradeInfo>,
+        ),
+        ConnectTransactionError,
+    >
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -84,7 +92,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier = self
+        let (mut tx_verifier, dex_trades) = self
             .connect_with_base(
                 tx_verifier_maker,
                 storage_backend,
@@ -97,7 +105,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 
         tx_verifier.set_best_block(block.get_id().into());
 
-        Ok((tx_verifier, BlockTxFees(vec![])))
+        Ok((tx_verifier, BlockTxFees(vec![]), dex_trades))
     }
 
     fn disconnect_block<C, S, M, U, A, T, O>(
@@ -136,7 +144,7 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, Vec<DexTradeInfo>), ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -150,21 +158,24 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
         let mut total_fees = AccumulatedFee::new();
+        let mut dex_trades = Vec::new();
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().random::<bool>() {
                 // derive a new cache
-                let (consumed_cache, fee, new_tx_index) = self.connect_with_derived(
-                    &tx_verifier,
-                    block,
-                    block_index,
-                    median_time_past,
-                    tx_num,
-                )?;
+                let (consumed_cache, fee, new_tx_index, derived_dex_trades) = self
+                    .connect_with_derived(
+                        &tx_verifier,
+                        block,
+                        block_index,
+                        median_time_past,
+                        tx_num,
+                    )?;
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
+                dex_trades.extend(derived_dex_trades);
 
                 flush_to_storage(&mut tx_verifier, consumed_cache)
                     .map_err(ConnectTransactionError::from)?;
@@ -179,6 +190,12 @@ impl RandomizedTransactionVerificationStrategy {
                     &block.transactions()[tx_num],
                     median_time_past,
                 )?;
+
+                dex_trades.extend(position_dex_trade_matches(
+                    block_index,
+                    tx_num,
+                    tx_verifier.take_dex_trade_matches(),
+                ));
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
@@ -210,9 +227,10 @@ impl RandomizedTransactionVerificationStrategy {
             )
             .log_err()?;
 
-        Ok(tx_verifier)
+        Ok((tx_verifier, dex_trades))
     }
 
+    #[allow(clippy::type_complexity)]
     fn connect_with_derived<C, S, U, A, T, O>(
         &self,
         base_tx_verifier: &TransactionVerifier<C, S, U, A, T, O>,
@@ -220,7 +238,15 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
         mut tx_num: usize,
-    ) -> Result<(TransactionVerifierDelta, AccumulatedFee, usize), ConnectTransactionError>
+    ) -> Result<
+        (
+            TransactionVerifierDelta,
+            AccumulatedFee,
+            usize,
+            Vec<DexTradeInfo>,
+        ),
+        ConnectTransactionError,
+    >
     where
         C: AsRef<ChainConfig>,
         U: UtxosView,
@@ -232,6 +258,7 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fees = AccumulatedFee::new();
+        let mut dex_trades = Vec::new();
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().random::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
@@ -246,6 +273,12 @@ impl RandomizedTransactionVerificationStrategy {
                     median_time_past,
                 )?;
 
+                dex_trades.extend(position_dex_trade_matches(
+                    block_index,
+                    tx_num,
+                    tx_verifier.take_dex_trade_matches(),
+                ));
+
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
@@ -253,7 +286,7 @@ impl RandomizedTransactionVerificationStrategy {
             }
         }
         let cache = tx_verifier.consume()?;
-        Ok((cache, total_fees, tx_num))
+        Ok((cache, total_fees, tx_num, dex_trades))
     }
 
     fn disconnect_with_base<C, S, M, U, A, T, O>(
