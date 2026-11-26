@@ -72,7 +72,7 @@ use crate::{
 // 8) We should also ensure that RPC types don't contain plain String's where an RpcAddress can be used (this affects
 // how the corresponding value is referred to in the generated RPC documentation; also, it has less potential for mis-use).
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Hash)]
 pub enum Currency {
     Coin,
     Token(TokenId),

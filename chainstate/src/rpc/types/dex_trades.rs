@@ -17,7 +17,7 @@
 
 use std::str::FromStr as _;
 
-use chainstate_types::DexTradeInfo;
+use chainstate_types::{DexTradeInfo, DexTradePairSet};
 use common::{
     chain::{Block, Currency, Transaction, tokens::TokenId},
     primitives::{BlockHeight, H256, Id},
@@ -39,52 +39,79 @@ pub struct RpcTradingPair {
     pub quote: String,
 }
 
-/// A trading pair that is not well-formed.
+/// The maximum number of pairs a subscription may select.
+pub const MAX_TRADING_PAIRS: usize = 256;
+
+/// How many characters of an invalid value are echoed back in the error.
+const ECHOED_VALUE_CHARS: usize = 64;
+/// The length of the canonical hex form of a token id (32 bytes).
+const TOKEN_ID_HEX_LEN: usize = 64;
+
+/// A trading pair filter that is not well-formed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error(
-    "invalid {side} of the trading pair: {value:?} is neither \"{COIN}\" nor a hex-encoded token id"
-)]
-pub struct RpcTradingPairError {
-    side: &'static str,
-    value: String,
+pub enum RpcTradingPairError {
+    #[error(
+        "invalid {side} of the trading pair: {value:?} is neither \"{COIN}\" nor a 64-hex-digit token id (no 0x prefix)"
+    )]
+    InvalidCurrency { side: &'static str, value: String },
+    #[error("too many trading pairs ({count}); at most {max} are allowed")]
+    TooManyPairs { count: usize, max: usize },
 }
 
 impl RpcTradingPair {
     /// Validate the pair, resolving its sides into currencies.
-    pub fn parse(&self) -> Result<TradingPair, RpcTradingPairError> {
+    pub fn parse(&self) -> Result<(Currency, Currency), RpcTradingPairError> {
         let base = parse_currency("base", &self.base)?;
         let quote = parse_currency("quote", &self.quote)?;
-        Ok(TradingPair { base, quote })
+        Ok((base, quote))
+    }
+
+    /// Validate the pairs of a subscription, collecting them into the set that selects the
+    /// matching trades. An absent or empty list selects all trades (`None`).
+    pub fn parse_pairs(
+        pairs: Option<Vec<RpcTradingPair>>,
+    ) -> Result<Option<DexTradePairSet>, RpcTradingPairError> {
+        let Some(pairs) = pairs else {
+            return Ok(None);
+        };
+        if pairs.len() > MAX_TRADING_PAIRS {
+            return Err(RpcTradingPairError::TooManyPairs {
+                count: pairs.len(),
+                max: MAX_TRADING_PAIRS,
+            });
+        }
+        let set: DexTradePairSet = pairs
+            .iter()
+            .map(RpcTradingPair::parse)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .collect();
+        Ok((!set.is_empty()).then_some(set))
     }
 }
 
 fn parse_currency(side: &'static str, value: &str) -> Result<Currency, RpcTradingPairError> {
-    let error = || RpcTradingPairError {
+    let error = || RpcTradingPairError::InvalidCurrency {
         side,
-        value: value.to_owned(),
+        value: truncate(value),
     };
     if value == COIN {
         return Ok(Currency::Coin);
     }
     // the canonical hex form of the ids of the events: 64 hex digits, no prefix
-    if value.starts_with("0x") || value.starts_with("0X") {
+    if value.len() != TOKEN_ID_HEX_LEN || value.starts_with("0x") || value.starts_with("0X") {
         return Err(error());
     }
     let token_id = H256::from_str(value).map_err(|_| error())?;
     Ok(Currency::Token(TokenId::new(token_id)))
 }
 
-/// A validated [`RpcTradingPair`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TradingPair {
-    pub base: Currency,
-    pub quote: Currency,
-}
-
-impl TradingPair {
-    /// Whether the trade has exactly this pair.
-    pub fn matches(&self, trade: &DexTradeInfo) -> bool {
-        self.base == trade.base && self.quote == trade.quote
+/// The first [`ECHOED_VALUE_CHARS`] characters of the value, so that an invalid value is not
+/// echoed back in full.
+fn truncate(value: &str) -> String {
+    match value.char_indices().nth(ECHOED_VALUE_CHARS) {
+        Some((index, _)) => value[..index].to_owned(),
+        None => value.to_owned(),
     }
 }
 
@@ -257,6 +284,11 @@ mod tests {
         );
     }
 
+    /// The filter selecting the given pairs (`None` if the list is empty or absent).
+    fn filter(pairs: Option<Vec<RpcTradingPair>>) -> Option<DexTradePairSet> {
+        RpcTradingPair::parse_pairs(pairs).unwrap()
+    }
+
     #[test]
     fn pair_filter_selects_and_rejects() {
         let token = token_id(0xab);
@@ -265,32 +297,51 @@ mod tests {
         let token_coin = trade(Currency::Token(token), Currency::Coin, 2);
         let token_token = trade(Currency::Token(token), Currency::Token(other_token), 3);
 
-        let coin_token_pair = pair("coin", &format!("{token:x}")).parse().unwrap();
-        assert!(coin_token_pair.matches(&coin_token));
+        let coin_token_pairs = filter(Some(vec![pair("coin", &format!("{token:x}"))])).unwrap();
+        assert!(coin_token_pairs.matches(&coin_token));
         // the reversed pair does not match
-        assert!(!coin_token_pair.matches(&token_coin));
-        assert!(!coin_token_pair.matches(&token_token));
+        assert!(!coin_token_pairs.matches(&token_coin));
+        assert!(!coin_token_pairs.matches(&token_token));
 
-        let token_coin_pair = pair(&format!("{token:x}"), "coin").parse().unwrap();
-        assert!(token_coin_pair.matches(&token_coin));
-        assert!(!token_coin_pair.matches(&coin_token));
+        let token_coin_pairs = filter(Some(vec![pair(&format!("{token:x}"), "coin")])).unwrap();
+        assert!(token_coin_pairs.matches(&token_coin));
+        assert!(!token_coin_pairs.matches(&coin_token));
 
-        let coin_coin_pair = pair("coin", "coin").parse().unwrap();
-        assert!(coin_coin_pair.matches(&trade(Currency::Coin, Currency::Coin, 4)));
-        assert!(!coin_coin_pair.matches(&coin_token));
+        let coin_coin_pairs = filter(Some(vec![pair("coin", "coin")])).unwrap();
+        assert!(coin_coin_pairs.matches(&trade(Currency::Coin, Currency::Coin, 4)));
+        assert!(!coin_coin_pairs.matches(&coin_token));
 
-        let token_token_pair =
-            pair(&format!("{token:x}"), &format!("{other_token:x}")).parse().unwrap();
-        assert!(token_token_pair.matches(&token_token));
-        assert!(!token_token_pair.matches(&trade(
+        let token_token_pairs = filter(Some(vec![pair(
+            &format!("{token:x}"),
+            &format!("{other_token:x}"),
+        )]))
+        .unwrap();
+        assert!(token_token_pairs.matches(&token_token));
+        assert!(!token_token_pairs.matches(&trade(
             Currency::Token(other_token),
             Currency::Token(token),
             5
         )));
 
+        // several pairs select the union of their trades, and duplicates count once
+        let several = filter(Some(vec![
+            pair("coin", &format!("{token:x}")),
+            pair("coin", &format!("{token:x}")),
+            pair(&format!("{token:x}"), &format!("{other_token:x}")),
+        ]))
+        .unwrap();
+        assert_eq!(several.len(), 2);
+        assert!(several.matches(&coin_token));
+        assert!(several.matches(&token_token));
+        assert!(!several.matches(&token_coin));
+
         // a well-formed pair of a token that does not exist is accepted and matches nothing
-        let unknown = pair(&format!("{:x}", token_id(0xff)), "coin").parse().unwrap();
+        let unknown = filter(Some(vec![pair(&format!("{:x}", token_id(0xff)), "coin")])).unwrap();
         assert!(!unknown.matches(&token_coin));
+
+        // an absent or empty list selects everything
+        assert_eq!(filter(None), None);
+        assert_eq!(filter(Some(vec![])), None);
     }
 
     #[test]
@@ -304,22 +355,65 @@ mod tests {
             "".to_owned(),
             "0x".to_owned(),
             format!("0x{token:x}"),
-            // shorter and longer than 32 bytes
-            "abc".to_owned(),
-            "ab".repeat(33),
+            "abc".to_owned(),       // shorter than 32 bytes
             format!("{token:x}00"), // longer than 32 bytes
             format!("{token:x}zz"), // non-hex characters
             "Coin".to_owned(),
             " coins".to_owned(),
         ] {
             let err = pair("coin", &malformed).parse().unwrap_err();
-            assert_eq!(err.side, "quote");
-            assert_eq!(err.value, malformed);
-            assert!(err.to_string().contains(&format!("{malformed:?}")), "{err}");
+            // an invalid value longer than 64 characters is echoed back truncated
+            let echoed: String = malformed.chars().take(64).collect();
+            assert_eq!(
+                err,
+                RpcTradingPairError::InvalidCurrency {
+                    side: "quote",
+                    value: echoed.clone()
+                }
+            );
+            assert!(err.to_string().contains(&format!("{echoed:?}")), "{err}");
         }
         let err = pair("nope", "coin").parse().unwrap_err();
-        assert_eq!(err.side, "base");
-        assert_eq!(err.value, "nope");
+        assert_eq!(
+            err,
+            RpcTradingPairError::InvalidCurrency {
+                side: "base",
+                value: "nope".to_owned()
+            }
+        );
+        // the error is raised through the list parsing too
+        assert_eq!(
+            RpcTradingPair::parse_pairs(Some(vec![pair("nope", "coin")])),
+            Err(err)
+        );
+    }
+
+    #[test]
+    fn invalid_value_is_echoed_truncated() {
+        let long = "z".repeat(200);
+        let err = pair(&long, "coin").parse().unwrap_err();
+        let RpcTradingPairError::InvalidCurrency { side, value } = &err else {
+            panic!("unexpected error {err:?}");
+        };
+        assert_eq!(*side, "base");
+        // only the first 64 characters are echoed back
+        assert_eq!(value, &"z".repeat(64));
+        assert!(!err.to_string().contains(&"z".repeat(65)));
+    }
+
+    #[test]
+    fn pair_filter_rejects_too_many_pairs() {
+        let token = token_id(0xab);
+        let pairs = || pair("coin", &format!("{token:x}"));
+        let max = MAX_TRADING_PAIRS;
+        assert!(RpcTradingPair::parse_pairs(Some(vec![pairs(); max])).is_ok());
+        assert_eq!(
+            RpcTradingPair::parse_pairs(Some(vec![pairs(); max + 1])),
+            Err(RpcTradingPairError::TooManyPairs {
+                count: max + 1,
+                max
+            })
+        );
     }
 
     #[test]
@@ -329,17 +423,17 @@ mod tests {
             trade(Currency::Coin, Currency::Token(token), 1),
             trade(Currency::Token(token), Currency::Coin, 2),
         ];
-        let pairs = [pair("coin", &format!("{token:x}")).parse().unwrap()];
+        let pairs = filter(Some(vec![pair("coin", &format!("{token:x}"))])).unwrap();
         let filtered: Vec<_> = trades
             .iter()
-            .filter(|trade| pairs.iter().any(|pair| pair.matches(trade)))
+            .filter(|trade| pairs.matches(trade))
             .map(RpcDexTradeEvent::from_trade)
             .collect();
         let unfiltered: Vec<_> = trades.iter().map(RpcDexTradeEvent::from_trade).collect();
         assert_eq!(filtered.len(), 1);
         assert_eq!(
-            serde_json::to_string(&filtered[0]).unwrap(),
-            serde_json::to_string(&unfiltered[0]).unwrap()
+            serde_json::to_value(&filtered[0]).unwrap(),
+            serde_json::to_value(&unfiltered[0]).unwrap()
         );
     }
 }
