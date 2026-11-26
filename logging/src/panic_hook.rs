@@ -188,11 +188,16 @@ mod tests {
         let inside_write = Arc::new(AtomicBool::new(false));
         let make_writer = write_to_make_writer(FailingWriter(Arc::clone(&inside_write)));
 
-        let result = make_writer.make_writer().write_all(b"line");
-        assert!(result.is_err());
+        // The mark covers the whole lock scope: from handing the writer out to dropping it.
+        let mut writer = make_writer.make_writer();
+        assert!(in_sink_write());
 
-        // The writer saw the guard, which is gone once the write is over.
+        let result = writer.write_all(b"line");
+        assert!(result.is_err());
         assert!(inside_write.load(Ordering::SeqCst));
+        assert!(in_sink_write());
+
+        drop(writer);
         assert!(!in_sink_write());
     }
 }
