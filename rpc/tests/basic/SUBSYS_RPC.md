@@ -43,6 +43,22 @@ Unsubscribe using `some_subsystem_unsubscribe_squares`.
 
 Note: Subscriptions only work over WebSockets.
 
+### Subscription `some_subsystem_subscribe_ending`
+
+Parameters:
+```
+{}
+```
+
+Produces:
+```
+number
+```
+
+Unsubscribe using `some_subsystem_unsubscribe_ending`.
+
+Note: Subscriptions only work over WebSockets.
+
 ### Method `some_subsystem_convoluted`
 
 Parameters:
