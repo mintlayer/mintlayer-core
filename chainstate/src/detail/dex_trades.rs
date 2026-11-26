@@ -305,7 +305,7 @@ mod tests {
         let dispatcher = DexTradesDispatcher::start().unwrap();
         let all = dispatcher.subscribe(None).unwrap();
         let other = dispatcher
-            .subscribe(Some(DexTradePairSet::from([(
+            .subscribe(Some(DexTradePairSet::from_iter([(
                 Currency::Coin,
                 Currency::Coin,
             )])))
@@ -327,7 +327,7 @@ mod tests {
         // a subscriber that never reads its queue, and one whose pairs select nothing
         let slow = dispatcher.subscribe(None).unwrap();
         let selective = dispatcher
-            .subscribe(Some(DexTradePairSet::from([(
+            .subscribe(Some(DexTradePairSet::from_iter([(
                 Currency::Coin,
                 Currency::Coin,
             )])))

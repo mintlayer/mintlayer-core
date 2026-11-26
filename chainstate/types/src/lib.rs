@@ -26,7 +26,9 @@ pub use crate::{
     block_index_handle::BlockIndexHandle,
     block_index_history_iter::BlockIndexHistoryIterator,
     block_status::{BlockStatus, BlockValidationStage},
-    dex_trades::{DexTradeInfo, DexTradeMatch, DexTradePairSet, DexTradePositionError},
+    dex_trades::{
+        DexTradeInfo, DexTradeMatch, DexTradePair, DexTradePairSet, DexTradePositionError,
+    },
     epoch_data::EpochData,
     epoch_data_cache::{
         ConsumedEpochDataCache, EpochDataCache, EpochStorageRead, EpochStorageWrite,

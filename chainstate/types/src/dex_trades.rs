@@ -174,26 +174,16 @@ fn compute_in_block_position(tx_index: u64, input_ordinal: u64, match_ordinal: u
         .expect("the bounds above leave room for every component")
 }
 
-/// A set of trading pairs, each `(base, quote)`: the currency the maker gives and the currency
-/// the maker asks for. Used to select the trades belonging to any of its pairs.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DexTradePairSet(HashSet<(Currency, Currency)>);
+/// A trading pair: the currency the maker gives (base) and the currency the maker asks for
+/// (quote).
+pub type DexTradePair = (Currency, Currency);
+
+/// A set of trading pairs, built from an iterator of pairs (a pair present several times is
+/// counted once). Used to select the trades belonging to any of its pairs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DexTradePairSet(HashSet<DexTradePair>);
 
 impl DexTradePairSet {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Add the pair `(base, quote)`; a pair present already is ignored.
-    pub fn insert(&mut self, base: Currency, quote: Currency) {
-        self.0.insert((base, quote));
-    }
-
-    /// The number of distinct pairs.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
     /// Whether the set has no pairs.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -206,14 +196,8 @@ impl DexTradePairSet {
     }
 }
 
-impl<T: IntoIterator<Item = (Currency, Currency)>> From<T> for DexTradePairSet {
-    fn from(pairs: T) -> Self {
-        pairs.into_iter().collect()
-    }
-}
-
-impl FromIterator<(Currency, Currency)> for DexTradePairSet {
-    fn from_iter<I: IntoIterator<Item = (Currency, Currency)>>(pairs: I) -> Self {
+impl FromIterator<DexTradePair> for DexTradePairSet {
+    fn from_iter<I: IntoIterator<Item = DexTradePair>>(pairs: I) -> Self {
         Self(pairs.into_iter().collect())
     }
 }
@@ -347,12 +331,7 @@ mod tests {
         };
         let token = Currency::Token(TokenId::zero());
         let other = Currency::Token(TokenId::new(H256::from_low_u64_be(1)));
-        let mut pairs = DexTradePairSet::new();
-        assert!(pairs.is_empty());
-        pairs.insert(Currency::Coin, token);
-        // a duplicate pair is counted once
-        pairs.insert(Currency::Coin, token);
-        assert_eq!(pairs.len(), 1);
+        let pairs = DexTradePairSet::from_iter([(Currency::Coin, token)]);
         assert!(!pairs.is_empty());
 
         assert!(pairs.matches(&trade(Currency::Coin, token)));
@@ -360,12 +339,18 @@ mod tests {
         assert!(!pairs.matches(&trade(token, Currency::Coin)));
         assert!(!pairs.matches(&trade(Currency::Coin, other)));
         assert!(!pairs.matches(&trade(Currency::Coin, Currency::Coin)));
+
+        // a pair present several times is counted once; several pairs select any of them
+        let several = DexTradePairSet::from_iter([
+            (Currency::Coin, token),
+            (Currency::Coin, token),
+            (token, Currency::Coin),
+        ]);
+        assert!(several.matches(&trade(token, Currency::Coin)));
+        assert!(!several.matches(&trade(Currency::Coin, other)));
         // an empty set matches nothing
-        assert!(!DexTradePairSet::new().matches(&trade(Currency::Coin, token)));
-        assert_eq!(
-            DexTradePairSet::from([(Currency::Coin, token), (token, Currency::Coin)]).len(),
-            2
-        );
+        assert!(DexTradePairSet::from_iter([]).is_empty());
+        assert!(!DexTradePairSet::from_iter([]).matches(&trade(Currency::Coin, token)));
     }
 
     #[test]
