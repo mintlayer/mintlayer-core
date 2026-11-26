@@ -43,6 +43,7 @@ use self::types::{block::RpcBlock, event::RpcEvent};
 
 pub use types::{
     RpcTypeError,
+    dex_trades::{RpcDexTradeEvent, RpcTradingPair},
     input::RpcUtxoOutpoint,
     output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
@@ -223,6 +224,33 @@ trait ChainstateRpc {
     /// After a successful subscription, the node will message the subscriber with a message on every event.
     #[subscription(name = "subscribe_to_events", item = RpcEvent)]
     async fn subscribe_to_events(&self) -> rpc::subscription::Reply;
+
+    /// Subscribe to the DEX trades (order fills) of the blocks that become the best chain.
+    ///
+    /// One event is produced per fill-order input of the transactions of a block, when the block
+    /// is connected as part of the best chain. The trade is described from the point of view of
+    /// the maker (the order being filled): `base_token_id` is the currency the maker gives and
+    /// `quote_token_id` is the currency the maker asks for; the amounts are in atoms.
+    ///
+    /// The `pairs` parameter filters the events by trading pair: a pair is `{ "base": <currency>,
+    /// "quote": <currency> }` where a currency is either the literal `"coin"` or the hex-encoded
+    /// token id, as used in the events. A trade matches a pair only if both of its sides match,
+    /// so a trade of the reversed pair does not match. An absent or empty list delivers all the
+    /// events; a well-formed pair of a market that has no trades simply delivers nothing.
+    /// A malformed pair rejects the subscription with an error naming the offending value.
+    ///
+    /// Events reflect what the best chain said when the block was connected: no compensating
+    /// events are produced on a reorg, so consumers should use `subscribe_to_events` to detect
+    /// reorgs and re-derive the trades from the blocks.
+    #[subscription(
+        name = "dex_subscribe_to_trades",
+        unsubscribe = "dex_unsubscribe_to_trades",
+        item = RpcDexTradeEvent
+    )]
+    async fn dex_subscribe_to_trades(
+        &self,
+        pairs: Option<Vec<RpcTradingPair>>,
+    ) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -548,6 +576,41 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn subscribe_to_events(&self, pending: subscription::Pending) -> subscription::Reply {
         let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
         rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
+    }
+
+    async fn dex_subscribe_to_trades(
+        &self,
+        pending: subscription::Pending,
+        pairs: Option<Vec<RpcTradingPair>>,
+    ) -> subscription::Reply {
+        // the pairs are validated before the subscription is accepted, so that a malformed pair
+        // is reported to the client in reply to the subscription request
+        let pairs = match pairs {
+            Some(pairs) => {
+                Some(pairs.iter().map(|pair| pair.parse()).collect::<Result<Vec<_>, _>>()?)
+            }
+            None => None,
+        };
+        let trade_rx = self.call_mut(move |this| this.subscribe_to_rpc_dex_trades()).await?;
+
+        match pairs {
+            // the filter drops the non-matching trades before they are serialized
+            Some(pairs) if !pairs.is_empty() => {
+                rpc::subscription::connect_broadcast_filter_map(trade_rx, pending, |trade| {
+                    pairs
+                        .iter()
+                        .any(|pair| pair.matches(&trade))
+                        .then(|| RpcDexTradeEvent::from_trade(&trade))
+                })
+                .await
+            }
+            _ => {
+                rpc::subscription::connect_broadcast_map(trade_rx, pending, |trade| {
+                    RpcDexTradeEvent::from_trade(&trade)
+                })
+                .await
+            }
+        }
     }
 }
 
