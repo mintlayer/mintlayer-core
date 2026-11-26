@@ -90,7 +90,10 @@ use self::{
 };
 
 pub use self::{
-    dex_trades::DexTradesSubscribeError, error::*, info::ChainInfo, median_time::MEDIAN_TIME_SPAN,
+    dex_trades::{DexTradesSubscribeError, MAX_DEX_TRADES_SUBSCRIBERS},
+    error::*,
+    info::ChainInfo,
+    median_time::MEDIAN_TIME_SPAN,
     median_time::calculate_median_time_past,
     median_time::calculate_median_time_past_from_blocktimestamps,
 };

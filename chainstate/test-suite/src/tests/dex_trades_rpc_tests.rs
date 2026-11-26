@@ -25,6 +25,7 @@ use super::{
 };
 use chainstate::{
     BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
+    MAX_DEX_TRADES_SUBSCRIBERS,
     chainstate_interface::ChainstateInterface,
     rpc::{ChainstateRpcClient as _, ChainstateRpcServer as _, RpcDexTradeEvent, RpcTradingPair},
 };
@@ -53,7 +54,6 @@ macro_rules! next_trade {
 
 /// A fresh chainstate with the chain configuration of `tf`, served over websockets.
 struct RunningRpc {
-    client: rpc::RpcWsClient,
     chainstate: subsystem::Handle<dyn ChainstateInterface>,
     server: rpc::Rpc,
     shutdown: subsystem::ShutdownTrigger,
@@ -87,19 +87,22 @@ impl RunningRpc {
             .build()
             .await
             .unwrap();
-        let client = rpc::new_ws_client(
-            format!("ws://{}", server.http_address()),
-            rpc::RpcAuthData::None,
-        )
-        .await
-        .unwrap();
         Self {
-            client,
             chainstate,
             server,
             shutdown,
             manager,
         }
+    }
+
+    /// A new client connected to the same server.
+    async fn connect(&self) -> rpc::RpcWsClient {
+        rpc::new_ws_client(
+            format!("ws://{}", self.server.http_address()),
+            rpc::RpcAuthData::None,
+        )
+        .await
+        .unwrap()
     }
 
     async fn stop(self) {
@@ -136,13 +139,8 @@ async fn rpc_subscription_delivers_filtered_trades(#[case] seed: Seed) {
         .map(|height| tf.block(tf.to_chain_block_id(&tf.block_id(height))))
         .collect();
 
-    let RunningRpc {
-        client,
-        chainstate,
-        server,
-        shutdown,
-        manager,
-    } = RunningRpc::start(&tf).await;
+    let rpc = RunningRpc::start(&tf).await;
+    let client = rpc.connect().await;
 
     // the trade of the fill gives tokens for coins: the pair of the maker is (token, coin)
     let pair_of_the_trade = RpcTradingPair {
@@ -177,7 +175,7 @@ async fn rpc_subscription_delivers_filtered_trades(#[case] seed: Seed) {
     // replaying the blocks into the served chainstate announces the trade to the subscribers
     // whose filter matches it, as identical JSON
     for block in blocks {
-        chainstate
+        rpc.chainstate
             .call_mut(move |this| this.process_block(block, BlockSource::Local))
             .await
             .unwrap()
@@ -221,13 +219,60 @@ async fn rpc_subscription_delivers_filtered_trades(#[case] seed: Seed) {
     );
     assert!(tokio::time::timeout(NO_EVENT_TIMEOUT, all_trades.next()).await.is_err());
 
-    RunningRpc {
-        client,
-        chainstate,
-        server,
-        shutdown,
-        manager,
+    drop(client);
+    rpc.stop().await;
+}
+
+// The subscriber cap counts live subscriptions only: clients that go away free their slots even
+// if no trade would ever have tried their (never matching) pair filter.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn disconnected_subscribers_free_their_slots(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let version = OrdersVersion::V1;
+    let mut tf = create_test_framework_with_orders(&mut rng, version);
+    let fixture = create_fixture(&mut rng, &mut tf, 1);
+    let rpc = RunningRpc::start(&tf).await;
+
+    // one connection fills the cap with subscriptions for a market without trades
+    let never_trading = RpcTradingPair {
+        base: format!("{:x}", fixture.token_id),
+        quote: "coin".to_owned(),
+    };
+    let client = rpc.connect().await;
+    let mut subscriptions = Vec::new();
+    for _ in 0..MAX_DEX_TRADES_SUBSCRIBERS {
+        subscriptions
+            .push(client.dex_subscribe_to_trades(Some(vec![never_trading.clone()])).await.unwrap());
     }
-    .stop()
-    .await;
+    let error = match client.dex_subscribe_to_trades(None).await {
+        Err(error) => error,
+        Ok(_) => panic!("the subscriber cap must be reached"),
+    };
+    assert!(
+        error.to_string().contains("too many DEX trades subscribers"),
+        "unexpected error: {error}"
+    );
+
+    // the connection goes away: its slots are reclaimed, and another client can subscribe
+    drop(subscriptions);
+    drop(client);
+    let other = rpc.connect().await;
+    let mut rejected = 0;
+    let subscription = loop {
+        match other.dex_subscribe_to_trades(None).await {
+            Ok(subscription) => break subscription,
+            Err(error) if error.to_string().contains("too many DEX trades subscribers") => {
+                rejected += 1;
+                assert!(rejected < 200, "the slots were not reclaimed");
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+            Err(error) => panic!("unexpected error: {error}"),
+        }
+    };
+    drop(subscription);
+
+    rpc.stop().await;
 }
