@@ -1256,8 +1256,9 @@ where
 
     /// Handle outbound connection error
     ///
-    /// The outbound connection was dialed successfully but the remote either did not respond
-    /// (at all or in time) or it didn't support the handshaking which forced the connection closed.
+    /// The outbound connection failed: either the dial to the remote did not complete, or
+    /// the remote did not respond (at all or in time) or it didn't support the handshaking
+    /// which forced the connection closed.
     ///
     /// If the connection was initiated by the user via RPC, inform them that the connection failed.
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
