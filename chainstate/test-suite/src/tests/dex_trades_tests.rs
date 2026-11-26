@@ -55,9 +55,9 @@ const NO_TRADE_TIMEOUT: Duration = Duration::from_millis(100);
 /// A coin outpoint together with the amount of coins it holds, so that transactions chaining
 /// within a block or across branches can be built before the outpoint exists in the chain.
 #[derive(Clone, Debug)]
-struct CoinUtxo {
-    outpoint: UtxoOutPoint,
-    amount: Amount,
+pub(super) struct CoinUtxo {
+    pub(super) outpoint: UtxoOutPoint,
+    pub(super) amount: Amount,
 }
 
 impl CoinUtxo {
@@ -68,14 +68,14 @@ impl CoinUtxo {
 }
 
 /// A transaction with fill-order inputs; see [`make_fill_tx`].
-struct FillTx {
-    tx: SignedTransaction,
+pub(super) struct FillTx {
+    pub(super) tx: SignedTransaction,
     /// The amount of tokens paid out for each fill.
-    payouts: Vec<Amount>,
+    pub(super) payouts: Vec<Amount>,
     /// The position of the fill input in the transaction inputs.
-    input_ordinal: usize,
+    pub(super) input_ordinal: usize,
     /// The output with the coins left after the fills.
-    coins_left: CoinUtxo,
+    pub(super) coins_left: CoinUtxo,
 }
 
 /// Issue a token from the genesis outputs and mint some of it; see
@@ -163,7 +163,7 @@ fn fill_order_input(
 /// (the rest is the fee). The fill input is the first input of the transaction if
 /// `fill_input_first` is set, and the second one otherwise.
 /// The payout is computed from the current state, so the order must not have been filled.
-fn make_fill_tx(
+pub(super) fn make_fill_tx(
     tf: &TestFramework,
     version: OrdersVersion,
     coin: &CoinUtxo,
@@ -295,7 +295,7 @@ fn build_block(
 }
 
 /// Build and process a block with the given transactions on top of `parent`; return its id.
-fn process_block_with_txs(
+pub(super) fn process_block_with_txs(
     tf: &mut TestFramework,
     rng: &mut impl randomness::CryptoRng,
     parent: Id<GenBlock>,
@@ -329,13 +329,13 @@ fn block_index_of_unprocessed_block(tf: &TestFramework, block: &WithId<Block>) -
 
 /// The fixture of the tests: a token, `orders_count` orders giving tokens for coins (created
 /// in one block), and the coin outpoint to pay for the fills.
-struct Fixture {
-    token_id: TokenId,
-    coin: CoinUtxo,
-    order_ids: Vec<OrderId>,
+pub(super) struct Fixture {
+    pub(super) token_id: TokenId,
+    pub(super) coin: CoinUtxo,
+    pub(super) order_ids: Vec<OrderId>,
 }
 
-fn create_fixture(
+pub(super) fn create_fixture(
     rng: &mut impl randomness::CryptoRng,
     tf: &mut TestFramework,
     orders_count: usize,
