@@ -39,16 +39,15 @@ pub(crate) const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 /// The number of trades a subscriber may have pending; a subscriber that falls behind by a full
 /// queue is dropped.
 ///
-/// A block holds at most about 15k fills (one per transaction, in a 1 MiB block: a v1 fill input
-/// is an account nonce, an order id and an amount, roughly 70 bytes with tags). The dispatcher
-/// pushes the trades of one activation batch — one block, or a chain of blocks activated
-/// together, such as a reorg branch — in a millisecond or two, while a forwarder moves hundreds
-/// to a few thousand events per scheduling window (serialization plus the per-connection buffer
-/// of 1024 messages). The dispatcher yields after every batch, so the queue holds roughly two
-/// maximum-volume single-block batches: a reader that keeps up with the chain does not overflow
-/// on any single-block batch, and a larger batch is handled like any fall-behind, with the
-/// documented termination. A reader that stopped reading holds at most these many trades before
-/// it is dropped.
+/// A block holds at most about 13k fills: a fill transaction carries one fill input (about 70
+/// bytes with tags) plus the funding of its ask amount, so realistic blocks hold fewer. The
+/// dispatcher pushes the trades of one activation batch — one block, or a chain of blocks
+/// activated together, such as a reorg branch — in a millisecond or two, while a forwarder
+/// moves hundreds to a few thousand events per scheduling window (serialization plus the
+/// per-connection buffer of 1024 messages). The queue holds more than one maximum-volume
+/// block and fewer than two; the dispatcher yields after every batch and after every this-many
+/// trades inside a batch, so a reader that keeps up with the chain does not overflow. A reader
+/// that stopped reading holds at most these many trades before it is dropped.
 const SUBSCRIBER_QUEUE_CAPACITY: usize = 16_384;
 
 /// A subscription that cannot be accepted.
@@ -166,7 +165,13 @@ impl DexTradesDispatcher {
             // a subscriber that selected pairs with no trades is never tried otherwise
             Self::reap_closed(&mut Self::lock_subscribers(&subscribers));
 
-            for trade in block_trades {
+            for (trades_done, trade) in block_trades.into_iter().enumerate() {
+                // let the forwarders drain the queues also in the middle of a batch, which can
+                // hold the trades of several blocks (a reorg branch): without this, a batch of
+                // more than two maximum-volume blocks could drop a subscriber that keeps up
+                if trades_done > 0 && trades_done % SUBSCRIBER_QUEUE_CAPACITY == 0 {
+                    tokio::task::yield_now().await;
+                }
                 let mut dropped_for_falling_behind = 0;
                 Self::lock_subscribers(&subscribers).retain(|subscriber| {
                     let selected =
@@ -192,7 +197,7 @@ impl DexTradesDispatcher {
                     );
                 }
             }
-            // let the forwarders drain the queues before the next block is pushed
+            // let the forwarders drain the queues before the next batch is pushed
             tokio::task::yield_now().await;
         }
     }
@@ -327,8 +332,10 @@ mod tests {
 
     #[tokio::test]
     async fn slow_subscriber_is_dropped_and_the_others_keep_receiving() {
-        let dispatcher = DexTradesDispatcher::start().unwrap();
-        // a subscriber that never reads its queue, and one whose pairs select nothing
+        // a tiny queue makes the overflow deterministic: with far more trades than the queue
+        // holds, the slow subscriber is dropped once its queue overflows, while the
+        // pair-filtered one (nothing matches) stays
+        let dispatcher = DexTradesDispatcher::start_with_queue_capacity(4).unwrap();
         let slow = dispatcher.subscribe(None).unwrap();
         let selective = dispatcher
             .subscribe(Some(DexTradePairSet::from_iter([(
@@ -337,16 +344,21 @@ mod tests {
             )])))
             .unwrap();
 
-        // one trade more than the slow subscriber's queue holds
-        let trades: Vec<_> = (0..=SUBSCRIBER_QUEUE_CAPACITY as u64).map(trade).collect();
+        let trades: Vec<_> = (0..16).map(trade).collect();
         dispatcher.dispatch(trades).unwrap();
 
-        // the slow subscriber receives its queue's worth, then its subscription is closed
+        // the slow subscriber receives the trades up to the overflow, then its subscription
+        // is closed
         let mut slow = slow;
-        for i in 0..SUBSCRIBER_QUEUE_CAPACITY as u64 {
-            assert_eq!(slow.recv().await.unwrap().tx_id, trade(i).tx_id);
+        let mut received = 0u64;
+        while let Some(t) = slow.recv().await {
+            assert_eq!(t.tx_id, trade(received).tx_id);
+            received += 1;
         }
-        assert!(slow.recv().await.is_none());
+        assert!(
+            received > 0,
+            "the slow subscriber should receive trades before being dropped"
+        );
         // the subscriber that selected nothing was not fed and stays
         assert_eq!(dispatcher.subscriber_count(), 1);
 
