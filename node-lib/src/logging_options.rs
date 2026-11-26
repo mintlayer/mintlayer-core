@@ -35,8 +35,9 @@ pub const DEFAULT_LOG_FILE_MAX_FILES: u64 = 14;
 /// Logging settings with every value resolved.
 ///
 /// A value given on the command line wins over the `[logging]` config section, which wins over
-/// the defaults. The stderr format has no default: when neither source sets it, the
-/// `ML_LOG_STYLE` env variable applies.
+/// the defaults. The default of `log_to_file` is the one of node-daemon (`false`) unless
+/// [`LoggingOptions::resolve_with_default`] is told otherwise, as node-gui does. The stderr
+/// format has no default: when neither source sets it, the `ML_LOG_STYLE` env variable applies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoggingOptions {
     pub log_to_file: bool,
@@ -51,8 +52,22 @@ pub struct LoggingOptions {
 }
 
 impl LoggingOptions {
-    /// Resolves the settings from the command line options and the config section.
+    /// Resolves the settings from the command line options and the config section, with
+    /// `log_to_file` off unless one of them turns it on.
     pub fn resolve(options: &TopLevelOptions, config: LoggingConfigFile) -> Result<Self> {
+        Self::resolve_with_default(options, config, false)
+    }
+
+    /// Resolves the settings like [`resolve`](Self::resolve), with `log_to_file` defaulting
+    /// to `default_log_to_file` when neither the command line nor the config section sets it.
+    ///
+    /// The default has to enter here rather than into the command line options: a default
+    /// written there would win over the config section, like any command line value.
+    pub fn resolve_with_default(
+        options: &TopLevelOptions,
+        config: LoggingConfigFile,
+        default_log_to_file: bool,
+    ) -> Result<Self> {
         let LoggingConfigFile {
             log_to_file,
             log_file_path,
@@ -103,7 +118,7 @@ impl LoggingOptions {
         };
 
         Ok(Self {
-            log_to_file: options.log_to_file.or(log_to_file).unwrap_or(false),
+            log_to_file: options.log_to_file.or(log_to_file).unwrap_or(default_log_to_file),
             log_file_path: options.log_file_path.clone().or(log_file_path),
             log_file_format,
             log_format,
@@ -383,14 +398,50 @@ mod tests {
     }
 
     #[test]
-    fn unknown_keys_are_rejected() {
-        // Pure toml parsing, no command line involved.
-        // Unknown keys inside the section...
-        let err = toml::from_str::<NodeConfigFile>("[logging]\nlog_file_formatt = \"json\"\n")
-            .unwrap_err();
-        assert!(err.to_string().contains("log_file_formatt"), "{err}");
+    #[serial_test::serial]
+    fn default_log_to_file_applies_below_cli_and_file() {
+        clear_logging_env_vars();
 
-        // ...and unknown sections, as before.
+        // node-gui logs to a file by default...
+        let options = LoggingOptions::resolve_with_default(
+            &default_cli_options(),
+            LoggingConfigFile::default(),
+            true,
+        )
+        .unwrap();
+        assert!(options.log_to_file);
+
+        // ...but the config file and the command line still win over the default.
+        let options = LoggingOptions::resolve_with_default(
+            &default_cli_options(),
+            config_from_toml("[logging]\nlog_to_file = false\n"),
+            true,
+        )
+        .unwrap();
+        assert!(!options.log_to_file);
+
+        let options = LoggingOptions::resolve_with_default(
+            &parse_top_level_options(&["--log-to-file", "false"]),
+            LoggingConfigFile::default(),
+            true,
+        )
+        .unwrap();
+        assert!(!options.log_to_file);
+
+        let options = LoggingOptions::resolve_with_default(
+            &parse_top_level_options(&["--log-to-file", "true"]),
+            config_from_toml("[logging]\nlog_to_file = false\n"),
+            true,
+        )
+        .unwrap();
+        assert!(options.log_to_file);
+    }
+
+    /// The rejection of unknown keys inside the `[logging]` section is covered end to end by
+    /// `read_logging_section_rejects_unknown_keys` in `tests/cli.rs`; this covers the section
+    /// names, which are parsed here.
+    #[test]
+    fn unknown_sections_are_rejected() {
         let err = toml::from_str::<NodeConfigFile>("[loggingg]\nlog_to_file = true\n").unwrap_err();
         assert!(err.to_string().contains("loggingg"), "{err}");
     }
