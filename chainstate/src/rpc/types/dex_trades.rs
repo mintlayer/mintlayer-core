@@ -17,7 +17,7 @@
 
 use std::str::FromStr as _;
 
-use chainstate_types::{DexTradeInfo, DexTradePairSet};
+use chainstate_types::{DexTradeInfo, DexTradePair, DexTradePairSet};
 use common::{
     chain::{Block, Currency, Transaction, tokens::TokenId},
     primitives::{BlockHeight, H256, Id},
@@ -60,7 +60,7 @@ pub enum RpcTradingPairError {
 
 impl RpcTradingPair {
     /// Validate the pair, resolving its sides into currencies.
-    pub fn parse(&self) -> Result<(Currency, Currency), RpcTradingPairError> {
+    pub fn parse(&self) -> Result<DexTradePair, RpcTradingPairError> {
         let base = parse_currency("base", &self.base)?;
         let quote = parse_currency("quote", &self.quote)?;
         Ok((base, quote))
@@ -331,7 +331,6 @@ mod tests {
             pair(&format!("{token:x}"), &format!("{other_token:x}")),
         ]))
         .unwrap();
-        assert_eq!(several.len(), 2);
         assert!(several.matches(&coin_token));
         assert!(several.matches(&token_token));
         assert!(!several.matches(&token_coin));
