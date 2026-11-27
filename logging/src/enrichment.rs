@@ -47,6 +47,9 @@ static ROOT_SPAN: OnceLock<Span> = OnceLock::new();
 ///
 /// This must be called after logging is initialized (the span is created by the subscriber
 /// that is current at the time of the first call) and only the first call has an effect.
+/// When that subscriber does not enable the span at all, which is what happens when logging
+/// was not initialized yet, the process runs without the enrichment: a warning is printed
+/// to stderr once, since the log could not carry it.
 ///
 /// The entered guard is leaked on purpose: dropping it would exit the span, and the span
 /// has to stay entered and alive for the whole process. The leak is a single, bounded
@@ -64,8 +67,16 @@ pub fn enter_root_span(
     pid: u32,
     extra_fields: Vec<(String, String)>,
 ) {
+    // The initialization runs once, so the warning below is printed once as well.
     ROOT_SPAN.get_or_init(|| {
         let span = make_root_span(version.into(), chain.into(), pid, extra_fields);
+        if span.is_none() {
+            eprintln!(
+                "Warning: the enrichment root span was not created: the subscriber that was current \
+                 at the first call did not enable it (logging not initialized yet?). Log lines \
+                 carry no node fields in this run"
+            );
+        }
         std::mem::forget(span.enter());
         span
     });
@@ -334,5 +345,16 @@ mod tests {
 
         assert!(text.contains(" INFO test_event: hello"), "{text}");
         assert!(!text.contains("node{"), "{text}");
+    }
+
+    /// A subscriber that enables nothing leaves the span disabled, which is the condition of
+    /// the warning of `enter_root_span`: in practice, the case of a call made before logging
+    /// was initialized.
+    #[test]
+    fn a_subscriber_that_enables_nothing_leaves_the_span_disabled() {
+        tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
+            let root_span = make_test_root_span(Vec::new());
+            assert!(root_span.is_none());
+        });
     }
 }
