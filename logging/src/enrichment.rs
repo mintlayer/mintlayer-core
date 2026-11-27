@@ -177,58 +177,14 @@ fn make_root_span(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
     use serde_json::Value as JsonValue;
-    use tracing_subscriber::layer::SubscriberExt as _;
+    use tracing_subscriber::{Registry, layer::SubscriberExt as _};
 
     use super::*;
     use crate::{
         LogStyle, ValueOrEnvVar, ValueOrEnvVarWithDefault, WriterSettings, make_layer,
-        write_to_make_writer,
+        test_utils::LogOutput, write_to_make_writer,
     };
-
-    /// Collects the output of a subscriber installed for the duration of `capture`.
-    #[derive(Clone, Default)]
-    struct LogOutput(Arc<Mutex<Vec<u8>>>);
-
-    impl LogOutput {
-        fn capture<R>(&self, log_style: LogStyle, f: impl FnOnce() -> R) -> String {
-            let mut errors = Vec::new();
-            let layer = make_layer(
-                WriterSettings {
-                    make_writer: write_to_make_writer(self.clone()),
-                    is_terminal: false,
-                    filter: ValueOrEnvVarWithDefault::Value("trace".to_owned()),
-                    log_style: ValueOrEnvVar::Value(log_style),
-                    source_location: false,
-                    thread_info: false,
-                },
-                &mut errors,
-            );
-            assert!(errors.is_empty(), "unexpected log init errors: {errors:?}");
-
-            let subscriber = tracing_subscriber::registry::Registry::default().with(layer);
-            tracing::subscriber::with_default(subscriber, f);
-            self.take()
-        }
-
-        fn take(&self) -> String {
-            let mut vec = self.0.lock().unwrap();
-            String::from_utf8(std::mem::take(&mut *vec)).unwrap()
-        }
-    }
-
-    impl std::io::Write for LogOutput {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
 
     fn make_test_root_span(extra_fields: Vec<(&str, &str)>) -> Span {
         make_root_span(
@@ -245,7 +201,7 @@ mod tests {
     #[test]
     fn json_output_carries_the_root_span_fields() {
         let output = LogOutput::default();
-        let json = output.capture(LogStyle::Json, || {
+        let json = output.capture(LogStyle::Json, false, false, || {
             let root_span = make_test_root_span(vec![("role", "seed")]);
             let _guard = root_span.enter();
             tracing::info!("block processed");
@@ -266,11 +222,16 @@ mod tests {
     #[test]
     fn text_output_has_the_root_span_prefix() {
         let output = LogOutput::default();
-        let text = output.capture(LogStyle::Text(crate::TextColoring::Off), || {
-            let root_span = make_test_root_span(vec![("role", "seed")]);
-            let _guard = root_span.enter();
-            tracing::info!("block processed");
-        });
+        let text = output.capture(
+            LogStyle::Text(crate::TextColoring::Off),
+            false,
+            false,
+            || {
+                let root_span = make_test_root_span(vec![("role", "seed")]);
+                let _guard = root_span.enter();
+                tracing::info!("block processed");
+            },
+        );
 
         assert!(
             text.contains(
@@ -286,7 +247,7 @@ mod tests {
     #[test]
     fn extra_fields_do_not_override_built_in_or_earlier_fields() {
         let output = LogOutput::default();
-        let json = output.capture(LogStyle::Json, || {
+        let json = output.capture(LogStyle::Json, false, false, || {
             let root_span = make_test_root_span(vec![
                 ("version", "0.0.1"),
                 ("role", "first"),
@@ -307,7 +268,7 @@ mod tests {
     #[test]
     fn enter_root_span_is_idempotent() {
         let output = LogOutput::default();
-        let json = output.capture(LogStyle::Json, || {
+        let json = output.capture(LogStyle::Json, false, false, || {
             enter_root_span("1.5.0", "mainnet", 42, Vec::new());
             // A second call must not enter the span again (no nested `node` spans).
             enter_root_span("0.0.0", "othernet", 1, Vec::new());
@@ -339,7 +300,7 @@ mod tests {
         );
         assert!(errors.is_empty(), "unexpected log init errors: {errors:?}");
 
-        let subscriber = tracing_subscriber::registry::Registry::default().with(layer);
+        let subscriber = Registry::default().with(layer);
         tracing::subscriber::with_default(subscriber, || {
             let root_span = make_test_root_span(Vec::new());
             let _guard = root_span.enter();

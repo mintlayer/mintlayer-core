@@ -15,6 +15,8 @@
 
 mod enrichment;
 mod log_style;
+#[cfg(test)]
+mod test_utils;
 mod utils;
 
 use std::{
@@ -371,67 +373,13 @@ fn should_use_coloring(preferred_coloring: TextColoring, is_terminal: bool) -> b
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
     use super::*;
+    use crate::test_utils::LogOutput;
 
     #[test]
     fn initialize_twice() {
         init_logging();
         init_logging();
-    }
-
-    /// A log output collector that can be shared between the subscriber and the test.
-    ///
-    /// Unlike the global initialization functions, the subscriber built here is installed
-    /// with `with_default` for the duration of a closure, so each test captures only its own
-    /// output.
-    #[derive(Clone, Default)]
-    struct LogOutput(Arc<Mutex<Vec<u8>>>);
-
-    impl LogOutput {
-        fn take(&self) -> String {
-            let mut vec = self.0.lock().unwrap();
-            String::from_utf8(std::mem::take(&mut *vec)).unwrap()
-        }
-
-        /// Runs the closure with a subscriber writing to this buffer, returning the output.
-        fn capture<R>(
-            &self,
-            log_style: LogStyle,
-            source_location: bool,
-            thread_info: bool,
-            f: impl FnOnce() -> R,
-        ) -> String {
-            let mut errors = Vec::new();
-            let layer = make_layer(
-                WriterSettings {
-                    make_writer: write_to_make_writer(self.clone()),
-                    is_terminal: false,
-                    filter: ValueOrEnvVarWithDefault::Value("trace".to_owned()),
-                    log_style: ValueOrEnvVar::Value(log_style),
-                    source_location,
-                    thread_info,
-                },
-                &mut errors,
-            );
-            assert!(errors.is_empty(), "unexpected log init errors: {errors:?}");
-
-            let subscriber = Registry::default().with(layer);
-            tracing::subscriber::with_default(subscriber, f);
-            self.take()
-        }
-    }
-
-    impl Write for LogOutput {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
     }
 
     const MESSAGE: &str = "captured test event";
