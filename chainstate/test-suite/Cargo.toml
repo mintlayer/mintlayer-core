@@ -9,7 +9,6 @@ rust-version.workspace = true
 accounting = { path = "../../accounting" }
 chainstate = { path = "../" }
 chainstate-storage = { path = "../storage", features = ["expensive-reads"] }
-storage = { path = "../../storage" }
 chainstate-test-framework = { path = "../test-framework" }
 chainstate-types = { path = "../types" }
 common = { path = "../../common" }
@@ -22,29 +21,26 @@ orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
+storage = { path = "../../storage" }
 test-utils = { path = "../../test-utils" }
 tokens-accounting = { path = "../../tokens-accounting" }
 tx-verifier = { path = "../tx-verifier" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 utxo = { path = "../../utxo" }
-
-rpc = { path = "../../rpc" }
-subsystem = { path = "../../subsystem" }
-
-serde_json.workspace = true
-
 ctor.workspace = true
 hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "time"] }
-
 criterion.workspace = true
 expect-test.workspace = true
+rpc = { path = "../../rpc" }
 rstest.workspace = true
+serde_json.workspace = true
 strum.workspace = true
+subsystem = { path = "../../subsystem" }
+tokio = { workspace = true, features = ["rt", "time"] }
 
 [[bench]]
 name = "benches"
