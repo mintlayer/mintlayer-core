@@ -528,7 +528,9 @@ fn default_log_file_name() -> String {
 ///
 /// The sinks are configured by `logging_options`; `default_log_filter` is the filter of the
 /// stderr sink that applies when `RUST_LOG` is not set. An unusable log file path is an
-/// error, so that the node does not run with its file output silently dropped.
+/// error at startup, as a best-effort check only: the rotating writer reopens the file by
+/// path and ignores open errors, so a path that becomes unusable later (or is swapped between
+/// the check and a reopen) still silently drops the file output.
 fn init_logging(
     data_dir: &Path,
     default_log_filter: &str,
