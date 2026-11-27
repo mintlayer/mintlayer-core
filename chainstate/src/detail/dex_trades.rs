@@ -101,11 +101,18 @@ impl DexTradesDispatcher {
             .map_err(|_| DexTradesSubscribeError::NoRuntime)?;
         let (block_trades_tx, block_trades_rx) = mpsc::channel(DISPATCHER_QUEUE_CAPACITY);
         let subscribers = Arc::new(Mutex::new(Vec::new()));
-        runtime.spawn(Self::run(
+        let dispatcher_task = runtime.spawn(Self::run(
             block_trades_rx,
             Arc::clone(&subscribers),
             subscriber_queue_capacity,
         ));
+        // the task ends quietly once the dispatcher is dropped; a panic would otherwise go
+        // unnoticed until the next dispatch fails with Closed, with no trace of its cause
+        runtime.spawn(async move {
+            if let Err(err) = dispatcher_task.await {
+                log::error!("The DEX trades dispatcher task failed: {err}");
+            }
+        });
         Ok(Self {
             block_trades_tx,
             subscribers,
