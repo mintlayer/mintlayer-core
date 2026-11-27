@@ -902,20 +902,23 @@ where
             let staging_capacity =
                 self.lookahead_window_target().saturating_sub(self.lookahead_window_len());
             let dropped_count = new_block_headers.len().saturating_sub(staging_capacity);
-            let first_dropped_id =
-                new_block_headers.get(staging_capacity).map(|header| header.get_id());
-            new_block_headers.truncate(staging_capacity);
             if dropped_count > 0 {
                 // Log the loss, because the locator may never reach the dropped range again.
+                // The id of a header is hashed on demand, so it is computed inside the record,
+                // which the log crate evaluates only when the record is emitted (debug is off
+                // at the default verbosity), and before the truncate that removes the header.
                 log::debug!(
                     "Dropping {dropped_count} headers from peer {} that do not fit the look-ahead window \
                      (staged: {}, window target: {}); the first dropped header is {}",
                     self.id(),
                     self.lookahead_window_len(),
                     self.lookahead_window_target(),
-                    first_dropped_id.map_or_else(|| "<none>".to_owned(), |id| id.to_string()),
+                    new_block_headers
+                        .get(staging_capacity)
+                        .map_or_else(|| "<none>".to_owned(), |header| header.get_id().to_string()),
                 );
             }
+            new_block_headers.truncate(staging_capacity);
             if !new_block_headers.is_empty() {
                 self.stage_in_lookahead(new_block_headers);
 
