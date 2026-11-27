@@ -185,7 +185,13 @@ async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
     filter_map_fn: impl FnMut(T) -> Option<U>,
 ) -> Reply {
     match forward_queue(event_receiver, pending, filter_map_fn).await? {
-        // the producer closed the queue: tell the client that the subscription is over
+        // the producer closed the queue: tell the client that the subscription is over. Unlike
+        // an error returned by a subscription method before `accept()` (see [`reject`]), this one
+        // does reach the client: jsonrpsee-core maps it to a closing error notification
+        // (`IntoSubscriptionCloseResponse for Result<(), SubscriptionError>` gives `NotifErr`,
+        // which `rpc_module` sends on the subscription sink). The end-to-end behavior is covered
+        // by `subscription_termination_is_observable` in rpc/tests/basic; the jsonrpsee Rust
+        // client itself only surfaces the end of the stream.
         ForwardingEnd::QueueEnded => Err(CLOSED_BY_NODE.into()),
         ForwardingEnd::ClientGone => Ok(()),
     }
