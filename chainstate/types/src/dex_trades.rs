@@ -180,15 +180,20 @@ fn compute_in_block_position(tx_index: u64, input_ordinal: u64, match_ordinal: u
 /// (quote).
 pub type DexTradePair = (Currency, Currency);
 
-/// A set of trading pairs, built from an iterator of pairs (a pair present several times is
-/// counted once). Used to select the trades belonging to any of its pairs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A set of trading pairs (a pair present several times is counted once). Used to select the
+/// trades belonging to any of its pairs.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DexTradePairSet(HashSet<DexTradePair>);
 
 impl DexTradePairSet {
     /// Whether the set has no pairs.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Add the pair; a pair present already is ignored.
+    pub fn insert(&mut self, pair: DexTradePair) {
+        self.0.insert(pair);
     }
 
     /// Whether the trade has one of the pairs of the set: both of its sides must match, so a

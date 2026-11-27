@@ -80,12 +80,12 @@ impl RpcTradingPair {
                 max: MAX_TRADING_PAIRS,
             });
         }
-        let set: DexTradePairSet = pairs
-            .iter()
-            .map(RpcTradingPair::parse)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .collect();
+        // the pairs are parsed one by one into the set, so that an invalid one is reported
+        // without the others being buffered first
+        let mut set = DexTradePairSet::default();
+        for pair in pairs {
+            set.insert(pair.parse()?);
+        }
         Ok((!set.is_empty()).then_some(set))
     }
 }
