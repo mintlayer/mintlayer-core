@@ -639,6 +639,10 @@ fn file_writer_settings(
                 })?;
         }
     }
+    // The handle is only used for the owner-only restriction on unix: the rotating writer
+    // reopens the file by path. Dropping it here also counts as a use of the binding on
+    // platforms without the restriction, where nothing reads it.
+    drop(log_file);
 
     let max_size_bytes = usize::try_from(logging_options.log_file_max_size_bytes)
         .context("log_file_max_size_bytes does not fit in the platform's size type")?;
