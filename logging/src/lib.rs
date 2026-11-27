@@ -409,8 +409,9 @@ mod tests {
             line = emit_test_event!();
         });
         // The file is the test's source path and the line is the `tracing::info!` call site.
-        // The path separator is platform-dependent (`file!()` uses backslashes on Windows).
-        let on = on.replace('\\', "/");
+        // The path separator is platform-dependent (`file!()` uses backslashes on Windows),
+        // and the json encoding escapes each of them, hence the two-backslash normalization.
+        let on = on.replace("\\\\", "/");
         assert!(on.contains("\"filename\":\"logging/src/lib.rs\""), "{on}");
         assert!(on.contains(&format!("\"line_number\":{line}")), "{on}");
     }
