@@ -139,11 +139,14 @@ mod tests {
         }
         let output = LogOutput::default();
 
-        // Outside a sink, the report goes through the log, after the previous hook.
+        // Outside a sink, the report goes through the log, after the previous hook. The path
+        // separator in the panic location is platform-dependent (`file!()` uses backslashes
+        // on Windows).
         let report = capture(&output, || {
             let result = std::panic::catch_unwind(|| panic!("test panic"));
             assert!(result.is_err());
         });
+        let report = report.replace('\\', "/");
         assert!(
             report.contains("Panic in thread 'panic_hook::tests::panic_hook_chains_to_the_previous_hook': test panic at logging/src/panic_hook.rs:"),
             "{report}"
