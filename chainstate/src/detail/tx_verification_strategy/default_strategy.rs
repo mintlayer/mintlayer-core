@@ -74,7 +74,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         // while connecting, to be persisted for serving to API consumers.
         // The DEX trades performed by the transactions are collected alongside.
         let mut block_tx_fees = Vec::with_capacity(block.transactions().len());
-        let mut block_dex_trades = Vec::new();
+        let mut block_dex_trades = Vec::with_capacity(block.transactions().len());
         let total_fees = block
             .transactions()
             .iter()
