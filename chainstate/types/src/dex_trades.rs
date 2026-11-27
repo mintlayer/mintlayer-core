@@ -191,6 +191,11 @@ impl DexTradePairSet {
         self.0.is_empty()
     }
 
+    /// The number of distinct pairs of the set.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     /// Add the pair; a pair present already is ignored.
     pub fn insert(&mut self, pair: DexTradePair) {
         self.0.insert(pair);

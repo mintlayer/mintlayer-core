@@ -249,8 +249,9 @@ trait ChainstateRpc {
     /// emit it in lowercase).
     /// A trade matches a pair only if both of its sides match, so a trade of the reversed pair
     /// does not match. An absent or empty list delivers all the events; a well-formed pair of a
-    /// market that has no trades simply delivers nothing. A list of more than 256 pairs, or a
-    /// malformed pair, rejects the subscription with an error naming the offending value.
+    /// market that has no trades simply delivers nothing. A list of more than 256 distinct
+    /// pairs (a pair listed twice counts once), or a malformed pair, rejects the subscription
+    /// with an error naming the offending value.
     ///
     /// The events reflect what the best chain said when the block was connected: no compensating
     /// events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`

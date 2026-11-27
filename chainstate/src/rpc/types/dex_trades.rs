@@ -40,7 +40,7 @@ pub struct RpcTradingPair {
     pub quote: String,
 }
 
-/// The maximum number of pairs a subscription may select.
+/// The maximum number of distinct pairs a subscription may select.
 pub const MAX_TRADING_PAIRS: usize = 256;
 
 /// How many characters of an invalid value are echoed back in the error.
@@ -68,24 +68,25 @@ impl RpcTradingPair {
     }
 
     /// Validate the pairs of a subscription, collecting them into the set that selects the
-    /// matching trades. An absent or empty list selects all trades (`None`).
+    /// matching trades; a pair listed several times counts once, also towards the cap. An
+    /// absent or empty list selects all trades (`None`).
     pub fn parse_pairs(
         pairs: Option<Vec<RpcTradingPair>>,
     ) -> Result<Option<DexTradePairSet>, RpcTradingPairError> {
         let Some(pairs) = pairs else {
             return Ok(None);
         };
-        if pairs.len() > MAX_TRADING_PAIRS {
-            return Err(RpcTradingPairError::TooManyPairs {
-                count: pairs.len(),
-                max: MAX_TRADING_PAIRS,
-            });
-        }
         // the pairs are parsed one by one into the set, so that an invalid one is reported
-        // without the others being buffered first
+        // without the others being buffered first; the cap applies to the distinct pairs
         let mut set = DexTradePairSet::default();
         for pair in pairs {
             set.insert(pair.parse()?);
+        }
+        if set.len() > MAX_TRADING_PAIRS {
+            return Err(RpcTradingPairError::TooManyPairs {
+                count: set.len(),
+                max: MAX_TRADING_PAIRS,
+            });
         }
         Ok((!set.is_empty()).then_some(set))
     }
@@ -410,13 +411,31 @@ mod tests {
     }
 
     #[test]
-    fn pair_filter_rejects_too_many_pairs() {
-        let token = token_id(0xab);
-        let pairs = || pair("coin", &format!("{token:x}"));
+    fn pair_filter_rejects_too_many_distinct_pairs() {
         let max = MAX_TRADING_PAIRS;
-        assert!(RpcTradingPair::parse_pairs(Some(vec![pairs(); max])).is_ok());
+        let pair_of = |token: u64| pair("coin", &format!("{:x}", token_id(token)));
+        let pairs_of =
+            |tokens: std::ops::RangeInclusive<u64>| Some(tokens.into_iter().map(pair_of).collect());
+
+        // the cap applies to distinct pairs: a pair listed several times counts once
+        let repeated = || pair_of(1);
         assert_eq!(
-            RpcTradingPair::parse_pairs(Some(vec![pairs(); max + 1])),
+            RpcTradingPair::parse_pairs(Some(vec![repeated(); max + 1]))
+                .unwrap()
+                .map(|set| set.len()),
+            Some(1)
+        );
+
+        // exactly the cap many distinct pairs are accepted
+        assert_eq!(
+            RpcTradingPair::parse_pairs(pairs_of(1..=max as u64))
+                .unwrap()
+                .map(|set| set.len()),
+            Some(max)
+        );
+        // one more rejects the subscription
+        assert_eq!(
+            RpcTradingPair::parse_pairs(pairs_of(1..=max as u64 + 1)),
             Err(RpcTradingPairError::TooManyPairs {
                 count: max + 1,
                 max
