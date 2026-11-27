@@ -45,9 +45,9 @@ pub(crate) const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 /// activated together, such as a reorg branch — in a millisecond or two, while a forwarder
 /// moves hundreds to a few thousand events per scheduling window (serialization plus the
 /// per-connection buffer of 1024 messages). The queue holds more than one maximum-volume
-/// block and fewer than two; the dispatcher yields after every batch and after every this-many
-/// trades inside a batch, so a reader that keeps up with the chain does not overflow. A reader
-/// that stopped reading holds at most these many trades before it is dropped.
+/// block and fewer than two; the dispatcher yields after every batch and after every as many
+/// trades inside a batch as a queue holds, so a reader that keeps up with the chain does not
+/// overflow. A reader that stopped reading holds at most these many trades before it is dropped.
 const SUBSCRIBER_QUEUE_CAPACITY: usize = 16_384;
 
 /// A subscription that cannot be accepted.
@@ -168,8 +168,9 @@ impl DexTradesDispatcher {
             for (trades_done, trade) in block_trades.into_iter().enumerate() {
                 // let the forwarders drain the queues also in the middle of a batch, which can
                 // hold the trades of several blocks (a reorg branch): without this, a batch of
-                // more than two maximum-volume blocks could drop a subscriber that keeps up
-                if trades_done > 0 && trades_done % SUBSCRIBER_QUEUE_CAPACITY == 0 {
+                // more than two maximum-volume blocks could drop a subscriber that keeps up.
+                // The cadence follows the capacity of the queues, which the tests make small.
+                if trades_done > 0 && trades_done % subscriber_queue_capacity == 0 {
                     tokio::task::yield_now().await;
                 }
                 let mut dropped_for_falling_behind = 0;
@@ -227,7 +228,8 @@ mod tests {
 
     use super::*;
 
-    fn trade(tx_low: u64) -> DexTradeInfo {
+    /// A trade of the given pair; the transaction id carries `tx_low`.
+    fn trade_of_pair(base: Currency, quote: Currency, tx_low: u64) -> DexTradeInfo {
         DexTradeInfo::new(
             Id::zero(),
             BlockHeight::zero(),
@@ -237,13 +239,17 @@ mod tests {
                 input_ordinal: 0,
                 match_ordinal: 0,
                 maker_order_id: OrderId::zero(),
-                base: Currency::Coin,
-                quote: Currency::Token(TokenId::zero()),
+                base,
+                quote,
                 base_amount: Amount::from_atoms(1),
                 quote_amount: Amount::from_atoms(1),
             },
         )
         .unwrap()
+    }
+
+    fn trade(tx_low: u64) -> DexTradeInfo {
+        trade_of_pair(Currency::Coin, Currency::Token(TokenId::zero()), tx_low)
     }
 
     /// Receive the trades until the queue closes; return the low bytes of their transaction ids.
@@ -334,7 +340,10 @@ mod tests {
     async fn slow_subscriber_is_dropped_and_the_others_keep_receiving() {
         // a tiny queue makes the overflow deterministic: with far more trades than the queue
         // holds, the slow subscriber is dropped once its queue overflows, while the
-        // pair-filtered one (nothing matches) stays
+        // pair-filtered one (nothing matches) stays. The slow subscriber is slow by not reading
+        // while the dispatcher pushes the batch: the test waits for a sentinel trade that only a
+        // third subscriber selected, which is delivered after the batch, so that the in-batch
+        // yields never let the slow subscriber drain its queue
         let dispatcher = DexTradesDispatcher::start_with_queue_capacity(4).unwrap();
         let slow = dispatcher.subscribe(None).unwrap();
         let selective = dispatcher
@@ -343,28 +352,42 @@ mod tests {
                 Currency::Coin,
             )])))
             .unwrap();
+        let sentinel_pair = || {
+            (
+                Currency::Token(TokenId::new(H256::from_low_u64_be(1))),
+                Currency::Token(TokenId::new(H256::from_low_u64_be(2))),
+            )
+        };
+        let sentinel = |tx_low: u64| {
+            let (base, quote) = sentinel_pair();
+            trade_of_pair(base, quote, tx_low)
+        };
+        let mut done = dispatcher
+            .subscribe(Some(DexTradePairSet::from_iter([sentinel_pair()])))
+            .unwrap();
 
         let trades: Vec<_> = (0..16).map(trade).collect();
         dispatcher.dispatch(trades).unwrap();
+        // delivered once the batch above was pushed to the subscribers
+        dispatcher.dispatch(vec![sentinel(0xff)]).unwrap();
+        assert_eq!(done.recv().await.unwrap().tx_id, sentinel(0xff).tx_id);
 
-        // the slow subscriber receives the trades up to the overflow, then its subscription
-        // is closed
+        // the slow subscriber received exactly the trades that fit in its queue, then its
+        // subscription was closed
         let mut slow = slow;
         let mut received = 0u64;
         while let Some(t) = slow.recv().await {
             assert_eq!(t.tx_id, trade(received).tx_id);
             received += 1;
         }
-        assert!(
-            received > 0,
-            "the slow subscriber should receive trades before being dropped"
-        );
-        // the subscriber that selected nothing was not fed and stays
-        assert_eq!(dispatcher.subscriber_count(), 1);
+        assert_eq!(received, 4);
+        // the subscriber that selected nothing was not fed and stays, as does the sentinel one
+        assert_eq!(dispatcher.subscriber_count(), 2);
 
         // the dispatcher keeps working for the remaining subscribers
-        dispatcher.dispatch(vec![trade(5000)]).unwrap();
+        dispatcher.dispatch(vec![sentinel(0xfee)]).unwrap();
         drop(dispatcher);
+        assert_eq!(receive_all(done).await, vec![0xfee]);
         assert!(receive_all(selective).await.is_empty());
     }
 
