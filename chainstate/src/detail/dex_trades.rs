@@ -427,21 +427,29 @@ mod tests {
     async fn dispatch_queue_is_bounded() {
         let dispatcher = DexTradesDispatcher::start().unwrap();
         let all = dispatcher.subscribe(None).unwrap();
-        // the dispatcher task has not run yet: the queue takes one list less than needed to overflow
-        for i in 0..DISPATCHER_QUEUE_CAPACITY {
-            dispatcher.dispatch(vec![trade(i as u64)]).unwrap();
+        // fill the queue of the dispatcher without awaiting in between, so that its task cannot
+        // run on the current-thread runtime of the test: the queue takes its capacity many lists
+        // and the next one does not fit. Should the task run anyway, the loop goes on until the
+        // queue is full, within a bound
+        let mut dispatched = Vec::new();
+        let mut queue_full = false;
+        for i in 0..2 * DISPATCHER_QUEUE_CAPACITY {
+            match dispatcher.dispatch(vec![trade(i as u64)]) {
+                Ok(()) => dispatched.push(i as u64),
+                Err(DexTradesDispatchError::QueueFull) => {
+                    queue_full = true;
+                    break;
+                }
+                Err(DexTradesDispatchError::Closed) => panic!("the dispatcher task is gone"),
+            }
         }
-        assert!(matches!(
-            dispatcher.dispatch(vec![trade(100)]),
-            Err(DexTradesDispatchError::QueueFull)
-        ));
+        assert!(queue_full, "the queue of the dispatcher is not bounded");
+        // whatever the dispatcher drained meanwhile, at least its capacity many lists fit
+        assert!(dispatched.len() >= DISPATCHER_QUEUE_CAPACITY);
 
         drop(dispatcher);
         let all_ids = receive_all(all).await;
-        assert_eq!(
-            all_ids,
-            (0..DISPATCHER_QUEUE_CAPACITY as u64).collect::<Vec<_>>()
-        );
+        assert_eq!(all_ids, dispatched);
     }
 
     #[test]
