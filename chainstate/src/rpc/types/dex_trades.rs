@@ -136,9 +136,11 @@ pub enum RpcDexTradeEvent {
         input_ordinal: u32,
         /// The position of the match among the matches of the input (always 0 for now).
         match_ordinal: u32,
-        /// The currency the maker gives: `"coin"` or the hex-encoded token id.
+        /// The currency the maker gives: the literal `"coin"` for the native coin, or the
+        /// hex-encoded token id in lowercase.
         base_token_id: String,
-        /// The currency the maker asks for: `"coin"` or the hex-encoded token id.
+        /// The currency the maker asks for: the literal `"coin"` for the native coin, or the
+        /// hex-encoded token id in lowercase.
         quote_token_id: String,
         /// The amount of base paid out by the maker, in atoms.
         base_amount: String,
