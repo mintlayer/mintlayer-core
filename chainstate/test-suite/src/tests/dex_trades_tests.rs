@@ -56,6 +56,9 @@ use utils_networking::broadcaster;
 const TRADE_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long to wait to make sure no trade is announced.
 const NO_TRADE_TIMEOUT: Duration = Duration::from_millis(100);
+/// The number of block trade lists the queue of the DEX trades dispatcher holds
+/// (`DISPATCHER_QUEUE_CAPACITY` of the chainstate, which this crate cannot name).
+const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 
 /// A coin outpoint together with the amount of coins it holds, so that transactions chaining
 /// within a block or across branches can be built before the outpoint exists in the chain.
@@ -960,4 +963,78 @@ async fn orphan_fill_announced_when_its_parent_arrives(#[case] seed: Seed) {
     expect_new_tip(&mut tips_rx, &tf, child_block_id).await;
     assert!(tokio::time::timeout(NO_TRADE_TIMEOUT, tips_rx.recv()).await.is_err());
     assert_eq!(tf.chainstate.orphans_count(), 0);
+}
+
+// A dispatcher that fell behind the chain is discarded with the batches still queued in it: a
+// client that subscribes again at once is served by a fresh dispatcher and does not receive the
+// trades queued for the closed subscriptions as if they were current.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn a_dispatcher_that_fell_behind_is_discarded_with_its_queue(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let version = OrdersVersion::V1;
+    let mut tf = create_test_framework_with_orders(&mut rng, version);
+    let fixture = create_fixture(&mut rng, &mut tf, 4);
+    let fill_amount = Amount::from_atoms(100);
+
+    let mut closed = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
+    // the dispatcher task cannot run while the test does not await, so every block handed over
+    // stays in the queue of the dispatcher: three with a trade, then enough empty ones to
+    // overflow it
+    let mut coin = fixture.coin.clone();
+    for order_id in &fixture.order_ids[..3] {
+        let fill = make_fill_tx(
+            &tf,
+            version,
+            &coin,
+            fixture.token_id,
+            *order_id,
+            fill_amount,
+            false,
+        );
+        let parent = tf.best_block_id();
+        process_block_with_txs(&mut tf, &mut rng, parent, [fill.tx.clone()]);
+        coin = fill.coins_left.clone();
+    }
+    for _ in 0..=DISPATCHER_QUEUE_CAPACITY {
+        process_empty_block(&mut tf, &mut rng);
+    }
+
+    // the subscription is closed without the trades queued for it: they are lost and the client
+    // has to re-derive them
+    assert!(closed.recv().await.is_none());
+
+    // a client that subscribes again at once is served by a fresh dispatcher: none of the trades
+    // queued for the closed subscription reaches it
+    let mut again = tf.chainstate.subscribe_to_rpc_dex_trades(None).unwrap();
+    expect_trades(&mut again, 0).await;
+
+    // and it receives the trades of the blocks connected from now on
+    let order_id = fixture.order_ids[3];
+    let fill = make_fill_tx(
+        &tf,
+        version,
+        &coin,
+        fixture.token_id,
+        order_id,
+        fill_amount,
+        false,
+    );
+    let parent = tf.best_block_id();
+    let block_id = process_block_with_txs(&mut tf, &mut rng, parent, [fill.tx.clone()]);
+    let trades = expect_trades(&mut again, 1).await;
+    assert_eq!(
+        trades[0],
+        expected_trade(
+            block_id,
+            tf.block_index(&block_id).block_height(),
+            0,
+            &fill,
+            fixture.token_id,
+            order_id,
+            fill_amount,
+        )
+    );
 }

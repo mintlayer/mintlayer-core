@@ -379,9 +379,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Hand the DEX trades of the blocks that just became the best chain to the dispatcher with a
     /// single send, in connect order; see [`dex_trades`] for what happens to them next. The batch
-    /// is handed over. A dispatcher that is unrealistically far behind loses the trades of the
-    /// block, which is reported, and drops its subscribers, so that the clients re-derive them;
-    /// the chainstate never waits for the subscribers.
+    /// is handed over. A dispatcher that is unrealistically far behind is discarded together with
+    /// the trades of the block and the batches still queued in it, which is reported, after its
+    /// subscribers were dropped, so that the clients re-derive them; the chainstate never waits
+    /// for the subscribers.
     fn broadcast_dex_trades(&mut self, dex_trades: Vec<DexTradeInfo>) {
         let Some(dispatcher) = &self.dex_trades_dispatcher else {
             // nobody ever subscribed
@@ -399,11 +400,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 log::error!(
                     "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
                      dropping {} trades of {} block(s) from block {:x?} on; closing \
-                     {dropped_subscribers} subscription(s) so that the clients re-derive the trades",
+                     {dropped_subscribers} subscription(s) so that the clients re-derive the trades; \
+                     a later subscription starts a fresh dispatcher",
                     dex_trades.len(),
                     Self::distinct_block_count(&dex_trades),
                     dex_trades.first().map(|trade| trade.block_id)
                 );
+                // the batches still queued would reach a client that subscribes again at once as if
+                // they were current: the dispatcher is discarded with them, and the next
+                // subscription starts a fresh one
+                self.dex_trades_dispatcher = None;
             }
             Err(DexTradesDispatchError::Closed(dex_trades)) => {
                 log::error!(

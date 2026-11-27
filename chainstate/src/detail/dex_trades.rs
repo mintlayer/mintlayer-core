@@ -22,8 +22,9 @@
 //! forwarder sends it to the client. A subscriber that falls behind by a full queue is dropped,
 //! which closes its subscription with an error notification to the client; a client that cannot
 //! keep up reconnects and re-derives. When the dispatcher itself falls behind the chain, every
-//! subscriber is dropped the same way: the trades that could not be taken are lost, and the
-//! clients re-derive them.
+//! subscriber is dropped the same way and the dispatcher is discarded with the batches still
+//! queued in it, so that a client that subscribes again at once does not receive them as if they
+//! were current: the trades that could not be taken are lost, and the clients re-derive them.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -35,8 +36,8 @@ use tokio::sync::mpsc;
 /// rejected.
 pub const MAX_DEX_TRADES_SUBSCRIBERS: usize = 32;
 /// The number of block trade lists the dispatcher may have pending; the chainstate drops the
-/// trades of a block when the dispatcher is further behind than that, which never happens under
-/// normal operation.
+/// trades of a block and discards the dispatcher when it is further behind than that, which never
+/// happens under normal operation.
 pub(crate) const DISPATCHER_QUEUE_CAPACITY: usize = 64;
 /// The number of trades a subscriber may have pending; a subscriber that falls behind by a full
 /// queue is dropped.
@@ -147,9 +148,8 @@ impl DexTradesDispatcher {
     }
 
     /// Drop every subscriber, which closes its queue and thereby its subscription: the client
-    /// sees the end of the stream and subscribes again. Used when the dispatcher cannot take the
-    /// trades of the blocks, which are lost; a later subscription is served by the same
-    /// dispatcher. Returns the number of subscribers dropped.
+    /// sees the end of the stream and subscribes again. Used when the trades of some blocks are
+    /// lost, so that the clients re-derive them. Returns the number of subscribers dropped.
     pub fn drop_subscribers(&self) -> usize {
         std::mem::take(&mut *Self::lock_subscribers(&self.subscribers)).len()
     }
