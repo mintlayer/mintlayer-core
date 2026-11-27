@@ -842,7 +842,8 @@ position is always below 2^40, i.e. an exactly representable JSON number.
 
 The `pairs` parameter filters the events by trading pair: a pair is
 `{ "base": <currency>, "quote": <currency> }` where a currency is either the literal
-`"coin"` or a token id as 64 hex digits without a `0x` prefix, as used in the events.
+`"coin"` or a token id as 64 hex digits of any case without a `0x` prefix (the events
+emit it in lowercase).
 A trade matches a pair only if both of its sides match, so a trade of the reversed pair
 does not match. An absent or empty list delivers all the events; a well-formed pair of a
 market that has no trades simply delivers nothing. A list of more than 256 pairs, or a

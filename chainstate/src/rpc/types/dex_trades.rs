@@ -30,7 +30,8 @@ const COIN: &str = "coin";
 /// A trading pair used to filter the trades of `dex_subscribe_to_trades`.
 ///
 /// The base is the currency the maker gives, the quote is the currency the maker asks for.
-/// Each of them is either the literal `"coin"` or the hex-encoded id of a token.
+/// Each of them is either the literal `"coin"` or the hex-encoded id of a token, in any case
+/// (the events always emit it in lowercase).
 /// A trade matches a pair only if both of its sides match: a pair is directional and a trade
 /// of the reversed pair does not match it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -44,7 +45,7 @@ pub const MAX_TRADING_PAIRS: usize = 256;
 
 /// How many characters of an invalid value are echoed back in the error.
 const ECHOED_VALUE_CHARS: usize = 64;
-/// The length of the canonical hex form of a token id (32 bytes).
+/// The length of the hex form of a token id (32 bytes).
 const TOKEN_ID_HEX_LEN: usize = 64;
 
 /// A trading pair filter that is not well-formed.
@@ -98,7 +99,8 @@ fn parse_currency(side: &'static str, value: &str) -> Result<Currency, RpcTradin
     if value == COIN {
         return Ok(Currency::Coin);
     }
-    // the canonical hex form of the ids of the events: 64 hex digits, no prefix
+    // 64 hex digits of any case and without a prefix: the form of the ids of the events, which
+    // are emitted in lowercase
     if value.len() != TOKEN_ID_HEX_LEN || value.starts_with("0x") || value.starts_with("0X") {
         return Err(error());
     }
@@ -171,7 +173,8 @@ impl RpcDexTradeEvent {
     }
 }
 
-/// The currency in the form accepted by [`RpcTradingPair`]: `"coin"` or the hex-encoded token id.
+/// The currency in the form accepted by [`RpcTradingPair`]: the literal `"coin"` or the
+/// lowercase hex-encoded token id.
 fn currency_to_string(currency: &Currency) -> String {
     match currency {
         Currency::Coin => COIN.to_owned(),
@@ -350,6 +353,11 @@ mod tests {
         // the canonical form is accepted
         assert!(pair(&format!("{token:x}"), "coin").parse().is_ok());
         assert!(pair("coin", "coin").parse().is_ok());
+        // so is any other case: only the events are always lowercase
+        assert_eq!(
+            pair(&format!("{token:X}"), "coin").parse(),
+            pair(&format!("{token:x}"), "coin").parse()
+        );
 
         for malformed in [
             "".to_owned(),
