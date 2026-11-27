@@ -89,7 +89,12 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                         &median_time_past,
                     )
                     .log_err()?;
-                block_dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_index));
+                let tx_id = tx.transaction().get_id();
+                block_dex_trades.extend(tx_verifier.take_dex_trade_infos(
+                    block_index,
+                    tx_index,
+                    tx_id,
+                ));
                 let tx_fee = fee
                     .clone()
                     .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
@@ -99,7 +104,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                             block.get_id().into(),
                         )
                     })?;
-                block_tx_fees.push((tx.transaction().get_id(), tx_fee));
+                block_tx_fees.push((tx_id, tx_fee));
                 total
                     .combine(fee)
                     .map_err(|_| ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()))

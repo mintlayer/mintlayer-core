@@ -411,12 +411,13 @@ fn verifier_records_trade_matches_of_block_fills(
             .unwrap();
 
         // the drained trades are positioned in the block of the transaction (at index 0)
-        let trades = verifier.take_dex_trade_infos(&block_index, 0);
+        let tx_id = fill.tx.transaction().get_id();
+        let trades = verifier.take_dex_trade_infos(&block_index, 0, tx_id);
         assert_eq!(trades.len(), 1);
         let trade = &trades[0];
         assert_eq!(trade.block_id, block.get_id());
         assert_eq!(trade.block_height, block_index.block_height());
-        assert_eq!(trade.tx_id, fill.tx.transaction().get_id());
+        assert_eq!(trade.tx_id, tx_id);
         assert_eq!(trade.input_ordinal, 1);
         assert_eq!(trade.match_ordinal, 0);
         assert_eq!(trade.in_block_position(), 1 << 4);
@@ -430,7 +431,7 @@ fn verifier_records_trade_matches_of_block_fills(
         );
         assert_eq!(trade.base_amount, fill.payouts[0]);
         // taking the trades drains them
-        assert!(verifier.take_dex_trade_infos(&block_index, 0).is_empty());
+        assert!(verifier.take_dex_trade_infos(&block_index, 0, tx_id).is_empty());
 
         let mut mempool_verifier = TransactionVerifier::new(&storage, chain_config);
         mempool_verifier
@@ -440,7 +441,107 @@ fn verifier_records_trade_matches_of_block_fills(
                 &median_time_past,
             )
             .unwrap();
-        assert!(mempool_verifier.take_dex_trade_infos(&block_index, 0).is_empty());
+        assert!(mempool_verifier.take_dex_trade_infos(&block_index, 0, tx_id).is_empty());
+    });
+}
+
+/// Connect two fill-order transactions of one block to a verifier and take the trades once,
+/// after the second one, as a strategy that drains late would; return the trades taken, the id
+/// of their block and the transactions.
+fn take_the_trades_of_two_transactions_once(
+    seed: Seed,
+    version: OrdersVersion,
+) -> (Vec<DexTradeInfo>, Id<Block>, [FillTx; 2]) {
+    let mut rng = make_seedable_rng(seed);
+    let mut tf = create_test_framework_with_orders(&mut rng, version);
+    let fixture = create_fixture(&mut rng, &mut tf, 2);
+    let fill_amount = Amount::from_atoms(100);
+    let fill0 = make_fill_tx(
+        &tf,
+        version,
+        &fixture.coin,
+        fixture.token_id,
+        fixture.order_ids[0],
+        fill_amount,
+        false,
+    );
+    let fill1 = make_fill_tx(
+        &tf,
+        version,
+        &fill0.coins_left,
+        fixture.token_id,
+        fixture.order_ids[1],
+        fill_amount,
+        false,
+    );
+
+    let storage =
+        InMemoryStorageWrapper::new(tf.storage.clone(), tf.chain_config().as_ref().clone());
+    let chain_config = tf.chainstate.get_chain_config().clone();
+    let parent = tf.best_block_id();
+    let block = build_block(
+        &mut tf,
+        &mut rng,
+        parent,
+        [fill0.tx.clone(), fill1.tx.clone()],
+    );
+    let block_id = block.get_id();
+    let block_index = block_index_of_unprocessed_block(&tf, &block);
+    let median_time_past = tf.genesis().timestamp();
+
+    let mut verifier = TransactionVerifier::new(&storage, chain_config);
+    for fill in [&fill0, &fill1] {
+        verifier
+            .connect_transaction(
+                &TransactionSourceForConnect::for_chain(&block_index),
+                &fill.tx,
+                &median_time_past,
+            )
+            .unwrap();
+    }
+    let tx_id = fill1.tx.transaction().get_id();
+    let trades = verifier.take_dex_trade_infos(&block_index, 1, tx_id);
+    (trades, block_id, [fill0, fill1])
+}
+
+// The trades taken with a transaction are the ones it made: a match left in the verifier by an
+// earlier transaction is not positioned as a trade of a later one. Taking the trades late is a
+// broken invariant, i.e. a panic in debug builds; in release builds the match is skipped.
+#[cfg(debug_assertions)]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+#[should_panic(expected = "the matches must be taken with the transaction that made them")]
+fn a_match_left_by_an_earlier_transaction_is_not_misattributed(
+    #[case] seed: Seed,
+    #[case] version: OrdersVersion,
+) {
+    utils::concurrency::model(move || {
+        let _ = take_the_trades_of_two_transactions_once(seed, version);
+    });
+}
+
+#[cfg(not(debug_assertions))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), OrdersVersion::V0)]
+#[case(Seed::from_entropy(), OrdersVersion::V1)]
+fn a_match_left_by_an_earlier_transaction_is_not_misattributed(
+    #[case] seed: Seed,
+    #[case] version: OrdersVersion,
+) {
+    utils::concurrency::model(move || {
+        let (trades, block_id, fills) = take_the_trades_of_two_transactions_once(seed, version);
+        // only the trade of the second transaction is positioned, as its own
+        assert_eq!(trades.len(), 1);
+        let trade = &trades[0];
+        assert_eq!(trade.block_id, block_id);
+        assert_eq!(trade.tx_id, fills[1].tx.transaction().get_id());
+        assert_eq!(
+            trade.in_block_position(),
+            (1 << 20) | ((fills[1].input_ordinal as u64) << 4)
+        );
     });
 }
 

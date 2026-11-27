@@ -191,15 +191,20 @@ impl RandomizedTransactionVerificationStrategy {
             } else {
                 // connect transactable using current verifier
 
+                let tx = &block.transactions()[tx_num];
                 let fee = tx_verifier.connect_transaction(
                     &TransactionSourceForConnect::Chain {
                         new_block_index: block_index,
                     },
-                    &block.transactions()[tx_num],
+                    tx,
                     median_time_past,
                 )?;
 
-                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_num));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(
+                    block_index,
+                    tx_num,
+                    tx.transaction().get_id(),
+                ));
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
@@ -259,15 +264,20 @@ impl RandomizedTransactionVerificationStrategy {
                 break;
             } else {
                 // connect transactable using current verifier
+                let tx = &block.transactions()[tx_num];
                 let fee = tx_verifier.connect_transaction(
                     &TransactionSourceForConnect::Chain {
                         new_block_index: block_index,
                     },
-                    &block.transactions()[tx_num],
+                    tx,
                     median_time_past,
                 )?;
 
-                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_num));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(
+                    block_index,
+                    tx_num,
+                    tx.transaction().get_id(),
+                ));
 
                 total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())

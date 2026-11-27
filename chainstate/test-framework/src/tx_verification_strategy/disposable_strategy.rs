@@ -91,7 +91,11 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &median_time_past,
                     )
                     .log_err()?;
-                dex_trades.extend(tx_verifier.take_dex_trade_infos(block_index, tx_index));
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(
+                    block_index,
+                    tx_index,
+                    tx.transaction().get_id(),
+                ));
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 

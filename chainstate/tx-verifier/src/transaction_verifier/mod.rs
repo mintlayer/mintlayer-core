@@ -1015,8 +1015,12 @@ where
     }
 
     /// Take the DEX trades of the transactions connected to the block since the last call (see
-    /// [`DexTradeMatch`]) and position them as the trades of the transaction at `tx_index` of
-    /// `block_index`.
+    /// [`DexTradeMatch`]) and position them as the trades of the transaction `tx_id` at `tx_index`
+    /// of `block_index`.
+    ///
+    /// The matches must be taken right after the transaction that made them was connected: a
+    /// match of another transaction, left in the verifier by an earlier one, would be positioned
+    /// as a trade of this transaction, so it is reported and skipped instead.
     ///
     /// The block size limit guarantees that every trade can be positioned; a trade that cannot
     /// be is reported and skipped rather than affecting the connection of the block.
@@ -1025,11 +1029,19 @@ where
         &mut self,
         block_index: &BlockIndex,
         tx_index: usize,
+        tx_id: Id<Transaction>,
     ) -> Vec<DexTradeInfo> {
         std::mem::take(&mut self.dex_trade_matches)
             .into_iter()
             .filter_map(|trade| {
-                let tx_id = trade.tx_id;
+                if trade.tx_id != tx_id {
+                    debug_panic_or_log!(
+                        "Skipping the DEX trade match of transaction {:x} taken with transaction \
+                         {tx_id:x}: the matches must be taken with the transaction that made them",
+                        trade.tx_id
+                    );
+                    return None;
+                }
                 match DexTradeInfo::new(
                     *block_index.block_id(),
                     block_index.block_height(),
