@@ -25,6 +25,8 @@
 //! subscriber is dropped the same way and the dispatcher is discarded with the batches still
 //! queued in it, so that a client that subscribes again at once does not receive them as if they
 //! were current: the trades that could not be taken are lost, and the clients re-derive them.
+//! The same happens when the trades of a reorg cannot be announced, so that the new tip is not
+//! mistaken for a reorg without trades.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 

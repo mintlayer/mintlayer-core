@@ -396,7 +396,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             Err(DexTradesDispatchError::QueueFull(dex_trades)) => {
                 // the subscribers cannot be told which trades they miss: their subscriptions are
                 // closed, which has them subscribe again and re-derive the trades from the blocks
-                let dropped_subscribers = dispatcher.drop_subscribers();
+                let dropped_subscribers = self.discard_dex_trades_dispatcher();
                 log::error!(
                     "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
                      dropping {} trades of {} block(s) from block {:x?} on; closing \
@@ -406,10 +406,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     Self::distinct_block_count(&dex_trades),
                     dex_trades.first().map(|trade| trade.block_id)
                 );
-                // the batches still queued would reach a client that subscribes again at once as if
-                // they were current: the dispatcher is discarded with them, and the next
-                // subscription starts a fresh one
-                self.dex_trades_dispatcher = None;
             }
             Err(DexTradesDispatchError::Closed(dex_trades)) => {
                 log::error!(
@@ -430,6 +426,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// chain of blocks is connected together, such as a reorg branch.
     fn distinct_block_count(dex_trades: &[DexTradeInfo]) -> usize {
         dex_trades.iter().map(|trade| trade.block_id).collect::<HashSet<_>>().len()
+    }
+
+    /// Close every DEX trades subscription and discard the dispatcher together with the batches
+    /// still queued in it: the clients subscribe again and re-derive the trades from the blocks,
+    /// and a client that subscribes again at once does not receive the batches queued for the
+    /// closed subscriptions as if they were current. Used when the trades of some blocks are
+    /// lost. Returns the number of subscriptions closed.
+    fn discard_dex_trades_dispatcher(&mut self) -> usize {
+        let dropped_subscribers = self
+            .dex_trades_dispatcher
+            .as_ref()
+            .map_or(0, |dispatcher| dispatcher.drop_subscribers());
+        self.dex_trades_dispatcher = None;
+        dropped_subscribers
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
@@ -1014,12 +1024,24 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if new_best_block_index.block_id() != prev_best_block_id {
             // The trades of the blocks connected by the reorg caused by the invalidation, if it
-            // went through, are announced together with the new tip.
-            let dex_trades = result.as_mut().ok().and_then(|trades| trades.take());
-            self.broadcast_new_tip_with_trades(
-                new_best_block_index.as_ref(),
-                dex_trades.unwrap_or_default(),
-            );
+            // went through, are announced together with the new tip. Otherwise they are not known:
+            // announcing the new tip without them would pass for a reorg without trades, so the
+            // subscriptions are closed and the clients re-derive the trades of the new chain.
+            let dex_trades = match result.as_mut() {
+                Ok(trades) => trades.take().unwrap_or_default(),
+                Err(err) => {
+                    let dropped_subscribers = self.discard_dex_trades_dispatcher();
+                    log::error!(
+                        "The tip moved to block {} after invalidating block {block_id} but the DEX \
+                         trades of the connected blocks are not known ({err}); closing \
+                         {dropped_subscribers} subscription(s) so that the clients re-derive the \
+                         trades of the new chain",
+                        new_best_block_index.block_id()
+                    );
+                    Vec::new()
+                }
+            };
+            self.broadcast_new_tip_with_trades(new_best_block_index.as_ref(), dex_trades);
         }
 
         result.map(|_| ())
