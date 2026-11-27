@@ -52,7 +52,9 @@ pub trait ChainstateInterface: Send + Sync {
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
     /// Subscribe to the stream of the DEX trades of the blocks that become the best chain,
     /// selecting the trades of `pairs` (all trades if `None`). The queue of the subscriber
-    /// closes when the subscriber is dropped (see `chainstate::detail::dex_trades`).
+    /// closes when the subscriber is dropped (see `chainstate::detail::dex_trades`). The first
+    /// subscription spawns the dispatcher task, so a tokio runtime must be running: outside of
+    /// one the call fails with [`DexTradesSubscribeError::NoRuntime`].
     fn subscribe_to_rpc_dex_trades(
         &mut self,
         pairs: Option<DexTradePairSet>,
