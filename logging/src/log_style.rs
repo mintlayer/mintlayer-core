@@ -43,9 +43,6 @@ pub enum LogFormat {
 }
 
 impl LogFormat {
-    /// The accepted spellings, in the order they are listed in the help texts.
-    pub const POSSIBLE_VALUES: &'static [&'static str] = &["text", "json"];
-
     /// The [`LogStyle`] of this format, with text rendered using the given coloring.
     pub fn to_log_style(self, text_coloring: TextColoring) -> LogStyle {
         match self {

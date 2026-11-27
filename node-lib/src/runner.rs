@@ -397,7 +397,7 @@ pub async fn setup(
     // the node, so it does not need the config file (which is deleted with the rest anyway).
     let config_path = options.top_level.config_path(*chain_config.chain_type());
     let run_options = options.command.run_options();
-    let node_config = if options.clean_data_option_set() {
+    let mut node_config = if options.clean_data_option_set() {
         NodeConfigFile::new()?
     } else {
         NodeConfigFile::read(&chain_config, &config_path, run_options)
@@ -407,7 +407,7 @@ pub async fn setup(
     // Init logging
     let logging_options = LoggingOptions::resolve(
         &options.top_level,
-        node_config.logging.clone().unwrap_or_default(),
+        std::mem::take(&mut node_config.logging).unwrap_or_default(),
     )?;
     let log_file_name = default_log_file_name();
     // Log files written by earlier versions may have wider permissions; restrict them too.
@@ -584,6 +584,10 @@ fn file_writer_settings(
         // like the RPC cookie file. The mode only applies to a file created here.
         open_options.mode(0o600);
     }
+    // The pre-open validates the path and applies the mode at creation. The rotating writer
+    // reopens the file by path (applying the mode again at creation, and at every rotation),
+    // so a path swapped in between redirects the stream: accepted, because swapping requires
+    // write access to the operator-controlled log directory.
     open_options
         .open(&log_file_path)
         .with_context(|| format!("Failed to open the log file {:?}", log_file_path))?;

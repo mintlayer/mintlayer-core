@@ -915,6 +915,31 @@ pub(crate) mod logging_options_test_support {
         }
     }
 
+    /// `clap_utils::env_adder` binds `ML_NODE_<LONG NAME IN UPPER SNAKE>` to every option,
+    /// so this list must grow and shrink with the logging options themselves: a new or
+    /// renamed logging option whose variable is missing here leaks the ambient environment
+    /// into the tests and silently breaks the env layer of the precedence chain.
+    #[test]
+    fn logging_env_var_list_covers_the_logging_options() {
+        let command = <TopLevelOptions as clap::CommandFactory>::command();
+        let mut expected: Vec<String> = command
+            .get_arguments()
+            .filter_map(|argument| argument.get_long())
+            .filter(|long_name| long_name.starts_with("log"))
+            .map(|long_name| format!("ML_NODE_{}", long_name.to_uppercase().replace('-', "_")))
+            .collect();
+        expected.sort();
+        expected.dedup();
+
+        let mut declared = LOGGING_ENV_VARS.to_vec();
+        declared.sort();
+
+        assert_eq!(
+            declared, expected,
+            "the ML_NODE_LOG_* list drifted from the logging options"
+        );
+    }
+
     /// Parses `mintlayerd <args...> mainnet` and returns the top-level options.
     pub(crate) fn try_parse_top_level_options(
         args: &[&str],
