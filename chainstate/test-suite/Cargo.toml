@@ -26,11 +26,11 @@ test-utils = { path = "../../test-utils" }
 tokens-accounting = { path = "../../tokens-accounting" }
 tx-verifier = { path = "../tx-verifier" }
 utils = { path = "../../utils" }
-utils-networking = { path = "../../utils/networking" }
 utxo = { path = "../../utxo" }
 ctor.workspace = true
 hex.workspace = true
 itertools.workspace = true
+utils-networking = { path = "../../utils/networking" }
 
 [dev-dependencies]
 criterion.workspace = true
