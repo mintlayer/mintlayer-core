@@ -45,6 +45,10 @@ static ROOT_SPAN: OnceLock<Span> = OnceLock::new();
 /// level under the `logging::enrichment` target, so a sink whose filter disables that
 /// target (for example `RUST_LOG=logging::enrichment=off`) does not show the prefix.
 ///
+/// Whether the span is enabled is decided once, at its creation: the span is not registered
+/// as a callsite, so a filter that is reloaded later does not re-evaluate it, and a sink that
+/// did not show the prefix at startup keeps not showing it for the rest of the run.
+///
 /// This must be called after logging is initialized (the span is created by the subscriber
 /// that is current at the time of the first call) and only the first call has an effect.
 /// When that subscriber does not enable the span at all, which is what happens when logging
@@ -142,7 +146,8 @@ fn make_root_span(
     // Ask the subscriber whether it enables the span before creating it, like the `span!`
     // macro does through callsite registration: apart from skipping a span no sink wants,
     // this is what records, per layer, whether its filter enabled the span, which is what
-    // the fmt layers consult when listing the spans in scope of an event.
+    // the fmt layers consult when listing the spans in scope of an event. The callsite is
+    // never registered, so this is also the only time the visibility of the span is decided.
     if !tracing::dispatcher::get_default(|dispatch| dispatch.enabled(metadata)) {
         return Span::none();
     }
