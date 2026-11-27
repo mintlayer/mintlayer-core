@@ -461,6 +461,8 @@ mod tests {
             line = emit_test_event!();
         });
         // The file is the test's source path and the line is the `tracing::info!` call site.
+        // The path separator is platform-dependent (`file!()` uses backslashes on Windows).
+        let on = on.replace('\\', "/");
         assert!(on.contains("\"filename\":\"logging/src/lib.rs\""), "{on}");
         assert!(on.contains(&format!("\"line_number\":{line}")), "{on}");
     }
@@ -475,7 +477,9 @@ mod tests {
             false,
             || emit_test_event!(),
         );
-        // The legacy text layout: timestamp, level, target, message; nothing else.
+        // The legacy text layout: timestamp, level, target, message; nothing else. The path
+        // separator is platform-dependent (`file!()` uses backslashes on Windows).
+        let off = off.replace('\\', "/");
         assert!(
             off.contains(&format!(" INFO logging::tests: {MESSAGE}")),
             "{off}"
@@ -486,7 +490,9 @@ mod tests {
         let on = output.capture(LogStyle::Text(TextColoring::Off), true, false, || {
             line = emit_test_event!()
         });
-        // The location is printed between the target and the message.
+        // The location is printed between the target and the message. The path separator is
+        // platform-dependent (`file!()` uses backslashes on Windows).
+        let on = on.replace('\\', "/");
         assert!(
             on.contains(&format!(
                 "logging::tests: logging/src/lib.rs:{line}: {MESSAGE}"
