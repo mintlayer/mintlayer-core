@@ -116,12 +116,22 @@ pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() ->
 ///
 /// The sink is written under a mutex, and the writer marks the writing thread for as long
 /// as the lock is held (from handing the writer out to the formatted event being written),
-/// so that the panic hook can keep away from the sink whenever a panic occurs under it.
+/// so that the panic hook can keep away from the sink whenever a panic occurs under it. The
+/// writer also holds the process-wide sink scope (see [`SINK_SCOPE`]) for the same duration,
+/// so that the hook can tell from any thread whether a write may be in progress.
 pub fn write_to_make_writer(
     writer: impl Write + Send + 'static,
 ) -> impl for<'a> MakeWriter<'a> + Send + Sync + 'static {
     SinkMakeWriter(Mutex::new(writer))
 }
+
+/// Held by every writer handed out by [`SinkMakeWriter`] for as long as the writer lives.
+///
+/// The lock guards no data: it records that some thread is inside a write to a log sink,
+/// whatever the sink, so that the panic hook can keep a report away from the sinks when a
+/// write may be stuck (see [`sink_scope_busy`]). It is taken before the lock of the sink
+/// itself and released after it, so it is held exactly while a thread is in the write scope.
+static SINK_SCOPE: Mutex<()> = Mutex::new(());
 
 /// A [`MakeWriter`] that marks the writing thread while its lock is held.
 struct SinkMakeWriter<W>(Mutex<W>);
@@ -136,9 +146,13 @@ where
         // The mark is entered before the lock is taken, so a re-entrant call from the
         // panic hook on this thread always sees the mark and stays off the sink.
         let guard = SinkWriteGuard::enter();
+        // A poisoned scope lock is only the trace of a panic inside a write, whose guard
+        // was released on the way out: it does not make the scope busy.
+        let scope = SINK_SCOPE.lock().unwrap_or_else(|err| err.into_inner());
         let inner = self.0.lock().expect("Log sink mutex poisoned");
         SinkGuardedWriter {
             inner,
+            _scope: scope,
             _guard: guard,
         }
     }
@@ -155,9 +169,26 @@ pub(crate) fn in_sink_write() -> bool {
     IN_SINK_WRITE.with(|in_sink_write| in_sink_write.get())
 }
 
+/// Whether some thread is inside a write to a log sink made by [`write_to_make_writer`].
+///
+/// Unlike [`in_sink_write`], this is not limited to the calling thread: the panic hook uses
+/// it to keep a report away from the sinks while another thread may be stuck in a write,
+/// since the report would wait for the lock held by that thread. The probe may be racing
+/// with a write that starts right after it; such a report is delayed by that write only.
+pub(crate) fn sink_scope_busy() -> bool {
+    match SINK_SCOPE.try_lock() {
+        Ok(_) => false,
+        // A poisoned lock was released by the panicking thread, so it is not held.
+        Err(std::sync::TryLockError::Poisoned(_)) => false,
+        Err(std::sync::TryLockError::WouldBlock) => true,
+    }
+}
+
 /// A writer that hands the sink out with the sink-write guard held (see [`SinkWriteGuard`]).
 struct SinkGuardedWriter<'a, W> {
     inner: std::sync::MutexGuard<'a, W>,
+    /// The sink scope, held for as long as the sink lock (see [`SINK_SCOPE`]).
+    _scope: std::sync::MutexGuard<'a, ()>,
     _guard: SinkWriteGuard,
 }
 
