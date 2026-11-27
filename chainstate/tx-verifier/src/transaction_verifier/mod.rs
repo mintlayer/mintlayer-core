@@ -1370,10 +1370,12 @@ where
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         // the DEX trades are not part of the delta: they must have been taken (see
         // [`TransactionVerifier::take_dex_trade_infos`]) before the state is consumed
-        debug_assert!(
-            self.dex_trade_matches.is_empty(),
-            "DEX trade matches left untaken before consuming the verifier"
-        );
+        if !self.dex_trade_matches.is_empty() {
+            debug_panic_or_log!(
+                "{} DEX trade match(es) left untaken before consuming the verifier; they are dropped",
+                self.dex_trade_matches.len()
+            );
+        }
         let (accounting_delta, accounting_block_deltas) = self.pos_accounting_adapter.consume();
         Ok(TransactionVerifierDelta {
             utxo_cache: self.utxo_cache.consume(),
