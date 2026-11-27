@@ -42,7 +42,9 @@ const NON_STRING_PAYLOAD_MESSAGE: &str = "<non-string panic payload>";
 /// runtime, and a panic in a joined task reaches the log only as the bare "task panicked"
 /// error of the join, without the location and the message of the failure.
 ///
-/// Calling this function again chains the hooks, so no previously installed report is lost.
+/// The logging initialization installs the hook once per process (see
+/// [`init_logging_generic`]). Calling this function directly chains the hooks, so no
+/// previously installed report is lost.
 pub fn install_panic_hook() {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info: &PanicHookInfo<'_>| {

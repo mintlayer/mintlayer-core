@@ -275,6 +275,9 @@ pub fn init_logging_generic<MW1, MW2>(
             .init();
 
         // The subscriber is in place, so panics can be reported through it from now on.
+        // This runs inside the `Once`, so the hook is installed once per process even when
+        // logging is initialized again: `install_panic_hook` chains the hooks by design, and
+        // a second installation would report every panic twice.
         install_panic_hook();
 
         // Now that we've initialized logging somehow, we can complain about errors, if any.
