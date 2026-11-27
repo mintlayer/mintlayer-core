@@ -402,6 +402,12 @@ impl BlockProduction {
     /// successfully, and the repeats are left at debug, like the failures that are part of the
     /// normal operation (no stake found in the current round, waiting for the chain to sync,
     /// a cancelled attempt).
+    ///
+    /// A routine failure between two occurrences of the same persistent failure does not turn
+    /// the second one into a new episode: it is the normal outcome of the attempts in between,
+    /// and the persistent failure recurring after it is still a repeat, left at debug. Two
+    /// distinct persistent failures that alternate (A, B, A, B, ...) are different episodes by
+    /// design and warn at every attempt, since both problems have to stay visible.
     fn log_block_production_failure(&self, pool_id: Option<PoolId>, err: &BlockProductionError) {
         let is_routine = matches!(
             err,
@@ -419,9 +425,16 @@ impl BlockProduction {
         let pool = pool_id.map(|pool_id| format!(" for pool {pool_id}")).unwrap_or_default();
         let message = format!("Block production failed{pool}: {err}");
 
+        if is_routine {
+            // The tracked failure is left untouched, so that a persistent failure recurring
+            // after a routine one is still recognized as a repeat (see above).
+            log::debug!("{message}");
+            return;
+        }
+
         let mut last_reported =
             self.last_reported_failure.lock().unwrap_or_else(|err| err.into_inner());
-        if is_routine || last_reported.as_deref() == Some(message.as_str()) {
+        if last_reported.as_deref() == Some(message.as_str()) {
             log::debug!("{message}");
             return;
         }
