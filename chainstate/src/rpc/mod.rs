@@ -269,9 +269,10 @@ trait ChainstateRpc {
     /// the same one that ends every subscription when the node stops) and the subscription
     /// stream ends; jsonrpsee-based Rust clients observe that end as `next()` returning
     /// `None` (the client library does not surface the notification body). The client has
-    /// to subscribe again, re-deriving what it missed from the blocks. At most 32
-    /// subscribers are served at a time; a subscription beyond that is rejected with an
-    /// error.
+    /// to subscribe again, re-deriving what it missed from the blocks. The node closes every
+    /// subscription the same way when its trade dispatcher falls more than 64 blocks behind
+    /// the chain. At most 32 subscribers are served at a time; a subscription beyond that is
+    /// rejected with an error.
     #[subscription(
         name = "dex_subscribe_to_trades",
         unsubscribe = "dex_unsubscribe_to_trades",

@@ -21,7 +21,9 @@
 //! whose pairs select it gets the trade in its own bounded queue, from which the subscription
 //! forwarder sends it to the client. A subscriber that falls behind by a full queue is dropped,
 //! which closes its subscription with an error notification to the client; a client that cannot
-//! keep up reconnects and re-derives.
+//! keep up reconnects and re-derives. When the dispatcher itself falls behind the chain, every
+//! subscriber is dropped the same way: the trades that could not be taken are lost, and the
+//! clients re-derive them.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -135,6 +137,14 @@ impl DexTradesDispatcher {
         let mut subscribers = Self::lock_subscribers(&self.subscribers);
         Self::reap_closed(&mut subscribers);
         subscribers.len()
+    }
+
+    /// Drop every subscriber, which closes its queue and thereby its subscription: the client
+    /// sees the end of the stream and subscribes again. Used when the dispatcher cannot take the
+    /// trades of the blocks, which are lost; a later subscription is served by the same
+    /// dispatcher. Returns the number of subscribers dropped.
+    pub fn drop_subscribers(&self) -> usize {
+        std::mem::take(&mut *Self::lock_subscribers(&self.subscribers)).len()
     }
 
     /// The number of registered subscribers, including the ones whose queue is closed but have
@@ -406,6 +416,31 @@ mod tests {
 
         drop(dispatcher);
         assert_eq!(receive_all(all).await.len(), fills_in_a_full_block as usize);
+    }
+
+    #[tokio::test]
+    async fn dropped_subscribers_see_the_end_of_their_queue() {
+        let dispatcher = DexTradesDispatcher::start().unwrap();
+        let all = dispatcher.subscribe(None).unwrap();
+        let selective = dispatcher
+            .subscribe(Some(DexTradePairSet::from_iter([(
+                Currency::Coin,
+                Currency::Coin,
+            )])))
+            .unwrap();
+
+        // the subscribers are dropped: their queues close at once, so that a reader sees the
+        // end of the stream instead of waiting for the next trade
+        assert_eq!(dispatcher.drop_subscribers(), 2);
+        assert_eq!(dispatcher.subscriber_count(), 0);
+        assert!(receive_all(all).await.is_empty());
+        assert!(receive_all(selective).await.is_empty());
+
+        // the dispatcher keeps working for a later subscriber
+        let late = dispatcher.subscribe(None).unwrap();
+        dispatcher.dispatch(vec![trade(2)]).unwrap();
+        drop(dispatcher);
+        assert_eq!(receive_all(late).await, vec![2]);
     }
 
     #[tokio::test]

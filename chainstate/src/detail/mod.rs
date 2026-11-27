@@ -34,7 +34,10 @@ pub mod bootstrap;
 pub mod query;
 pub mod tx_verification_strategy;
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use thiserror::Error;
@@ -377,7 +380,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Hand the DEX trades of the blocks that just became the best chain to the dispatcher with a
     /// single send, in connect order; see [`dex_trades`] for what happens to them next. The batch
     /// is handed over. A dispatcher that is unrealistically far behind loses the trades of the
-    /// block, which is reported; the chainstate never waits for the subscribers.
+    /// block, which is reported, and drops its subscribers, so that the clients re-derive them;
+    /// the chainstate never waits for the subscribers.
     fn broadcast_dex_trades(&mut self, dex_trades: Vec<DexTradeInfo>) {
         let Some(dispatcher) = &self.dex_trades_dispatcher else {
             // nobody ever subscribed
@@ -388,24 +392,38 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
         match dispatcher.dispatch(dex_trades) {
             Ok(()) => (),
-            Err(DexTradesDispatchError::QueueFull(dex_trades)) => log::error!(
-                "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
-                 dropping {} trades from block {:x?}",
-                dex_trades.len(),
-                dex_trades.first().map(|trade| trade.block_id)
-            ),
+            Err(DexTradesDispatchError::QueueFull(dex_trades)) => {
+                // the subscribers cannot be told which trades they miss: their subscriptions are
+                // closed, which has them subscribe again and re-derive the trades from the blocks
+                let dropped_subscribers = dispatcher.drop_subscribers();
+                log::error!(
+                    "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
+                     dropping {} trades of {} block(s) from block {:x?} on; closing \
+                     {dropped_subscribers} subscription(s) so that the clients re-derive the trades",
+                    dex_trades.len(),
+                    Self::distinct_block_count(&dex_trades),
+                    dex_trades.first().map(|trade| trade.block_id)
+                );
+            }
             Err(DexTradesDispatchError::Closed(dex_trades)) => {
                 log::error!(
-                    "The DEX trades dispatcher task is gone; dropping {} trades from block \
-                     {:x?}; the subscriptions are closed and a later subscription starts a fresh \
-                     dispatcher",
+                    "The DEX trades dispatcher task is gone; dropping {} trades of {} block(s) from \
+                     block {:x?} on; the subscriptions are closed and a later subscription starts a \
+                     fresh dispatcher",
                     dex_trades.len(),
+                    Self::distinct_block_count(&dex_trades),
                     dex_trades.first().map(|trade| trade.block_id)
                 );
                 // the subscribers' queues were held by the task and are closed with it
                 self.dex_trades_dispatcher = None;
             }
         }
+    }
+
+    /// The number of blocks whose trades a batch holds; a batch spans several blocks when a
+    /// chain of blocks is connected together, such as a reorg branch.
+    fn distinct_block_count(dex_trades: &[DexTradeInfo]) -> usize {
+        dex_trades.iter().map(|trade| trade.block_id).collect::<HashSet<_>>().len()
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
