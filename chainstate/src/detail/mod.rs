@@ -365,7 +365,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     fn broadcast_new_tip_with_trades(
         &mut self,
         best_block_index: GenBlockIndexRef<'_>,
-        dex_trades: &[DexTradeInfo],
+        dex_trades: Vec<DexTradeInfo>,
     ) {
         let is_initial_block_download = self.is_initial_block_download();
         if !is_initial_block_download {
@@ -375,10 +375,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Hand the DEX trades of the blocks that just became the best chain to the dispatcher with a
-    /// single send, in connect order; see [`dex_trades`] for what happens to them next. A
-    /// dispatcher that is unrealistically far behind loses the trades of the block, which is
-    /// reported; the chainstate never waits for the subscribers.
-    fn broadcast_dex_trades(&mut self, dex_trades: &[DexTradeInfo]) {
+    /// single send, in connect order; see [`dex_trades`] for what happens to them next. The batch
+    /// is handed over. A dispatcher that is unrealistically far behind loses the trades of the
+    /// block, which is reported; the chainstate never waits for the subscribers.
+    fn broadcast_dex_trades(&mut self, dex_trades: Vec<DexTradeInfo>) {
         let Some(dispatcher) = &self.dex_trades_dispatcher else {
             // nobody ever subscribed
             return;
@@ -386,20 +386,21 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         if dispatcher.subscriber_count() == 0 {
             return;
         }
-        let first_block_id = dex_trades.first().map(|trade| trade.block_id);
-        match dispatcher.dispatch(dex_trades.to_vec()) {
+        match dispatcher.dispatch(dex_trades) {
             Ok(()) => (),
-            Err(DexTradesDispatchError::QueueFull) => log::error!(
+            Err(DexTradesDispatchError::QueueFull(dex_trades)) => log::error!(
                 "The DEX trades dispatcher is more than {DISPATCHER_QUEUE_CAPACITY} blocks behind; \
-                 dropping {} trades from block {first_block_id:x?}",
-                dex_trades.len()
+                 dropping {} trades from block {:x?}",
+                dex_trades.len(),
+                dex_trades.first().map(|trade| trade.block_id)
             ),
-            Err(DexTradesDispatchError::Closed) => {
+            Err(DexTradesDispatchError::Closed(dex_trades)) => {
                 log::error!(
                     "The DEX trades dispatcher task is gone; dropping {} trades from block \
-                     {first_block_id:x?}; the subscriptions are closed and a later subscription \
-                     starts a fresh dispatcher",
-                    dex_trades.len()
+                     {:x?}; the subscriptions are closed and a later subscription starts a fresh \
+                     dispatcher",
+                    dex_trades.len(),
+                    dex_trades.first().map(|trade| trade.block_id)
                 );
                 // the subscribers' queues were held by the task and are closed with it
                 self.dex_trades_dispatcher = None;
@@ -886,7 +887,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             // disk: the flag stays unset for retry, and tip events resume (including
             // the pending block) once a sync succeeds.
             self.update_initial_block_download_flag(best_block_index_ref, false)?;
-            self.broadcast_new_tip_with_trades(best_block_index_ref, &dex_trades);
+            self.broadcast_new_tip_with_trades(best_block_index_ref, dex_trades);
 
             let compact_target = match best_block_index.block_header().consensus_data() {
                 ConsensusData::None => Compact::from(Uint256::ZERO),
@@ -975,7 +976,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .get_best_block_id()
             .map_err(BlockInvalidatorError::BestBlockIdQueryError)?;
 
-        let result = BlockInvalidator::new(self)
+        let mut result = BlockInvalidator::new(self)
             .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
         // Note: we don't ignore the result of check_consistency even though we may already have
         // an error to return (if the checks are enabled but couldn't be done for some reason,
@@ -990,10 +991,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         if new_best_block_index.block_id() != prev_best_block_id {
             // The trades of the blocks connected by the reorg caused by the invalidation, if it
             // went through, are announced together with the new tip.
-            let dex_trades = result.as_ref().ok().and_then(|trades| trades.as_deref());
+            let dex_trades = result.as_mut().ok().and_then(|trades| trades.take());
             self.broadcast_new_tip_with_trades(
                 new_best_block_index.as_ref(),
-                dex_trades.unwrap_or(&[]),
+                dex_trades.unwrap_or_default(),
             );
         }
 
@@ -1021,7 +1022,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             // The trades of the blocks connected by the reorg are announced together with the new tip.
             self.broadcast_new_tip_with_trades(
                 new_best_block_index.as_ref(),
-                dex_trades.as_deref().unwrap_or(&[]),
+                dex_trades.unwrap_or_default(),
             );
         }
 

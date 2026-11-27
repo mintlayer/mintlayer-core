@@ -61,13 +61,13 @@ pub enum DexTradesSubscribeError {
     NoRuntime,
 }
 
-/// The dispatcher cannot take the trades of a block.
+/// The dispatcher cannot take the trades of a block; the batch is handed back.
 #[derive(Debug)]
 pub enum DexTradesDispatchError {
     /// The dispatcher is more than [`DISPATCHER_QUEUE_CAPACITY`] block trade lists behind.
-    QueueFull,
+    QueueFull(Vec<DexTradeInfo>),
     /// The dispatcher task is gone.
-    Closed,
+    Closed(Vec<DexTradeInfo>),
 }
 
 /// A subscriber: the pairs it selected (all trades if `None`) and its bounded queue.
@@ -148,8 +148,12 @@ impl DexTradesDispatcher {
     /// connect order, without waiting for the subscribers.
     pub fn dispatch(&self, block_trades: Vec<DexTradeInfo>) -> Result<(), DexTradesDispatchError> {
         self.block_trades_tx.try_send(block_trades).map_err(|err| match err {
-            mpsc::error::TrySendError::Full(_) => DexTradesDispatchError::QueueFull,
-            mpsc::error::TrySendError::Closed(_) => DexTradesDispatchError::Closed,
+            mpsc::error::TrySendError::Full(block_trades) => {
+                DexTradesDispatchError::QueueFull(block_trades)
+            }
+            mpsc::error::TrySendError::Closed(block_trades) => {
+                DexTradesDispatchError::Closed(block_trades)
+            }
         })
     }
 
@@ -436,11 +440,11 @@ mod tests {
         for i in 0..2 * DISPATCHER_QUEUE_CAPACITY {
             match dispatcher.dispatch(vec![trade(i as u64)]) {
                 Ok(()) => dispatched.push(i as u64),
-                Err(DexTradesDispatchError::QueueFull) => {
+                Err(DexTradesDispatchError::QueueFull(_)) => {
                     queue_full = true;
                     break;
                 }
-                Err(DexTradesDispatchError::Closed) => panic!("the dispatcher task is gone"),
+                Err(DexTradesDispatchError::Closed(_)) => panic!("the dispatcher task is gone"),
             }
         }
         assert!(queue_full, "the queue of the dispatcher is not bounded");
