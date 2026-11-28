@@ -20,7 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 use chainstate::{BlockError, ChainstateError, CheckBlockError, ban_score::BanScore};
 use common::{
     chain::block::{Block, BlockReward, ConsensusData, timestamp::BlockTimestamp},
-    primitives::Idable,
+    primitives::{H256, Id, Idable},
     time_getter::{MonotonicTimeGetter, TimeGetter},
 };
 use networking::test_helpers::TestTransportMaker;
@@ -165,10 +165,11 @@ where
             assert_eq!(
                 adjust_by,
                 P2pError::ChainstateError(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid(
-                        BlockTimestamp::from_int_seconds(4),
-                        BlockTimestamp::from_int_seconds(5),
-                    ))
+                    BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid {
+                        block_id: Id::new(H256::zero()),
+                        block_timestamp: BlockTimestamp::from_int_seconds(4),
+                        median_time_past: BlockTimestamp::from_int_seconds(5),
+                    })
                 ))
                 .ban_score()
             );

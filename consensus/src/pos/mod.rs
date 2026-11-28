@@ -148,7 +148,10 @@ where
 
     utils::ensure!(
         target == pos_data.compact_target(),
-        ConsensusPoSError::InvalidTarget(pos_data.compact_target())
+        ConsensusPoSError::InvalidTarget {
+            pool_id: *pos_data.stake_pool_id(),
+            target: pos_data.compact_target(),
+        }
     );
 
     let prev_block_index = block_index_handle

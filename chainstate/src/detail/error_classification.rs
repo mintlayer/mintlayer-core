@@ -165,9 +165,9 @@ impl BlockProcessingErrorClassification for OrphanCheckError {
 impl BlockProcessingErrorClassification for CheckBlockError {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
-            CheckBlockError::MerkleRootMismatch
+            CheckBlockError::MerkleRootMismatch { .. }
             | CheckBlockError::ParentBlockMissing { .. }
-            | CheckBlockError::BlockTimeOrderInvalid(_, _)
+            | CheckBlockError::BlockTimeOrderInvalid { .. }
             | CheckBlockError::InvalidBlockRewardOutputType(_)
             | CheckBlockError::CheckpointMismatch { .. }
             | CheckBlockError::AttemptedToAddBlockBeforeReorgLimit { .. }
@@ -184,7 +184,7 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             CheckBlockError::PropertyQueryError(err) => err.classify(),
             CheckBlockError::MerkleRootCalculationFailed(_, err) => err.classify(),
             CheckBlockError::BlockSizeError(err) => err.classify(),
-            CheckBlockError::BlockRewardMaturityError(err) => err.classify(),
+            CheckBlockError::BlockRewardMaturityError { source: err, .. } => err.classify(),
             CheckBlockError::TransactionVerifierError(err) => err.classify(),
             CheckBlockError::EpochSealError(err) => err.classify(),
             CheckBlockError::CheckTransactionFailed(err) => err.classify(),
@@ -650,7 +650,7 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::MultipleKernels
             | ConsensusPoSError::BitsToTargetConversionFailed(_)
             | ConsensusPoSError::PoolBalanceNotFound(_)
-            | ConsensusPoSError::InvalidTarget(_)
+            | ConsensusPoSError::InvalidTarget { .. }
             | ConsensusPoSError::DecodingBitsFailed(_)
             | ConsensusPoSError::NotEnoughTimestampsToAverage
             | ConsensusPoSError::InvalidTargetBlockTime

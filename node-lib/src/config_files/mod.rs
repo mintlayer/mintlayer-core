@@ -19,12 +19,14 @@ pub const DEFAULT_RPC_ENABLED: bool = true;
 pub const DEFAULT_P2P_NETWORKING_ENABLED: bool = true;
 
 pub use self::{
-    chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
+    chainstate_launcher::StorageBackendConfigFile, logging::LoggingConfigFile,
+    p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
 };
 
 mod blockprod;
 mod chainstate;
 mod chainstate_launcher;
+mod logging;
 mod mempool;
 mod p2p;
 mod rpc;
@@ -54,6 +56,10 @@ pub struct NodeConfigFile {
     pub mempool: Option<MempoolConfigFile>,
     pub p2p: Option<P2pConfigFile>,
     pub rpc: Option<RpcConfigFile>,
+    /// The logging configuration as read from the file, not merged with the command line:
+    /// the logging command line options are top-level options, so the merge is done by
+    /// [`LoggingOptions::resolve`](crate::LoggingOptions::resolve) instead of by [`Self::read`].
+    pub logging: Option<LoggingConfigFile>,
 }
 
 impl NodeConfigFile {
@@ -64,6 +70,7 @@ impl NodeConfigFile {
             mempool: None,
             p2p: None,
             rpc: None,
+            logging: None,
         })
     }
 
@@ -93,6 +100,7 @@ impl NodeConfigFile {
             mempool,
             p2p,
             rpc,
+            logging,
         } = toml::from_str(&config_as_str).context("Failed to parse config")?;
 
         let blockprod = blockprod_config(blockprod.unwrap_or_default(), options);
@@ -107,6 +115,7 @@ impl NodeConfigFile {
             mempool: Some(mempool),
             p2p: Some(p2p),
             rpc: Some(rpc),
+            logging,
         })
     }
 }
@@ -276,6 +285,7 @@ mod tests {
         let _config: ChainstateConfigFile = toml::from_str("").unwrap();
         let _config: P2pConfigFile = toml::from_str("").unwrap();
         let _config: RpcConfigFile = toml::from_str("").unwrap();
+        let _config: LoggingConfigFile = toml::from_str("").unwrap();
     }
 
     #[test]

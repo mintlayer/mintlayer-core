@@ -525,7 +525,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     /// Enforce checkpoints for the passed header.
     /// The header's parent block must be known.
-    #[log_error]
+    #[log_error(level = "trace")]
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         let prev_block_index = self.get_previous_block_index(header)?;
         let current_height = prev_block_index.block_height().next_height();
@@ -591,7 +591,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_height_vs_max_reorg_depth(
         &self,
         header: &SignedBlockHeader,
@@ -615,7 +615,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Return Ok(parent_block_index) if the specified block has a valid parent and an error otherwise.
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
@@ -719,7 +719,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             &pos_delta,
         )
         .map_err(CheckBlockError::ConsensusVerificationFailed)
-        .log_err()?;
+        .log_lvl(log::Level::Trace)?;
 
         // This enforces the minimum accepted timestamp for the block. Depending on the consensus algorithm,
         // there might be extra checks. For example, PoS requires the timestamp to be greater the previous
@@ -727,7 +727,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let median_time_past = calculate_median_time_past(self, header.prev_block_id());
         ensure!(
             header.timestamp() >= median_time_past,
-            CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
+            CheckBlockError::BlockTimeOrderInvalid {
+                block_id: *WithId::id(header),
+                block_timestamp: header.timestamp(),
+                median_time_past,
+            },
         );
 
         let max_future_offset = self
@@ -747,7 +751,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         block
             .block_reward()
@@ -772,7 +776,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             tx_verifier::timelock_check::check_output_maturity_setting(
                                 tl, required, outpoint,
                             )
-                            .map_err(CheckBlockError::BlockRewardMaturityError)
+                            .map_err(|source| {
+                                CheckBlockError::BlockRewardMaturityError {
+                                    block_id: block.get_id(),
+                                    source,
+                                }
+                            })
                         }
                         TxOutput::Transfer(_, _)
                         | TxOutput::CreateStakePool(_, _)
@@ -811,7 +820,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             })
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {
         let size = header.header_size();
         ensure!(
@@ -822,7 +831,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_block_size(&self, block: &Block) -> Result<(), BlockSizeError> {
         let block_size = block.block_size();
 
@@ -854,7 +863,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Reject the block if it has duplicate inputs, with the exception of v1 FillOrder inputs,
         // which can't be unique (because they only contain the order id and the amount).
@@ -884,7 +893,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn check_transactions(
         &self,
         block: &Block,
@@ -908,7 +917,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(block_index.block_id())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         let header_with_id = WithId::as_sub_obj(block);
         if self.skip_check_block_because_block_exists_and_is_checked(WithId::id(&header_with_id))? {
@@ -932,7 +941,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let merkle_tree_root = block.merkle_root();
             ensure!(
                 merkle_tree_root == merkle_proxy.merkle_tree().root(),
-                CheckBlockError::MerkleRootMismatch
+                CheckBlockError::MerkleRootMismatch {
+                    block_id: block.get_id()
+                }
             );
         }
         {
@@ -940,7 +951,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let witness_merkle_root = block.witness_merkle_root();
             ensure!(
                 witness_merkle_root == merkle_proxy.witness_merkle_tree().root(),
-                CheckBlockError::MerkleRootMismatch
+                CheckBlockError::MerkleRootMismatch {
+                    block_id: block.get_id()
+                }
             );
         }
 
@@ -958,7 +971,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn get_block_proof(
         &self,
         prev_block_timestamp: BlockTimestamp,
@@ -1052,7 +1065,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn create_block_index_for_new_block(
         &self,
         block: &WithId<Block>,
@@ -1212,13 +1225,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 }
 
 impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'_, S, V> {
+    /// Disconnect the blocks of the main chain from the given tip down to, but excluding,
+    /// the given block; return the number of blocks disconnected.
     #[log_error]
     pub fn disconnect_until(
         &mut self,
         cur_tip_block_id: &Id<Block>,
         last_to_remain_connected: &Id<GenBlock>,
-    ) -> Result<(), BlockError> {
+    ) -> Result<usize, BlockError> {
         let mut block_id_to_disconnect: Id<GenBlock> = (*cur_tip_block_id).into();
+        let mut disconnected_count = 0;
 
         while block_id_to_disconnect != *last_to_remain_connected {
             let cur_block_id = match block_id_to_disconnect.classify(self.chain_config) {
@@ -1228,11 +1244,12 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
             let previous_block_index = self.disconnect_tip(Some(&cur_block_id))?;
             block_id_to_disconnect = previous_block_index.block_id();
+            disconnected_count += 1;
         }
-        Ok(())
+        Ok(disconnected_count)
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn reorganize(
         &mut self,
         best_block_id: &Id<GenBlock>,
@@ -1248,7 +1265,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                     e,
                 )
             })
-            .log_err()?;
+            .log_lvl(log::Level::Trace)?;
         debug_assert!(!new_chain.is_empty()); // there has to always be at least one new block
 
         let common_ancestor_id = {
@@ -1258,22 +1275,41 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         };
 
         // Disconnect the current chain if it is not a genesis
-        if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            // Disconnect blocks
-            self.disconnect_until(&best_block_id, common_ancestor_id)?;
-        }
+        let disconnected_count =
+            if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
+                // Disconnect blocks
+                self.disconnect_until(&best_block_id, common_ancestor_id)?
+            } else {
+                0
+            };
+        let connected_count = new_chain.len();
+        let fork_point_id = *common_ancestor_id;
 
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index, in_memory_block)
                 .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
-                .log_err()?;
+                .log_lvl(log::Level::Trace)?;
+        }
+
+        // A chain switch is a primary operator signal (wallets, exchanges and indexers follow
+        // it), so report it once with the points needed to locate it. The common case of a
+        // block extending the tip disconnects nothing and is reported by the new tip line.
+        if disconnected_count > 0 {
+            log::info!(
+                "Chain reorg: disconnected {disconnected_count} block(s) from the main chain starting at tip {} \
+                 down to the fork point {}; connected {connected_count} block(s) up to the new tip {} at height {}",
+                best_block_id,
+                fork_point_id,
+                new_block_index.block_id(),
+                new_block_index.block_height(),
+            );
         }
 
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn connect_transactions(
         &mut self,
         block_index: &BlockIndex,
@@ -1292,7 +1328,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                 block,
                 median_time_past,
             )
-            .log_err()?;
+            .log_lvl(log::Level::Trace)?;
 
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
@@ -1323,7 +1359,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
     }
 
     // Connect new block
-    #[log_error]
+    #[log_error(level = "trace")]
     fn connect_tip(
         &mut self,
         block_index: &BlockIndex,
@@ -1356,7 +1392,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
                         );
                         BlockError::BlockDataMissingForValidBlockIndex(id)
                     })
-                    .log_err()?
+                    .log_lvl(log::Level::Trace)?
                     .into(),
             };
 
@@ -1433,7 +1469,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
 
     /// Perform a reorg to the specified block if needed.
     /// Return true if the reorg has been performed, and false otherwise.
-    #[log_error]
+    #[log_error(level = "trace")]
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
@@ -1490,6 +1526,12 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             return Ok(false);
         }
         if activation_context.seal_activation_gate_bypassed() {
+            log::debug!(
+                "Skipping the PoS seal activation gate for the candidate block {} at height {}: the \
+                 activation is part of the recovery after a block invalidation",
+                new_block_index.block_id(),
+                new_block_index.block_height(),
+            );
             return Ok(false);
         }
 
@@ -1512,19 +1554,35 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
             return Ok(false);
         }
 
-        if segment_seals_all_duplicated(&self.db_tx, &new_chain)? {
+        if let Some(sightings) = segment_seals_all_duplicated(&self.db_tx, &new_chain)? {
             // Both a reused-proof attack and an honest same-pool re-seal of an
             // orphaned slot land here; either way the chain stays stored and
-            // becomes activatable with its next fresh-seal block.
+            // becomes activatable with its next fresh-seal block. The sightings
+            // tell the two apart: a re-seal has one partner block per seal, while
+            // a reused proof accumulates partners.
+            let mut evidence = sightings
+                .iter()
+                .take(MAX_REPORTED_SEAL_SIGHTINGS)
+                .map(|sighting| sighting.to_string())
+                .collect::<Vec<_>>()
+                .join("; ");
+            // A segment reports one sighting per block, so the evidence is capped to keep
+            // the line bounded; the rest are counted.
+            let unreported_count = sightings.len().saturating_sub(MAX_REPORTED_SEAL_SIGHTINGS);
+            if unreported_count > 0 {
+                evidence.push_str(&format!("; ... and {unreported_count} more"));
+            }
             log::warn!(
                 "Not activating the chain of candidate block {} at height {} (current best \
                  block {}): every block of its new segment ({} blocks) reuses an \
                  already-known PoS consensus proof; the chain stays stored and becomes \
-                 activatable with its next fresh-seal block",
+                 activatable with its next fresh-seal block. Evidence ({} duplicate seals): {}",
                 new_block_index.block_id(),
                 new_block_index.block_height(),
                 best_block_id,
                 new_chain.len(),
+                sightings.len(),
+                evidence,
             );
             return Ok(true);
         }
@@ -1621,7 +1679,7 @@ impl<S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRe
         Ok(())
     }
 
-    #[log_error]
+    #[log_error(level = "trace")]
     fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {
         let tip_height = tip_index.block_height();
         epoch_seal::update_epoch_seal(
@@ -1736,30 +1794,77 @@ impl ChainActivationContext {
 /// one and lands on the orphan's slot again, because the VRF output binds the
 /// epoch randomness and the timestamp but not the parent. The refused block
 /// is stored, and the chain always recovers with its next fresh-seal block.
+///
+/// Returns one sighting per block of the segment when every block carries a
+/// duplicate-seal proof, and `None` otherwise; the sightings are the evidence
+/// that the gate reports with its refusal.
 fn segment_seals_all_duplicated<S: BlockchainStorageRead>(
     db_tx: &S,
     new_chain: &[BlockIndex],
-) -> Result<bool, BlockError> {
+) -> Result<Option<Vec<DuplicateSealSighting>>, BlockError> {
     if new_chain.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
+
+    let mut sightings = Vec::with_capacity(new_chain.len());
+
     for block_index in new_chain {
         let Some(seal) =
             BlockSeal::from_consensus_data(block_index.block_header().consensus_data())
         else {
             // The block does not yield a well-formed seal, so it cannot be
             // classified as a duplicate and the segment is not fully duplicated.
-            return Ok(false);
+            return Ok(None);
         };
-        let duplicated = match db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
-            Some(entry) => entry.is_seen_on_block_other_than(*block_index.block_id()),
-            None => false,
+        let seen_on = match db_tx.get_seal_index_entry(&seal).map_err(BlockError::from)? {
+            Some(entry) if entry.is_seen_on_block_other_than(*block_index.block_id()) => entry
+                .blocks()
+                .iter()
+                .copied()
+                .filter(|(known_block_id, _)| *known_block_id != *block_index.block_id())
+                .collect(),
+            _ => return Ok(None),
         };
-        if !duplicated {
-            return Ok(false);
-        }
+        sightings.push(DuplicateSealSighting {
+            block_id: *block_index.block_id(),
+            block_height: block_index.block_height(),
+            pool_id: *seal.pool_id(),
+            seen_on,
+        });
     }
-    Ok(true)
+    Ok(Some(sightings))
+}
+
+/// The number of duplicate-seal sightings listed in the evidence of a refused activation.
+const MAX_REPORTED_SEAL_SIGHTINGS: usize = 5;
+
+/// A block whose PoS consensus proof is already known from the other blocks listed in
+/// the seal index; reported with the refusal of the PoS seal activation gate.
+struct DuplicateSealSighting {
+    block_id: Id<Block>,
+    block_height: BlockHeight,
+    pool_id: PoolId,
+    /// The other blocks that carry the same proof, as recorded in the seal index.
+    seen_on: Vec<(Id<Block>, BlockHeight)>,
+}
+
+impl std::fmt::Display for DuplicateSealSighting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "block {} at height {} of pool {} (seal also seen on ",
+            self.block_id, self.block_height, self.pool_id
+        )?;
+        // Note: the list is never empty, because the sighting is only collected when the
+        // seal is known from a block other than the one being classified.
+        let seen_on = self
+            .seen_on
+            .iter()
+            .map(|(block_id, block_height)| format!("block {block_id} at height {block_height}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(f, "{seen_on})")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

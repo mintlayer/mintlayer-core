@@ -17,6 +17,7 @@
 
 mod checkpoints_from_file;
 mod config_files;
+mod logging_options;
 mod mock_time;
 pub mod node_controller;
 mod node_daemon_runner;
@@ -29,8 +30,9 @@ pub type Error = anyhow::Error;
 use chainstate_launcher::ChainConfig;
 
 pub use config_files::{
-    NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
+    LoggingConfigFile, NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
 };
+pub use logging_options::LoggingOptions;
 pub use node_daemon_runner::{ExitCode, run_node_daemon};
 pub use options::{
     CLEAN_DATA_OPTION_LONG_NAME, Command, IMPORT_BOOTSTRAP_FILE_OPTION_LONG_NAME, Options,

@@ -248,8 +248,9 @@ where
                 )
             }
             Err(err) => {
-                // This happens often (for example, if the remote node is behind NAT), so use `info!` here
-                log::info!("Failed to establish connection to {address:?}: {err}");
+                // This happens often (for example, if the remote node is behind NAT), and the
+                // peer manager reports the failure once with the role of the connection.
+                log::debug!("Failed to establish connection to {address:?}: {err}");
 
                 Ok(
                     self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
@@ -455,7 +456,9 @@ where
                 match peer.run().await {
                     Ok(()) => {}
                     Err(P2pError::ChannelClosed) if shutdown.load() => {}
-                    Err(e) => log::error!("Peer {peer_id} failed: {e}"),
+                    // The peer task reports the failure and the end of the connection with
+                    // the peer address itself.
+                    Err(_) => {}
                 }
             },
             &format!("Peer[id={peer_id}]"),
@@ -685,32 +688,15 @@ where
 
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.remove_pending_peer(peer_id) {
-                    // Note: we'll get here if handshake has failed, so no need to use log levels
-                    // higher that debug, because the error should have been logged properly already.
-                    match pending_peer.connection_info {
-                        ConnectionInfo::Inbound => {
-                            log::debug!(
-                                "Inbound pending connection from {} was closed",
-                                pending_peer.peer_address
-                            );
-                        }
-                        ConnectionInfo::Outbound {
-                            handshake_nonce: _,
-                            local_services_override: _,
-                        } => {
-                            log::debug!(
-                                "Outbound pending connection to {} was closed",
-                                pending_peer.peer_address
-                            );
-
-                            // TODO: this ConnectionRefusedOrTimedOut is misleading; probably
-                            // we should include the actual error in PeerEvent::ConnectionClosed
-                            // and propagate it here.
-                            self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
-                                peer_address: pending_peer.peer_address,
-                                error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                            })?;
-                        }
+                    // Note: we'll get here if the handshake has failed; the peer task has
+                    // reported the end of the connection with the reason. The peer manager
+                    // only needs to know that the attempt is over; it has the role, which
+                    // decides whether the failure is worth a line of its own.
+                    if let ConnectionInfo::Outbound { .. } = pending_peer.connection_info {
+                        self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
+                            peer_address: pending_peer.peer_address,
+                            error: P2pError::DialError(DialError::HandshakeFailed),
+                        })?;
                     }
                 }
 

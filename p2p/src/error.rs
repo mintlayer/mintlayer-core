@@ -102,6 +102,11 @@ pub enum DialError {
     AttemptToDialSelf,
     #[error("Connection refused or timed out")]
     ConnectionRefusedOrTimedOut,
+    /// The connection was established, but closed before the handshake completed. The peer
+    /// task reports the actual error; this is what the peer manager and the callers of a
+    /// manual connection see.
+    #[error("Connection closed before the handshake completed")]
+    HandshakeFailed,
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]

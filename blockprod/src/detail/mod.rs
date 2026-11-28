@@ -19,7 +19,7 @@ pub mod utils;
 
 use std::{
     cmp,
-    sync::{Arc, mpsc},
+    sync::{Arc, Mutex, mpsc},
 };
 
 use tokio::sync::oneshot;
@@ -44,6 +44,7 @@ use consensus::{
     generate_pow_consensus_data_and_reward,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
+use logging::log;
 use mempool::{MempoolHandle, tx_accumulator::PackingStrategy};
 use p2p::P2pHandle;
 use randomness::{Rng, RngExt as _, make_true_rng};
@@ -128,6 +129,9 @@ pub struct BlockProduction {
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
     p2p_handle: P2pHandle,
     e2e_encryption_key: ephemeral_e2e::EndToEndPrivateKey,
+    /// The last block production failure reported at the warning level, so that a failure
+    /// that persists across attempts is reported once until it changes.
+    last_reported_failure: Mutex<Option<String>>,
 }
 
 impl BlockProduction {
@@ -154,6 +158,7 @@ impl BlockProduction {
             job_manager_handle,
             mining_thread_pool,
             e2e_encryption_key: EndToEndPrivateKey::new_from_rng(&mut rng),
+            last_reported_failure: Mutex::new(None),
         };
 
         Ok(block_production)
@@ -362,14 +367,81 @@ impl BlockProduction {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(
-            input_data,
-            transactions,
-            transaction_ids,
-            packing_strategy,
-            None,
-        )
-        .await
+        let pool_id = match &input_data {
+            GenerateBlockInputData::PoS(pos_input_data) => Some(pos_input_data.pool_id()),
+            GenerateBlockInputData::None | GenerateBlockInputData::PoW(_) => None,
+        };
+
+        let result = self
+            .produce_block_with_custom_id(
+                input_data,
+                transactions,
+                transaction_ids,
+                packing_strategy,
+                None,
+            )
+            .await;
+
+        match &result {
+            Ok(_) => {
+                // A success ends the failure episode: the same error recurring after it is
+                // a new episode and is reported again.
+                *self.last_reported_failure.lock().unwrap_or_else(|err| err.into_inner()) = None;
+            }
+            Err(err) => self.log_block_production_failure(pool_id, err),
+        }
+
+        result
+    }
+
+    /// Report a failed block production.
+    ///
+    /// Stakers attempt to produce a block every few seconds, so a persistent failure (e.g.
+    /// the pool of the staker does not exist) would otherwise repeat with every attempt: it
+    /// is reported once as a warning until a different failure occurs or a block is produced
+    /// successfully, and the repeats are left at debug, like the failures that are part of the
+    /// normal operation (no stake found in the current round, waiting for the chain to sync,
+    /// a cancelled attempt).
+    ///
+    /// A routine failure between two occurrences of the same persistent failure does not turn
+    /// the second one into a new episode: it is the normal outcome of the attempts in between,
+    /// and the persistent failure recurring after it is still a repeat, left at debug. Two
+    /// distinct persistent failures that alternate (A, B, A, B, ...) are different episodes by
+    /// design and warn at every attempt, since both problems have to stay visible.
+    fn log_block_production_failure(&self, pool_id: Option<PoolId>, err: &BlockProductionError) {
+        let is_routine = matches!(
+            err,
+            BlockProductionError::TryAgainLater
+                | BlockProductionError::Cancelled
+                | BlockProductionError::ChainstateWaitForSync
+                | BlockProductionError::RecoverableMempoolError
+                | BlockProductionError::FailedConsensusInitialization(
+                    ConsensusCreationError::StakingFailed
+                        | ConsensusCreationError::StakingStopped
+                        | ConsensusCreationError::MiningStopped
+                )
+        );
+
+        let pool = pool_id.map(|pool_id| format!(" for pool {pool_id}")).unwrap_or_default();
+        let message = format!("Block production failed{pool}: {err}");
+
+        if is_routine {
+            // The tracked failure is left untouched, so that a persistent failure recurring
+            // after a routine one is still recognized as a repeat (see above).
+            log::debug!("{message}");
+            return;
+        }
+
+        let mut last_reported =
+            self.last_reported_failure.lock().unwrap_or_else(|err| err.into_inner());
+        if last_reported.as_deref() == Some(message.as_str()) {
+            log::debug!("{message}");
+            return;
+        }
+        *last_reported = Some(message.clone());
+        drop(last_reported);
+
+        log::warn!("{message}");
     }
 
     async fn ensure_can_produce_block(&self) -> Result<(), BlockProductionError> {

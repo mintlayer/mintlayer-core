@@ -32,6 +32,7 @@ use test_utils::{
 };
 
 use crate::{
+    error::{DialError, P2pError},
     message::HeaderList,
     net::default_backend::types::{HandshakeMessage, Message},
     peer_manager,
@@ -81,9 +82,13 @@ where
     // Send some other message instead of HelloAck.
     msg_writer.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
 
-    // connect_result should indicate a failed connection
+    // connect_result should indicate a failed connection; the dial itself succeeded, so the
+    // failure is the one of the handshake, as reported for every such connection.
     let connect_result = connect_result_receiver.await.unwrap();
-    assert!(connect_result.is_err());
+    assert_eq!(
+        connect_result,
+        Err(P2pError::DialError(DialError::HandshakeFailed))
+    );
 
     // The connection should be closed.
     msg_reader.recv().await.unwrap_err();

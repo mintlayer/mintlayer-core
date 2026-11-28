@@ -776,6 +776,8 @@ mod log_output {
                     is_terminal: false,
                     filter: ValueOrEnvVarWithDefault::Value("trace".to_owned()),
                     log_style: ValueOrEnvVar::Value(LogStyle::Text(logging::TextColoring::Off)),
+                    source_location: false,
+                    thread_info: false,
                 },
                 logging::no_writer_settings(),
             );

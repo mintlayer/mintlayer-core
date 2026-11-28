@@ -5067,6 +5067,7 @@ version = "1.4.5"
 dependencies = [
  "console-subscriber",
  "log",
+ "serde_json",
  "serial_test",
  "test-utils",
  "thiserror 1.0.69",
@@ -5639,6 +5640,8 @@ dependencies = [
  "logging",
  "node-lib",
  "rpc-description",
+ "serde_json",
+ "tempfile",
  "tokio",
  "utils",
 ]

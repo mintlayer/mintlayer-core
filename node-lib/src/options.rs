@@ -49,6 +49,8 @@ use crate::{
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
 };
 
+use logging::LogFormat;
+
 const CONFIG_NAME: &str = "config.toml";
 
 pub const CLEAN_DATA_OPTION_LONG_NAME: &str = "clean-data";
@@ -134,13 +136,87 @@ pub struct TopLevelOptions {
     /// Log to a file.
     ///
     /// If enabled, application logs will also be written to a file inside the "logs" subdirectory
-    /// of the data directory.
+    /// of the data directory (see `--log-file-path` for a custom location).
     /// The file will be rotated based on size.
     /// The log level used in this case doesn't depend on the RUST_LOG env variable and is always INFO.
     ///
     /// By default, the option is enabled for node-gui and disabled for node-daemon.
+    ///
+    /// Config file equivalent: `[logging] log_to_file`.
     #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
     pub log_to_file: Option<bool>,
+
+    /// Path of the log file used when `--log-to-file` is enabled.
+    ///
+    /// A relative path is resolved against the data directory. If unset, the file is
+    /// `<data dir>/logs/<executable name>.log`. Setting the path does not enable logging
+    /// to a file: `--log-to-file` is still required.
+    ///
+    /// Config file equivalent: `[logging] log_file_path`.
+    #[clap(long, value_name = "PATH")]
+    pub log_file_path: Option<PathBuf>,
+
+    /// Format of the log file used when `--log-to-file` is enabled.
+    ///
+    /// Defaults to `text`.
+    ///
+    /// Config file equivalent: `[logging] log_file_format`.
+    #[clap(long, value_name = "text|json")]
+    pub log_file_format: Option<LogFormat>,
+
+    /// Format of the log output written to stderr.
+    ///
+    /// If unset, the `ML_LOG_STYLE` env variable applies (plain text by default).
+    ///
+    /// Config file equivalent: `[logging] log_format`.
+    #[clap(long, value_name = "text|json")]
+    pub log_format: Option<LogFormat>,
+
+    /// Size of the log file at which it is rotated, in bytes.
+    ///
+    /// Defaults to 10000000. Must be at least 1.
+    ///
+    /// Config file equivalent: `[logging] log_file_max_size_bytes`.
+    #[clap(long, value_name = "BYTES", value_parser = clap::value_parser!(u64).range(1..))]
+    pub log_file_max_size_bytes: Option<u64>,
+
+    /// Number of rotated log files to keep, including the one being written to.
+    ///
+    /// Defaults to 14. Must be at least 1.
+    ///
+    /// Config file equivalent: `[logging] log_file_max_files`.
+    #[clap(long, value_name = "COUNT", value_parser = clap::value_parser!(u64).range(1..))]
+    pub log_file_max_files: Option<u64>,
+
+    /// Extra fields added to every log line, for example `--log-fields role=seed,dc=eu`.
+    ///
+    /// Each entry is a `key=value` pair; entries are separated by commas. In the json
+    /// output the fields appear in the `node` span, in the text output in the `node{...}` prefix.
+    ///
+    /// Config file equivalent: `[logging] log_fields` (a list of `"key=value"` strings).
+    #[clap(
+        long,
+        value_name = "KEY=VALUE[,KEY=VALUE...]",
+        value_delimiter = ',',
+        value_parser = parse_log_field
+    )]
+    pub log_fields: Option<Vec<(String, String)>>,
+
+    /// Whether to include the source file name and line number of every log line.
+    ///
+    /// Defaults to `false`.
+    ///
+    /// Config file equivalent: `[logging] log_source_location`.
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
+    pub log_source_location: Option<bool>,
+
+    /// Whether to include the thread id and thread name of every log line.
+    ///
+    /// Defaults to `false`.
+    ///
+    /// Config file equivalent: `[logging] log_thread_info`.
+    #[clap(long, value_name = "true|false", action = clap::ArgAction::Set)]
+    pub log_thread_info: Option<bool>,
 
     /// If specified, the application will clean the data directory and exit immediately.
     #[clap(
@@ -169,6 +245,18 @@ impl TopLevelOptions {
             .clone()
             .unwrap_or_else(|| default_data_dir(chain_type))
             .join(CONFIG_NAME)
+    }
+}
+
+/// Parses one `key=value` entry of `--log-fields` and of `[logging] log_fields` (see
+/// [`TopLevelOptions::log_fields`]).
+pub(crate) fn parse_log_field(entry: &str) -> Result<(String, String), String> {
+    let entry = entry.trim();
+    match entry.split_once('=') {
+        Some((key, value)) if !key.trim().is_empty() => {
+            Ok((key.trim().to_owned(), value.to_owned()))
+        }
+        _ => Err(format!("expected `key=value`, got `{entry}`")),
     }
 }
 
@@ -796,6 +884,197 @@ mod reckless_mode_option_tests {
         env_guard.set("not-a-bool");
         let result = <Options as clap::Parser>::try_parse_from(["mintlayerd", "mainnet"]);
         assert!(result.is_err());
+    }
+}
+
+/// Test support for the logging options, shared by the option tests and the tests of the
+/// resolved logging settings.
+#[cfg(test)]
+pub(crate) mod logging_options_test_support {
+    use super::*;
+
+    /// The environment variables bound to the logging options by `clap_utils::env_adder`.
+    /// Parsing reads them, so they are cleared to keep an ambient environment out of the
+    /// tests. Removal is only safe in `#[serial_test::serial]`-serialized tests.
+    const LOGGING_ENV_VARS: &[&str] = &[
+        "ML_NODE_LOG_TO_FILE",
+        "ML_NODE_LOG_FILE_PATH",
+        "ML_NODE_LOG_FILE_FORMAT",
+        "ML_NODE_LOG_FORMAT",
+        "ML_NODE_LOG_FILE_MAX_SIZE_BYTES",
+        "ML_NODE_LOG_FILE_MAX_FILES",
+        "ML_NODE_LOG_FIELDS",
+        "ML_NODE_LOG_SOURCE_LOCATION",
+        "ML_NODE_LOG_THREAD_INFO",
+    ];
+
+    pub(crate) fn clear_logging_env_vars() {
+        // SAFETY: the tests using this are `#[serial_test::serial]`-serialized.
+        for var in LOGGING_ENV_VARS {
+            unsafe { std::env::remove_var(var) };
+        }
+    }
+
+    /// `clap_utils::env_adder` binds `ML_NODE_<LONG NAME IN UPPER SNAKE>` to every option,
+    /// so this list must grow and shrink with the logging options themselves: a new or
+    /// renamed logging option whose variable is missing here leaks the ambient environment
+    /// into the tests and silently breaks the env layer of the precedence chain.
+    #[test]
+    fn logging_env_var_list_covers_the_logging_options() {
+        let command = <TopLevelOptions as clap::CommandFactory>::command();
+        let mut expected: Vec<String> = command
+            .get_arguments()
+            .filter_map(|argument| argument.get_long())
+            .filter(|long_name| long_name.starts_with("log"))
+            .map(|long_name| format!("ML_NODE_{}", long_name.to_uppercase().replace('-', "_")))
+            .collect();
+        expected.sort();
+        expected.dedup();
+
+        let mut declared = LOGGING_ENV_VARS.to_vec();
+        declared.sort();
+
+        assert_eq!(
+            declared, expected,
+            "the ML_NODE_LOG_* list drifted from the logging options"
+        );
+    }
+
+    /// Parses `mintlayerd <args...> mainnet` and returns the top-level options.
+    pub(crate) fn try_parse_top_level_options(
+        args: &[&str],
+    ) -> Result<TopLevelOptions, clap::Error> {
+        let full_args = std::iter::once("mintlayerd")
+            .chain(args.iter().copied())
+            .chain(std::iter::once("mainnet"));
+        <Options as clap::Parser>::try_parse_from(full_args).map(|options| options.top_level)
+    }
+
+    pub(crate) fn parse_top_level_options(args: &[&str]) -> TopLevelOptions {
+        try_parse_top_level_options(args)
+            .unwrap_or_else(|err| panic!("arguments must parse: {err}"))
+    }
+}
+
+#[cfg(test)]
+mod logging_cli_options_tests {
+    use super::logging_options_test_support::*;
+    use super::*;
+
+    #[test]
+    #[serial_test::serial]
+    fn logging_options_absent_yield_none() {
+        clear_logging_env_vars();
+        let top_level = parse_top_level_options(&[]);
+
+        assert_eq!(top_level.log_to_file, None);
+        assert_eq!(top_level.log_file_path, None);
+        assert_eq!(top_level.log_file_format, None);
+        assert_eq!(top_level.log_format, None);
+        assert_eq!(top_level.log_file_max_size_bytes, None);
+        assert_eq!(top_level.log_file_max_files, None);
+        assert_eq!(top_level.log_fields, None);
+        assert_eq!(top_level.log_source_location, None);
+        assert_eq!(top_level.log_thread_info, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn logging_options_round_trip() {
+        clear_logging_env_vars();
+        let top_level = parse_top_level_options(&[
+            "--log-to-file",
+            "true",
+            "--log-file-path",
+            "logs/node.jsonl",
+            "--log-file-format",
+            "json",
+            "--log-format",
+            "text",
+            "--log-file-max-size-bytes",
+            "1234",
+            "--log-file-max-files",
+            "3",
+            "--log-fields",
+            "role=seed,dc=eu",
+            "--log-fields",
+            "extra=1",
+            "--log-source-location",
+            "true",
+            "--log-thread-info",
+            "false",
+        ]);
+
+        assert_eq!(top_level.log_to_file, Some(true));
+        assert_eq!(
+            top_level.log_file_path.as_deref(),
+            Some(Path::new("logs/node.jsonl"))
+        );
+        assert_eq!(top_level.log_file_format, Some(LogFormat::Json));
+        assert_eq!(top_level.log_format, Some(LogFormat::Text));
+        assert_eq!(top_level.log_file_max_size_bytes, Some(1234));
+        assert_eq!(top_level.log_file_max_files, Some(3));
+        assert_eq!(
+            top_level.log_fields,
+            Some(vec![
+                ("role".to_owned(), "seed".to_owned()),
+                ("dc".to_owned(), "eu".to_owned()),
+                ("extra".to_owned(), "1".to_owned()),
+            ])
+        );
+        assert_eq!(top_level.log_source_location, Some(true));
+        assert_eq!(top_level.log_thread_info, Some(false));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn logging_options_reject_bad_values() {
+        clear_logging_env_vars();
+
+        let bad_values: &[&[&str]] = &[
+            &["--log-to-file", "maybe"],
+            &["--log-file-format", "text-colored"],
+            &["--log-file-format", "jsn"],
+            &["--log-format", "xml"],
+            &["--log-file-max-size-bytes", "ten"],
+            &["--log-file-max-size-bytes", "0"],
+            &["--log-file-max-files", "0"],
+            &["--log-fields", "no-equals-sign"],
+            &["--log-fields", "=value"],
+            &["--log-fields", "role=seed,malformed"],
+            &["--log-source-location", "yes"],
+            &["--log-thread-info", "no"],
+        ];
+        for args in bad_values {
+            let err = try_parse_top_level_options(args)
+                .expect_err("arguments must be rejected")
+                .to_string();
+            assert!(
+                err.contains(&format!("--{}", args[0].trim_start_matches('-'))),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
+    fn log_field_entries_are_trimmed() {
+        // Spaces around an entry or a key are tolerated; the value is taken verbatim.
+        assert_eq!(
+            parse_log_field(" role = seed"),
+            Ok(("role".to_owned(), " seed".to_owned()))
+        );
+        assert_eq!(
+            parse_log_field(" role=seed "),
+            Ok(("role".to_owned(), "seed".to_owned()))
+        );
+        assert_eq!(
+            parse_log_field("empty="),
+            Ok(("empty".to_owned(), String::new()))
+        );
+        assert_eq!(
+            parse_log_field("a=b=c"),
+            Ok(("a".to_owned(), "b=c".to_owned()))
+        );
     }
 }
 

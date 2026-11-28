@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod enrichment;
 mod log_style;
+mod panic_hook;
+#[cfg(test)]
+mod test_utils;
 mod utils;
 
 use std::{
@@ -24,12 +28,17 @@ use std::{
 
 use tracing::{Subscriber, level_filters::LevelFilter};
 use tracing_subscriber::{
-    EnvFilter, Layer, Registry, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
+    EnvFilter, Layer, Registry, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
+pub use enrichment::{enter_root_span, root_span};
 pub use log;
+pub use log_style::{LogFormat, LogStyleParseError, get_log_style_from_env};
 pub use log_style::{LogStyle, TextColoring};
-pub use log_style::{LogStyleParseError, get_log_style_from_env};
+pub use panic_hook::install_panic_hook;
+/// Re-exported for instrumenting futures with [`root_span`] without a direct `tracing` dependency.
+pub use tracing::Instrument;
+pub use tracing_subscriber::fmt::MakeWriter;
 pub use utils::{GetFromEnvError, get_from_env};
 
 /// Default value for `RUST_LOG` used by the "simple" log initialization functions.
@@ -77,6 +86,8 @@ pub fn init_logging_to(file: impl Write + Send + 'static, is_terminal: bool) {
                 default_value: SIMPLE_INIT_DEFAULT_FILTER.to_owned(),
             },
             log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
+            source_location: false,
+            thread_info: false,
         },
         no_writer_settings(),
     );
@@ -96,14 +107,118 @@ pub fn default_writer_settings(default_filter: String) -> WriterSettings<fn() ->
         },
         // Use the default env var for style.
         log_style: ValueOrEnvVar::EnvVar(LOG_STYLE_ENV_VAR_NAME.into()),
+        source_location: false,
+        thread_info: false,
     }
 }
 
 /// Convert a `Write` instance to `MakeWriter`.
+///
+/// The sink is written under a mutex, and the writer marks the writing thread for as long
+/// as the lock is held (from handing the writer out to the formatted event being written),
+/// so that the panic hook can keep away from the sink whenever a panic occurs under it. The
+/// writer also holds the process-wide sink scope (see [`SINK_SCOPE`]) for the same duration,
+/// so that the hook can tell from any thread whether a write may be in progress.
 pub fn write_to_make_writer(
     writer: impl Write + Send + 'static,
 ) -> impl for<'a> MakeWriter<'a> + Send + Sync + 'static {
-    Mutex::new(Box::new(writer))
+    SinkMakeWriter(Mutex::new(writer))
+}
+
+/// Held by every writer handed out by [`SinkMakeWriter`] for as long as the writer lives.
+///
+/// The lock guards no data: it records that some thread is inside a write to a log sink,
+/// whatever the sink, so that the panic hook can keep a report away from the sinks when a
+/// write may be stuck (see [`sink_scope_busy`]). It is taken before the lock of the sink
+/// itself and released after it, so it is held exactly while a thread is in the write scope.
+static SINK_SCOPE: Mutex<()> = Mutex::new(());
+
+/// A [`MakeWriter`] that marks the writing thread while its lock is held.
+struct SinkMakeWriter<W>(Mutex<W>);
+
+impl<'a, W> MakeWriter<'a> for SinkMakeWriter<W>
+where
+    W: Write + 'a,
+{
+    type Writer = SinkGuardedWriter<'a, W>;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        // The mark is entered before the lock is taken, so a re-entrant call from the
+        // panic hook on this thread always sees the mark and stays off the sink.
+        let guard = SinkWriteGuard::enter();
+        // A poisoned scope lock is only the trace of a panic inside a write, whose guard
+        // was released on the way out: it does not make the scope busy.
+        let scope = SINK_SCOPE.lock().unwrap_or_else(|err| err.into_inner());
+        let inner = self.0.lock().expect("Log sink mutex poisoned");
+        SinkGuardedWriter {
+            inner,
+            _scope: scope,
+            _guard: guard,
+        }
+    }
+}
+
+thread_local! {
+    /// Whether the current thread is inside a write to a log sink made by [`write_to_make_writer`].
+    static IN_SINK_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether the current thread is writing to a log sink, and therefore holds the lock that
+/// serializes the writes to it.
+pub(crate) fn in_sink_write() -> bool {
+    IN_SINK_WRITE.with(|in_sink_write| in_sink_write.get())
+}
+
+/// Whether some thread is inside a write to a log sink made by [`write_to_make_writer`].
+///
+/// Unlike [`in_sink_write`], this is not limited to the calling thread: the panic hook uses
+/// it to keep a report away from the sinks while another thread may be stuck in a write,
+/// since the report would wait for the lock held by that thread. The probe may be racing
+/// with a write that starts right after it; such a report is delayed by that write only.
+pub(crate) fn sink_scope_busy() -> bool {
+    match SINK_SCOPE.try_lock() {
+        Ok(_) => false,
+        // A poisoned lock was released by the panicking thread, so it is not held.
+        Err(std::sync::TryLockError::Poisoned(_)) => false,
+        Err(std::sync::TryLockError::WouldBlock) => true,
+    }
+}
+
+/// A writer that hands the sink out with the sink-write guard held (see [`SinkWriteGuard`]).
+struct SinkGuardedWriter<'a, W> {
+    inner: std::sync::MutexGuard<'a, W>,
+    /// The sink scope, held for as long as the sink lock (see [`SINK_SCOPE`]).
+    _scope: std::sync::MutexGuard<'a, ()>,
+    _guard: SinkWriteGuard,
+}
+
+impl<'a, W: Write> Write for SinkGuardedWriter<'a, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Marks the current thread as writing to a log sink until dropped.
+///
+/// A panic that unwinds through the guard leaves the thread marked until the guard is
+/// dropped, which is what the panic hook, running before the unwinding, needs to see.
+#[derive(Debug)]
+pub(crate) struct SinkWriteGuard(bool);
+
+impl SinkWriteGuard {
+    pub(crate) fn enter() -> Self {
+        Self(IN_SINK_WRITE.with(|in_sink_write| in_sink_write.replace(true)))
+    }
+}
+
+impl Drop for SinkWriteGuard {
+    fn drop(&mut self) {
+        IN_SINK_WRITE.with(|in_sink_write| in_sink_write.set(self.0));
+    }
 }
 
 static LOG_STYLE_ENV_VAR_NAME: &str = "ML_LOG_STYLE";
@@ -129,6 +244,10 @@ pub struct WriterSettings<MW> {
     pub is_terminal: bool,
     pub filter: ValueOrEnvVarWithDefault<String, String>,
     pub log_style: ValueOrEnvVar<LogStyle>,
+    /// Whether to include the source file name and line number of every event in the output.
+    pub source_location: bool,
+    /// Whether to include the thread id and thread name of every event in the output.
+    pub thread_info: bool,
 }
 
 /// Generic version of init_logging that allows to have an auxiliary writer with its own settings
@@ -154,6 +273,12 @@ pub fn init_logging_generic<MW1, MW2>(
             // initializes a 'log' compatibility layer, so that 'log' macros continue to work
             // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
             .init();
+
+        // The subscriber is in place, so panics can be reported through it from now on.
+        // This runs inside the `Once`, so the hook is installed once per process even when
+        // logging is initialized again: `install_panic_hook` chains the hooks by design, and
+        // a second installation would report every panic twice.
+        install_panic_hook();
 
         // Now that we've initialized logging somehow, we can complain about errors, if any.
         for error in errors {
@@ -198,6 +323,8 @@ where
         writer_settings.is_terminal,
         filter,
         log_style,
+        writer_settings.source_location,
+        writer_settings.thread_info,
     )
 }
 
@@ -206,20 +333,32 @@ fn make_layer_impl<MW, S>(
     is_terminal: bool,
     filter: EnvFilter,
     log_style: LogStyle,
+    source_location: bool,
+    thread_info: bool,
 ) -> Box<dyn Layer<S> + Send + Sync>
 where
     MW: for<'a> MakeWriter<'a> + Send + Sync + 'static,
     S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
+    // Both flags default to `false` in the layer, so passing them unconditionally is
+    // equivalent to applying the methods only when they are set.
     match log_style {
         LogStyle::Json => tracing_subscriber::fmt::Layer::new()
             .json()
             .with_writer(make_writer)
+            .with_file(source_location)
+            .with_line_number(source_location)
+            .with_thread_ids(thread_info)
+            .with_thread_names(thread_info)
             .with_filter(filter)
             .boxed(),
         LogStyle::Text(preferred_coloring) => tracing_subscriber::fmt::Layer::new()
             .with_writer(make_writer)
             .with_ansi(should_use_coloring(preferred_coloring, is_terminal))
+            .with_file(source_location)
+            .with_line_number(source_location)
+            .with_thread_ids(thread_info)
+            .with_thread_names(thread_info)
             .with_filter(filter)
             .boxed(),
     }
@@ -347,10 +486,120 @@ fn should_use_coloring(preferred_coloring: TextColoring, is_terminal: bool) -> b
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::LogOutput;
 
     #[test]
+    #[serial_test::serial]
     fn initialize_twice() {
         init_logging();
         init_logging();
+    }
+
+    const MESSAGE: &str = "captured test event";
+
+    /// Emits the test event and returns the line it was emitted from (both `line!()` and the
+    /// event metadata resolve to the line of this macro's invocation).
+    macro_rules! emit_test_event {
+        () => {{
+            let line = line!();
+            tracing::info!("{}", MESSAGE);
+            line
+        }};
+    }
+
+    #[test]
+    fn source_location_flag_in_json_output() {
+        let output = LogOutput::default();
+
+        let off = output.capture(LogStyle::Json, false, false, || emit_test_event!());
+        assert!(off.contains("\"fields\":{\"message\":\""), "{off}");
+        assert!(off.contains(MESSAGE), "{off}");
+        assert!(!off.contains("\"filename\""), "{off}");
+        assert!(!off.contains("\"line_number\""), "{off}");
+
+        let mut line = 0;
+        let on = output.capture(LogStyle::Json, true, false, || {
+            line = emit_test_event!();
+        });
+        // The file is the test's source path and the line is the `tracing::info!` call site.
+        // The path separator is platform-dependent (`file!()` uses backslashes on Windows),
+        // and the json encoding escapes each of them, hence the two-backslash normalization.
+        let on = on.replace("\\\\", "/");
+        assert!(on.contains("\"filename\":\"logging/src/lib.rs\""), "{on}");
+        assert!(on.contains(&format!("\"line_number\":{line}")), "{on}");
+    }
+
+    #[test]
+    fn source_location_flag_in_text_output() {
+        let output = LogOutput::default();
+
+        let off = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            false,
+            || emit_test_event!(),
+        );
+        // The legacy text layout: timestamp, level, target, message; nothing else. The path
+        // separator is platform-dependent (`file!()` uses backslashes on Windows).
+        let off = off.replace('\\', "/");
+        assert!(
+            off.contains(&format!(" INFO logging::tests: {MESSAGE}")),
+            "{off}"
+        );
+        assert!(!off.contains("logging/src/lib.rs"), "{off}");
+
+        let mut line = 0;
+        let on = output.capture(LogStyle::Text(TextColoring::Off), true, false, || {
+            line = emit_test_event!()
+        });
+        // The location is printed between the target and the message. The path separator is
+        // platform-dependent (`file!()` uses backslashes on Windows).
+        let on = on.replace('\\', "/");
+        assert!(
+            on.contains(&format!(
+                "logging::tests: logging/src/lib.rs:{line}: {MESSAGE}"
+            )),
+            "{on}"
+        );
+    }
+
+    #[test]
+    fn thread_info_flag_in_json_output() {
+        let output = LogOutput::default();
+        let thread_name = std::thread::current().name().unwrap().to_owned();
+
+        let off = output.capture(LogStyle::Json, false, false, || emit_test_event!());
+        assert!(!off.contains("\"threadId\""), "{off}");
+        assert!(!off.contains("\"threadName\""), "{off}");
+
+        let on = output.capture(LogStyle::Json, false, true, || emit_test_event!());
+        assert!(on.contains("\"threadId\":\"ThreadId("), "{on}");
+        assert!(
+            on.contains(&format!("\"threadName\":\"{thread_name}\"")),
+            "{on}"
+        );
+    }
+
+    #[test]
+    fn thread_info_flag_in_text_output() {
+        let output = LogOutput::default();
+        let thread_name = std::thread::current().name().unwrap().to_owned();
+
+        let off = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            false,
+            || emit_test_event!(),
+        );
+        assert!(!off.contains("ThreadId("), "{off}");
+
+        let on = output.capture(
+            LogStyle::Text(TextColoring::Off),
+            false,
+            true,
+            || emit_test_event!(),
+        );
+        // The thread name and id are printed right before the target.
+        assert!(on.contains(&format!("{thread_name} ThreadId(")), "{on}");
     }
 }
