@@ -79,7 +79,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
             let median_time_past = calculate_median_time_past(self, &new_tip.prev_block_id());
 
-            let (connected_txs_verifier, _block_tx_fees) = self
+            // The DEX trades of the blocks connected in memory are only a side effect of the
+            // validation and are not emitted.
+            let (connected_txs_verifier, _block_tx_fees, _dex_trades) = self
                 .tx_verification_strategy
                 .connect_block(
                     TransactionVerifier::new,

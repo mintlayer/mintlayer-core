@@ -20,7 +20,9 @@ use std::{
     sync::Arc,
 };
 
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
+use chainstate_types::{
+    BlockIndex, DexTradeInfo, DexTradePairSet, EpochData, GenBlockIndex, Locator,
+};
 use common::{
     chain::{
         AccountNonce, AccountType, Block, BlockTxFees, Currency, DelegationId, GenBlock, OrderId,
@@ -39,7 +41,7 @@ use utxo::Utxo;
 
 use crate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
-    NonZeroPoolBalances, chainstate_interface::ChainstateInterface,
+    DexTradesSubscribeError, NonZeroPoolBalances, chainstate_interface::ChainstateInterface,
 };
 
 impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
@@ -55,6 +57,13 @@ where
 
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
         self.deref_mut().subscribe_to_rpc_events()
+    }
+
+    fn subscribe_to_rpc_dex_trades(
+        &mut self,
+        pairs: Option<DexTradePairSet>,
+    ) -> Result<tokio::sync::mpsc::Receiver<DexTradeInfo>, DexTradesSubscribeError> {
+        self.deref_mut().subscribe_to_rpc_dex_trades(pairs)
     }
 
     fn process_block(

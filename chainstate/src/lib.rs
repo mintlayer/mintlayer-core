@@ -39,14 +39,17 @@ pub use crate::{
     detail::{
         BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
         ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-        EpochSealError, IOPolicyError, InitializationError, Locator, MEDIAN_TIME_SPAN,
-        NonZeroPoolBalances, OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError,
-        TokenIssuanceError, TokensError, TransactionVerifierStorageError, ban_score,
-        block_invalidation::BlockInvalidatorError, bootstrap::BootstrapError,
-        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
+        DexTradesSubscribeError, EpochSealError, IOPolicyError, InitializationError, Locator,
+        MAX_DEX_TRADES_SUBSCRIBERS, MEDIAN_TIME_SPAN, NonZeroPoolBalances, OrphanCheckError,
+        SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
+        TransactionVerifierStorageError, ban_score, block_invalidation::BlockInvalidatorError,
+        bootstrap::BootstrapError, calculate_median_time_past,
+        calculate_median_time_past_from_blocktimestamps,
     },
 };
-pub use chainstate_types::{BlockIndex, GenBlockIndex, GenBlockIndexRef, PropertyQueryError};
+pub use chainstate_types::{
+    BlockIndex, DexTradeInfo, GenBlockIndex, GenBlockIndexRef, PropertyQueryError,
+};
 pub use constraints_value_accumulator;
 pub use detail::index_block_seal_if_enabled;
 pub use detail::tx_verification_strategy::*;

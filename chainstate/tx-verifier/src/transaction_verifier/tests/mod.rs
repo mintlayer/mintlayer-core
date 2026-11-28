@@ -20,8 +20,8 @@ pub mod mock;
 use super::*;
 use common::{
     chain::{
-        Destination, OutPointSourceId, UtxoOutPoint, output_value::OutputValue,
-        stakelock::StakePoolData,
+        Destination, OutPointSourceId, UtxoOutPoint, config::Builder as ConfigBuilder,
+        output_value::OutputValue, stakelock::StakePoolData,
     },
     primitives::{BlockHeight, H256, amount::UnsignedIntType, per_thousand::PerThousand},
 };
@@ -68,4 +68,44 @@ fn create_pool_data(
         margin_ratio,
         cost_per_block,
     )
+}
+
+// DEX trade matches left in the verifier when it is consumed are dropped, which is reported as a
+// broken invariant: a panic in debug builds, an error log in release builds.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "DEX trade match(es) left untaken before consuming the verifier")]
+fn untaken_dex_trade_matches_are_reported_when_consuming() {
+    let chain_config = ConfigBuilder::test_chain().build();
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    let mut verifier = TransactionVerifier::new(&store, &chain_config);
+    verifier.dex_trade_matches.push(untaken_dex_trade_match());
+    verifier.consume().unwrap();
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn untaken_dex_trade_matches_are_reported_when_consuming() {
+    let chain_config = ConfigBuilder::test_chain().build();
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    let mut verifier = TransactionVerifier::new(&store, &chain_config);
+    verifier.dex_trade_matches.push(untaken_dex_trade_match());
+    // the matches are dropped and the state is consumed regardless
+    verifier.consume().unwrap();
+}
+
+/// A DEX trade match, as recorded by [`TransactionVerifier::fill_order`].
+fn untaken_dex_trade_match() -> DexTradeMatch {
+    DexTradeMatch {
+        tx_id: Id::new(H256::zero()),
+        input_ordinal: 0,
+        match_ordinal: 0,
+        maker_order_id: OrderId::zero(),
+        base: Currency::Coin,
+        quote: Currency::Coin,
+        base_amount: Amount::from_atoms(1),
+        quote_amount: Amount::from_atoms(1),
+    }
 }

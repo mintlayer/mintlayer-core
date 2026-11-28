@@ -30,10 +30,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["auth", "set-header"] }
+tokio = { workspace = true, features = ["macros", "sync"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
 expect-test.workspace = true
 rstest.workspace = true
-tokio.workspace = true

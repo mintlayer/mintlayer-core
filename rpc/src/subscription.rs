@@ -17,6 +17,7 @@
 //! [Ethereum pubsub spec](https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub).
 
 use jsonrpsee::{PendingSubscriptionAcceptError, SubscriptionMessage};
+use tokio::sync::mpsc;
 
 use utils_networking::broadcaster;
 
@@ -57,6 +58,15 @@ impl<T: serde::Serialize> Sink<T> {
         self.sink.send(msg).await.map_err(|_| Error::ConnectionClosed)
     }
 
+    /// Complete when the client closed the subscription or went away.
+    ///
+    /// Use it to stop a forwarder that would otherwise wait for the next event of a quiet
+    /// stream forever; the call is cancel-safe, so it can be awaited in a `select!` with the
+    /// next event.
+    pub async fn closed(&self) {
+        self.sink.closed().await
+    }
+
     /// Get subscription ID.
     pub fn subscription_id(&self) -> SubscriptionId {
         self.sink.subscription_id()
@@ -73,20 +83,79 @@ pub async fn accept<T>(pending: Pending) -> Result<Sink<T>, Error> {
     Sink::accept(pending).await
 }
 
-/// Connect a broadcaster to event sink, transforming and filtering the events on the go
-pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
-    mut event_receiver: broadcaster::Receiver<T>,
+/// Reject a subscription request with an invalid-parameters error delivered to the client,
+/// e.g. when the subscription parameters fail validation.
+///
+/// Note that returning an error from a subscription method does not reach the client; the
+/// request must be rejected explicitly.
+pub async fn reject(pending: Pending, message: impl std::fmt::Display) {
+    pending
+        .reject(jsonrpsee::types::error::ErrorObjectOwned::owned(
+            jsonrpsee::types::error::INVALID_PARAMS_CODE,
+            message.to_string(),
+            None::<Box<serde_json::value::RawValue>>,
+        ))
+        .await;
+}
+
+/// A source of events for a subscription that ends when it yields `None`.
+trait EventQueue<T> {
+    async fn next_event(&mut self) -> Option<T>;
+}
+
+impl<T> EventQueue<T> for broadcaster::Receiver<T> {
+    async fn next_event(&mut self) -> Option<T> {
+        self.recv().await
+    }
+}
+
+impl<T> EventQueue<T> for mpsc::Receiver<T> {
+    async fn next_event(&mut self) -> Option<T> {
+        self.recv().await
+    }
+}
+
+/// Why the forwarding of the events of a queue to a subscription stopped.
+#[derive(Debug, PartialEq, Eq)]
+enum ForwardingEnd {
+    /// The client closed the subscription or went away.
+    ClientGone,
+    /// The queue ended: its producer closed it.
+    QueueEnded,
+}
+
+/// Accept the subscription and forward the events of the queue to the client until the client
+/// goes away or the queue ends. The subscription is watched for closing while waiting for an
+/// event, so that a client that went away releases its queue promptly.
+async fn forward_queue<T, U: serde::Serialize, Q: EventQueue<T>>(
+    mut queue: Q,
     pending: Pending,
     mut filter_map_fn: impl FnMut(T) -> Option<U>,
-) -> Reply {
+) -> Result<ForwardingEnd, Error> {
     let subscription = accept::<U>(pending).await?;
 
-    while let Some(event) = event_receiver.recv().await {
+    loop {
+        let event = tokio::select! {
+            event = queue.next_event() => event,
+            // the client is gone: nothing left to forward
+            () = subscription.closed() => return Ok(ForwardingEnd::ClientGone),
+        };
+        let Some(event) = event else {
+            return Ok(ForwardingEnd::QueueEnded);
+        };
         if let Some(event) = filter_map_fn(event) {
             subscription.send(&event).await?;
         }
     }
+}
 
+/// Connect a broadcaster to event sink, transforming and filtering the events on the go
+pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
+    event_receiver: broadcaster::Receiver<T>,
+    pending: Pending,
+    filter_map_fn: impl FnMut(T) -> Option<U>,
+) -> Reply {
+    forward_queue(event_receiver, pending, filter_map_fn).await?;
     Ok(())
 }
 
@@ -97,6 +166,52 @@ pub async fn connect_broadcast_map<T, U: serde::Serialize>(
     mut map_fn: impl FnMut(T) -> U,
 ) -> Reply {
     connect_broadcast_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
+}
+
+/// The error sent to the client when the node ended a subscription because the producer closed
+/// its event queue: the subscriber fell behind, or the stream stopped.
+pub const CLOSED_BY_NODE: &str =
+    "subscription closed by the node: the subscriber fell behind or the stream ended";
+
+/// Connect a bounded queue of events to the subscription sink, transforming and filtering the
+/// events on the go. The queue is fed by the producer of the events with `try_send`.
+///
+/// Closing the queue ends the subscription with the [`CLOSED_BY_NODE`] error, so that the client
+/// sees the end of the stream rather than waiting for the next event forever. When the client
+/// goes away, the queue is dropped at once, so that the producer sees its receiver as closed.
+async fn connect_mpsc_filter_map<T, U: serde::Serialize>(
+    event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+    filter_map_fn: impl FnMut(T) -> Option<U>,
+) -> Reply {
+    match forward_queue(event_receiver, pending, filter_map_fn).await? {
+        // the producer closed the queue: tell the client that the subscription is over. Unlike
+        // an error returned by a subscription method before `accept()` (see [`reject`]), this one
+        // does reach the client: jsonrpsee-core maps it to a closing error notification
+        // (`IntoSubscriptionCloseResponse for Result<(), SubscriptionError>` gives `NotifErr`,
+        // which `rpc_module` sends on the subscription sink). The end-to-end behavior is covered
+        // by `subscription_termination_is_observable` in rpc/tests/basic; the jsonrpsee Rust
+        // client itself only surfaces the end of the stream.
+        ForwardingEnd::QueueEnded => Err(CLOSED_BY_NODE.into()),
+        ForwardingEnd::ClientGone => Ok(()),
+    }
+}
+
+/// Connect a bounded queue of events to the subscription sink, transforming the events on the go
+pub async fn connect_mpsc_map<T, U: serde::Serialize>(
+    event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+    mut map_fn: impl FnMut(T) -> U,
+) -> Reply {
+    connect_mpsc_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
+}
+
+/// Connect a bounded queue of events to the subscription sink
+pub async fn connect_mpsc<T: serde::Serialize>(
+    event_receiver: mpsc::Receiver<T>,
+    pending: Pending,
+) -> Reply {
+    connect_mpsc_filter_map(event_receiver, pending, Some).await
 }
 
 /// Connect a broadcaster to event sink

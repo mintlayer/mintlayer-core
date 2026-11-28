@@ -43,6 +43,7 @@ use self::types::{block::RpcBlock, event::RpcEvent};
 
 pub use types::{
     RpcTypeError,
+    dex_trades::{RpcDexTradeEvent, RpcTradingPair},
     input::RpcUtxoOutpoint,
     output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
     signed_transaction::RpcSignedTransaction,
@@ -223,6 +224,66 @@ trait ChainstateRpc {
     /// After a successful subscription, the node will message the subscriber with a message on every event.
     #[subscription(name = "subscribe_to_events", item = RpcEvent)]
     async fn subscribe_to_events(&self) -> rpc::subscription::Reply;
+
+    /// Subscribe to the DEX trades (order fills) of the blocks that become the best chain.
+    ///
+    /// One event is produced per fill-order input of the transactions of a block, when the block
+    /// is connected as part of the best chain; the events of a block are delivered in the order
+    /// of the transactions in the block and of the inputs in each transaction. The trade is
+    /// described from the point of view of the maker (the order being filled): `base_token_id`
+    /// is the currency the maker gives and `quote_token_id` is the currency the maker asks for,
+    /// so the price of the trade in quote per base is `quote_amount / base_amount`; the amounts
+    /// are in atoms. `match_ordinal` is always 0 (a fill input matches exactly the order it
+    /// references). A trade is uniquely identified by the tuple
+    /// `(block_id, tx_id, input_ordinal, match_ordinal)`.
+    ///
+    /// `in_block_position` is `(tx_index << 20) | (input_ordinal << 4) | match_ordinal`, where
+    /// `tx_index` is the index of the transaction in the block (`< 2^20`), `input_ordinal` is
+    /// the index of the input in the transaction (`< 2^16`) and `match_ordinal` is `< 16`; the
+    /// positions of the trades of a block are therefore increasing in delivery order, and a
+    /// position is always below 2^40, i.e. an exactly representable JSON number.
+    ///
+    /// The `pairs` parameter filters the events by trading pair: a pair is
+    /// `{ "base": <currency>, "quote": <currency> }` where a currency is either the literal
+    /// `"coin"` or a token id as 64 hex digits of any case without a `0x` prefix (the events
+    /// emit it in lowercase).
+    /// A trade matches a pair only if both of its sides match, so a trade of the reversed pair
+    /// does not match. An absent or empty list delivers all the events; a well-formed pair of a
+    /// market that has no trades simply delivers nothing. A list of more than 256 distinct
+    /// pairs (a pair listed twice counts once), or a malformed pair, rejects the subscription
+    /// with an error naming the offending value.
+    ///
+    /// The events reflect what the best chain said when the block was connected: no compensating
+    /// events are produced on a reorg. Consumers should detect reorgs with `subscribe_to_events`
+    /// and re-derive the trades from the blocks of the new best chain.
+    ///
+    /// The events are only produced for the blocks connected once the initial block download
+    /// of the node is complete: a node that is still syncing announces nothing. The trades of
+    /// the blocks connected while the download was still running are never announced, except
+    /// for the batch whose connection completes the download: those are announced with the
+    /// first tip event that reports `is_initial_block_download: false` (see
+    /// `subscribe_to_events`).
+    ///
+    /// Delivery policy: the node keeps up with the chain, not with the subscribers. Every
+    /// subscriber has a bounded queue of events; a subscriber that stops reading is closed by
+    /// the node once its queue overflows: the node sends a final error notification
+    /// ("subscription closed by the node: the subscriber fell behind or the stream ended",
+    /// the same one that ends every subscription when the node stops) and the subscription
+    /// stream ends; jsonrpsee-based Rust clients observe that end as `next()` returning
+    /// `None` (the client library does not surface the notification body). The client has
+    /// to subscribe again, re-deriving what it missed from the blocks. The node closes every
+    /// subscription the same way when its trade dispatcher falls more than 64 blocks behind
+    /// the chain. At most 32 subscribers are served at a time; a subscription beyond that is
+    /// rejected with an error.
+    #[subscription(
+        name = "dex_subscribe_to_trades",
+        unsubscribe = "dex_unsubscribe_to_trades",
+        item = RpcDexTradeEvent
+    )]
+    async fn dex_subscribe_to_trades(
+        &self,
+        pairs: Option<Vec<RpcTradingPair>>,
+    ) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -548,6 +609,36 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn subscribe_to_events(&self, pending: subscription::Pending) -> subscription::Reply {
         let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
         rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
+    }
+
+    async fn dex_subscribe_to_trades(
+        &self,
+        pending: subscription::Pending,
+        pairs: Option<Vec<RpcTradingPair>>,
+    ) -> subscription::Reply {
+        // the pairs are validated before the subscription is accepted, so that a malformed or
+        // oversized list is reported to the client in reply to the subscription request
+        let pairs = match RpcTradingPair::parse_pairs(pairs) {
+            Ok(pairs) => pairs,
+            Err(err) => {
+                rpc::subscription::reject(pending, err).await;
+                return Ok(());
+            }
+        };
+        // the chainstate filters the trades by the pairs before queueing them for the subscriber
+        let trade_rx =
+            match self.call_mut(move |this| this.subscribe_to_rpc_dex_trades(pairs)).await {
+                Ok(Ok(trade_rx)) => trade_rx,
+                Ok(Err(err)) => {
+                    rpc::subscription::reject(pending, err).await;
+                    return Ok(());
+                }
+                Err(err) => return Err(err.into()),
+            };
+        rpc::subscription::connect_mpsc_map(trade_rx, pending, |trade| {
+            RpcDexTradeEvent::from_trade(&trade)
+        })
+        .await
     }
 }
 

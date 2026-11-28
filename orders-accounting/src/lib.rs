@@ -27,7 +27,7 @@ pub use {
         OrderData, OrdersAccountingData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData,
     },
     error::Error,
-    operations::{OrdersAccountingOperations, OrdersAccountingUndo},
+    operations::{FillOrderUndo, OrdersAccountingOperations, OrdersAccountingUndo},
     price_calculation::{calculate_fill_order, calculate_filled_amount},
     storage::{
         OrdersAccountingStorageRead, OrdersAccountingStorageWrite, db::OrdersAccountingDB,

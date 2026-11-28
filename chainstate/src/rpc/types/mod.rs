@@ -17,6 +17,7 @@ pub mod account;
 pub mod block;
 pub mod block_reward;
 pub mod consensus_data;
+pub mod dex_trades;
 pub mod event;
 pub mod input;
 pub mod output;

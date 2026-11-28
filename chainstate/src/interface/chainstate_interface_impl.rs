@@ -20,8 +20,8 @@ use std::{
 };
 
 use crate::{
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
-    NonZeroPoolBalances,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface,
+    DexTradesSubscribeError, Locator, NonZeroPoolBalances,
     detail::{
         self, BlockSource, CHAINSTATE_TRACING_TARGET_VERBOSE_BLOCK_IDS, OrphanBlocksRef,
         block_checking::BlockChecker, bootstrap::export_bootstrap_stream,
@@ -29,7 +29,9 @@ use crate::{
     },
 };
 use chainstate_storage::BlockchainStorage;
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    BlockIndex, DexTradeInfo, DexTradePairSet, EpochData, GenBlockIndex, PropertyQueryError,
+};
 use common::{
     chain::{
         AccountNonce, AccountType, BlockTxFees, Currency, DelegationId, OrderId, PoolId,
@@ -69,6 +71,14 @@ where
     #[tracing::instrument(skip_all)]
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
         self.chainstate.subscribe_to_event_broadcast()
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn subscribe_to_rpc_dex_trades(
+        &mut self,
+        pairs: Option<DexTradePairSet>,
+    ) -> Result<tokio::sync::mpsc::Receiver<DexTradeInfo>, DexTradesSubscribeError> {
+        self.chainstate.subscribe_to_dex_trades_broadcast(pairs)
     }
 
     // Note: in this and some other functions below (in particular, in those that are called from

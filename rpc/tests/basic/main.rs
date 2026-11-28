@@ -46,6 +46,9 @@ pub trait SubsystemRpc {
     #[subscription(name = "subscribe_squares", item = u32)]
     async fn subscribe_squares(&self) -> subscription::Reply;
 
+    #[subscription(name = "subscribe_ending", item = u32)]
+    async fn subscribe_ending(&self) -> subscription::Reply;
+
     #[method(name = "convoluted")]
     fn convoluted(
         &self,
@@ -88,6 +91,19 @@ impl SubsystemRpcServer for SubsystemRpcImpl {
         Ok(())
     }
 
+    async fn subscribe_ending(&self, pending: subscription::Pending) -> subscription::Reply {
+        let (tx, rx) = tokio::sync::mpsc::channel(16);
+        tokio::spawn(async move {
+            for i in 1u32..=3 {
+                if tx.send(i).await.is_err() {
+                    break;
+                }
+            }
+            // the queue ends while the server stays up: the client must see the termination
+        });
+        subscription::connect_mpsc_map(rx, pending, |x| x).await
+    }
+
     fn convoluted(
         &self,
         _first: Option<bool>,
@@ -100,12 +116,14 @@ impl SubsystemRpcServer for SubsystemRpcImpl {
 
 #[tokio::test]
 async fn method_list() -> anyhow::Result<()> {
-    const METHOD_LIST: [&str; 6] = [
+    const METHOD_LIST: [&str; 8] = [
         "method_list",
         "some_subsystem_add",
         "some_subsystem_convoluted",
         "some_subsystem_name",
+        "some_subsystem_subscribe_ending",
         "some_subsystem_subscribe_squares",
+        "some_subsystem_unsubscribe_ending",
         "some_subsystem_unsubscribe_squares",
     ];
 
@@ -360,6 +378,43 @@ async fn simple_subscription() -> anyhow::Result<()> {
     assert_eq!(squares_sub.next().await.unwrap()?, 9);
 
     squares_sub.unsubscribe().await.unwrap();
+
+    subsystem::Subsystem::shutdown(rpc).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn subscription_termination_is_observable() -> anyhow::Result<()> {
+    let bind_address = "127.0.0.1:0".parse::<SocketAddr>()?;
+
+    let rpc = Builder::new(bind_address, None)
+        .register(SubsystemRpcImpl.into_rpc())
+        .build()
+        .await?;
+
+    let url = format!("ws://{}", rpc.http_address());
+    let client = new_ws_client(url, RpcAuthData::None).await?;
+
+    let mut ending_sub: jsonrpsee::core::client::Subscription<u32> = client
+        .subscribe(
+            "some_subsystem_subscribe_ending",
+            [(); 0],
+            "some_subsystem_unsubscribe_ending",
+        )
+        .await?;
+
+    for expected in [1u32, 2, 3] {
+        assert_eq!(ending_sub.next().await.unwrap()?, expected);
+    }
+
+    // the queue ended while the server is up: the subscription stream ends (the jsonrpsee Rust
+    // client swallows the error notification body and reports the end; other clients see the
+    // error notification on the wire)
+    let final_item = ending_sub.next().await;
+    assert!(
+        final_item.is_none(),
+        "the subscription end was not observed"
+    );
 
     subsystem::Subsystem::shutdown(rpc).await;
     Ok(())

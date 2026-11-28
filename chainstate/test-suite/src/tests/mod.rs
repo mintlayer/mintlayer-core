@@ -31,6 +31,8 @@ mod chainstate_accounting_storage_tests;
 mod chainstate_storage_tests;
 mod data_deposit;
 mod delegation_tests;
+mod dex_trades_rpc_tests;
+mod dex_trades_tests;
 mod double_spend_tests;
 mod events_tests;
 mod framework_tests;

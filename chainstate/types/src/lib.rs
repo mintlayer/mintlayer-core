@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod dex_trades;
 pub mod pos_randomness;
 pub mod seal;
 pub mod storage_result;
@@ -25,6 +26,9 @@ pub use crate::{
     block_index_handle::BlockIndexHandle,
     block_index_history_iter::BlockIndexHistoryIterator,
     block_status::{BlockStatus, BlockValidationStage},
+    dex_trades::{
+        DexTradeInfo, DexTradeMatch, DexTradePair, DexTradePairSet, DexTradePositionError,
+    },
     epoch_data::EpochData,
     epoch_data_cache::{
         ConsumedEpochDataCache, EpochDataCache, EpochStorageRead, EpochStorageWrite,

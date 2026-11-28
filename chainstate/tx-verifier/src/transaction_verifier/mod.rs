@@ -31,7 +31,7 @@ mod tx_source;
 use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::{
-    OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData,
+    FillOrderUndo, OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData,
     OrdersAccountingOperations, OrdersAccountingStorageRead, OrdersAccountingUndo,
     OrdersAccountingView,
 };
@@ -62,15 +62,15 @@ use self::{
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
-use ::utils::{ensure, shallow_clone::ShallowClone};
+use ::utils::{debug_panic_or_log, ensure, shallow_clone::ShallowClone};
 pub use reward_distribution::{RewardDistributionError, distribute_pos_reward};
 
-use chainstate_types::{BlockIndex, TipStorageTag};
+use chainstate_types::{BlockIndex, DexTradeInfo, DexTradeMatch, TipStorageTag};
 use common::{
     chain::{
-        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrdersVersion,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig, Currency,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, OrderAccountCommand, OrderId,
+        OrdersVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
         block::{BlockRewardTransactable, ConsensusData, timestamp::BlockTimestamp},
         make_delegation_id, make_order_id, make_pool_id, make_token_id,
         output_value::OutputValue,
@@ -129,6 +129,10 @@ pub struct TransactionVerifier<C, S, U, A, T, O> {
     orders_accounting_cache: OrdersAccountingCache<O>,
     orders_accounting_block_undo: AccountingBlockUndoCache<OrdersAccountingUndo>,
 
+    /// The DEX trade matches of the transactions connected to a block so far; see
+    /// [`TransactionVerifier::take_dex_trade_infos`].
+    dex_trade_matches: Vec<DexTradeMatch>,
+
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
@@ -167,6 +171,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             orders_accounting_cache,
             orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
+            dex_trade_matches: Vec::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -207,6 +212,7 @@ where
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             orders_accounting_cache: OrdersAccountingCache::new(orders_accounting),
             orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
+            dex_trade_matches: Vec::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -246,6 +252,7 @@ where
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             orders_accounting_cache: OrdersAccountingCache::new(&self.orders_accounting_cache),
             orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
+            dex_trade_matches: Vec::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
@@ -825,7 +832,8 @@ where
         let input_undos = tx
             .inputs()
             .iter()
-            .filter_map(|input| match input {
+            .enumerate()
+            .filter_map(|(input_ordinal, input)| match input {
                 TxInput::Utxo(_) | TxInput::Account(_) => None,
                 TxInput::AccountCommand(nonce, account_op) => match account_op {
                     AccountCommand::MintTokens(..)
@@ -849,19 +857,28 @@ where
                         let res = self
                             .spend_input_from_account(*nonce, account_op.into())
                             .and_then(|_| {
-                                self.orders_accounting_cache
-                                    .fill_order(*order_id, *fill, OrdersVersion::V0)
-                                    .map_err(ConnectTransactionError::OrdersAccountingError)
+                                self.fill_order(
+                                    tx_source,
+                                    tx,
+                                    input_ordinal,
+                                    *order_id,
+                                    *fill,
+                                    OrdersVersion::V0,
+                                )
                             });
                         Some(res)
                     }
                 },
                 TxInput::OrderAccountCommand(cmd) => match cmd {
                     OrderAccountCommand::FillOrder(order_id, fill) => {
-                        let res = self
-                            .orders_accounting_cache
-                            .fill_order(*order_id, *fill, OrdersVersion::V1)
-                            .map_err(ConnectTransactionError::OrdersAccountingError);
+                        let res = self.fill_order(
+                            tx_source,
+                            tx,
+                            input_ordinal,
+                            *order_id,
+                            *fill,
+                            OrdersVersion::V1,
+                        );
                         Some(res)
                     }
                     OrderAccountCommand::ConcludeOrder(order_id) => {
@@ -921,6 +938,127 @@ where
         }
 
         Ok(())
+    }
+
+    /// Fill an order and, if the transaction is being connected to a block, record the
+    /// resulting trade (see [`DexTradeMatch`]). Fills verified for the mempool are not trades
+    /// and are not recorded.
+    ///
+    /// Recording the trade is best-effort: it must never change the outcome of connecting the
+    /// transaction, so a trade that cannot be described is reported and skipped.
+    fn fill_order(
+        &mut self,
+        tx_source: &TransactionSourceForConnect,
+        tx: &Transaction,
+        input_ordinal: usize,
+        order_id: OrderId,
+        fill: Amount,
+        orders_version: OrdersVersion,
+    ) -> Result<OrdersAccountingUndo, ConnectTransactionError> {
+        let undo = self
+            .orders_accounting_cache
+            .fill_order(order_id, fill, orders_version)
+            .map_err(ConnectTransactionError::OrdersAccountingError)?;
+
+        if tx_source.chain_block_index().is_some()
+            && let OrdersAccountingUndo::FillOrder(fill_undo) = &undo
+        {
+            // Orders cannot be created with token v0 currencies, so both sides of a stored
+            // order resolve into currencies.
+            let sides = match self.orders_accounting_cache.get_order_data(&order_id) {
+                Ok(Some(order_data)) => match (
+                    Currency::from_output_value(order_data.give()),
+                    Currency::from_output_value(order_data.ask()),
+                ) {
+                    (Some(base), Some(quote)) => Some((base, quote)),
+                    _ => {
+                        debug_panic_or_log!(
+                            "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                             transaction {:x}: a side of the order is not a currency",
+                            tx.get_id()
+                        );
+                        None
+                    }
+                },
+                // a failed read is a storage problem, not a broken invariant: report it and
+                // carry on
+                Err(err) => {
+                    logging::log::error!(
+                        "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                         transaction {:x}: reading the order failed: {err}",
+                        tx.get_id()
+                    );
+                    None
+                }
+                // the fill above just read the order: its data cannot be gone
+                Ok(None) => {
+                    debug_panic_or_log!(
+                        "Skipping the DEX trade record of the fill of order {order_id:x} in \
+                         transaction {:x}: the order data is missing",
+                        tx.get_id()
+                    );
+                    None
+                }
+            };
+            if let Some((base, quote)) = sides {
+                self.dex_trade_matches.extend(fill_order_matches(
+                    tx.get_id(),
+                    input_ordinal,
+                    fill_undo,
+                    base,
+                    quote,
+                ));
+            }
+        }
+
+        Ok(undo)
+    }
+
+    /// Take the DEX trades of the transactions connected to the block since the last call (see
+    /// [`DexTradeMatch`]) and position them as the trades of the transaction `tx_id` at `tx_index`
+    /// of `block_index`.
+    ///
+    /// The matches must be taken right after the transaction that made them was connected: a
+    /// match of another transaction, left in the verifier by an earlier one, would be positioned
+    /// as a trade of this transaction, so it is reported and skipped instead.
+    ///
+    /// The block size limit guarantees that every trade can be positioned; a trade that cannot
+    /// be is reported and skipped rather than affecting the connection of the block.
+    /// Transactions connected for the mempool produce no trades.
+    pub fn take_dex_trade_infos(
+        &mut self,
+        block_index: &BlockIndex,
+        tx_index: usize,
+        tx_id: Id<Transaction>,
+    ) -> Vec<DexTradeInfo> {
+        std::mem::take(&mut self.dex_trade_matches)
+            .into_iter()
+            .filter_map(|trade| {
+                if trade.tx_id != tx_id {
+                    debug_panic_or_log!(
+                        "Skipping the DEX trade match of transaction {:x} taken with transaction \
+                         {tx_id:x}: the matches must be taken with the transaction that made them",
+                        trade.tx_id
+                    );
+                    return None;
+                }
+                match DexTradeInfo::new(
+                    *block_index.block_id(),
+                    block_index.block_height(),
+                    tx_index,
+                    trade,
+                ) {
+                    Ok(info) => Some(info),
+                    Err(err) => {
+                        debug_panic_or_log!(
+                            "Skipping the DEX trade of transaction {tx_id:x} of block {}: {err}",
+                            block_index.block_id()
+                        );
+                        None
+                    }
+                }
+            })
+            .collect()
     }
 
     fn disconnect_orders_accounting_outputs(
@@ -1242,6 +1380,14 @@ where
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
+        // the DEX trades are not part of the delta: they must have been taken (see
+        // [`TransactionVerifier::take_dex_trade_infos`]) before the state is consumed
+        if !self.dex_trade_matches.is_empty() {
+            debug_panic_or_log!(
+                "{} DEX trade match(es) left untaken before consuming the verifier; they are dropped",
+                self.dex_trade_matches.len()
+            );
+        }
         let (accounting_delta, accounting_block_deltas) = self.pos_accounting_adapter.consume();
         Ok(TransactionVerifierDelta {
             utxo_cache: self.utxo_cache.consume(),
@@ -1257,6 +1403,37 @@ where
             orders_accounting_delta_undo: self.orders_accounting_block_undo.consume(),
         })
     }
+}
+
+/// The matches of a fill-order input, enumerated from the data of the fill undo.
+///
+/// A fill input matches exactly the order it references, so the enumeration yields one match
+/// with ordinal 0; a matcher producing several matches per input can yield them here without
+/// changing the shape of the trade records.
+fn fill_order_matches(
+    tx_id: Id<Transaction>,
+    input_ordinal: usize,
+    fill_undo: &FillOrderUndo,
+    base: Currency,
+    quote: Currency,
+) -> impl Iterator<Item = DexTradeMatch> {
+    let fill = (
+        fill_undo.id(),
+        fill_undo.ask_balance(),
+        fill_undo.give_balance(),
+    );
+    std::iter::once(fill).enumerate().map(
+        move |(match_ordinal, (maker_order_id, quote_amount, base_amount))| DexTradeMatch {
+            tx_id,
+            input_ordinal,
+            match_ordinal,
+            maker_order_id,
+            base,
+            quote,
+            base_amount,
+            quote_amount,
+        },
+    )
 }
 
 #[cfg(test)]

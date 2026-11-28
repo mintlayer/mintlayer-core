@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use chainstate::{
-    TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
+    ConnectBlockOutput, TransactionVerificationStrategy, TransactionVerifierMakerFn,
+    TransactionVerifierStorageError,
 };
 use chainstate_types::BlockIndex;
 use common::{
@@ -61,7 +62,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U, A, T, O>, BlockTxFees), ConnectTransactionError>
+    ) -> Result<ConnectBlockOutput<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -74,10 +75,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
     {
         let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
+        let mut dex_trades = Vec::new();
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(AccumulatedFee::new(), |total, tx| {
+            .enumerate()
+            .try_fold(AccumulatedFee::new(), |total, (tx_index, tx)| {
                 let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
                     .connect_transaction(
@@ -88,6 +91,11 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &median_time_past,
                     )
                     .log_err()?;
+                dex_trades.extend(tx_verifier.take_dex_trade_infos(
+                    block_index,
+                    tx_index,
+                    tx.transaction().get_id(),
+                ));
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
@@ -120,7 +128,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
 
         base_tx_verifier.set_best_block(block.get_id().into());
 
-        Ok((base_tx_verifier, BlockTxFees(vec![])))
+        Ok((base_tx_verifier, BlockTxFees(vec![]), dex_trades))
     }
 
     fn disconnect_block<C, S, M, U, A, T, O>(
